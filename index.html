@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="aa168e3df3a7">
+<meta name="ntx-build" content="f9cc162d471a">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -517,9 +517,13 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 /* Home: Nuova nota + Nuova offerta */
 .head-actions{display:flex;gap:8px;flex-wrap:wrap}
 @media (max-width:760px){.head-actions{width:100%}.head-actions .btn{flex:1 1 0}}
+/* Bacheca: offerte RADIX da sentire dentro i follow-up */
+.rx-fu-block{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.rx-fu{display:flex;align-items:center;gap:8px;flex-wrap:wrap} .rx-fu .due{margin-left:0}
+.rx-fu-main{flex:1 1 200px;min-width:0;text-decoration:none;color:inherit}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"aa168e3df3a7"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f9cc162d471a"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1894,7 +1898,28 @@ async function radixOffersCard(app, c, refresh) {
 }
 
 
-return { radixOfferOpen, dueState, radixOfferDialog, radixOffersPanel, radixOffersCard };
+// Bacheca, riquadro follow-up (Tommaso 01/11: "le offerte da seguire sono follow-up importanti"): un blocco compatto
+// con le offerte RADIX da sentire (scadute e di oggi, poi i prossimi 7 giorni), al massimo 5 righe, il resto in Offerte › Da RADIX.
+async function radixFollowupBlock(app, refresh) {
+  const all = app.store.radixOffers ? await app.store.radixOffers().catch(() => []) : [];
+  const t = today(), in7 = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+  const open = all.filter(radixOfferOpen).filter(o => radixOfferDue(o));
+  const late = open.filter(o => radixOfferDue(o) < t), now = open.filter(o => radixOfferDue(o) === t), soon = open.filter(o => radixOfferDue(o) > t && radixOfferDue(o) <= in7);
+  const urgent = [...late, ...now, ...soon].sort((a, b) => radixOfferDue(a).localeCompare(radixOfferDue(b)) || (b.total || 0) - (a.total || 0));
+  if (!urgent.length) return null;
+  const counts = [late.length ? `${late.length} da sentire` : '', now.length ? `${now.length} oggi` : '', soon.length ? `${soon.length} nei prossimi 7 giorni` : ''].filter(Boolean).join(' · ');
+  const line = o => { const c = o.customerId ? app.store.customer(o.customerId) : null; const d = radixOfferDue(o), st = d < t ? 'scaduto' : d === t ? 'oggi' : 'in-programma';
+    return h('li', { class: 'rx-fu' },
+      h('span', { class: 'due ' + st }, d === t ? 'oggi' : dateIt(d)),
+      h('a', { href: c ? '#/agenda/' + c.id : '#/preventivi/radix', class: 'rx-fu-main' }, h('strong', {}, c?.name || o.customerLabel), h('small', { class: 'muted' }, ` ${o.id}${o.subject ? ' · ' + o.subject : ''}${o.total ? ' · ' + eur(o.total) : ''}`)),
+      app.session.preview ? null : h('button', { class: 'link', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, 'Esito')); };
+  return h('div', { class: 'group rx-fu-block' },
+    h('h3', {}, `Offerte RADIX da sentire (${urgent.length})`), h('small', { class: 'muted' }, counts),
+    h('ul', { class: 'checks' }, urgent.slice(0, 5).map(line)),
+    h('a', { class: 'more', href: '#/preventivi/radix' }, urgent.length > 5 ? `Tutte le ${urgent.length} →` : 'Apri Offerte › Da RADIX →'));
+}
+
+return { radixOfferOpen, dueState, radixOfferDialog, radixOffersPanel, radixOffersCard, radixFollowupBlock };
 })();
 __m["js/core/search.js"] = (function () {
 // Ricerca clienti: tollerante ad accenti, punteggiatura, forme societarie e piccoli errori di battitura.
@@ -2424,6 +2449,7 @@ const { h, dateIt, toast, modal, field, emptyState } = __m["js/ui.js"];
 const { openActions } = __m["js/views/actions.js"];
 const { mailtoUrl, openMailto } = __m["js/core/mailto.js"];
 const { noteDialog } = __m["js/views/agenda.js"];
+const { radixFollowupBlock } = __m["js/views/radix-offers.js"];
 // Bacheca: comunicazioni della Direzione (in app + email dalla casella di chi scrive) e follow-up.
 // Scrivono solo gli accessi Direzione con servizio comunicazioni (Tommaso, Marco); Christian legge soltanto.
 async function viewBoard(app) {
@@ -2443,6 +2469,7 @@ async function boardSection(app, refresh) {
     try { if (a.assigned) await app.store.followupDone(a.id, true); else await app.store.toggleAction(a.note.id, a.id); toast('Follow-up completato'); refresh(); } catch (e) { toast(e.message, 'error'); }
   };
   const editor = (kind, p) => postDialog(app, kind, p).then(ok => ok && refresh());
+  const rxBlock = await radixFollowupBlock(app, refresh);
   return h('div', { class: 'section-body' },
     h('div', { class: 'grid2' },
       h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'Comunicazioni'),
@@ -2466,7 +2493,8 @@ async function boardSection(app, refresh) {
               : isDir ? h('small', { class: 'muted' }, ' · ' + a.note.authorName) : null,
             a.assigned?.body ? h('div', { class: 'fine' }, a.assigned.body) : null,
             a.assigned && canWrite ? h('button', { class: 'link', onclick: () => editor('follow-up', a.assigned) }, 'Modifica') : null))));
-        }) : emptyState('Nessun follow-up aperto. Si creano con le note nella scheda cliente' + (canWrite ? ' o con "+ Follow-up a un agente".' : '.')),
+        }) : rxBlock ? null : emptyState('Nessun follow-up aperto. Si creano con le note nella scheda cliente' + (canWrite ? ' o con "+ Follow-up a un agente".' : '.')),
+        rxBlock,
         isDir && doneAssigned.length ? h('details', { class: 'done-list' }, h('summary', {}, `Follow-up assegnati completati (${doneAssigned.length})`),
           h('ul', { class: 'checks' }, doneAssigned.map(p => h('li', { class: 'done' }, `${p.title} · ${p.audience[0]} · ${dateIt(p.doneAt)}`)))) : null)),
     await radixCard(app, refresh));
@@ -2476,9 +2504,10 @@ async function boardSection(app, refresh) {
 // RADIX resta la fonte: qui si leggono e, se serve, si trasformano in follow-up dell'app.
 async function radixCard(app, refresh) {
   if (!app.store.radixNotes) return null;
-  const today = new Date().toISOString().slice(0, 10), d30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10), y1 = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10), d30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
   const all = await app.store.radixNotes({ since: d30 }).catch(() => []);
-  const todo = all.filter(n => n.appointment && !n.ok && n.appointment >= y1 && n.group !== 'Prezzi')   // nei Prezzi la data è la validità del prezzo, non un compito
+  // promemoria aperti da 30 giorni fa in avanti: quelli più vecchi non chiusi in RADIX sono ormai superati (Tommaso 01/11)
+  const todo = all.filter(n => n.appointment && !n.ok && n.appointment >= d30 && n.group !== 'Prezzi')   // nei Prezzi la data è la validità del prezzo, non un compito
    .sort((a, b) => a.appointment.localeCompare(b.appointment));
   const recent = all.filter(n => n.date >= d30 && !todo.includes(n)).sort((a, b) => b.date.localeCompare(a.date));
   const cust = id => app.store.customer(id);
@@ -4374,6 +4403,9 @@ async function viewHome(app, tabArg) {
   // offerte aperte importate da RADIX (01/11/2026): contano tra le offerte aperte
   const rxAll = app.store.radixOffers ? await app.store.radixOffers().catch(() => []) : [];
   const rxOpen = rxAll.filter(radixOfferOpen);
+  const rxFollow = rxOpen.filter(o => { const d = radixOfferDue(o); return d && d <= today(); });   // offerte RADIX da sentire (scadute o di oggi)
+  const followTile = (label, href) => tile(label, actions.length + rxFollow.length,
+    [overdue ? `${overdue} scaduti` : `${todayN} oggi`, rxFollow.length ? `${rxFollow.length} offerte RADIX da sentire` : ''].filter(Boolean).join(' · '), href);
   const openTile = () => tile('Offerte aperte', open.length + rxOpen.length, eur(open.reduce((t, q) => t + (q.total || 0), 0) + rxOpen.reduce((t, o) => t + (o.total || 0), 0)) + (rxOpen.length ? ` · ${rxOpen.length} da RADIX` : ''), rxOpen.length && !open.length ? '#/preventivi/radix' : '#/preventivi');
   const overdue = actions.filter(a => a.state === 'scaduto').length, todayN = actions.filter(a => a.state === 'oggi').length;
   const tile = (label, value, sub, href) => h('a', { class: 'kpi', href }, h('small', {}, label), h('strong', {}, value), sub ? h('span', {}, sub) : null);
@@ -4401,7 +4433,7 @@ async function viewHome(app, tabArg) {
       h('section', { class: 'kpis' },
         tile('Clienti in rete', customers.length.toLocaleString('it-IT'), `${count('Attivo')} attivi · ${count('Da recuperare')} da recuperare`, '#/agenda'),
         tile('Attività ultimi 30 gg', notes.filter(n => n.createdAt >= d30).length + radix30, radix30 ? `di cui ${radix30} da RADIX` : 'note, visite, telefonate', '#/home/attivita'),
-        tile('Follow-up rete', actions.length, overdue ? `${overdue} scaduti · ${todayN} oggi` : `${todayN} oggi`, '#/home/bacheca'),
+        followTile('Follow-up rete', '#/home/bacheca'),
         openTile()),
       tabsEl, body, foot);
   }
@@ -4435,7 +4467,7 @@ async function viewHome(app, tabArg) {
     h('section', { class: 'kpis compact' },
       tile('I miei clienti', customers.length.toLocaleString('it-IT'), `${count('Attivo')} attivi`, '#/agenda'),
       tile('Da recuperare', count('Da recuperare'), 'nessun ordine 2026', '#/agenda/stato/Da recuperare'),
-      tile('Follow-up', actions.length, overdue ? `${overdue} scaduti` : `${todayN} oggi`, '#/bacheca'),
+      followTile('Follow-up', '#/bacheca'),
       openTile()),
     h('section', { class: 'card' }, h('h2', {}, 'Da fare oggi'),
       toOrder.length ? h('ul', { class: 'todo-list' }, toOrder.map(q => h('li', { class: 'todo' }, h('a', { href: '#/offerta/' + q.id, class: 'todo-main' },
