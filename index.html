@@ -2,8 +2,8 @@
 <html lang="it">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="e5a3887f7a5a">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
+<meta name="ntx-build" content="ef62c898bf28">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -506,9 +506,17 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 .dict{display:flex;align-items:center;gap:8px}
 .dict-live{color:var(--muted);font-style:italic;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dict-btn.on{background:var(--nt-red,#D40E41);color:#fff;border-color:transparent}
+/* nota vocale */
+.voice{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px;border:1px dashed var(--line);border-radius:10px}
+.voice audio{width:100%;max-width:320px;height:36px}
+.btn.rec{border-color:var(--nt-red,#D40E41);color:var(--nt-red,#D40E41)} .btn.rec.on{background:var(--nt-red,#D40E41);color:#fff}
+.rec-time{font-variant-numeric:tabular-nums;color:var(--nt-red,#D40E41);font-weight:700}
+.voice-note{margin-top:6px;display:flex;flex-direction:column;gap:6px}
+.voice-play{display:flex;align-items:center;gap:8px;flex-wrap:wrap} .voice-play audio{height:34px;max-width:100%}
+.transcript{background:var(--bg-soft,#f6f6f5);border-radius:8px;padding:8px 10px} .transcript p{margin:4px 0;white-space:pre-wrap}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"e5a3887f7a5a"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ef62c898bf28"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -838,7 +846,7 @@ __m["js/core/preview.js"] = (function () {
 // Sola lettura: ogni scrittura è bloccata, così nulla viene creato a nome della Direzione sui clienti dell'agente.
 // I permessi veri restano quelli del database: qui si filtra soltanto ciò che la Direzione vede già.
 const { radixOfferForAgent } = __m["js/data/model.js"];
-const WRITE = /^(add|save|delete|set|toggle|mark|import|changePassword|followupDone|logQuoteSend|request|update)/;
+const WRITE = /^(add|save|delete|set|toggle|mark|import|changePassword|followupDone|logQuoteSend|request|update|transcribe|approve)/;
 
 class PreviewError extends Error { constructor() { super('Anteprima agente: sola lettura. Esci dall\'anteprima per modificare.'); this.code = 'PREVIEW'; } }
 
@@ -898,7 +906,7 @@ function indexedDbKv(dbName = 'nordtex-hub') {
   return { get: k => tx('readonly', s => s.get(k)), set: (k, v) => tx('readwrite', s => s.put(v, k)) };
 }
 
-const COLLECTIONS = ['notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes'];
+const COLLECTIONS = ['notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio'];
 
 function createLocalStore({ data, kv }) {
   if (data?.schema !== 'nordtex-hub-data-v1') throw new Error('Dati HUB non compatibili');
@@ -959,7 +967,9 @@ function createLocalStore({ data, kv }) {
 
     async notes(customerId) {
       mustSession(); const all = await col('notes');
-      const own = all.filter(n => (customerId ? n.customerId === customerId : true) && canSeeCustomer(n.customerId));
+      const audio = new Map((await col('noteAudio')).map(a => [a.noteId, a]));
+      const own = all.filter(n => (customerId ? n.customerId === customerId : true) && canSeeCustomer(n.customerId))
+        .map(n => audio.has(n.id) ? { ...n, audio: { path: n.id, mime: audio.get(n.id).mime, size: audio.get(n.id).size, transcript: null } } : n);
       const radix = customerId && canSeeCustomer(customerId) ? (data.radixNotes || []).filter(n => n.customer === customerId && radixVisible(session, n)).map(n => radixNoteView(n, customerId)) : [];
       return own.concat(radix).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     },
@@ -973,6 +983,18 @@ function createLocalStore({ data, kv }) {
         actions: actions.filter(a => String(a.title || '').trim()).map(a => ({ id: uid(), title: a.title.trim(), due: a.due || null, done: false, doneAt: null })) };
       (await col('notes')).push(note); await save('notes'); return note;
     },
+    // Note vocali nella versione locale: l'audio resta su questo dispositivo; la trascrizione automatica è solo online
+    supportsAudio: true,
+    async saveNoteAudio(noteId, blob) {
+      const s = mustSession(); const n = (await col('notes')).find(x => x.id === noteId);
+      if (!n || n.authorId !== s.userId) throw new Error('Nota non tua');
+      const mime = String(blob.type || '').split(';')[0]; if (!/^audio\/(mp4|webm|ogg)$/.test(mime)) throw new Error('Formato audio non supportato');
+      if (!blob.size || blob.size > 10 * 1024 * 1024) throw new Error('Registrazione troppo lunga (massimo 10 MB)');
+      const list = await col('noteAudio'); list.push({ noteId, mime, size: blob.size, blob }); await save('noteAudio'); return { path: noteId, mime, size: blob.size };
+    },
+    async transcribeNote() { return { status: 'failed', code: 'NOT_CONFIGURED', text: null }; },
+    async noteAudioBlob(path) { const a = (await col('noteAudio')).find(x => x.noteId === path); if (!a) throw new Error('Audio non disponibile'); return a.blob; },
+    async approveTranscript() { throw new Error('Trascrizione disponibile solo nella versione online'); },
     async toggleAction(noteId, actionId) {
       const s = mustSession(); const n = (await col('notes')).find(x => x.id === noteId);
       if (!n || !canSeeCustomer(n.customerId)) throw new Error('Attività non trovata');
@@ -1127,6 +1149,16 @@ __m["js/data/supabase-store.js"] = (function () {
 // Login ordinario email/password; i permessi sono applicati dal database (RLS),
 // l'app non usa mai chiavi privilegiate. Richiede la migrazione supabase/migrations/20261031120000_hub_v1.sql.
 const { nowIso, makeProspect, applyStatus, checkStatusChange, radixNoteView, checkOrderRequest, checkRadixOutcome } = __m["js/data/model.js"];
+const AUDIO_MAX = 10 * 1024 * 1024;
+const AUDIO_EXT = { 'audio/mp4': 'mp4', 'audio/webm': 'webm', 'audio/ogg': 'ogg' };
+const audioMime = t => { const m = String(t || '').split(';')[0].trim().toLowerCase(); return AUDIO_EXT[m] ? m : m === 'audio/x-m4a' || m === 'audio/aac' ? 'audio/mp4' : null; };
+// audio e trascrizione di una nota (relazioni PostgREST: oggetto o elenco)
+function audioView(a) {
+  const x = Array.isArray(a) ? a[0] : a; if (!x) return null;
+  const t = Array.isArray(x.hub_note_transcripts) ? x.hub_note_transcripts[0] : x.hub_note_transcripts;
+  return { path: x.path, mime: x.mime_type, size: x.size_bytes,
+    transcript: t ? { status: t.status, text: t.approved_text || t.raw_text || '', approved: !!t.approved_text, error: t.error_code || null } : null };
+}
 const fail = (code, msg) => Object.assign(new Error(msg || code), { code });
 const SKEY = 'ntx-auth';
 // Conserva solo il token di rinnovo sul dispositivo (come la libreria ufficiale Supabase); nessuna password.
@@ -1147,7 +1179,15 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     const r = await fetchImpl(url + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'omit', cache: 'no-store' });
     if (r.status === 401) { session = token = null; throw fail('SESSION', 'Sessione scaduta: ricarica la pagina o accedi di nuovo'); }
     if (!r.ok) throw fail('HTTP_' + r.status, (await r.text().catch(() => '')) || 'Errore ' + r.status);
-    return r.status === 204 ? null : r.json();
+    if (r.status === 204) return null;
+    const txt = await r.text(); return txt ? JSON.parse(txt) : null;   // 201 senza corpo (inserimento senza "return=representation")
+  }
+  // chiamate non JSON (file audio su Storage, funzioni server) con il token dell'utente
+  async function rawFetch(path, { method = 'GET', body, headers = {} } = {}) {
+    if (!token) throw fail('SESSION', 'Accesso richiesto');
+    const r = await fetchImpl(url + path, { method, headers: { apikey: key, Authorization: 'Bearer ' + token, ...headers }, body, credentials: 'omit', cache: 'no-store' });
+    if (r.status === 401) { session = token = null; throw fail('SESSION', 'Sessione scaduta: ricarica la pagina o accedi di nuovo'); }
+    return r;
   }
   async function pageAll(path, size = 1000) {
     const out = []; for (let from = 0; ; from += size) {
@@ -1268,11 +1308,12 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     async setSetting(key, value) { return api('/rest/v1/hub_settings', { method: 'POST', prefer: 'resolution=merge-duplicates', body: { key, value } }); },
 
     async notes(customerId) {
-      const q = '/rest/v1/hub_notes?select=id,customer_id,author_id,body,contact_kind,outcome,created_at,hub_actions(id,title,due_date,done,completed_at,position)&order=created_at.desc'
+      const q = '/rest/v1/hub_notes?select=id,customer_id,author_id,body,contact_kind,outcome,created_at,hub_actions(id,title,due_date,done,completed_at,position)' + (customerId ? ',hub_note_audio(path,mime_type,size_bytes,hub_note_transcripts(status,raw_text,approved_text,reviewed_at,error_code))' : '') + '&order=created_at.desc'
         + (customerId ? '&customer_id=eq.' + custUuid(customerId) : '&limit=500');
       const nm = await names();
       const own = (await api(q)).map(n => ({ id: n.id, customerId: custCode(n.customer_id), authorId: n.author_id, authorName: nm.get(n.author_id) || '', kind: n.contact_kind || 'Altro', outcome: n.outcome || '', body: n.body, createdAt: n.created_at,
-        actions: (n.hub_actions || []).sort((a, b) => a.position - b.position).map(a => ({ id: a.id, title: a.title, due: a.due_date, done: a.done, doneAt: a.completed_at })) }));
+        actions: (n.hub_actions || []).sort((a, b) => a.position - b.position).map(a => ({ id: a.id, title: a.title, due: a.due_date, done: a.done, doneAt: a.completed_at })),
+        audio: audioView(n.hub_note_audio) }));
       if (!customerId) return own;
       // note RADIX (sola lettura; la visibilità per gruppo la decide la policy radix_notes_read). Tabella assente = migrazione non ancora applicata.
       const radix = ((await api('/rest/v1/hub_radix_notes?select=id,note_date,grp,author_code,author_name,subject,body&order=note_date.desc&customer_id=eq.' + custUuid(customerId)).catch(() => [])) || [])
@@ -1286,6 +1327,34 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       const acts = actions.filter(a => String(a.title || '').trim()).map(a => ({ title: a.title.trim(), due_date: a.due || '' }));
       await api('/rest/v1/rpc/hub_save_activity', { method: 'POST', body: { p_note_id: id, p_customer_id: custUuid(customerId), p_body: body.trim(), p_kind: kind, p_outcome: outcome, p_actions: acts } });
       return { id, customerId, kind, outcome, body: body.trim(), createdAt: nowIso(), authorId: session.userId, authorName: session.name, actions: [] };
+    },
+    // Note vocali (migrazione 20261101180000): file nel contenitore privato hub-audio, trascrizione con la funzione hub-transcribe
+    supportsAudio: true,
+    async saveNoteAudio(noteId, blob) {
+      const mime = audioMime(blob.type);
+      if (!mime) throw fail('INPUT', 'Formato audio non supportato');
+      if (!blob.size || blob.size > AUDIO_MAX) throw fail('INPUT', 'Registrazione troppo lunga (massimo 10 MB)');
+      const path = `${noteId}/${crypto.randomUUID()}.${AUDIO_EXT[mime]}`;
+      const up = await rawFetch('/storage/v1/object/hub-audio/' + path, { method: 'POST', body: blob, headers: { 'Content-Type': mime, 'x-upsert': 'false' } });
+      if (!up.ok) throw fail('HTTP_' + up.status, 'Audio non caricato (' + up.status + ')');
+      await api('/rest/v1/hub_note_audio', { method: 'POST', body: { note_id: noteId, path, mime_type: mime, size_bytes: blob.size } });
+      return { path, mime, size: blob.size };
+    },
+    async transcribeNote(noteId) {
+      const r = await rawFetch('/functions/v1/hub-transcribe', { method: 'POST', body: JSON.stringify({ note_id: noteId }), headers: { 'Content-Type': 'application/json' } });
+      const j = await r.json().catch(() => ({}));
+      return { status: j.status || (r.ok ? 'ready' : 'failed'), text: j.text || null, code: j.code || null };
+    },
+    async noteAudioBlob(path) {
+      const r = await rawFetch('/storage/v1/object/authenticated/hub-audio/' + path.split('/').map(encodeURIComponent).join('/'));
+      if (!r.ok) throw fail('HTTP_' + r.status, 'Audio non disponibile');
+      return r.blob();
+    },
+    async approveTranscript(noteId, text) {
+      const t = String(text || '').trim(); if (!t) throw fail('INPUT', 'Testo vuoto');
+      const r = await api('/rest/v1/hub_note_transcripts?note_id=eq.' + noteId, { method: 'PATCH', prefer: 'return=representation', body: { approved_text: t.slice(0, 10000) } });
+      if (!r?.length) throw fail('FORBIDDEN', 'Solo l\'autore della nota o la Direzione possono correggere la trascrizione');
+      return t;
     },
     // completed_at è impostato dal trigger esistente hub_action_completion
     async toggleAction(noteId, actionId) {
@@ -1415,7 +1484,7 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
   return store;
 }
 
-return { createSupabaseStore };
+return { audioMime, audioView, createSupabaseStore };
 })();
 __m["js/views/actions.js"] = (function () {
 const { dueState, quoteReminders } = __m["js/data/model.js"];
@@ -1718,6 +1787,34 @@ function startDictation(textarea, { onState = () => {}, onInterim = () => {} } =
 
 return { dictationAvailable, appendDictated, startDictation };
 })();
+__m["js/core/recorder.js"] = (function () {
+// Registrazione della nota vocale (01/11/2026): microfono del telefono/PC, formato audio/mp4 su iPhone, webm altrove.
+// Qualità voce (32 kbit/s): 10 minuti ≈ 2,4 MB, sotto il limite di 10 MB del contenitore.
+const RECORD_MAX_SECONDS = 10 * 60;
+const recordingAvailable = () => typeof window !== 'undefined' && !!(window.MediaRecorder && navigator.mediaDevices?.getUserMedia);
+
+function pickMime(isSupported = t => window.MediaRecorder?.isTypeSupported?.(t)) {
+  for (const t of ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']) if (isSupported(t)) return t;
+  return '';
+}
+const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+// Avvia la registrazione. onTick(secondi), onStop(blob) a fine registrazione (anche automatica a 10 minuti).
+async function startRecording({ onTick = () => {}, onStop = () => {} } = {}) {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  const mimeType = pickMime();
+  const rec = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 32000 });
+  const chunks = []; const t0 = Date.now();
+  const tick = setInterval(() => { const s = (Date.now() - t0) / 1000; onTick(s); if (s >= RECORD_MAX_SECONDS) stop(); }, 250);
+  rec.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
+  rec.onstop = () => { clearInterval(tick); stream.getTracks().forEach(t => t.stop()); onStop(new Blob(chunks, { type: (rec.mimeType || mimeType || 'audio/mp4').split(';')[0] })); };
+  rec.start(1000);
+  function stop() { if (rec.state !== 'inactive') rec.stop(); }
+  return { stop, cancel() { rec.onstop = () => { clearInterval(tick); stream.getTracks().forEach(t => t.stop()); }; stop(); } };
+}
+
+return { RECORD_MAX_SECONDS, recordingAvailable, pickMime, mmss, startRecording };
+})();
 __m["js/views/radix-offers.js"] = (function () {
 // Offerte aperte importate da RADIX (richiesta Tommaso 01/11/2026): l'app le mostra a chi segue il cliente
 // (senza cliente HUB solo alla Direzione) e permette di segnare l'esito. Le offerte restano in RADIX: qui si seguono.
@@ -1925,6 +2022,7 @@ return { SALES_YEARS, purchaseSummary };
 __m["js/views/agenda.js"] = (function () {
 const { h, fill, eur, dateIt, dateTimeIt, statusBadge, toast, modal, field, emptyState, debounce, telLinks, today } = __m["js/ui.js"];
 const { dictationAvailable, startDictation } = __m["js/core/dictation.js"];
+const { recordingAvailable, startRecording, mmss } = __m["js/core/recorder.js"];
 const { radixOffersCard } = __m["js/views/radix-offers.js"];
 const { CONTACT_KINDS, NOTE_OUTCOMES, STATUS_ORDER, STATUS_INFO, MANUAL_STATUSES, TYPOLOGIES, dueState, assigneeFor } = __m["js/data/model.js"];
 const { buildIndex, searchCustomers, highlight } = __m["js/core/search.js"];
@@ -2127,7 +2225,8 @@ async function customerCard(app, c) {
     h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'Visite, telefonate e note'), h('button', { class: 'btn small', onclick: () => noteDialog(app, c).then(ok => ok && refresh()) }, '+ Nota')),
       notes.length ? h('ol', { class: 'timeline' }, notes.map(n => h('li', { class: n.source === 'RADIX' ? 'tl-radix' : '' },
         h('div', { class: 'tl-head' }, h('span', { class: 'badge muted' }, n.kind), n.outcome ? h('span', { class: 'badge' }, n.outcome) : null, h('small', { class: 'muted' }, `${n.source === 'RADIX' ? dateIt(n.createdAt) : dateTimeIt(n.createdAt)} · ${n.authorName}`)),
-        n.source === 'RADIX' ? radixBody(n) : h('p', {}, n.body),
+        n.source === 'RADIX' ? radixBody(n) : (n.audio && n.body === 'Nota vocale' ? null : h('p', {}, n.body)),
+        n.audio ? noteVoice(app, n, refresh) : null,
         n.actions.length ? h('ul', { class: 'checks' }, n.actions.map(a => h('li', {}, h('label', {}, h('input', { type: 'checkbox', checked: a.done, onchange: async () => { try { await app.store.toggleAction(n.id, a.id); refresh(); } catch (e) { toast(e.message, 'error'); } } }),
           h('span', { class: a.done ? 'done' : '' }, a.title), a.due ? h('span', { class: 'due ' + dueState(a).replace(' ', '-') }, dateIt(a.due)) : null)))) : null)))
         : h('p', { class: 'muted' }, 'Nessuna attività registrata. Aggiungi la prima nota: visita, telefonata o email, con un follow-up.')),
@@ -2146,12 +2245,79 @@ async function noteDialog(app, c, preset = {}) {
   const body = h('textarea', { rows: 5, placeholder: 'Cosa è emerso, prodotti di interesse, cantieri, concorrenza…' }, preset.body || '');
   const fu = h('input', { placeholder: 'es. richiamare per offerta fibra', value: preset.fu || '' });
   const due = h('input', { type: 'date', min: today(), value: preset.due && preset.due >= today() ? preset.due : '' });
-  return modal('Nuova nota — ' + c.name, h('div', { class: 'form' }, field('Tipo di contatto', kind), field('Esito', outcome),
+  const voice = app.store.saveNoteAudio && recordingAvailable() ? voiceRecorder() : null;
+  const res = await modal('Nuova nota — ' + c.name, h('div', { class: 'form' }, field('Tipo di contatto', kind), field('Esito', outcome),
     h('div', { class: 'field' }, h('div', { class: 'note-head' }, h('span', {}, 'Nota'), dictateButton(body)), body),
+    voice ? voice.el : null,
     h('fieldset', {}, h('legend', {}, 'Follow-up (facoltativo)'), field('Cosa fare', fu), field('Entro il', due))),
   [{ label: 'Annulla', value: false }, { label: 'Salva nota', primary: true, run: async () => {
-    await app.store.addNote({ customerId: c.id, kind: kind.value, outcome: outcome.value, body: body.value, actions: fu.value ? [{ title: fu.value, due: due.value || null }] : [] });
-    toast('Nota salvata'); return true; } }]);
+    if (voice?.recording()) throw new Error('Prima ferma la registrazione');
+    const blob = voice?.blob();
+    const text = body.value.trim() || (blob ? 'Nota vocale' : '');
+    const n = await app.store.addNote({ customerId: c.id, kind: kind.value, outcome: outcome.value, body: text, actions: fu.value ? [{ title: fu.value, due: due.value || null }] : [] });
+    if (blob) {
+      try { await app.store.saveNoteAudio(n.id, blob); }
+      catch (e) { toast('Nota salvata, ma l\'audio non è stato caricato: ' + e.message, 'error'); return true; }
+      toast('Nota salvata. Trascrizione in corso…');
+      transcribeLater(app, c, n.id);
+    } else toast('Nota salvata');
+    return true; } }]);
+  voice?.cancel();   // chiusa la finestra (anche con ✕): il microfono si spegne sempre
+  return res;
+}
+
+// Registratore nella finestra della nota: Registra → Ferma → ascolto di prova / Rifai
+function voiceRecorder() {
+  let rec = null, blob = null, url = null;
+  const box = h('div', { class: 'voice' });
+  const draw = (state, secs = 0) => {
+    if (url) { URL.revokeObjectURL(url); url = null; }
+    if (state === 'rec') return fill(box, h('button', { type: 'button', class: 'btn small rec on', onclick: () => rec?.stop() }, '■ Ferma'), h('span', { class: 'rec-time' }, '● ' + mmss(secs)), h('small', { class: 'muted' }, 'massimo 10 minuti'));
+    if (state === 'done' && blob) { url = URL.createObjectURL(blob);
+      return fill(box, h('audio', { controls: true, src: url, preload: 'metadata' }), h('button', { type: 'button', class: 'link', onclick: () => { blob = null; draw('idle'); } }, 'Elimina e rifai'),
+        h('small', { class: 'muted' }, 'Al salvataggio l\'audio resta nella scheda e arriva la trascrizione scritta.')); }
+    fill(box, h('button', { type: 'button', class: 'btn small rec', onclick: async () => {
+      try { rec = await startRecording({ onTick: s => draw('rec', s), onStop: b => { rec = null; blob = b; draw('done'); } }); draw('rec', 0); }
+      catch (e) { toast(e.name === 'NotAllowedError' ? 'Consenti l\'uso del microfono per registrare' : 'Microfono non disponibile: ' + e.message, 'error'); }
+    } }, '● Registra nota vocale'), h('small', { class: 'muted' }, 'Parli, l\'audio resta salvato e arriva anche scritto.'));
+  };
+  draw('idle');
+  return { el: box, blob: () => blob, recording: () => !!rec, cancel() { rec?.cancel(); rec = null; } };
+}
+
+// Trascrizione dopo il salvataggio (non blocca): a fine lavoro aggiorna la scheda se è ancora aperta
+async function transcribeLater(app, c, noteId) {
+  const r = await app.store.transcribeNote(noteId).catch(() => ({ status: 'failed' }));
+  const msg = { ready: 'Trascrizione pronta', limit: 'Limite mensile di trascrizioni raggiunto: l\'audio è salvato', disabled: 'Trascrizione disattivata: l\'audio è salvato' }[r.status]
+    || (r.code === 'NOT_CONFIGURED' ? 'Trascrizione non ancora attiva: l\'audio è salvato' : 'Trascrizione non riuscita: l\'audio è salvato');
+  toast(msg, r.status === 'ready' ? 'info' : 'error');
+  if (location.hash === '#/agenda/' + encodeURIComponent(c.id) || location.hash === '#/agenda/' + c.id) app.go('agenda/' + c.id);
+}
+
+// Nella cronologia: ascolto (scaricato solo quando serve) e trascrizione, correggibile da autore o Direzione
+function noteVoice(app, n, refresh) {
+  const a = n.audio; if (!a) return null;
+  const player = h('span');
+  const listen = h('button', { type: 'button', class: 'btn small', onclick: async () => {
+    listen.disabled = true; listen.textContent = 'Carico…';
+    try { const b = await app.store.noteAudioBlob(a.path); fill(player, h('audio', { controls: true, autoplay: true, src: URL.createObjectURL(b) })); listen.remove(); }
+    catch (e) { toast(e.message, 'error'); listen.disabled = false; listen.textContent = '▶ Ascolta'; }
+  } }, '▶ Ascolta');
+  const t = a.transcript;
+  const canEdit = n.authorId === app.session.userId || app.session.role === 'direzione';
+  const online = app.store.mode !== 'locale';
+  const tr = !t ? h('p', { class: 'muted small' }, online ? 'Trascrizione non disponibile.' : 'Trascrizione automatica solo nella versione online.', canEdit && online ? h('button', { type: 'button', class: 'link', onclick: async () => { toast('Trascrizione in corso…'); const r = await app.store.transcribeNote(n.id).catch(() => ({ status: 'failed' })); toast(r.status === 'ready' ? 'Trascrizione pronta' : 'Trascrizione non riuscita', r.status === 'ready' ? 'info' : 'error'); refresh(); } }, ' Trascrivi') : null)
+    : t.status === 'processing' ? h('p', { class: 'muted small' }, 'Trascrizione in corso… ', h('button', { type: 'button', class: 'link', onclick: refresh }, 'Aggiorna'))
+    : t.status === 'failed' ? h('p', { class: 'muted small' }, 'Trascrizione non riuscita: resta l\'audio.')
+    : h('div', { class: 'transcript' }, h('small', { class: 'muted' }, t.approved ? 'Trascrizione (riletta)' : 'Trascrizione automatica — da rileggere'),
+        h('p', {}, t.text), canEdit ? h('button', { type: 'button', class: 'link', onclick: async () => { if (await transcriptDialog(app, n, t.text)) refresh(); } }, 'Correggi') : null);
+  return h('div', { class: 'voice-note' }, h('div', { class: 'voice-play' }, '🎙️ Nota vocale ', listen, player), tr);
+}
+
+async function transcriptDialog(app, n, text) {
+  const ta = h('textarea', { rows: 8 }, text);
+  return modal('Correggi la trascrizione', h('div', { class: 'form' }, field('Testo', ta), h('p', { class: 'fine' }, 'Correggi nomi, prodotti e quantità: questo testo resta nella scheda cliente.')),
+    [{ label: 'Annulla', value: false }, { label: 'Salva', primary: true, run: async () => { await app.store.approveTranscript(n.id, ta.value); toast('Trascrizione salvata'); return true; } }]);
 }
 
 // Pulsante "Detta": il telefono scrive mentre parli (gratis). Se non disponibile, indica il microfono della tastiera.
@@ -2240,7 +2406,7 @@ async function statusDialog(app, c) {
   [{ label: 'Annulla', value: false }, { label: 'Salva stato', primary: true, run: async () => { await app.store.setStatus({ customerId: c.id, status: sel.value, reason: reason.value }); app.invalidate(); toast('Stato aggiornato: ' + sel.value); return true; } }]);
 }
 
-return { viewAgenda, quoteCls, noteDialog, dictateButton, newCustomerDialog };
+return { viewAgenda, quoteCls, noteDialog, noteVoice, dictateButton, newCustomerDialog };
 })();
 __m["js/views/board.js"] = (function () {
 const { h, dateIt, toast, modal, field, emptyState } = __m["js/ui.js"];
