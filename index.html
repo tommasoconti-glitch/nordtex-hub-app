@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="5ed403eed5f0">
+<meta name="ntx-build" content="b6efdd50db79">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -514,9 +514,12 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 .voice-note{margin-top:6px;display:flex;flex-direction:column;gap:6px}
 .voice-play{display:flex;align-items:center;gap:8px;flex-wrap:wrap} .voice-play audio{height:34px;max-width:100%}
 .transcript{background:var(--bg-soft,#f6f6f5);border-radius:8px;padding:8px 10px} .transcript p{margin:4px 0;white-space:pre-wrap}
+/* Home: Nuova nota + Nuova offerta */
+.head-actions{display:flex;gap:8px;flex-wrap:wrap}
+@media (max-width:760px){.head-actions{width:100%}.head-actions .btn{flex:1 1 0}}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"5ed403eed5f0"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"b6efdd50db79"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4265,31 +4268,39 @@ function printQuote(q) {
 // Nuova offerta in un passaggio (01/11): si sceglie il cliente in una finestra e si apre subito l'offerta
 let pickIndex = { src: null, ix: null };
 async function startNewQuote(app) {
-  const all = await app.customers();
-  if (pickIndex.src !== all) pickIndex = { src: all, ix: buildIndex(all) };
   const quotes = await app.store.quotes().catch(() => []);
-  const recentIds = [...new Set(quotes.slice().sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))).map(q => q.customerId))];
-  const recent = recentIds.map(id => app.store.customer(id)).filter(Boolean).slice(0, 6);
-  const list = h('div', { class: 'pick-list' });
-  const close = () => back.remove();
-  const choose = c => { close(); app.go('offerta/nuova/' + c.id); };
-  const item = c => h('button', { class: 'pick-item', disabled: !!c.salesBlockedSince, onclick: () => choose(c) }, h('strong', {}, c.name), h('small', { class: 'muted' }, c.salesBlockedSince ? 'Vendita bloccata in RADIX' : [c.city, c.prov, c.status].filter(Boolean).join(' · ')));
-  const draw = q => {
-    const rows = q.trim() ? searchCustomers(pickIndex.ix, q).slice(0, 12).map(r => r.c) : recent;
-    fill(list, q.trim() ? null : (recent.length ? h('small', { class: 'muted pick-hint' }, 'Clienti delle ultime offerte') : h('small', { class: 'muted pick-hint' }, 'Scrivi nome, città, P.IVA o numero cliente')),
-      ...rows.map(item), q.trim() && !rows.length ? h('p', { class: 'muted' }, 'Nessun cliente trovato. Un cliente nuovo si crea da Clienti › “+ Nuovo cliente”.') : null);
-  };
-  const input = h('input', { type: 'search', enterkeyhint: 'search', autocomplete: 'off', placeholder: 'Cerca il cliente…', 'aria-label': 'Cerca il cliente',
-    oninput: debounce(e => draw(e.target.value), 100),
-    onkeydown: e => { if (e.key === 'Enter') { e.preventDefault(); list.querySelector('.pick-item')?.click(); } if (e.key === 'Escape') close(); } });
-  const back = h('div', { class: 'modal-back', onclick: e => { if (e.target === back) close(); } },
-    h('div', { class: 'modal pick', role: 'dialog', 'aria-label': 'Nuova offerta' },
-      h('div', { class: 'modal-head' }, h('h3', {}, 'Nuova offerta: per quale cliente?'), h('button', { class: 'icon-btn', 'aria-label': 'Chiudi', onclick: close }, '✕')),
-      h('div', { class: 'modal-body' }, input, list)));
-  draw(''); document.body.append(back); input.focus();
+  const recentIds = quotes.slice().sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))).map(q => q.customerId);
+  const c = await pickCustomer(app, { title: 'Nuova offerta: per quale cliente?', recentIds, recentLabel: 'Clienti delle ultime offerte', blockSales: true });
+  if (c) app.go('offerta/nuova/' + c.id);
 }
 
-return { viewQuotes, outcomeDialog, resolveOutcome, orderDialog, viewQuoteEditor, printQuote, startNewQuote };
+// Scelta del cliente (cerca per nome, città, P.IVA, numero): usata da "+ Nuova offerta" e "+ Nuova nota"
+async function pickCustomer(app, { title, recentIds = [], recentLabel = 'Clienti recenti', blockSales = false }) {
+  const all = await app.customers();
+  if (pickIndex.src !== all) pickIndex = { src: all, ix: buildIndex(all) };
+  const recent = [...new Set(recentIds)].map(id => app.store.customer(id)).filter(Boolean).slice(0, 6);
+  return new Promise(resolve => {
+    const list = h('div', { class: 'pick-list' });
+    const close = v => { back.remove(); resolve(v || null); };
+    const item = c => { const blocked = blockSales && !!c.salesBlockedSince;
+      return h('button', { class: 'pick-item', disabled: blocked, onclick: () => close(c) }, h('strong', {}, c.name), h('small', { class: 'muted' }, blocked ? 'Vendita bloccata in RADIX' : [c.city, c.prov, c.status].filter(Boolean).join(' · '))); };
+    const draw = q => {
+      const rows = q.trim() ? searchCustomers(pickIndex.ix, q).slice(0, 12).map(r => r.c) : recent;
+      fill(list, q.trim() ? null : (recent.length ? h('small', { class: 'muted pick-hint' }, recentLabel) : h('small', { class: 'muted pick-hint' }, 'Scrivi nome, città, P.IVA o numero cliente')),
+        ...rows.map(item), q.trim() && !rows.length ? h('p', { class: 'muted' }, 'Nessun cliente trovato. Un cliente nuovo si crea da Clienti › “+ Nuovo cliente”.') : null);
+    };
+    const input = h('input', { type: 'search', enterkeyhint: 'search', autocomplete: 'off', placeholder: 'Cerca il cliente…', 'aria-label': 'Cerca il cliente',
+      oninput: debounce(e => draw(e.target.value), 100),
+      onkeydown: e => { if (e.key === 'Enter') { e.preventDefault(); list.querySelector('.pick-item')?.click(); } if (e.key === 'Escape') close(); } });
+    const back = h('div', { class: 'modal-back', onclick: e => { if (e.target === back) close(); } },
+      h('div', { class: 'modal pick', role: 'dialog', 'aria-label': title },
+        h('div', { class: 'modal-head' }, h('h3', {}, title), h('button', { class: 'icon-btn', 'aria-label': 'Chiudi', onclick: () => close() }, '✕')),
+        h('div', { class: 'modal-body' }, input, list)));
+    draw(''); document.body.append(back); input.focus();
+  });
+}
+
+return { viewQuotes, outcomeDialog, resolveOutcome, orderDialog, viewQuoteEditor, printQuote, startNewQuote, pickCustomer };
 })();
 __m["js/views/orders.js"] = (function () {
 // Ordini passati all'ufficio (offerte accettate): l'ufficio li segue fino all'inserimento in RADIX. Solo Direzione.
@@ -4336,7 +4347,8 @@ const { h, fill, eur, dateIt, today, telLinks } = __m["js/ui.js"];
 const { boardSection } = __m["js/views/board.js"];
 const { networkSection, managerSection } = __m["js/views/direction.js"];
 const { openActions } = __m["js/views/actions.js"];
-const { startNewQuote } = __m["js/views/quotes.js"];
+const { startNewQuote, pickCustomer } = __m["js/views/quotes.js"];
+const { noteDialog } = __m["js/views/agenda.js"];
 const { ordersSection } = __m["js/views/orders.js"];
 const { radixOfferOpen, dueState } = __m["js/views/radix-offers.js"];
 const { radixOfferDue } = __m["js/data/model.js"];
@@ -4361,7 +4373,7 @@ async function viewHome(app, tabArg) {
   const tile = (label, value, sub, href) => h('a', { class: 'kpi', href }, h('small', {}, label), h('strong', {}, value), sub ? h('span', {}, sub) : null);
   const asOf = customers.reduce((m, c) => (c.salesAsOf && c.salesAsOf > m ? c.salesAsOf : m), '');
   const head = h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, `Buongiorno, ${s.name.split(' ')[0]}`), h('p', { class: 'muted' }, (isDir ? 'Direzione commerciale · tutta la rete' : `Portafoglio ${s.assignee}`) + ` · dati RADIX al ${asOf ? dateIt(asOf) : '31/10/2026'}`)),
-    h('button', { class: 'btn primary', onclick: () => startNewQuote(app) }, '+ Nuova offerta'));
+    h('div', { class: 'head-actions' }, h('button', { class: 'btn', onclick: () => startNewNote(app) }, '+ Nuova nota'), h('button', { class: 'btn primary', onclick: () => startNewQuote(app) }, '+ Nuova offerta')));
   const foot = h('p', { class: 'fine' }, `Oggi ${dateIt(today())} · Dati RADIX (clienti, fatturato) al ${asOf ? dateIt(asOf) : '31/10/2026'}${app.store.stock?.depots?.[0]?.date ? ' · giacenze al ' + dateIt(app.store.stock.depots[0].date) : ''} · Archivio ${app.store.mode === 'locale' ? 'locale su questo dispositivo' : 'condiviso'}`);
 
   if (isDir) {
@@ -4439,6 +4451,13 @@ async function viewHome(app, tabArg) {
           : h('p', { class: 'muted' }, 'Nessuna comunicazione.'),
         h('a', { class: 'more', href: '#/bacheca' }, 'Apri la bacheca →'))),
     foot);
+}
+
+// "+ Nuova nota" dalla Home (richiesta Tommaso 01/11): scegli il cliente, scrivi/detta/registra, poi si apre la sua scheda
+async function startNewNote(app) {
+  const mine = (await app.store.notes().catch(() => [])).filter(n => n.authorId === app.session.userId).map(n => n.customerId);
+  const c = await pickCustomer(app, { title: 'Nuova nota: per quale cliente?', recentIds: mine, recentLabel: 'Clienti delle ultime note' });
+  if (c && await noteDialog(app, c)) app.go('agenda/' + c.id);
 }
 
 return { viewHome, openActions };
