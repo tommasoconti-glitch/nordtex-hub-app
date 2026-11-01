@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="6870996e3f39">
+<meta name="ntx-build" content="bfc97faeadb3">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -469,9 +469,19 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 .pick-item{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:2px;padding:10px 6px;border:0;border-top:1px solid var(--line);background:none;color:var(--ink);cursor:pointer;font:inherit}
 .pick-item:first-of-type{border-top:0} .pick-item:hover{background:var(--nt-lime-soft)} .pick-item:disabled{opacity:.5;cursor:not-allowed}
 .pick-hint{padding:2px 6px}
+/* Ordini all'ufficio (01/11) */
+.order-box{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);display:flex;flex-direction:column;gap:8px}
+.order-box.todo{background:var(--warn-bg);border-color:transparent;flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.order-edit{display:flex;gap:8px;flex-wrap:wrap;align-items:center} .order-edit select,.order-edit input{width:auto;min-width:140px;flex:1}
+.order-list{list-style:none;margin:10px 0 0;padding:0}
+.order-item{border-top:1px solid var(--line);padding:12px 0;display:flex;flex-direction:column;gap:6px} .order-item:first-child{border-top:0}
+.order-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap} .order-head a{color:var(--ink);text-decoration:none}
+.order-notes{margin:0;font-size:.85rem}
+@media (max-width:760px){.tabs .tab{padding-left:4px;padding-right:4px;font-size:.82rem}}
+.tab-count{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--nt-red,#D40E41);color:#fff;font-size:.7rem;line-height:18px;text-align:center;vertical-align:1px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"6870996e3f39"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"bfc97faeadb3"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -602,13 +612,14 @@ __m["js/core/preview.js"] = (function () {
 // Sola lettura: ogni scrittura è bloccata, così nulla viene creato a nome della Direzione sui clienti dell'agente.
 // I permessi veri restano quelli del database: qui si filtra soltanto ciò che la Direzione vede già.
 
-const WRITE = /^(add|save|delete|set|toggle|mark|import|changePassword|followupDone|logQuoteSend)/;
+const WRITE = /^(add|save|delete|set|toggle|mark|import|changePassword|followupDone|logQuoteSend|request|update)/;
 
 class PreviewError extends Error { constructor() { super('Anteprima agente: sola lettura. Esci dall\'anteprima per modificare.'); this.code = 'PREVIEW'; } }
 
 function previewStore(store, label) {
   const mine = c => !!c && c.assignee === label;
   const ownCustomer = id => mine(store.customer(id));
+  const this_quotes = async () => (await store.quotes()).filter(q => ownCustomer(q.customerId));
   return new Proxy(store, {
     get(target, prop) {
       const v = Reflect.get(target, prop, target);
@@ -619,8 +630,9 @@ function previewStore(store, label) {
       if (prop === 'quotes') return async (...a) => (await target.quotes(...a)).filter(q => ownCustomer(q.customerId));
       if (prop === 'quote') return async id => { const q = await target.quote(id); return q && ownCustomer(q.customerId) ? q : null; };
       if (prop === 'statusChanges') return async () => (await target.statusChanges()).filter(x => ownCustomer(x.customerId));
+      if (prop === 'orders') return async () => { const ids = new Set((await this_quotes()).map(q => q.id)); return (await target.orders()).filter(o => ids.has(o.quoteId)); };
       if (prop === 'posts') return async () => (await target.posts()).filter(p => (p.audience || []).length === 0 || p.audience.includes(label));
-      if (prop === 'logOpen' || prop === 'accessSummary') return async () => null;
+      if (prop === 'logOpen' || prop === 'accessSummary' || prop === 'dataCopy') return async () => null;
       if (WRITE.test(String(prop))) return async () => { throw new PreviewError(); };
       return v.bind(target);
     },
@@ -806,13 +818,26 @@ function radixNoteView(n, customerId) {
 }
 const radixVisible = (session, n) => session?.role === 'direzione' || !RADIX_DIRECTION_GROUPS.includes(n.group);
 
-return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, assigneeFor, validVat, makeProspect, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible };
+// Richieste d'ordine all'ufficio (offerta accettata → ordine da inserire in RADIX), decisione Direzione 01/11/2026
+const ORDER_STATES = ['Da inserire', 'In lavorazione', 'Inserito', 'Annullato'];
+const ORDER_OFFICE_EMAIL = 'commerciale@nordtex.it';
+function checkOrderRequest(q, f = {}) {
+  if (!q?.id) throw new Error('Salva l\'offerta prima di passare l\'ordine');
+  if (q.status !== 'Accettata') throw new Error('L\'ordine si passa all\'ufficio solo per offerte accettate');
+  if (f.deliveryDate && !/^\d{4}-\d{2}-\d{2}$/.test(f.deliveryDate)) throw new Error('Data di consegna non valida');
+  const lim = { deliveryAddress: 500, customerRef: 120, siteContact: 200, notes: 2000 };
+  for (const [k, n] of Object.entries(lim)) if (String(f[k] || '').length > n) throw new Error('Testo troppo lungo');
+  return { deliveryDate: f.deliveryDate || null, deliveryAddress: String(f.deliveryAddress || '').trim(), customerRef: String(f.customerRef || '').trim(),
+    siteContact: String(f.siteContact || '').trim(), notes: String(f.notes || '').trim() };
+}
+
+return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, assigneeFor, validVat, makeProspect, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest };
 })();
 __m["js/data/local-store.js"] = (function () {
 // Archivio locale: dati di riferimento (clienti, prodotti) da hub-data.json,
 // attività (note, follow-up, referenti, offerte, bacheca) salvate nel browser (IndexedDB).
 // Pensato per anteprima e uso su un singolo dispositivo; la versione condivisa usa Supabase.
-const { uid, nowIso, visibleTo, nextQuoteNumber, DIREZIONE, CONTACT_KINDS, NOTE_OUTCOMES, makeProspect, applyStatus, checkStatusChange, radixNoteView, radixVisible } = __m["js/data/model.js"];
+const { uid, nowIso, visibleTo, nextQuoteNumber, DIREZIONE, CONTACT_KINDS, NOTE_OUTCOMES, makeProspect, applyStatus, checkStatusChange, radixNoteView, radixVisible, checkOrderRequest, ORDER_STATES } = __m["js/data/model.js"];
 function memoryKv(initial = {}) {
   const m = new Map(Object.entries(initial));
   return { async get(k) { return m.has(k) ? structuredClone(m.get(k)) : undefined; }, async set(k, v) { m.set(k, structuredClone(v)); } };
@@ -829,7 +854,7 @@ function indexedDbKv(dbName = 'nordtex-hub') {
   return { get: k => tx('readonly', s => s.get(k)), set: (k, v) => tx('readwrite', s => s.put(v, k)) };
 }
 
-const COLLECTIONS = ['notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends'];
+const COLLECTIONS = ['notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders'];
 
 function createLocalStore({ data, kv }) {
   if (data?.schema !== 'nordtex-hub-data-v1') throw new Error('Dati HUB non compatibili');
@@ -934,6 +959,23 @@ function createLocalStore({ data, kv }) {
       (await col('quoteSends')).push(rec); await save('quoteSends'); return rec;
     },
     async agentEmails() { return []; },
+    async orders() { mustSession(); const ids = new Set((await this.quotes()).map(q => q.id)); return (await col('orders')).filter(o => ids.has(o.quoteId)).slice().reverse(); },
+    async requestOrder(q, fields) {
+      const s = mustSession(); const f = checkOrderRequest(q, fields);
+      const quote = (await col('quotes')).find(x => x.id === q.id);
+      if (!quote || (quote.ownerId !== s.userId && !isDir())) throw new Error('Offerta non tua');
+      const list = await col('orders'); if (list.some(o => o.quoteId === q.id)) throw new Error('Ordine già passato all\'ufficio');
+      const rec = { id: uid(), quoteId: q.id, requestedBy: s.userId, requestedByName: s.name, requestedAt: nowIso(), ...f, status: 'Da inserire', radixRef: '', officeNote: '', handledByName: '', handledAt: null };
+      list.push(rec); await save('orders'); return rec;
+    },
+    async updateOrder(id, { status, radixRef, officeNote }) {
+      const s = mustSession(); if (!isDir()) throw new Error('Lo stato dell\'ordine lo aggiorna l\'ufficio');
+      if (!ORDER_STATES.includes(status)) throw new Error('Stato non valido');
+      const o = (await col('orders')).find(x => x.id === id); if (!o) throw new Error('Ordine non trovato');
+      Object.assign(o, { status, radixRef: radixRef || '', officeNote: officeNote || '', handledByName: s.name, handledAt: nowIso() }); await save('orders');
+    },
+    async dataCopy() { return this.exportBackup(); },
+    async setUserActive() { throw new Error('Nella versione locale gli accessi non si gestiscono'); },
     async logOpen() {},
     async accessSummary() { return null; },   // registro accessi solo nella versione online   // in locale le email degli agenti non ci sono (online: profili)
     // Nella versione locale non c'è un server di posta: l'invio è disponibile solo online
@@ -1016,7 +1058,7 @@ __m["js/data/supabase-store.js"] = (function () {
 // Archivio condiviso su Supabase (stesso interfaccia dell'archivio locale).
 // Login ordinario email/password; i permessi sono applicati dal database (RLS),
 // l'app non usa mai chiavi privilegiate. Richiede la migrazione supabase/migrations/20261031120000_hub_v1.sql.
-const { nowIso, makeProspect, applyStatus, checkStatusChange, radixNoteView } = __m["js/data/model.js"];
+const { nowIso, makeProspect, applyStatus, checkStatusChange, radixNoteView, checkOrderRequest } = __m["js/data/model.js"];
 const fail = (code, msg) => Object.assign(new Error(msg || code), { code });
 const SKEY = 'ntx-auth';
 // Conserva solo il token di rinnovo sul dispositivo (come la libreria ufficiale Supabase); nessuna password.
@@ -1227,6 +1269,33 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       return { ...p, id: (Array.isArray(r) ? r[0] : r)?.id || p.id };
     },
     async deletePost(id) { return api('/rest/v1/hub_board_posts?id=eq.' + id, { method: 'DELETE' }); },
+    // Richieste d'ordine all'ufficio (migrazione 20261101160000): se la tabella non c'è ancora, elenco vuoto
+    async orders() {
+      const rows = await api('/rest/v1/hub_order_requests?select=*&order=requested_at.desc').catch(() => null);
+      if (!rows) return [];
+      const nm = await names();
+      return rows.map(r => ({ id: r.id, quoteId: r.quote_id, requestedBy: r.requested_by, requestedByName: nm.get(r.requested_by) || '', requestedAt: r.requested_at,
+        deliveryDate: r.delivery_date, deliveryAddress: r.delivery_address || '', customerRef: r.customer_ref || '', siteContact: r.site_contact || '', notes: r.notes || '',
+        status: r.status, radixRef: r.radix_ref || '', officeNote: r.office_note || '', handledByName: nm.get(r.handled_by) || '', handledAt: r.handled_at }));
+    },
+    async requestOrder(q, fields) {
+      const f = checkOrderRequest(q, fields);
+      const [r] = await api('/rest/v1/hub_order_requests', { method: 'POST', prefer: 'return=representation', body: { quote_id: q.id, delivery_date: f.deliveryDate,
+        delivery_address: f.deliveryAddress || null, customer_ref: f.customerRef || null, site_contact: f.siteContact || null, notes: f.notes || null } });
+      return r;
+    },
+    async updateOrder(id, { status, radixRef, officeNote }) {
+      return api('/rest/v1/hub_order_requests?id=eq.' + id, { method: 'PATCH', body: { status, radix_ref: radixRef || null, office_note: officeNote || null } });
+    },
+    // Copia di sicurezza (Direzione): tutto ciò che si crea nell'app, in un file JSON da conservare
+    async dataCopy() {
+      const get = path => api(path).catch(() => []);
+      const [contacts, sends, posts, notes] = await Promise.all([get('/rest/v1/hub_contacts?select=*'), get('/rest/v1/hub_quote_sends?select=*'), get('/rest/v1/hub_board_posts?select=*'),
+        get('/rest/v1/hub_notes?select=*,hub_actions(*)&order=created_at.desc&limit=50000')]);
+      return { schema: 'nordtex-hub-copia-v1', created: nowIso(), by: session?.name || '', quotes: await this.quotes(), notes: notes.map(n => ({ ...n, customerCode: custCode(n.customer_id) })), orders: await this.orders(),
+        statusChanges: statusRows.slice(), contacts: contacts.map(c => ({ ...c, customerCode: custCode(c.customer_id) })), quoteSends: sends, posts };
+    },
+    async setUserActive(userId, active) { return api('/rest/v1/rpc/hub_set_active', { method: 'POST', body: { p_user: userId, p_active: !!active } }); },
     // Registro aperture dell'app (migrazione 20261101150000): se non ancora applicata, l'app funziona lo stesso
     async logOpen(device) { if (!token) return; await api('/rest/v1/rpc/hub_log_open', { method: 'POST', body: { p_device: device } }).catch(() => {}); },
     async accessSummary() {
@@ -2121,7 +2190,7 @@ function quoteCommission(q, rules, assignee) {
 return { unitCost, quoteMargin, validateBands, DEFAULT_COMMISSION_RULES, effectiveRules, bandsFor, commissionRate, quoteCommission };
 })();
 __m["js/views/direction.js"] = (function () {
-const { h, fill, eur, dateIt, dateTimeIt, emptyState, toast } = __m["js/ui.js"];
+const { h, fill, eur, dateIt, dateTimeIt, emptyState, toast, modal } = __m["js/ui.js"];
 const { quoteCls } = __m["js/views/agenda.js"];
 const { validateBands, effectiveRules } = __m["js/core/margins.js"];
 const feedState = { assignee: '', days: 30, type: '' };
@@ -2186,14 +2255,40 @@ function accessCard(app) {
     const th = (...xs) => h('tr', {}, xs.map(x => h('th', { class: x.n ? 'num' : '' }, x.t || x)));
     fill(body, h('p', { class: 'muted' }, 'Una apertura = l\'app aperta o ripresa dopo almeno 15 minuti. "Ultimo login" = ultima volta con email e password.'),
       h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
-        h('thead', {}, th('Persona', 'Ultima apertura', 'Dispositivo', { t: 'Aperture 7 gg', n: 1 }, { t: 'Aperture 30 gg', n: 1 }, { t: 'Giorni d\'uso 30 gg', n: 1 }, 'Ultimo login')),
+        h('thead', {}, th('Persona', 'Ultima apertura', 'Dispositivo', { t: 'Aperture 7 gg', n: 1 }, { t: 'Aperture 30 gg', n: 1 }, { t: 'Giorni d\'uso 30 gg', n: 1 }, 'Ultimo login', 'Accesso')),
         h('tbody', {}, rows.map(r => h('tr', { class: r.active ? '' : 'muted' },
           h('td', {}, h('strong', {}, r.name), h('br'), h('small', { class: 'muted' }, (r.role === 'direzione' ? 'Direzione' : 'Agente') + (r.active ? '' : ' · disattivato'))),
           h('td', {}, h('span', { class: r.lastOpen ? '' : 'warn-text' }, agoIt(r.lastOpen))), h('td', {}, r.device || '—'),
           h('td', { class: 'num' }, r.opens7), h('td', { class: 'num' }, r.opens30), h('td', { class: 'num' }, r.days30),
-          h('td', {}, r.lastSignIn ? dateTimeIt(r.lastSignIn) : 'mai')))))));
+          h('td', {}, r.lastSignIn ? dateTimeIt(r.lastSignIn) : 'mai'),
+          h('td', {}, r.userId === app.session.userId ? h('small', { class: 'muted' }, 'tu') : h('button', { class: 'btn small' + (r.active ? ' ghost' : ''), onclick: () => toggleUser(r) }, r.active ? 'Disattiva' : 'Riattiva'))))))));
   });
+  // Disattiva subito l'accesso (telefono perso, agente che lascia): il database blocca ogni dato al profilo non attivo
+  async function toggleUser(r) {
+    const ok = await modal(r.active ? `Disattivare l'accesso di ${r.name}?` : `Riattivare l'accesso di ${r.name}?`,
+      h('p', {}, r.active ? 'Da subito non vede più clienti, offerte e note, su qualsiasi dispositivo. I suoi dati restano e potrai riattivarlo quando vuoi.' : 'Potrà di nuovo entrare con la sua email e password.'),
+      [{ label: 'Annulla', value: false }, { label: r.active ? 'Disattiva' : 'Riattiva', primary: true, value: true }]);
+    if (!ok) return;
+    try { await app.store.setUserActive(r.userId, !r.active); toast(r.active ? 'Accesso disattivato' : 'Accesso riattivato'); loaded = false; box.dispatchEvent(new Event('toggle')); }
+    catch (e) { toast(e.message, 'error'); }
+  }
   return box;
+}
+
+// Copia di sicurezza: tutto ciò che si crea nell'app (offerte, note, ordini, referenti, bacheca) in un file da conservare
+function backupCard(app) {
+  const go = async () => {
+    try {
+      const data = await app.store.dataCopy();
+      if (!data) throw new Error('Copia non disponibile in anteprima');
+      const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' })), download: `NORDTEX_HUB_copia_dati_${new Date().toISOString().slice(0, 10)}.json` });
+      document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      toast(`Copia scaricata: ${data.quotes?.length ?? 0} offerte, ${data.notes?.length ?? 0} note`);
+    } catch (e) { toast(e.message, 'error'); }
+  };
+  return h('details', { class: 'card fold-box' }, h('summary', {}, 'Copia di sicurezza dei dati'),
+    h('p', { class: 'muted' }, 'Scarica in un file tutto ciò che si crea nell\'app: offerte, note e follow-up, ordini, referenti, comunicazioni. Consiglio: una volta a settimana, da conservare sul computer.'),
+    h('button', { class: 'btn primary', onclick: go }, 'Scarica copia dei dati'));
 }
 
 // Regole provvigioni: fasce di sconto complessivo → percentuale sulla merce netta; generali o per singolo agente
@@ -2257,7 +2352,7 @@ async function managerSection(app) {
         h('dl', { class: 'pf-grid' }, [['Zona', r.provinces || '—'], ['Clienti', r.total], ['Attivi', r.active], ['Da recuperare', r.recover], ['Persi', r.lost], ['Mai fatturato', r.never],
           ['Note ultimi 30 gg', r.notes30], ['Follow-up scaduti', r.overdue, r.overdue ? 'bad-text' : ''], ['Offerte aperte', `${r.openQ} · ${eur(r.openValue)}`], ['Offerte accettate', eur(r.won)]]
           .map(([l, v, cls]) => h('div', {}, h('dt', {}, l), h('dd', { class: cls || '' }, typeof v === 'number' ? v.toLocaleString('it-IT') : v)))))))),
-    rows.length ? null : emptyState('Nessun dato.'), commissions, accessCard(app));
+    rows.length ? null : emptyState('Nessun dato.'), commissions, accessCard(app), backupCard(app));
 }
 
 return { viewNetwork, networkSection, viewManager, managerSection };
@@ -3203,6 +3298,48 @@ function sheetLinksText(products) {
 
 return { sheetKeyFor, techSheetFor, sheetEntries, sheetLinksText };
 })();
+__m["js/core/order-mail.js"] = (function () {
+// Email "ordine da inserire" per l'ufficio (offerta accettata dal cliente, decisione Direzione 01/11/2026).
+// Solo testo, pronto da ricopiare in RADIX: cliente con N° RADIX, righe con codice RADIX, quantità, sconti e netto.
+const { totals, lineNet, lineAmount } = __m["js/core/pricing.js"];
+const { DEPOTS } = __m["js/core/quote-doc.js"];
+const { ORDER_OFFICE_EMAIL } = __m["js/data/model.js"];
+const n2 = v => Number(v || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const nq = v => Number(v || 0).toLocaleString('it-IT', { maximumFractionDigits: 3 });
+const itDate = d => { if (!d) return ''; const x = new Date(String(d).length === 10 ? d + 'T12:00:00' : d); return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`; };
+const disc = ds => ds.filter(d => d > 0).map(d => n2(d).replace(/,00$/, '')).join('+') || '—';
+
+function orderMailSubject(q) {
+  return `ORDINE DA INSERIRE – ${q.customer?.name || ''} – offerta ${q.number}`;
+}
+
+function orderMailBody(q, o, senderName = '') {
+  const t = totals(q), c = q.customer || {};
+  const depot = (DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta).label;
+  const lines = q.lines.map((l, i) => [`${i + 1}) ${l.radixCode || l.listCode || l.productId} – ${l.description}`,
+    `   ${nq(l.qty)} ${String(l.unit || '').toLowerCase()} × listino ${n2(l.listPrice)} € · sconto ${disc(l.discounts)} · netto ${n2(lineNet(l))} € = ${n2(lineAmount(l))} €`].join('\n'));
+  return [
+    'Buongiorno,',
+    `il cliente ha accettato l'offerta ${q.number}: vi chiedo di inserire l'ordine in RADIX.`,
+    ['CLIENTE', `${c.name || ''}${c.number ? ' (N° cliente RADIX ' + c.number + ')' : ''}`, [c.street, [c.cap, c.city].filter(Boolean).join(' '), c.prov ? '(' + c.prov + ')' : ''].filter(Boolean).join(' '),
+      c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean).join('\n'),
+    ['ORDINE', o.customerRef ? `Riferimento ordine cliente: ${o.customerRef}` : '', o.deliveryDate ? `Consegna richiesta: ${itDate(o.deliveryDate)}` : 'Consegna richiesta: da concordare',
+      `Consegna a: ${o.deliveryAddress || 'sede del cliente'}`, o.siteContact ? `Referente per la consegna: ${o.siteContact}` : '',
+      `Deposito / partenza: ${depot} · trasporto a cura: ${q.transportBy || 'DESTINATARIO'}`].filter(Boolean).join('\n'),
+    ['ARTICOLI', ...lines].join('\n'),
+    ['IMPORTI', `Merce netta: ${n2(t.goods)} €`, t.extras ? `${q.extrasLabel || 'Altri addebiti'}: ${n2(t.extras)} €` : '',
+      `Trasporto: ${t.freightPending ? 'da definire' : n2(t.freight) + ' €'}`, `Imponibile: ${n2(t.taxable)} € + IVA ${n2(t.vatRate).replace(/,00$/, '')}%`,
+      `Pagamento: ${q.payment || 'DA CONCORDARE'}`].filter(Boolean).join('\n'),
+    o.notes ? 'NOTE PER L\'UFFICIO\n' + o.notes : '',
+    `L'offerta completa è nel NORDTEX HUB (offerta ${q.number}); quando è inserita, segnate nell'app il numero d'ordine RADIX.`,
+    'Grazie' + (senderName ? '\n' + senderName : ''),
+  ].filter(Boolean).join('\n\n');
+}
+
+const orderMailTo = () => [ORDER_OFFICE_EMAIL];
+
+return { orderMailSubject, orderMailBody, orderMailTo };
+})();
 __m["js/views/quotes.js"] = (function () {
 const { h, fill, eur, num, dateIt, toast, modal, field, emptyState, debounce } = __m["js/ui.js"];
 const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions, normPayment, LOST_REASONS, QUOTE_SNOOZE_DAYS, quoteReminders } = __m["js/data/model.js"];
@@ -3219,6 +3356,8 @@ const { conversionLines, quantityEquivalents } = __m["js/core/conversions.js"];
 const { quoteEmail, QUOTE_BCC, isEmail } = __m["js/core/quote-email.js"];
 const { quoteDocHtml, quoteFileName, DEPOTS, TRANSPORT_BY } = __m["js/core/quote-doc.js"];
 const { techSheetFor, sheetLinksText, sheetEntries } = __m["js/core/tech-sheets.js"];
+const { orderMailBody, orderMailSubject, orderMailTo } = __m["js/core/order-mail.js"];
+const { ORDER_STATES } = __m["js/data/model.js"];
 const IMAGES = { header: OFFER_HEADER, footer: OFFER_FOOTER };
 
 const listState = { q: '', status: '' };
@@ -3258,7 +3397,7 @@ async function outcomeDialog(q, status) {
   const reason = h('select', {}, h('option', { value: '' }, 'Scegli il motivo…'), LOST_REASONS.map(r => h('option', { value: r }, r)));
   const note = h('textarea', { rows: 2, placeholder: status === 'Persa' ? 'es. concorrente e prezzo praticato, se noto' : 'Facoltativa' });
   const res = await modal(`Offerta ${q.number || ''}: ${status.toLowerCase()}`, h('div', { class: 'form' },
-    status === 'Persa' ? field('Motivo', reason) : h('p', {}, 'Ottimo. L\'offerta ufficiale e l\'ordine li prepara l\'ufficio in RADIX.'), field('Nota', note)),
+    status === 'Persa' ? field('Motivo', reason) : h('p', {}, 'Ottimo. Subito dopo passi l\'ordine all\'ufficio: lo inserisce in RADIX.'), field('Nota', note)),
     [{ label: 'Annulla', value: false }, { label: 'Conferma', primary: true, run: async () => {
       if (status === 'Persa' && !reason.value) throw new Error('Indica il motivo');
       return { reason: reason.value || '', note: note.value.trim() };
@@ -3278,6 +3417,28 @@ async function resolveOutcome(app, q, choice) {
   toast(choice === 'trattativa' ? `Ti ricordo l'esito tra ${QUOTE_SNOOZE_DAYS} giorni` : `Offerta ${choice.toLowerCase()}`);
   return true;
 }
+// Offerta accettata → richiesta d'ordine all'ufficio (registrata nell'app) + email pronta per commerciale@ (01/11/2026)
+async function orderDialog(app, q) {
+  const today = new Date().toISOString().slice(0, 10);
+  const date = h('input', { type: 'date', min: today });
+  const addr = h('textarea', { rows: 2, placeholder: 'Sede del cliente oppure indirizzo del cantiere' }, q.site || '');
+  const ref = h('input', { placeholder: 'es. conferma d\'ordine n. 125 del 03/11' });
+  const contact = h('input', { placeholder: 'es. Mario Rossi 333 1234567' });
+  const notes = h('textarea', { rows: 3, placeholder: 'es. scarico con gru, orari, bancali da rendere, accordi presi' });
+  const rec = await modal(`Passa l'ordine all'ufficio · ${q.number}`, h('div', { class: 'form' },
+    h('p', { class: 'muted' }, `${q.customer?.name || ''} · ${eur(q.total || 0)}. L'ufficio riceve l'ordine nell'app e via email e lo inserisce in RADIX.`),
+    field('Consegna richiesta', date, 'Lascia vuoto se da concordare'), field('Consegna a', addr), field('Riferimento ordine del cliente', ref),
+    field('Referente per la consegna', contact), field('Note per l\'ufficio', notes)),
+    [{ label: 'Più tardi', value: false }, { label: 'Passa all\'ufficio', primary: true, run: async () => {
+      const f = { deliveryDate: date.value || null, deliveryAddress: addr.value, customerRef: ref.value, siteContact: contact.value, notes: notes.value };
+      await app.store.requestOrder(q, f); return f;
+    } }]);
+  if (!rec || typeof rec !== 'object') return false;
+  openMailto(mailtoUrl({ to: orderMailTo(), subject: orderMailSubject(q), body: orderMailBody(q, rec, app.session.name) }));
+  toast('Ordine passato all\'ufficio: invia anche l\'email che si è aperta');
+  return true;
+}
+
 // Prima di una nuova offerta l'agente chiude le offerte senza esito da oltre 30 giorni
 async function outcomeGate(app) {
   if (app.session.role === 'direzione') return true;
@@ -3318,6 +3479,9 @@ async function viewQuoteEditor(app, id, customerId) {
   const isOwner = !q.ownerId || q.ownerId === app.session.userId || app.session.role === 'direzione' || !!app.session.preview;
   const locked = !isOwner || q.status === 'Accettata' || q.status === 'Persa';
   let dirty = false, tp = null;
+  let order = q.id ? ((await (app.store.orders?.() ?? Promise.resolve([])).catch(() => [])) || []).find(o => o.quoteId === q.id) || null : null;
+  const refreshOrder = async () => { order = ((await app.store.orders?.().catch(() => [])) || []).find(o => o.quoteId === q.id) || null; const n = header(); head.replaceWith(n); head = n; };
+  const askOrder = async () => { try { if (await orderDialog(app, q)) await refreshOrder(); } catch (e) { toast(e.message, 'error'); } };
   const stock = app.store.stock || null;
   const sheetLinks = p => { const t = techSheetFor(p); return t ? h('small', { class: 'sheets' }, t.sheet ? h('a', { href: t.sheet, target: '_blank', rel: 'noopener' }, '📄 Scheda tecnica') : '📄', ...t.dop.map((u, i) => [t.sheet || i ? ' · ' : ' ', h('a', { href: u, target: '_blank', rel: 'noopener' }, t.dop.length > 1 ? `DoP ${i + 1}` : 'DoP')])) : null; };
   const stockLine = code => { const s = stockFor(stock, code); return s.length ? h('small', { class: 'stock' }, `Magazzino al ${dateIt(s[0].date)}: ` + s.map(x => `${x.name.split('-')[0]} ${num(x.available, 2)} ${x.um.toLowerCase()}`).join(' · ')) : null; };
@@ -3471,7 +3635,7 @@ async function viewQuoteEditor(app, id, customerId) {
     try {
       if (!q.lines.length) throw new Error('Aggiungi almeno un prodotto');
       totals(q); const saved = await app.store.saveQuote(q); Object.assign(q, saved); dirty = false; saveBtn.classList.remove('attn'); dock.querySelector('.qd-act .attn')?.classList.remove('attn');
-      toast('Offerta salvata: ' + saved.number); if (id === 'nuova') app.go('offerta/' + saved.id); else { const n = header(); head.replaceWith(n); head = n; };
+      toast('Offerta salvata: ' + saved.number); if (id === 'nuova') app.go('offerta/' + saved.id); else { const n = header(); head.replaceWith(n); head = n; if (q.status === 'Accettata' && !order && !app.session.preview) await askOrder(); };
     } catch (e) { toast(e.message, 'error'); }
   }
   async function duplicate() {
@@ -3556,12 +3720,30 @@ async function viewQuoteEditor(app, id, customerId) {
     const r = q.id && isOwner ? quoteReminders([q], [], []).find(x => x.kind === 'esito') : null;
     if (!r) return null;
     return h('div', { class: 'warn-box' }, h('strong', {}, 'Inviata da oltre 30 giorni: com\'è andata?'), ' ',
-      ['Accettata', 'Persa', 'trattativa'].map(ch => h('button', { class: 'btn small', onclick: async () => { try { if (await resolveOutcome(app, q, ch)) { const n = header(); head.replaceWith(n); head = n; }; } catch (e) { toast(e.message, 'error'); } } }, ch === 'trattativa' ? 'Ancora in trattativa' : ch)));
+      ['Accettata', 'Persa', 'trattativa'].map(ch => h('button', { class: 'btn small', onclick: async () => { try { if (await resolveOutcome(app, q, ch)) { const n = header(); head.replaceWith(n); head = n; if (ch === 'Accettata' && !order) await askOrder(); }; } catch (e) { toast(e.message, 'error'); } } }, ch === 'trattativa' ? 'Ancora in trattativa' : ch)));
+  };
+  const orderCls = st => ({ 'Da inserire': 'warn', 'In lavorazione': 'info', 'Inserito': 'ok', 'Annullato': 'muted' }[st] || 'muted');
+  const orderBox = () => {
+    if (!q.id || q.status !== 'Accettata') return null;
+    if (!order) return isOwner && !app.session.preview ? h('div', { class: 'order-box todo' }, h('strong', {}, 'Offerta accettata: passa l\'ordine all\'ufficio'),
+      h('button', { class: 'btn small primary', onclick: askOrder }, 'Passa l\'ordine all\'ufficio')) : h('div', { class: 'order-box' }, 'Ordine non ancora passato all\'ufficio');
+    const info = h('div', {}, h('span', { class: 'badge ' + orderCls(order.status) }, 'Ordine: ' + order.status), order.radixRef ? h('strong', {}, ' · RADIX ' + order.radixRef) : null,
+      h('small', { class: 'muted' }, ` · passato da ${order.requestedByName || '—'} il ${dateIt(order.requestedAt)}${order.deliveryDate ? ' · consegna ' + dateIt(order.deliveryDate) : ''}${order.handledByName ? ' · ufficio: ' + order.handledByName : ''}`),
+      order.officeNote ? h('p', { class: 'muted' }, 'Ufficio: ' + order.officeNote) : null);
+    if (!isDir || app.session.preview) return h('div', { class: 'order-box' }, info);
+    const st = h('select', { 'aria-label': 'Stato ordine' }, ORDER_STATES.map(x => h('option', { selected: x === order.status }, x)));
+    const rr = h('input', { value: order.radixRef || '', placeholder: 'N° ordine RADIX', 'aria-label': 'Numero ordine RADIX' });
+    const on = h('input', { value: order.officeNote || '', placeholder: 'Nota dell\'ufficio (facoltativa)', 'aria-label': 'Nota ufficio' });
+    return h('div', { class: 'order-box' }, info, h('div', { class: 'row order-edit' }, st, rr, on, h('button', { class: 'btn small', onclick: async () => {
+      try {
+        if (st.value === 'Inserito' && !rr.value.trim()) throw new Error('Indica il numero d\'ordine RADIX');
+        await app.store.updateOrder(order.id, { status: st.value, radixRef: rr.value.trim(), officeNote: on.value.trim() }); toast('Ordine aggiornato'); await refreshOrder();
+      } catch (e) { toast(e.message, 'error'); } } }, 'Aggiorna')));
   };
   const header = () => h('header', { class: 'page-head' },
     h('div', {}, h('h1', {}, q.number ? 'Offerta ' + q.number : 'Nuova offerta'),
       h('p', { class: 'muted' }, h('a', { href: '#/agenda/' + q.customerId }, q.customer.name), ` · ${[q.customer.city, q.customer.prov].filter(Boolean).join(' ')}`, q.ownerName ? ` · ${q.ownerName}` : '', q.revision ? ` · rev. ${q.revision}` : '', q.radixRef ? ` · RADIX: ${q.radixRef}` : ''),
-      outcomeBanner(),
+      outcomeBanner(), orderBox(),
       q.outcome ? h('p', { class: 'muted' }, `Esito: ${q.outcome.status}${q.outcome.reason ? ' – ' + q.outcome.reason : ''}${q.outcome.note ? ' (' + q.outcome.note + ')' : ''} · ${q.outcome.by || ''}`) : null,
       directChannel ? h('p', { class: 'info-text' }, `Canale alternativo (${directChannel}): la vendita diretta a imprese o privati va condivisa con la Direzione e le condizioni autorizzate prima dell'invio (Condizioni agenti 2026).`) : null),
     h('div', { class: 'actions' }, statusSel, saveBtn,
@@ -3632,7 +3814,47 @@ async function startNewQuote(app) {
   draw(''); document.body.append(back); input.focus();
 }
 
-return { viewQuotes, outcomeDialog, resolveOutcome, viewQuoteEditor, printQuote, startNewQuote };
+return { viewQuotes, outcomeDialog, resolveOutcome, orderDialog, viewQuoteEditor, printQuote, startNewQuote };
+})();
+__m["js/views/orders.js"] = (function () {
+// Ordini passati all'ufficio (offerte accettate): l'ufficio li segue fino all'inserimento in RADIX. Solo Direzione.
+const { h, eur, dateIt, emptyState, toast } = __m["js/ui.js"];
+const { ORDER_STATES } = __m["js/data/model.js"];
+const state = { filter: 'aperti' };
+const cls = st => ({ 'Da inserire': 'warn', 'In lavorazione': 'info', 'Inserito': 'ok', 'Annullato': 'muted' }[st] || 'muted');
+
+async function ordersSection(app, refresh) {
+  const [orders, quotes] = await Promise.all([app.store.orders ? app.store.orders().catch(() => []) : [], app.store.quotes()]);
+  const qById = new Map(quotes.map(q => [q.id, q]));
+  const open = o => o.status === 'Da inserire' || o.status === 'In lavorazione';
+  const rows = orders.filter(o => state.filter === 'tutti' || (state.filter === 'aperti' ? open(o) : o.status === state.filter));
+  const filters = [['aperti', `Da gestire (${orders.filter(open).length})`], ['Inserito', 'Inseriti'], ['Annullato', 'Annullati'], ['tutti', 'Tutti']];
+  const item = o => {
+    const q = qById.get(o.quoteId);
+    const st = h('select', { 'aria-label': 'Stato ordine' }, ORDER_STATES.map(x => h('option', { selected: x === o.status }, x)));
+    const rr = h('input', { value: o.radixRef || '', placeholder: 'N° ordine RADIX', 'aria-label': 'Numero ordine RADIX' });
+    const save = async () => {
+      try {
+        if (st.value === 'Inserito' && !rr.value.trim()) throw new Error('Indica il numero d\'ordine RADIX');
+        await app.store.updateOrder(o.id, { status: st.value, radixRef: rr.value.trim(), officeNote: o.officeNote || '' }); toast('Ordine aggiornato'); refresh();
+      } catch (e) { toast(e.message, 'error'); }
+    };
+    return h('li', { class: 'order-item' },
+      h('div', { class: 'order-head' }, h('span', { class: 'badge ' + cls(o.status) }, o.status),
+        h('a', { href: q ? '#/offerta/' + q.id : '#/preventivi' }, h('strong', {}, q?.customer?.name || 'Offerta'), ` · ${q?.number || ''} · ${eur(q?.total || 0)}`)),
+      h('small', { class: 'muted' }, [`passato da ${o.requestedByName || '—'} il ${dateIt(o.requestedAt)}`, o.deliveryDate ? 'consegna ' + dateIt(o.deliveryDate) : 'consegna da concordare',
+        o.customerRef ? 'rif. cliente ' + o.customerRef : '', o.radixRef ? 'RADIX ' + o.radixRef : ''].filter(Boolean).join(' · ')),
+      o.deliveryAddress || o.notes ? h('p', { class: 'order-notes' }, [o.deliveryAddress ? 'Consegna a: ' + o.deliveryAddress : '', o.siteContact ? 'Referente: ' + o.siteContact : '', o.notes].filter(Boolean).join(' · ')) : null,
+      h('div', { class: 'row order-edit' }, st, rr, h('button', { class: 'btn small', onclick: save }, 'Aggiorna')));
+  };
+  return h('div', { class: 'section-body' },
+    h('section', { class: 'card' }, h('h2', {}, 'Ordini passati all\'ufficio'),
+      h('p', { class: 'muted' }, 'Offerte accettate dai clienti: il commerciale le passa all\'ufficio, l\'ufficio le inserisce in RADIX e segna qui il numero d\'ordine.'),
+      h('div', { class: 'chips' }, filters.map(([v, l]) => h('button', { class: 'chip' + (state.filter === v ? ' on' : ''), onclick: () => { state.filter = v; refresh(); } }, l))),
+      rows.length ? h('ul', { class: 'order-list' }, rows.map(item)) : emptyState(orders.length ? 'Nessun ordine in questo elenco.' : 'Ancora nessun ordine passato all\'ufficio.')));
+}
+
+return { ordersSection };
 })();
 __m["js/views/home.js"] = (function () {
 const { h, fill, eur, dateIt, today, telLinks } = __m["js/ui.js"];
@@ -3640,14 +3862,15 @@ const { boardSection } = __m["js/views/board.js"];
 const { networkSection, managerSection } = __m["js/views/direction.js"];
 const { openActions } = __m["js/views/actions.js"];
 const { startNewQuote } = __m["js/views/quotes.js"];
+const { ordersSection } = __m["js/views/orders.js"];
 
-const TABS = [['attivita', 'Attività rete'], ['bacheca', 'Bacheca'], ['manager', 'Area manager']];
+const TABS = [['attivita', 'Attività rete'], ['ordini', 'Ordini'], ['bacheca', 'Bacheca'], ['manager', 'Area manager']];
 const getTab = () => { try { return localStorage.getItem('ntx-home-tab') || 'attivita'; } catch { return 'attivita'; } };
 const setTab = t => { try { localStorage.setItem('ntx-home-tab', t); } catch { /* facoltativo */ } };
 
 async function viewHome(app, tabArg) {
   const s = app.session, isDir = s.role === 'direzione';
-  const [customers, quotes, posts, actions, notes] = await Promise.all([app.customers(), app.store.quotes(), app.store.posts(), openActions(app), app.store.notes()]);
+  const [customers, quotes, posts, actions, notes, orders] = await Promise.all([app.customers(), app.store.quotes(), app.store.posts(), openActions(app), app.store.notes(), app.store.orders ? app.store.orders().catch(() => []) : []]);
   const comms = posts.filter(p => p.kind !== 'follow-up');   // i follow-up assegnati stanno tra i follow-up, non tra le comunicazioni
   // dove porta un follow-up: offerta (promemoria offerte), cliente se collegato, altrimenti la bacheca
   const actionHref = a => a.quoteReminder ? `#/offerta/${a.quoteReminder.quote.id}` : a.note.customerId ? `#/agenda/${a.note.customerId}` : '#/bacheca';
@@ -3655,9 +3878,10 @@ async function viewHome(app, tabArg) {
   const open = quotes.filter(q => q.status === 'Bozza' || q.status === 'Inviata');
   const overdue = actions.filter(a => a.state === 'scaduto').length, todayN = actions.filter(a => a.state === 'oggi').length;
   const tile = (label, value, sub, href) => h('a', { class: 'kpi', href }, h('small', {}, label), h('strong', {}, value), sub ? h('span', {}, sub) : null);
-  const head = h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, `Buongiorno, ${s.name.split(' ')[0]}`), h('p', { class: 'muted' }, isDir ? 'Direzione commerciale · tutta la rete' : `Portafoglio ${s.assignee}`)),
+  const asOf = customers.reduce((m, c) => (c.salesAsOf && c.salesAsOf > m ? c.salesAsOf : m), '');
+  const head = h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, `Buongiorno, ${s.name.split(' ')[0]}`), h('p', { class: 'muted' }, (isDir ? 'Direzione commerciale · tutta la rete' : `Portafoglio ${s.assignee}`) + ` · dati RADIX al ${asOf ? dateIt(asOf) : '31/10/2026'}`)),
     h('button', { class: 'btn primary', onclick: () => startNewQuote(app) }, '+ Nuova offerta'));
-  const foot = h('p', { class: 'fine' }, `Oggi ${dateIt(today())} · Archivio ${app.store.mode === 'locale' ? 'locale su questo dispositivo' : 'condiviso'}`);
+  const foot = h('p', { class: 'fine' }, `Oggi ${dateIt(today())} · Dati RADIX (clienti, fatturato) al ${asOf ? dateIt(asOf) : '31/10/2026'}${app.store.stock?.depots?.[0]?.date ? ' · giacenze al ' + dateIt(app.store.stock.depots[0].date) : ''} · Archivio ${app.store.mode === 'locale' ? 'locale su questo dispositivo' : 'condiviso'}`);
 
   if (isDir) {
     const d30 = new Date(Date.now() - 30 * 864e5).toISOString();
@@ -3666,10 +3890,11 @@ async function viewHome(app, tabArg) {
     const tabsEl = h('div', { class: 'tabs', role: 'tablist' });
     const draw = async () => {
       setTab(tab);
-      fill(tabsEl, TABS.map(([id, label]) => h('button', { role: 'tab', 'aria-selected': String(id === tab), class: 'tab' + (id === tab ? ' on' : ''), onclick: () => { tab = id; draw(); } }, label)));
+      const openOrders = (app.store.orders ? await app.store.orders().catch(() => []) : []).filter(o => o.status === 'Da inserire' || o.status === 'In lavorazione').length;
+      fill(tabsEl, TABS.map(([id, label]) => h('button', { role: 'tab', 'aria-selected': String(id === tab), class: 'tab' + (id === tab ? ' on' : ''), onclick: () => { tab = id; draw(); } }, label, id === 'ordini' && openOrders ? h('span', { class: 'tab-count' }, openOrders) : null)));
       const refresh = () => draw();
       fill(body, h('p', { class: 'muted' }, 'Caricamento…'));
-      fill(body, tab === 'bacheca' ? await boardSection(app, refresh) : tab === 'manager' ? await managerSection(app) : await networkSection(app, refresh));
+      fill(body, tab === 'bacheca' ? await boardSection(app, refresh) : tab === 'manager' ? await managerSection(app) : tab === 'ordini' ? await ordersSection(app, refresh) : await networkSection(app, refresh));
     };
     await draw();
     return h('div', { class: 'page' }, head,
@@ -3683,6 +3908,8 @@ async function viewHome(app, tabArg) {
 
   // Agente: la Home è "cosa fare oggi" (01/11): follow-up e promemoria offerte scaduti o di oggi, poi clienti da recuperare da sentire
   const urgent = actions.filter(a => a.state === 'scaduto' || a.state === 'oggi');
+  const ordered = new Set(orders.map(o => o.quoteId));
+  const toOrder = quotes.filter(q => q.status === 'Accettata' && !ordered.has(q.id) && (s.preview || q.ownerId === s.userId));
   const upcoming = actions.filter(a => a.state !== 'scaduto' && a.state !== 'oggi').slice(0, 5);
   const d60 = new Date(Date.now() - 60 * 864e5).toISOString();
   const heard = new Set(notes.filter(n => n.createdAt >= d60).map(n => n.customerId));
@@ -3705,8 +3932,10 @@ async function viewHome(app, tabArg) {
       tile('Follow-up', actions.length, overdue ? `${overdue} scaduti` : `${todayN} oggi`, '#/bacheca'),
       tile('Offerte aperte', open.length, eur(open.reduce((t, q) => t + (q.total || 0), 0)), '#/preventivi')),
     h('section', { class: 'card' }, h('h2', {}, 'Da fare oggi'),
+      toOrder.length ? h('ul', { class: 'todo-list' }, toOrder.map(q => h('li', { class: 'todo' }, h('a', { href: '#/offerta/' + q.id, class: 'todo-main' },
+        h('span', { class: 'due oggi' }, 'ordine'), h('span', { class: 'todo-text' }, h('strong', {}, 'Passa l\'ordine all\'ufficio'), h('small', { class: 'muted' }, `${q.number} · ${q.customer?.name || ''} · ${eur(q.total || 0)}`)))))) : null,
       urgent.length ? h('ul', { class: 'todo-list' }, urgent.map(actionItem))
-        : h('p', { class: 'muted' }, 'Nessun follow-up scaduto o in scadenza oggi.'),
+        : toOrder.length ? null : h('p', { class: 'muted' }, 'Nessun follow-up scaduto o in scadenza oggi.'),
       toCall.length ? [h('h3', { class: 'todo-sub' }, 'Clienti da recuperare da sentire'),
         h('p', { class: 'fine' }, 'Hanno comprato nel 2025 ma non nel 2026 e non hanno note negli ultimi 60 giorni; prima i più importanti.'),
         h('ul', { class: 'todo-list' }, toCall.map(callItem)),
@@ -4058,7 +4287,12 @@ function deviceKind() {
   return /Windows|Macintosh|Linux|CrOS/.test(ua) ? 'computer' : 'altro';
 }
 let lastOpenLog = 0;
+// Uscita automatica dopo 30 giorni senza usare l'app (telefono perso o dimenticato): al riavvio si richiede la password
+const IDLE_DAYS = 30;
+function touchUse() { localStorageSet('ntx-last-use', String(Date.now())); }
+function idleTooLong() { const t = Number(localStorageGet('ntx-last-use') || 0); return t > 0 && Date.now() - t > IDLE_DAYS * 864e5; }
 function logOpen(force = false) {
+  if (app.session && !app.session.preview) touchUse();
   if (!app.session || app.session.preview || !app.store?.logOpen || (!force && Date.now() - lastOpenLog < 15 * 60e3)) return;
   lastOpenLog = Date.now(); app.store.logOpen(deviceKind());
 }
@@ -4090,7 +4324,8 @@ async function boot() {
   try {
     if (cfg.mode === 'supabase') {
       app.store = createSupabaseStore({ url: cfg.supabaseUrl, key: cfg.supabaseKey });
-      app.session = await app.store.restore().catch(() => null);
+      if (idleTooLong()) { app.store.signOut(); localStorageSet('ntx-last-use', ''); }
+      else app.session = await app.store.restore().catch(() => null);
       logOpen(true);
     } else {
       const data = window.NTX_DATA || await fetch(cfg.dataUrl || '../data-private/hub-data.json').then(r => { if (!r.ok) throw new Error('Dati non trovati'); return r.json(); });
