@@ -418,6 +418,7 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
   table.table.stack td .btn{align-self:flex-start}
   table.table.stack tr td[colspan]{grid-column:1/-1}
 }
+.access-box>summary{color:var(--muted);font-size:.85rem;list-style:none} .access-box>summary::-webkit-details-marker{display:none} .access-box>summary::before{content:'▸ '} .access-box[open]>summary::before{content:'▾ '} .access-box:not([open]){padding-top:10px;padding-bottom:10px}
 
 </style>
 <script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8"};</script>
@@ -2082,21 +2083,28 @@ const agoIt = iso => {
   const hm = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
   return days <= 0 ? 'oggi ' + hm : days === 1 ? 'ieri ' + hm : days < 7 ? `${days} giorni fa` : dateIt(iso.slice(0, 10));
 };
-async function accessCard(app) {
-  const rows = app.store.accessSummary ? await app.store.accessSummary() : null;
-  const head = h('h2', {}, 'Accessi all\'app');
-  if (!rows) return h('section', { class: 'card' }, head, h('p', { class: 'muted' }, app.store.mode === 'supabase'
-    ? 'Registro accessi non ancora attivo: serve l\'aggiornamento del database (file 06).' : 'Il registro accessi è disponibile solo nella versione online.'));
-  const th = (...xs) => h('tr', {}, xs.map(x => h('th', { class: x.n ? 'num' : '' }, x.t || x)));
-  return h('section', { class: 'card' }, head,
-    h('p', { class: 'muted' }, 'Una apertura = l\'app aperta o ripresa dopo almeno 15 minuti. "Ultimo login" = ultima volta con email e password.'),
-    h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
-      h('thead', {}, th('Persona', 'Ultima apertura', 'Dispositivo', { t: 'Aperture 7 gg', n: 1 }, { t: 'Aperture 30 gg', n: 1 }, { t: 'Giorni d\'uso 30 gg', n: 1 }, 'Ultimo login')),
-      h('tbody', {}, rows.map(r => h('tr', { class: r.active ? '' : 'muted' },
-        h('td', {}, h('strong', {}, r.name), h('br'), h('small', { class: 'muted' }, (r.role === 'direzione' ? 'Direzione' : 'Agente') + (r.active ? '' : ' · disattivato'))),
-        h('td', {}, h('span', { class: r.lastOpen ? '' : 'warn-text' }, agoIt(r.lastOpen))), h('td', {}, r.device || '—'),
-        h('td', { class: 'num' }, r.opens7), h('td', { class: 'num' }, r.opens30), h('td', { class: 'num' }, r.days30),
-        h('td', {}, r.lastSignIn ? dateTimeIt(r.lastSignIn) : 'mai')))))));
+// Riquadro chiuso in fondo all'Area manager: i dati si caricano solo quando lo si apre
+function accessCard(app) {
+  const body = h('div', {});
+  const box = h('details', { class: 'card access-box' }, h('summary', {}, 'Accessi all\'app'), body);
+  let loaded = false;
+  box.addEventListener('toggle', async () => {
+    if (!box.open || loaded) return;
+    loaded = true; fill(body, h('p', { class: 'muted' }, 'Caricamento…'));
+    const rows = app.store.accessSummary ? await app.store.accessSummary() : null;
+    if (!rows) { loaded = false; fill(body, h('p', { class: 'muted' }, app.store.mode === 'supabase'
+      ? 'Registro accessi non disponibile: serve l\'aggiornamento del database (file 06).' : 'Il registro accessi è disponibile solo nella versione online.')); return; }
+    const th = (...xs) => h('tr', {}, xs.map(x => h('th', { class: x.n ? 'num' : '' }, x.t || x)));
+    fill(body, h('p', { class: 'muted' }, 'Una apertura = l\'app aperta o ripresa dopo almeno 15 minuti. "Ultimo login" = ultima volta con email e password.'),
+      h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
+        h('thead', {}, th('Persona', 'Ultima apertura', 'Dispositivo', { t: 'Aperture 7 gg', n: 1 }, { t: 'Aperture 30 gg', n: 1 }, { t: 'Giorni d\'uso 30 gg', n: 1 }, 'Ultimo login')),
+        h('tbody', {}, rows.map(r => h('tr', { class: r.active ? '' : 'muted' },
+          h('td', {}, h('strong', {}, r.name), h('br'), h('small', { class: 'muted' }, (r.role === 'direzione' ? 'Direzione' : 'Agente') + (r.active ? '' : ' · disattivato'))),
+          h('td', {}, h('span', { class: r.lastOpen ? '' : 'warn-text' }, agoIt(r.lastOpen))), h('td', {}, r.device || '—'),
+          h('td', { class: 'num' }, r.opens7), h('td', { class: 'num' }, r.opens30), h('td', { class: 'num' }, r.days30),
+          h('td', {}, r.lastSignIn ? dateTimeIt(r.lastSignIn) : 'mai')))))));
+  });
+  return box;
 }
 
 // Regole provvigioni: fasce di sconto complessivo → percentuale sulla merce netta; generali o per singolo agente
@@ -2152,7 +2160,7 @@ async function managerSection(app) {
   }).sort((a, b) => b.active + b.recover - (a.active + a.recover));
   const sum = k => rows.reduce((t, r) => t + r[k], 0);
   const th = (...xs) => h('tr', {}, xs.map(x => h('th', { class: x.n ? 'num' : '' }, x.t || x)));
-  return h('div', { class: 'section-body' }, await accessCard(app), await commissionCard(app),
+  return h('div', { class: 'section-body' }, await commissionCard(app),
     h('section', { class: 'kpis' }, [['Clienti', sum('total')], ['Attivi', sum('active')], ['Da recuperare', sum('recover')], ['Note ultimi 30 gg', sum('notes30')], ['Offerte aperte', eur(sum('openValue'))]]
       .map(([l, v]) => h('div', { class: 'kpi' }, h('small', {}, l), h('strong', {}, typeof v === 'number' ? v.toLocaleString('it-IT') : v)))),
     h('div', { class: 'table-wrap card' }, h('table', { class: 'table' },
@@ -2161,7 +2169,7 @@ async function managerSection(app) {
         h('td', {}, h('strong', {}, r.name), h('br'), h('small', { class: 'muted' }, r.role)), h('td', {}, h('small', {}, r.provinces)),
         ...[r.total, r.active, r.recover, r.lost, r.never, r.notes30].map(v => h('td', { class: 'num' }, v)),
         h('td', { class: 'num' + (r.overdue ? ' bad-text' : '') }, r.overdue), h('td', { class: 'num' }, `${r.openQ} · ${eur(r.openValue)}`), h('td', { class: 'num' }, eur(r.won))))))),
-    rows.length ? null : emptyState('Nessun dato.'));
+    rows.length ? null : emptyState('Nessun dato.'), accessCard(app));
 }
 
 return { viewNetwork, networkSection, viewManager, managerSection };
