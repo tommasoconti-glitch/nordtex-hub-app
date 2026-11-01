@@ -418,7 +418,9 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
   table.table.stack td .btn{align-self:flex-start}
   table.table.stack tr td[colspan]{grid-column:1/-1}
 }
-.access-box>summary{color:var(--muted);font-size:.85rem;list-style:none} .access-box>summary::-webkit-details-marker{display:none} .access-box>summary::before{content:'▸ '} .access-box[open]>summary::before{content:'▾ '} .access-box:not([open]){padding-top:10px;padding-bottom:10px}
+.fold-box>summary{color:var(--muted);font-size:.85rem;list-style:none} .fold-box>summary::-webkit-details-marker{display:none} .fold-box>summary::before{content:'▸ '} .fold-box[open]>summary::before{content:'▾ '} .fold-box:not([open]){padding-top:10px;padding-bottom:10px}
+
+.fold-box+.fold-box{margin-top:-6px}
 
 </style>
 <script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8"};</script>
@@ -2086,7 +2088,7 @@ const agoIt = iso => {
 // Riquadro chiuso in fondo all'Area manager: i dati si caricano solo quando lo si apre
 function accessCard(app) {
   const body = h('div', {});
-  const box = h('details', { class: 'card access-box' }, h('summary', {}, 'Accessi all\'app'), body);
+  const box = h('details', { class: 'card fold-box' }, h('summary', {}, 'Accessi all\'app'), body);
   let loaded = false;
   box.addEventListener('toggle', async () => {
     if (!box.open || loaded) return;
@@ -2142,7 +2144,7 @@ async function commissionCard(app, refresh) {
       h('p', { class: 'fine' }, 'La provvigione si calcola riga per riga sulla merce netta, in base allo sconto complessivo della riga. Fascia 52,5% = sconto 50+5. Oltre 50+5: provvigione 3% e condizioni da autorizzare. Premio di fine anno 2% oltre € 500.000 di fatturato annuo (trasporti e servizi esclusi), riconosciuto a consuntivo sul fatturato incassato. Gli agenti vedono solo la propria provvigione.'));
   };
   draw();
-  return h('section', { class: 'card' }, h('h2', {}, 'Regole provvigioni'), box);
+  return h('details', { class: 'card fold-box' }, h('summary', {}, 'Regole provvigioni'), box);
 }
 
 async function managerSection(app) {
@@ -2160,7 +2162,8 @@ async function managerSection(app) {
   }).sort((a, b) => b.active + b.recover - (a.active + a.recover));
   const sum = k => rows.reduce((t, r) => t + r[k], 0);
   const th = (...xs) => h('tr', {}, xs.map(x => h('th', { class: x.n ? 'num' : '' }, x.t || x)));
-  return h('div', { class: 'section-body' }, await commissionCard(app),
+  const commissions = await commissionCard(app);
+  return h('div', { class: 'section-body' },
     h('section', { class: 'kpis' }, [['Clienti', sum('total')], ['Attivi', sum('active')], ['Da recuperare', sum('recover')], ['Note ultimi 30 gg', sum('notes30')], ['Offerte aperte', eur(sum('openValue'))]]
       .map(([l, v]) => h('div', { class: 'kpi' }, h('small', {}, l), h('strong', {}, typeof v === 'number' ? v.toLocaleString('it-IT') : v)))),
     h('div', { class: 'table-wrap card' }, h('table', { class: 'table' },
@@ -2169,7 +2172,7 @@ async function managerSection(app) {
         h('td', {}, h('strong', {}, r.name), h('br'), h('small', { class: 'muted' }, r.role)), h('td', {}, h('small', {}, r.provinces)),
         ...[r.total, r.active, r.recover, r.lost, r.never, r.notes30].map(v => h('td', { class: 'num' }, v)),
         h('td', { class: 'num' + (r.overdue ? ' bad-text' : '') }, r.overdue), h('td', { class: 'num' }, `${r.openQ} · ${eur(r.openValue)}`), h('td', { class: 'num' }, eur(r.won))))))),
-    rows.length ? null : emptyState('Nessun dato.'), accessCard(app));
+    rows.length ? null : emptyState('Nessun dato.'), commissions, accessCard(app));
 }
 
 return { viewNetwork, networkSection, viewManager, managerSection };
