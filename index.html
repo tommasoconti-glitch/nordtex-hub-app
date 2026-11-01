@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="febb9d51918b">
+<meta name="ntx-build" content="34d92641f240">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -571,9 +571,22 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 .cmeta{gap:2px;font-size:.78rem;white-space:nowrap} .cmeta small{display:inline;font-size:.62rem;letter-spacing:.04em}
 .vmeta.warn{color:var(--warn)} .vmeta.bad{color:var(--bad)} .vmeta.ok{color:var(--ok)}
 .warn-text{color:var(--warn)}
+/* Offerte: elenco unico app + RADIX */
+.origin{font-size:.66rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:6px;background:#eef1f5;color:#475467}
+.origin.app{background:var(--lime-soft,#f2f3d1);color:var(--lime-ink,#575800)}
+.offers-list .rx-offer.is-late{border-left:3px solid var(--bad);padding-left:10px}
+button.kpi{font:inherit;text-align:left;cursor:pointer;border:0} .kpi.on{outline:2px solid var(--accent,#BCBF00)}
+/* urgenza offerte: pallino e bordo colorati, intestazioni di gruppo */
+.urg-dot{width:12px;height:12px;border-radius:50%;flex:none;display:inline-block;margin-top:5px}
+.urg-dot.subito{background:var(--bad,#D40E41);box-shadow:0 0 0 3px var(--bad-bg,#fbe3e8)} .urg-dot.settimana{background:#e09a00;box-shadow:0 0 0 3px var(--warn-bg,#fdf1d8)} .urg-dot.dopo{background:#2e9e5b;box-shadow:0 0 0 3px #e5f4ea}
+.offers-list .rx-offer{gap:10px;justify-content:flex-start} .offers-list .rx-main{flex:1}
+.offers-list .rx-offer.urg-subito{background:linear-gradient(90deg,var(--bad-bg,#fbe3e8) 0,transparent 40%)}
+.urg-head{display:flex;align-items:center;gap:8px;padding:14px 0 6px;border-bottom:2px solid var(--line);list-style:none}
+.urg-head .urg-dot{margin-top:0} .urg-head strong{font-size:.95rem} .urg-head small{color:var(--muted);margin-left:auto}
+.urg-head.subito{border-bottom-color:var(--bad,#D40E41)} .urg-head.settimana{border-bottom-color:#e09a00} .urg-head.dopo{border-bottom-color:#2e9e5b}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"febb9d51918b"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"34d92641f240"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -896,7 +909,37 @@ const radixOfferDue = o => o.nextFollowup || o.followup || null;
 // Offerte fatte in RADIX come DIREZIONALE: le vedono Direzione e consulenti interni, non gli agenti (decisione Tommaso 01/11/2026)
 const radixOfferForAgent = (o, assigneeRole) => String(o.radixAgent || '').toUpperCase() !== 'DIREZIONALE' || assigneeRole === 'Consulente interno';
 
-return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, assigneeFor, validVat, makeProspect, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent };
+// Validità dell'offerta (01/11 sera, Tommaso): "scade tra N giorni" è il motivo più concreto per richiamare
+function validityInfo(validUntil, today = new Date().toISOString().slice(0, 10)) {
+  if (!validUntil) return null;
+  const days = Math.round((new Date(validUntil + 'T12:00:00') - new Date(today + 'T12:00:00')) / 864e5);
+  if (days < 0) return { days, cls: 'muted', label: 'validità scaduta il ' + validUntil.split('-').reverse().join('/') };
+  if (days <= 7) return { days, cls: days <= 2 ? 'bad' : 'warn', label: days === 0 ? 'scade oggi' : days === 1 ? 'scade domani' : `scade tra ${days} giorni` };
+  return { days, cls: '', label: 'valida fino al ' + validUntil.split('-').reverse().join('/') };
+}
+const isExpiring = v => !!v && v.days >= 0 && v.days <= 7;
+// Offerte dell'app e di RADIX in un solo elenco: stato comune (aperta/accettata/persa), data del prossimo contatto, validità
+function unifiedOffers({ quotes = [], radix = [], reminders = [], customer = () => null, today = new Date().toISOString().slice(0, 10) }) {
+  const due = new Map(reminders.map(r => [r.quote.id, r.due]));
+  const app = quotes.map(q => {
+    const open = q.status === 'Bozza' || q.status === 'Inviata';
+    const vu = q.createdAt ? addDays(String(q.createdAt).slice(0, 10), q.validDays || 30) : null;
+    return { key: 'q:' + q.id, origin: 'app', id: q.id, number: q.number, customerId: q.customerId, customerName: q.customer?.name || customer(q.customerId)?.name || '',
+      subject: (q.lines || []).slice(0, 2).map(l => l.description || l.radixCode).filter(Boolean).join(', '), total: q.total ?? null, who: q.ownerName || '',
+      state: open ? 'aperta' : q.status === 'Accettata' ? 'accettata' : 'persa', label: q.status, due: open ? (due.get(q.id) || null) : null,
+      validity: open ? validityInfo(vu, today) : null, date: String(q.createdAt || q.updatedAt || '').slice(0, 10), raw: q };
+  });
+  const rx = radix.map(o => {
+    const open = o.outcome === 'Da seguire' || o.outcome === 'Sentito';
+    return { key: 'r:' + o.id, origin: 'radix', id: o.id, number: o.id, customerId: o.customerId, customerName: customer(o.customerId)?.name || o.customerLabel,
+      subject: o.subject || '', total: o.total ?? null, who: customer(o.customerId)?.assignee || '', radixAgent: o.radixAgent || '',
+      state: open ? 'aperta' : o.outcome === 'Accettata' ? 'accettata' : 'persa', label: o.outcome, due: open ? (o.nextFollowup || o.followup || null) : null,
+      validity: open ? validityInfo(o.validUntil, today) : null, date: o.date, raw: o };
+  });
+  return app.concat(rx);
+}
+
+return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, assigneeFor, validVat, makeProspect, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers };
 })();
 __m["js/core/preview.js"] = (function () {
 // Anteprima "come agente" per la Direzione (richiesta Tommaso 01/11/2026): l'app mostra solo ciò che vede l'agente scelto.
@@ -1781,7 +1824,7 @@ __m["js/views/radix-offers.js"] = (function () {
 // Offerte aperte importate da RADIX (richiesta Tommaso 01/11/2026): l'app le mostra a chi segue il cliente
 // (senza cliente HUB solo alla Direzione) e permette di segnare l'esito. Le offerte restano in RADIX: qui si seguono.
 const { h, fill, eur, dateIt, today, toast, modal, field, emptyState } = __m["js/ui.js"];
-const { RADIX_OFFER_OUTCOMES, radixOfferDue } = __m["js/data/model.js"];
+const { RADIX_OFFER_OUTCOMES, radixOfferDue, validityInfo, isExpiring } = __m["js/data/model.js"];
 const CLS = { 'Da seguire': 'warn', Sentito: 'info', Accettata: 'ok', Persa: 'bad' };
 const radixOfferOpen = o => o.outcome === 'Da seguire' || o.outcome === 'Sentito';
 const dueState = o => { const d = radixOfferDue(o); if (!d || !radixOfferOpen(o)) return ''; const t = today(); return d < t ? 'scaduto' : d === t ? 'oggi' : ''; };
@@ -1813,7 +1856,8 @@ function row(app, o, refresh, { showCustomer = true } = {}) {
   return h('li', { class: 'rx-offer' },
     h('div', { class: 'rx-main' },
       h('div', { class: 'rx-top' }, h('strong', {}, o.id), h('span', { class: 'badge ' + (CLS[o.outcome] || 'muted') }, o.outcome),
-        d && radixOfferOpen(o) ? h('span', { class: 'due ' + st }, (st === 'scaduto' ? 'da sentire dal ' : st === 'oggi' ? 'sentire oggi' : 'sentire il ') + (st === 'oggi' ? '' : dateIt(d))) : null),
+        d && radixOfferOpen(o) ? h('span', { class: 'due ' + st }, (st === 'scaduto' ? 'da sentire dal ' : st === 'oggi' ? 'sentire oggi' : 'sentire il ') + (st === 'oggi' ? '' : dateIt(d))) : null,
+        (v => radixOfferOpen(o) && isExpiring(v) ? h('span', { class: 'due ' + (v.cls === 'bad' ? 'scaduto' : 'oggi') }, v.label) : null)(validityInfo(o.validUntil))),
       showCustomer ? (c ? h('a', { href: '#/agenda/' + c.id }, c.name + (c.city ? ' · ' + c.city : '')) : h('span', {}, o.customerLabel, h('small', { class: 'muted' }, ' (non nell\'anagrafica HUB)'))) : null,
       h('small', { class: 'muted' }, [o.subject || 'senza oggetto', 'del ' + dateIt(o.date), o.radixAgent ? 'RADIX: ' + o.radixAgent.toLowerCase() : '', o.contact].filter(Boolean).join(' · ')),
       o.outcomeNote ? h('small', { class: 'rx-note' }, `“${o.outcomeNote}” — ${o.outcomeByName || ''} ${o.outcomeAt ? dateIt(o.outcomeAt) : ''}`) : null),
@@ -3657,6 +3701,102 @@ const orderMailTo = () => [ORDER_OFFICE_EMAIL];
 
 return { orderMailSubject, orderMailBody, orderMailTo };
 })();
+__m["js/views/offers-list.js"] = (function () {
+// Offerte (01/11 sera, Tommaso): un solo elenco con le offerte dell'app e quelle RADIX.
+// All'apertura "Da seguire" (aperte) in ordine di prossimo contatto; in evidenza quelle in scadenza di validità.
+const { h, fill, eur, dateIt, today, toast, emptyState, debounce } = __m["js/ui.js"];
+const { unifiedOffers, quoteReminders, isExpiring } = __m["js/data/model.js"];
+const { radixOfferDialog } = __m["js/views/radix-offers.js"];
+const { quoteCls } = __m["js/views/agenda.js"];
+const st = { filter: 'aperte', q: '', who: '', origin: '' };
+// Urgenza a colpo d'occhio (01/11 sera, Tommaso: "far capire l'urgenza di intervento, non per forza scritta"):
+// rosso = subito (contatto scaduto o validità entro 2 giorni), arancio = questa settimana, verde = più avanti
+const URG = [['subito', 'Subito'], ['settimana', 'Questa settimana'], ['dopo', 'Più avanti']];
+function urgency(o, t = today()) {
+  if (o.state !== 'aperta') return null;
+  const in7 = new Date(new Date(t + 'T12:00:00').getTime() + 7 * 864e5).toISOString().slice(0, 10);
+  if ((o.due && o.due < t) || (o.validity && o.validity.days >= 0 && o.validity.days <= 2)) return 'subito';
+  if ((o.due && o.due <= in7) || (o.validity && o.validity.days >= 0 && o.validity.days <= 7)) return 'settimana';
+  return 'dopo';
+}
+const RX_CLS = { 'Da seguire': 'warn', Sentito: 'info', Accettata: 'ok', Persa: 'bad' };
+
+async function offersList(app, { onNew }) {
+  const isDir = app.session.role === 'direzione';
+  const [quotes, radix, notes, sends] = await Promise.all([app.store.quotes(), app.store.radixOffers ? app.store.radixOffers().catch(() => []) : [],
+    app.store.notes().catch(() => []), app.store.quoteSends ? app.store.quoteSends().catch(() => []) : []]);
+  const t = today(), month = t.slice(0, 7);
+  let all = unifiedOffers({ quotes, radix, reminders: quoteReminders(quotes, notes, sends), customer: id => app.store.customer(id), today: t });
+  const reload = async () => { const r = app.store.radixOffers ? await app.store.radixOffers().catch(() => radix) : radix;
+    all = unifiedOffers({ quotes, radix: r, reminders: quoteReminders(quotes, notes, sends), customer: id => app.store.customer(id), today: t }); draw(); };
+
+  const open = () => all.filter(o => o.state === 'aperta');
+  const late = o => o.due && o.due <= t;
+  const FILTERS = [['aperte', 'Da seguire', x => x.state === 'aperta'], ['sentire', 'Da sentire', x => x.state === 'aperta' && late(x)], ['scadenza', 'In scadenza', x => x.state === 'aperta' && isExpiring(x.validity)],
+    ['accettate', 'Accettate', x => x.state === 'accettata'], ['perse', 'Perse', x => x.state === 'persa'], ['tutte', 'Tutte', () => true]];
+  const sorters = { sentire: (a, b) => (a.due || '').localeCompare(b.due || '') || (b.total || 0) - (a.total || 0), aperte: (a, b) => (a.due || '9999').localeCompare(b.due || '9999') || (b.total || 0) - (a.total || 0),
+    scadenza: (a, b) => a.validity.days - b.validity.days || (b.total || 0) - (a.total || 0) };
+
+  const kpis = h('section', { class: 'kpis trend' });
+  const chips = h('div', { class: 'chips' });
+  const list = h('ul', { class: 'rx-list offers-list' });
+  const counter = h('small', { class: 'muted' });
+
+  const row = o => {
+    const c = o.customerId ? app.store.customer(o.customerId) : null;
+    const dueCls = o.due ? (o.due < t ? 'scaduto' : o.due === t ? 'oggi' : 'in-programma') : '';
+    const badge = o.origin === 'app' ? h('span', { class: 'badge ' + quoteCls(o.label) }, o.label) : h('span', { class: 'badge ' + (RX_CLS[o.label] || 'muted') }, o.label);
+    const main = h('div', { class: 'rx-main' },
+      h('div', { class: 'rx-top' }, h('strong', {}, o.number || 'bozza'), h('span', { class: 'origin ' + o.origin }, o.origin === 'app' ? 'app' : 'RADIX'), badge,
+        o.due ? h('span', { class: 'due ' + dueCls }, o.due < t ? 'da sentire dal ' + dateIt(o.due) : o.due === t ? 'sentire oggi' : 'sentire il ' + dateIt(o.due)) : null,
+        o.validity && o.validity.cls ? h('span', { class: 'due ' + (o.validity.cls === 'muted' ? '' : o.validity.cls === 'bad' ? 'scaduto' : 'oggi') }, o.validity.label) : null),
+      c ? h('a', { href: '#/agenda/' + c.id }, c.name + (c.city ? ' · ' + c.city : '')) : h('span', {}, o.customerName),
+      h('small', { class: 'muted' }, [o.subject || null, 'del ' + dateIt(o.date), isDir && o.who ? 'segue ' + o.who : null,
+        o.origin === 'radix' && o.radixAgent && isDir ? 'in RADIX: ' + o.radixAgent.toLowerCase() : null].filter(Boolean).join(' · ')),
+      o.origin === 'radix' && o.raw.outcomeNote ? h('small', { class: 'rx-note' }, `“${o.raw.outcomeNote}” — ${o.raw.outcomeByName || ''}`) : null);
+    const side = h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, o.total ? eur(o.total) : '—'),
+      o.origin === 'radix' && !app.session.preview ? h('button', { class: 'btn small', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o.raw).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, 'Esito')
+        : o.origin === 'app' ? h('a', { class: 'btn small', href: '#/offerta/' + o.id }, 'Apri') : null);
+    const u = urgency(o, t);
+    return h('li', { class: 'rx-offer' + (u ? ' urg-' + u : '') }, u ? h('span', { class: 'urg-dot ' + u, title: URG.find(x => x[0] === u)[1], 'aria-label': URG.find(x => x[0] === u)[1] }) : null, main, side);
+  };
+
+  function draw() {
+    const op = open(), lateN = op.filter(late).length, exp = op.filter(o => isExpiring(o.validity));
+    const won = all.filter(o => o.state === 'accettata' && String(o.origin === 'app' ? (o.raw.outcome?.at || o.raw.updatedAt) : o.raw.outcomeAt || '').slice(0, 7) === month);
+    const sum = xs => xs.reduce((a, x) => a + (x.total || 0), 0);
+    const tile = (label, value, sub, f) => h('button', { class: 'kpi' + (st.filter === f ? ' on' : ''), type: 'button', onclick: () => { st.filter = f; draw(); } }, h('small', {}, label), h('strong', {}, value), sub ? h('span', {}, sub) : null);
+    fill(kpis, tile('Offerte aperte', eur(sum(op)), `${op.length} offerte`, 'aperte'), tile('Da sentire', lateN.toLocaleString('it-IT'), 'scadute o di oggi', 'sentire'),
+      tile('In scadenza di validità', exp.length.toLocaleString('it-IT'), exp.length ? eur(sum(exp)) + ' entro 7 giorni' : 'nei prossimi 7 giorni', 'scadenza'),
+      tile('Accettate nel mese', eur(sum(won)), `${won.length} offerte`, 'accettate'));
+    const w = st.q.toLocaleLowerCase('it');
+    const base = all.filter(o => (!st.who || o.who === st.who) && (!st.origin || o.origin === st.origin)
+      && (!w || [o.number, o.customerName, o.subject, o.who, o.radixAgent].join(' ').toLocaleLowerCase('it').includes(w)));
+    fill(chips, FILTERS.map(([k, l, f]) => h('button', { class: 'chip' + (st.filter === k ? ' on' : ''), type: 'button', onclick: () => { st.filter = k; draw(); } }, l, h('b', {}, base.filter(f).length.toLocaleString('it-IT')))));
+    const f = FILTERS.find(x => x[0] === st.filter)[2];
+    const rows = base.filter(f).sort(sorters[st.filter] || ((a, b) => String(b.date).localeCompare(String(a.date))));
+    counter.textContent = `${rows.length} offerte · ${eur(sum(rows))}`;
+    // con le offerte aperte l'elenco è diviso per urgenza, ogni gruppo con colore, numero e valore
+    const grouped = ['aperte', 'sentire', 'scadenza'].includes(st.filter);
+    const body = !rows.length ? [h('li', {}, emptyState(all.length ? 'Nessuna offerta con questi filtri.' : 'Nessuna offerta. Tocca “+ Nuova offerta” e scegli il cliente.'))]
+      : grouped ? URG.flatMap(([k, l]) => { const g = rows.filter(o => urgency(o, t) === k); return g.length ? [h('li', { class: 'urg-head ' + k }, h('span', { class: 'urg-dot ' + k }), h('strong', {}, l), h('small', {}, `${g.length} · ${eur(sum(g))}`)), ...g.slice(0, 200).map(row)] : []; })
+      : rows.slice(0, 300).map(row);
+    fill(list, body);
+  }
+  const whoList = [...new Set(all.map(o => o.who).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
+  const tools = h('div', { class: 'list-tools row' },
+    h('input', { type: 'search', placeholder: 'Cerca numero, cliente, oggetto…', value: st.q, oninput: debounce(e => { st.q = e.target.value; draw(); }) }),
+    isDir ? h('select', { 'aria-label': 'Chi la segue', onchange: e => { st.who = e.target.value; draw(); } }, h('option', { value: '' }, 'Tutti gli agenti'), whoList.map(x => h('option', { selected: x === st.who }, x))) : null,
+    h('select', { 'aria-label': 'Origine', onchange: e => { st.origin = e.target.value; draw(); } }, [['', 'App e RADIX'], ['app', 'Solo app'], ['radix', 'Solo RADIX']].map(([v, l]) => h('option', { value: v, selected: v === st.origin }, l))));
+  draw();
+  return h('div', { class: 'page' },
+    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Offerte'), h('p', { class: 'muted' }, 'Offerte dell\'app e offerte aperte importate da RADIX · prezzi dal listino n.05 del 01/10/2026')),
+      h('button', { class: 'btn primary', onclick: onNew }, '+ Nuova offerta')),
+    kpis, tools, chips, counter, list);
+}
+
+return { urgency, offersList };
+})();
 __m["js/views/quotes.js"] = (function () {
 const { h, fill, eur, num, dateIt, toast, modal, field, emptyState, debounce } = __m["js/ui.js"];
 const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions, normPayment, LOST_REASONS, QUOTE_SNOOZE_DAYS, quoteReminders } = __m["js/data/model.js"];
@@ -3675,43 +3815,13 @@ const { quoteDocHtml, quoteFileName, DEPOTS, TRANSPORT_BY } = __m["js/core/quote
 const { techSheetFor, sheetLinksText, sheetEntries } = __m["js/core/tech-sheets.js"];
 const { orderMailBody, orderMailSubject, orderMailTo } = __m["js/core/order-mail.js"];
 const { ORDER_STATES } = __m["js/data/model.js"];
-const { radixOffersPanel } = __m["js/views/radix-offers.js"];
+const { offersList } = __m["js/views/offers-list.js"];
 const IMAGES = { header: OFFER_HEADER, footer: OFFER_FOOTER };
 
-const listState = { q: '', status: '', tab: 'app' };
 
-async function viewQuotes(app, tabArg) {
-  if (tabArg === 'radix' || tabArg === 'app') listState.tab = tabArg;
-  const quotes = await app.store.quotes();
-  const isDir = app.session.role === 'direzione';
-  const body = h('tbody');
-  const draw = () => {
-    const w = listState.q.toLocaleLowerCase('it');
-    const rows = quotes.filter(q => (!listState.status || q.status === listState.status) && (!w || [q.number, q.customer?.name, q.ownerName].join(' ').toLocaleLowerCase('it').includes(w)));
-    fill(body, ...rows.map(q => h('tr', { onclick: () => app.go('offerta/' + q.id) }, h('td', {}, h('strong', {}, q.number)), h('td', {}, q.customer?.name || ''),
-      h('td', {}, h('span', { class: 'badge ' + quoteCls(q.status) }, q.status)), h('td', {}, dateIt(q.updatedAt)), isDir ? h('td', {}, q.ownerName) : null, h('td', { class: 'num' }, eur(q.total)))));
-    if (!rows.length) fill(body, h('tr', {}, h('td', { colspan: 6 }, emptyState(quotes.length ? 'Nessuna offerta con questi filtri.' : 'Nessuna offerta. Tocca “+ Nuova offerta” e scegli il cliente.'))));
-  };
-  draw();
-  const byStatus = s => quotes.filter(q => q.status === s);
-  // Seconda scheda: offerte aperte importate da RADIX (01/11/2026)
-  const rx = await radixOffersPanel(app);
-  const appBox = h('div');
-  const tabsEl = h('div', { class: 'tabs', role: 'tablist' });
-  const tabBody = h('div');
-  const drawTab = () => {
-    fill(tabsEl, [['app', 'Offerte dall\'app'], ['radix', 'Da RADIX']].map(([id, label]) => h('button', { role: 'tab', 'aria-selected': String(id === listState.tab), class: 'tab' + (id === listState.tab ? ' on' : ''),
-      onclick: () => { listState.tab = id; drawTab(); } }, label, id === 'radix' && rx.count ? h('span', { class: 'tab-count' }, rx.count) : null)));
-    fill(tabBody, listState.tab === 'radix' ? rx.el : appBox);
-  };
-  return h('div', { class: 'page' },
-    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Offerte'), h('p', { class: 'muted' }, 'Prezzi dal listino n.05 del 01/10/2026.')),
-      h('button', { class: 'btn primary', onclick: () => startNewQuote(app) }, '+ Nuova offerta')),
-    (drawTab(), tabsEl), tabBody,
-    fill(appBox, h('section', { class: 'kpis' }, QUOTE_STATES.map(s => h('div', { class: 'kpi' }, h('small', {}, s), h('strong', {}, byStatus(s).length), h('span', {}, eur(byStatus(s).reduce((t, q) => t + (q.total || 0), 0)))))),
-    h('div', { class: 'list-tools row' }, h('input', { type: 'search', placeholder: 'Cerca numero, cliente…', value: listState.q, oninput: debounce(e => { listState.q = e.target.value; draw(); }) }),
-      h('select', { onchange: e => { listState.status = e.target.value; draw(); } }, h('option', { value: '' }, 'Tutti gli stati'), QUOTE_STATES.map(s => h('option', { selected: s === listState.status }, s)))),
-    h('table', { class: 'table' }, h('thead', {}, h('tr', {}, h('th', {}, 'Numero'), h('th', {}, 'Cliente'), h('th', {}, 'Stato'), h('th', {}, 'Aggiornata'), isDir ? h('th', {}, 'Autore') : null, h('th', { class: 'num' }, 'Totale'))), body)) && null);
+// Elenco offerte unico (app + RADIX), 01/11 sera: vedi offers-list.js
+async function viewQuotes(app) {
+  return offersList(app, { onNew: () => startNewQuote(app) });
 }
 
 function newQuote(app, c) {
@@ -4178,7 +4288,7 @@ const { openActions } = __m["js/views/actions.js"];
 const { startNewQuote, pickCustomer } = __m["js/views/quotes.js"];
 const { noteDialog } = __m["js/views/agenda.js"];
 const { radixOfferOpen, dueState } = __m["js/views/radix-offers.js"];
-const { radixOfferDue } = __m["js/data/model.js"];
+const { radixOfferDue, validityInfo, isExpiring } = __m["js/data/model.js"];
 
 const greeting = () => { const hr = new Date().getHours(); return hr < 13 ? 'Buongiorno' : hr < 18 ? 'Buon pomeriggio' : 'Buonasera'; };
 
@@ -4278,6 +4388,7 @@ async function homeDirection(app, { head, foot, customers, quotes, actions, note
     [rxFollow.length, 'Offerte RADIX da sentire', `${eur(sum(rxFollow, o => o.total))}${bigRx ? ' · le più grandi: ' + bigRx : ''}`, '#/preventivi/radix', 'bad'],
     [late.length, 'Follow-up scaduti o di oggi', topAgents || 'della rete', '#/bacheca', 'bad'],
     [noOutcome.length, 'Offerte inviate senza esito da oltre 30 giorni', eur(sum(noOutcome, q => q.total)), '#/preventivi', 'warn'],
+    ((exp) => [exp.length, 'Offerte in scadenza di validità', exp.length ? `entro 7 giorni · ${eur(sum(exp, o => o.total))}` : '', '#/preventivi', 'warn'])(rxOpen.filter(o => isExpiring(validityInfo(o.validUntil, t)))),
     [rxTodo.length, 'Promemoria RADIX da fare', 'scritti in RADIX con una data, non ancora chiusi', '#/bacheca', 'warn'],
   ].filter(r => r[0] > 0);
   const todayCard = h('section', { class: 'card today-card' }, h('h2', {}, 'Oggi'),
