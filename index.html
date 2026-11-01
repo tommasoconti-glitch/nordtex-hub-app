@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="c7903c4e3027">
+<meta name="ntx-build" content="7f6ac311bc81">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -485,8 +485,13 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 .radix-item a{color:var(--ink);text-decoration:none} .radix-text{font-size:.88rem;white-space:pre-line;max-height:4.2em;overflow:hidden}
 .radix-item .link{align-self:flex-start;padding:0} .radix-more summary{cursor:pointer;font-weight:600;padding:6px 0}
 
+/* invio: condivisione con PDF allegato (iPhone/iPad) */
+.share-box{border:1px solid var(--line,#e6e6e8);border-radius:12px;padding:12px;margin-bottom:10px;background:#f2f3d1}
+.share-box .btn{width:100%}
+.share-box .fine{margin:8px 0 0}
+
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"c7903c4e3027"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"7f6ac311bc81"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3737,8 +3742,26 @@ async function viewQuoteEditor(app, id, customerId) {
       openMailto(mailtoUrl({ to: list, bcc: isDir && !bccBox.checked ? [] : QUOTE_BCC, subject: subject.value, body: quoteMailBody(q, msg.value, sheetsBox.checked ? sheetsText : '') }));
       done.mail = true; draw();
     };
+    // Su iPhone/iPad (e dove il sistema lo permette): un tocco apre "Condividi" con il PDF già allegato e il testo pronto;
+    // si sceglie Mail, Outlook o Gmail e l'email parte dalla casella di chi usa l'app. L'indirizzo del cliente viene copiato, basta incollarlo.
+    const shareFile = () => { try { const r = pdf(); const f = new File([r.bytes], r.fileName, { type: 'application/pdf' }); return navigator.canShare?.({ files: [f] }) ? f : null; } catch { return null; } };
+    const canShare = !!shareFile();
+    const sharePdf = () => {
+      const list = to.value.split(/[;,\s]+/).filter(Boolean);
+      if (!list.length || !list.every(isEmail)) { toast('Indirizzo email del cliente non valido', 'error'); return; }
+      const f = shareFile(); if (!f) { toast('Condivisione non disponibile su questo dispositivo', 'error'); return; }
+      const copy = list.join(', ');
+      try { navigator.clipboard?.writeText(copy).catch(() => null); } catch { /* copia facoltativa */ }
+      navigator.share({ files: [f], title: subject.value, text: quoteMailBody(q, msg.value, sheetsBox.checked ? sheetsText : '') })
+        .then(() => { done.pdf = done.mail = true; draw(); toast('Indirizzo copiato: incollalo in "A" (' + copy + ')'); })
+        .catch(e => { if (e?.name !== 'AbortError') toast('Condivisione non riuscita: usa i passi qui sotto', 'error'); });
+    };
     const step = (n, label, ok, btn) => h('div', { class: 'send-step' + (ok ? ' ok' : '') }, h('span', { class: 'n' }, ok ? '✓' : n), h('div', {}, label), btn);
     const draw = () => fill(st,
+      canShare ? h('div', { class: 'share-box' },
+        h('button', { class: 'btn primary', type: 'button', onclick: sharePdf }, 'Condividi PDF ed email'),
+        h('p', { class: 'fine' }, 'Si apre "Condividi" con il PDF già allegato: scegli Mail, Outlook o Gmail (la tua casella), incolla l\'indirizzo del cliente in "A" (è già copiato)' + (isDir && !bccBox.checked ? '' : ' e in "Ccn" metti ' + QUOTE_BCC.join(', ')) + ', poi invia.'),
+        h('p', { class: 'fine muted' }, 'Oppure, senza Condividi:')) : null,
       step(1, 'Salva il PDF dell\'offerta (formato NORDTEX)', done.pdf, h('button', { class: 'btn small' + (done.pdf ? '' : ' primary'), type: 'button', onclick: savePdf }, done.pdf ? 'Di nuovo' : 'Salva PDF')),
       step(2, 'Apri l\'email già compilata nel tuo programma di posta e allega il PDF', done.mail, h('button', { class: 'btn small' + (done.pdf && !done.mail ? ' primary' : ''), type: 'button', onclick: openMail }, 'Apri email')),
       h('p', { class: 'fine' }, 'Su iPhone/iPad: il PDF finisce in File › Download; nell\'email tocca il testo e scegli "Allega file". Su computer trascina il PDF nell\'email.'));
