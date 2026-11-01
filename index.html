@@ -2,7 +2,8 @@
 <html lang="it">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; connect-src https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
+<meta name="ntx-build" content="f3a4913806d0">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -427,9 +428,10 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 .pf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 18px;margin:0 0 14px 1.6em}
 .pf-grid dt{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)} .pf-grid dd{margin:2px 0 0;font-weight:600}
 @media (max-width:600px){.pf-grid{grid-template-columns:1fr 1fr;margin-left:1.2em} .pf-grid>div:first-child{grid-column:1/-1}}
+.update-bar{position:fixed;left:12px;right:12px;margin:0 auto;max-width:480px;justify-content:space-between;top:calc(env(safe-area-inset-top) + 10px);z-index:2000;display:flex;align-items:center;gap:12px;background:var(--ink);color:#fff;padding:10px 12px 10px 16px;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.25);font-size:.9rem}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f3a4913806d0"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3907,7 +3909,25 @@ function logOpen(force = false) {
   if (!app.session || !app.store?.logOpen || (!force && Date.now() - lastOpenLog < 15 * 60e3)) return;
   lastOpenLog = Date.now(); app.store.logOpen(deviceKind());
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') logOpen(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { logOpen(); checkUpdate(); } });
+
+// Nuova versione pubblicata: l'app aperta dalla Home dell'iPhone può restare sulla vecchia pagina in memoria.
+// Al ritorno sull'app (e ogni 30 minuti) confronta la propria impronta con quella pubblicata e propone di aggiornare.
+let lastUpdateCheck = 0;
+async function checkUpdate() {
+  const cfg = window.NTX_CONFIG || {};
+  if (cfg.mode !== 'supabase' || !cfg.buildId || Date.now() - lastUpdateCheck < 60e3 || document.getElementById('ntx-update')) return;
+  lastUpdateCheck = Date.now();
+  try {
+    const html = await fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '');
+    const live = (html.match(/<meta name="ntx-build" content="([0-9a-f]+)"/) || [])[1];
+    if (!live || live === cfg.buildId) return;
+    const go = () => location.replace(location.pathname + '?v=' + live + location.hash);
+    document.body.append(h('div', { id: 'ntx-update', class: 'update-bar', role: 'status' },
+      h('span', {}, 'Nuova versione dell\'app disponibile'), h('button', { class: 'btn small primary', onclick: go }, 'Aggiorna')));
+  } catch { /* offline: si riprova al prossimo ritorno */ }
+}
+setInterval(checkUpdate, 30 * 60e3);
 
 async function boot() {
   document.head.append(h('style', {}, FONT_CSS));
@@ -3929,6 +3949,7 @@ async function boot() {
   }
   window.addEventListener('hashchange', render);
   render();
+  checkUpdate();
 }
 
 function loginView() {
