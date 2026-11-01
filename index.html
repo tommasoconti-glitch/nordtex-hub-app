@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="f3a4913806d0">
+<meta name="ntx-build" content="2aaf600d8bdd">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -430,8 +430,42 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 @media (max-width:600px){.pf-grid{grid-template-columns:1fr 1fr;margin-left:1.2em} .pf-grid>div:first-child{grid-column:1/-1}}
 .update-bar{position:fixed;left:12px;right:12px;margin:0 auto;max-width:480px;justify-content:space-between;top:calc(env(safe-area-inset-top) + 10px);z-index:2000;display:flex;align-items:center;gap:12px;background:var(--ink);color:#fff;padding:10px 12px 10px 16px;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.25);font-size:.9rem}
 
+/* Navigazione 01/11: profilo come iniziale in alto a destra; anteprima agente */
+.mb-left{display:flex;align-items:center;gap:8px}
+.avatar{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:var(--nt-lime-soft);color:var(--ink);font-weight:700;font-size:.8rem;text-decoration:none;letter-spacing:.02em}
+.avatar.on{background:var(--nt-red,#D40E41);color:#fff}
+.preview-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:nowrap;background:#fff4d6;color:#5a4300;border-bottom:1px solid #f0d58a;padding:6px 10px 6px 14px;font-size:.85rem;position:sticky;top:0;z-index:16}
+:root[data-scheme="dark"] .preview-bar{background:#3a3115;color:#f3e2a8;border-color:#5b4b1a}
+@media (max-width:760px){.previewing .mobile-brand{top:0}.preview-bar{position:static}}
+.tabbar a{flex:1;min-width:0} .tabbar small{white-space:nowrap}
+/* Home agente "Da fare oggi" (01/11) */
+.todo-list{list-style:none;margin:6px 0 4px;padding:0}
+.todo{display:flex;align-items:center;gap:10px;border-top:1px solid var(--line);padding:9px 0} .todo:first-child{border-top:0}
+.todo-main{display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0;color:var(--ink);text-decoration:none}
+.todo-main .due{margin:2px 0 0;flex:none;min-width:58px;text-align:center}
+.todo-text{display:flex;flex-direction:column;min-width:0} .todo-text strong{font-weight:600} .todo-text small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.todo-tel{flex:none;font-size:.85rem} .todo-tel a{display:inline-block;padding:6px 10px;border:1px solid var(--line);border-radius:8px;text-decoration:none;white-space:nowrap}
+.due.warn{background:var(--warn-bg);color:var(--warn)}
+.todo-sub{margin:16px 0 2px;font-size:.95rem}
+/* Numeri riassuntivi compatti sul telefono (01/11) */
+@media (max-width:760px){
+  .kpis{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+  .kpi{padding:9px 11px} .kpi strong,:root[data-look="chiara"] .kpi strong{font-size:1.25rem} .kpi span{font-size:.75rem}
+  :root[data-look="chiara"] .kpi small{font-size:.6rem}
+  .todo-tel a{padding:6px 8px;font-size:0} .todo-tel a::before{content:'☎';font-size:1rem}
+}
+/* Offerta sul telefono: barra fissa sopra la barra di navigazione (01/11) */
+.quote-dock{display:none}
+@media (max-width:760px){
+  .quote-dock{display:flex;position:fixed;left:8px;right:8px;bottom:calc(62px + env(safe-area-inset-bottom));z-index:19;align-items:center;justify-content:space-between;gap:10px;
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px 8px 8px 14px;box-shadow:0 6px 24px rgba(0,0,0,.14)}
+  .qd-sum{display:flex;flex-direction:column;min-width:0} .qd-sum strong{font-size:1.1rem} .qd-sum small{color:var(--muted);font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qd-act{display:flex;gap:6px;flex:none}
+  .page.editor{padding-bottom:90px}
+}
+
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f3a4913806d0"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"2aaf600d8bdd"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -556,6 +590,45 @@ function watchTables(root) {
 }
 
 return { stackWideTables, watchTables };
+})();
+__m["js/core/preview.js"] = (function () {
+// Anteprima "come agente" per la Direzione (richiesta Tommaso 01/11/2026): l'app mostra solo ciò che vede l'agente scelto.
+// Sola lettura: ogni scrittura è bloccata, così nulla viene creato a nome della Direzione sui clienti dell'agente.
+// I permessi veri restano quelli del database: qui si filtra soltanto ciò che la Direzione vede già.
+
+const WRITE = /^(add|save|delete|set|toggle|mark|import|changePassword|followupDone|logQuoteSend)/;
+
+class PreviewError extends Error { constructor() { super('Anteprima agente: sola lettura. Esci dall\'anteprima per modificare.'); this.code = 'PREVIEW'; } }
+
+function previewStore(store, label) {
+  const mine = c => !!c && c.assignee === label;
+  const ownCustomer = id => mine(store.customer(id));
+  return new Proxy(store, {
+    get(target, prop) {
+      const v = Reflect.get(target, prop, target);
+      if (typeof v !== 'function') return v;
+      if (prop === 'customer') return id => (ownCustomer(id) ? target.customer(id) : null);
+      if (prop === 'customers') return async () => (await target.customers()).filter(mine);
+      if (prop === 'notes') return async (...a) => (await target.notes(...a)).filter(n => ownCustomer(n.customerId));
+      if (prop === 'quotes') return async (...a) => (await target.quotes(...a)).filter(q => ownCustomer(q.customerId));
+      if (prop === 'quote') return async id => { const q = await target.quote(id); return q && ownCustomer(q.customerId) ? q : null; };
+      if (prop === 'statusChanges') return async () => (await target.statusChanges()).filter(x => ownCustomer(x.customerId));
+      if (prop === 'posts') return async () => (await target.posts()).filter(p => (p.audience || []).length === 0 || p.audience.includes(label));
+      if (prop === 'logOpen' || prop === 'accessSummary') return async () => null;
+      if (WRITE.test(String(prop))) return async () => { throw new PreviewError(); };
+      return v.bind(target);
+    },
+  });
+}
+
+// Elenco degli agenti visibili in anteprima: assegnatari dei clienti, con il ruolo se noto
+function previewChoices(customers, assignees = []) {
+  const roles = new Map(assignees.map(a => [a.name, a.role]));
+  return [...new Set(customers.map(c => c.assignee).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'))
+    .map(name => ({ name, role: roles.get(name) || '' }));
+}
+
+return { PreviewError, previewStore, previewChoices };
 })();
 __m["js/data/model.js"] = (function () {
 // Modello comune ai due archivi (locale e Supabase)
@@ -1185,7 +1258,7 @@ async function openActions(app) {
   const fromNotes = mine.flatMap(n => n.actions.filter(a => !a.done).map(a => ({ ...a, note: n, state: dueState(a) })));
   const assigned = posts.filter(p => p.kind === 'follow-up' && !p.doneAt).map(p => ({ id: p.id, title: p.title, due: p.due, assigned: p, state: dueState({ due: p.due }),
     note: { id: null, customerId: p.customerId, authorName: p.authorName } }));
-  const myQuotes = isDir ? quotes : quotes.filter(q => q.ownerId === app.session.userId);
+  const myQuotes = isDir || app.session.preview ? quotes : quotes.filter(q => q.ownerId === app.session.userId);
   const fromQuotes = quoteReminders(myQuotes, notes, sends).map(r => ({ id: 'q:' + r.quote.id + ':' + r.kind, title: r.title, due: r.due, quoteReminder: r,
     state: r.kind === 'esito' ? 'scaduto' : dueState({ due: r.due }), note: { id: null, customerId: r.quote.customerId, authorName: r.quote.ownerName || '' } }));
   return fromNotes.concat(assigned, fromQuotes).sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
@@ -2171,8 +2244,6 @@ async function managerSection(app) {
   const sum = k => rows.reduce((t, r) => t + r[k], 0);
   const commissions = await commissionCard(app);
   return h('div', { class: 'section-body' },
-    h('section', { class: 'kpis' }, [['Clienti', sum('total')], ['Attivi', sum('active')], ['Da recuperare', sum('recover')], ['Note ultimi 30 gg', sum('notes30')], ['Offerte aperte', eur(sum('openValue'))]]
-      .map(([l, v]) => h('div', { class: 'kpi' }, h('small', {}, l), h('strong', {}, typeof v === 'number' ? v.toLocaleString('it-IT') : v)))),
     h('section', { class: 'card' }, h('h2', {}, 'Portafoglio per assegnatario'),
       h('p', { class: 'muted' }, 'Clienti, stato e attività di ciascun agente e consulente. Tocca un nome per vedere i numeri.'),
       h('div', { class: 'pf-list' }, rows.map(r => h('details', {},
@@ -2186,7 +2257,7 @@ async function managerSection(app) {
 return { viewNetwork, networkSection, viewManager, managerSection };
 })();
 __m["js/views/home.js"] = (function () {
-const { h, fill, eur, dateIt, today } = __m["js/ui.js"];
+const { h, fill, eur, dateIt, today, telLinks } = __m["js/ui.js"];
 const { boardSection } = __m["js/views/board.js"];
 const { networkSection, managerSection } = __m["js/views/direction.js"];
 const { openActions } = __m["js/views/actions.js"];
@@ -2197,7 +2268,7 @@ const setTab = t => { try { localStorage.setItem('ntx-home-tab', t); } catch { /
 
 async function viewHome(app, tabArg) {
   const s = app.session, isDir = s.role === 'direzione';
-  const [customers, quotes, posts, actions, notes] = await Promise.all([app.customers(), app.store.quotes(), app.store.posts(), openActions(app), isDir ? app.store.notes() : Promise.resolve([])]);
+  const [customers, quotes, posts, actions, notes] = await Promise.all([app.customers(), app.store.quotes(), app.store.posts(), openActions(app), app.store.notes()]);
   const comms = posts.filter(p => p.kind !== 'follow-up');   // i follow-up assegnati stanno tra i follow-up, non tra le comunicazioni
   // dove porta un follow-up: offerta (promemoria offerte), cliente se collegato, altrimenti la bacheca
   const actionHref = a => a.quoteReminder ? `#/offerta/${a.quoteReminder.quote.id}` : a.note.customerId ? `#/agenda/${a.note.customerId}` : '#/bacheca';
@@ -2230,21 +2301,44 @@ async function viewHome(app, tabArg) {
       tabsEl, body, foot);
   }
 
+  // Agente: la Home è "cosa fare oggi" (01/11): follow-up e promemoria offerte scaduti o di oggi, poi clienti da recuperare da sentire
+  const urgent = actions.filter(a => a.state === 'scaduto' || a.state === 'oggi');
+  const upcoming = actions.filter(a => a.state !== 'scaduto' && a.state !== 'oggi').slice(0, 5);
+  const d60 = new Date(Date.now() - 60 * 864e5).toISOString();
+  const heard = new Set(notes.filter(n => n.createdAt >= d60).map(n => n.customerId));
+  const toCall = customers.filter(c => c.status === 'Da recuperare' && !heard.has(c.id))
+    .sort((a, b) => (b.rev2025 || 0) - (a.rev2025 || 0) || a.name.localeCompare(b.name, 'it')).slice(0, 5);
+  const custOf = a => app.store.customer(a.note.customerId);
+  const actionItem = a => { const c = custOf(a); return h('li', { class: 'todo' },
+    h('a', { href: actionHref(a), class: 'todo-main' }, h('span', { class: 'due ' + a.state.replace(' ', '-') }, a.state === 'oggi' ? 'oggi' : a.due ? dateIt(a.due) : 'subito'),
+      h('span', { class: 'todo-text' }, h('strong', {}, a.title), c ? h('small', { class: 'muted' }, c.name + (c.city ? ' · ' + c.city : '')) : null)),
+    c?.phone ? h('span', { class: 'todo-tel' }, telLinks(c.phone.split(';')[0])) : null); };
+  const callItem = c => h('li', { class: 'todo' },
+    h('a', { href: '#/agenda/' + c.id, class: 'todo-main' }, h('span', { class: 'due warn' }, 'recupera'),
+      h('span', { class: 'todo-text' }, h('strong', {}, c.name), h('small', { class: 'muted' }, [c.city, c.rev2025 ? 'acquistato 2025 ' + eur(c.rev2025) : ''].filter(Boolean).join(' · ')))),
+    c.phone ? h('span', { class: 'todo-tel' }, telLinks(c.phone.split(';')[0])) : null);
+
   return h('div', { class: 'page' }, head,
-    h('section', { class: 'kpis' },
+    h('section', { class: 'kpis compact' },
       tile('I miei clienti', customers.length.toLocaleString('it-IT'), `${count('Attivo')} attivi`, '#/agenda'),
-      tile('Da recuperare', count('Da recuperare'), 'ultimo acquisto 2025', '#/agenda/stato/Da recuperare'),
-      tile('Follow-up', actions.length, overdue ? `${overdue} scaduti · ${todayN} oggi` : `${todayN} oggi`, '#/bacheca'),
+      tile('Da recuperare', count('Da recuperare'), 'nessun ordine 2026', '#/agenda/stato/Da recuperare'),
+      tile('Follow-up', actions.length, overdue ? `${overdue} scaduti` : `${todayN} oggi`, '#/bacheca'),
       tile('Offerte aperte', open.length, eur(open.reduce((t, q) => t + (q.total || 0), 0)), '#/preventivi')),
+    h('section', { class: 'card' }, h('h2', {}, 'Da fare oggi'),
+      urgent.length ? h('ul', { class: 'todo-list' }, urgent.map(actionItem))
+        : h('p', { class: 'muted' }, 'Nessun follow-up scaduto o in scadenza oggi.'),
+      toCall.length ? [h('h3', { class: 'todo-sub' }, 'Clienti da recuperare da sentire'),
+        h('p', { class: 'fine' }, 'Hanno comprato nel 2025 ma non nel 2026 e non hanno note negli ultimi 60 giorni; prima i più importanti.'),
+        h('ul', { class: 'todo-list' }, toCall.map(callItem)),
+        h('a', { class: 'more', href: '#/agenda/stato/Da recuperare' }, 'Tutti i clienti da recuperare →')] : null),
     h('div', { class: 'grid2' },
-      h('section', { class: 'card' }, h('h2', {}, 'Comunicazioni della Direzione'),
-        comms.length ? comms.slice(0, 4).map(p => h('div', { class: 'post' + (p.pinned ? ' pinned' : '') }, h('strong', {}, p.title), p.body ? h('p', {}, p.body) : null, h('small', { class: 'muted post-meta' }, `${p.authorName} · ${dateIt(p.createdAt)}${p.due ? ' · scadenza ' + dateIt(p.due) : ''}`)))
-          : h('p', { class: 'muted' }, 'Nessuna comunicazione.'),
-        h('a', { class: 'more', href: '#/bacheca' }, 'Apri la bacheca →')),
       h('section', { class: 'card' }, h('h2', {}, 'Prossimi follow-up'),
-        actions.length ? h('ul', { class: 'list' }, actions.slice(0, 6).map(a => h('li', {}, h('a', { href: actionHref(a) },
-          h('span', { class: 'due ' + a.state.replace(' ', '-') }, a.due ? dateIt(a.due) : 'senza data'), h('span', {}, a.title), h('small', { class: 'muted' }, app.store.customer(a.note.customerId)?.name || '')))))
-          : h('p', { class: 'muted' }, 'Nessun follow-up aperto. Si creano dalle note nella scheda cliente.'))),
+        upcoming.length ? h('ul', { class: 'todo-list' }, upcoming.map(actionItem))
+          : h('p', { class: 'muted' }, 'Nessun follow-up in programma. Si creano dalle note nella scheda cliente.')),
+      h('section', { class: 'card' }, h('h2', {}, 'Comunicazioni della Direzione'),
+        comms.length ? comms.slice(0, 3).map(p => h('div', { class: 'post' + (p.pinned ? ' pinned' : '') }, h('strong', {}, p.title), p.body ? h('p', {}, p.body) : null, h('small', { class: 'muted post-meta' }, `${p.authorName} · ${dateIt(p.createdAt)}${p.due ? ' · scadenza ' + dateIt(p.due) : ''}`)))
+          : h('p', { class: 'muted' }, 'Nessuna comunicazione.'),
+        h('a', { class: 'more', href: '#/bacheca' }, 'Apri la bacheca →'))),
     foot);
 }
 
@@ -3224,8 +3318,8 @@ async function viewQuotes(app) {
   draw();
   const byStatus = s => quotes.filter(q => q.status === s);
   return h('div', { class: 'page' },
-    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Preventivi'), h('p', { class: 'muted' }, 'Prezzi dal Master prodotti, listino n.05 del 01/10/2026.')),
-      h('a', { class: 'btn primary', href: '#/agenda' }, '+ Nuova (scegli cliente)')),
+    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Offerte'), h('p', { class: 'muted' }, 'Prezzi dal listino n.05 del 01/10/2026.')),
+      h('a', { class: 'btn primary', href: '#/agenda' }, '+ Nuova offerta')),
     h('section', { class: 'kpis' }, QUOTE_STATES.map(s => h('div', { class: 'kpi' }, h('small', {}, s), h('strong', {}, byStatus(s).length), h('span', {}, eur(byStatus(s).reduce((t, q) => t + (q.total || 0), 0)))))),
     h('div', { class: 'list-tools row' }, h('input', { type: 'search', placeholder: 'Cerca numero, cliente…', value: listState.q, oninput: debounce(e => { listState.q = e.target.value; draw(); }) }),
       h('select', { onchange: e => { listState.status = e.target.value; draw(); } }, h('option', { value: '' }, 'Tutti gli stati'), QUOTE_STATES.map(s => h('option', { selected: s === listState.status }, s)))),
@@ -3269,7 +3363,7 @@ async function resolveOutcome(app, q, choice) {
 async function outcomeGate(app) {
   if (app.session.role === 'direzione') return true;
   const [quotes, sends] = await Promise.all([app.store.quotes(), app.store.quoteSends ? app.store.quoteSends().catch(() => []) : []]);
-  let due = quoteReminders(quotes.filter(x => x.ownerId === app.session.userId), [], sends).filter(r => r.kind === 'esito').map(r => r.quote);
+  let due = quoteReminders(quotes.filter(x => app.session.preview || x.ownerId === app.session.userId), [], sends).filter(r => r.kind === 'esito').map(r => r.quote);
   if (!due.length) return true;
   return new Promise(resolve => {
     const list = h('div', { class: 'gate-list' });
@@ -3302,14 +3396,14 @@ async function viewQuoteEditor(app, id, customerId) {
   const agentLabel = app.store.customer(q.customerId)?.assignee || app.session.assignee;
   const pct = n => n === null || n === undefined ? '—' : num(n, 1) + '%';
   const byId = new Map(products.map(p => [p.id, p]));
-  const isOwner = !q.ownerId || q.ownerId === app.session.userId || app.session.role === 'direzione';
+  const isOwner = !q.ownerId || q.ownerId === app.session.userId || app.session.role === 'direzione' || !!app.session.preview;
   const locked = !isOwner || q.status === 'Accettata' || q.status === 'Persa';
   let dirty = false, tp = null;
   const stock = app.store.stock || null;
   const sheetLinks = p => { const t = techSheetFor(p); return t ? h('small', { class: 'sheets' }, t.sheet ? h('a', { href: t.sheet, target: '_blank', rel: 'noopener' }, '📄 Scheda tecnica') : '📄', ...t.dop.map((u, i) => [t.sheet || i ? ' · ' : ' ', h('a', { href: u, target: '_blank', rel: 'noopener' }, t.dop.length > 1 ? `DoP ${i + 1}` : 'DoP')])) : null; };
   const stockLine = code => { const s = stockFor(stock, code); return s.length ? h('small', { class: 'stock' }, `Magazzino al ${dateIt(s[0].date)}: ` + s.map(x => `${x.name.split('-')[0]} ${num(x.available, 2)} ${x.um.toLowerCase()}`).join(' · ')) : null; };
   const root = h('div', { class: 'page editor' });
-  const mark = () => { dirty = true; saveBtn.classList.add('attn'); };
+  const mark = () => { dirty = true; saveBtn.classList.add('attn'); dock.querySelector('.qd-act .btn:not(.primary)')?.classList.add('attn'); };
 
   // ---- ricerca prodotti
   const results = h('div', { class: 'results' });
@@ -3331,6 +3425,8 @@ async function viewQuoteEditor(app, id, customerId) {
   // ---- righe
   const linesBody = h('tbody');
   const totBox = h('div', { class: 'totals' });
+  // Telefono (01/11): barra fissa in basso con totale, trasporto e azioni, sempre visibile mentre si compilano le righe
+  const dock = h('div', { class: 'quote-dock' });
   // campi numerici: il calcolo si aggiorna mentre si scrive (iPad/iPhone non confermano finché il campo resta attivo)
   const selectAll = el => setTimeout(() => { try { el.setSelectionRange(0, el.value.length); } catch { el.select(); } }, 0);
   const numIn = (value, onset, attrs = {}, live = null) => {
@@ -3425,6 +3521,10 @@ async function viewQuoteEditor(app, id, customerId) {
       t.discountAlerts ? h('p', { class: 'bad-text' }, `${t.discountAlerts} righe con sconto oltre ${DISCOUNT_ALERT_LABEL}`) : null,
       t.freightPending ? h('p', { class: 'muted' }, 'Trasporto da definire: non è compreso nel totale.') : null,
       econBox());
+    const tr = t.freightPending ? 'trasporto da definire' : t.freight ? 'trasporto ' + eur(t.freight) : 'trasporto compreso';
+    fill(dock, h('div', { class: 'qd-sum' }, h('strong', {}, eur(t.total)), h('small', {}, `IVA incl. · ${tr}`)),
+      h('div', { class: 'qd-act' }, isOwner && !locked ? h('button', { class: 'btn small' + (dirty ? ' attn' : ''), onclick: save }, 'Salva') : null,
+        q.id && isOwner && ['Bozza', 'Inviata'].includes(q.status) ? h('button', { class: 'btn small primary', onclick: () => sendDialog().catch(e => toast(e.message, 'error')) }, 'Invia') : null));
   }
 
   // ---- trasporto e condizioni
@@ -3451,7 +3551,7 @@ async function viewQuoteEditor(app, id, customerId) {
   async function save() {
     try {
       if (!q.lines.length) throw new Error('Aggiungi almeno un prodotto');
-      totals(q); const saved = await app.store.saveQuote(q); Object.assign(q, saved); dirty = false; saveBtn.classList.remove('attn');
+      totals(q); const saved = await app.store.saveQuote(q); Object.assign(q, saved); dirty = false; saveBtn.classList.remove('attn'); dock.querySelector('.qd-act .attn')?.classList.remove('attn');
       toast('Offerta salvata: ' + saved.number); if (id === 'nuova') app.go('offerta/' + saved.id); else { const n = header(); head.replaceWith(n); head = n; };
     } catch (e) { toast(e.message, 'error'); }
   }
@@ -3574,7 +3674,7 @@ async function viewQuoteEditor(app, id, customerId) {
         viewerIsDir ? cond('Rif. RADIX (offerta ufficiale / ordine, a cura dell\'ufficio)', txtIn('radixRef', { placeholder: 'es. OFF 1324 del 29/10 – ORD 815' })) : null,
         cond('Cantiere (facoltativo)', h('textarea', { rows: 2, disabled: locked, placeholder: 'es. EDILIZIA VIGONOVO\nVia La Croce 16, 33074 Vigonovo (PN)', onchange: e => { q.site = e.target.value; mark(); } }, q.site || '')),
         cond('Note', notesIn)),
-      h('section', { class: 'card' }, h('h2', {}, 'Riepilogo'), totBox)));
+      h('section', { class: 'card' }, h('h2', {}, 'Riepilogo'), totBox)), dock);
   return root;
 }
 
@@ -3860,6 +3960,7 @@ __m["js/main.js"] = (function () {
 const { h, toast, eur, dateTimeIt } = __m["js/ui.js"];
 const { LOGO, MARK_WHITE, MARK_GREY, FONT_CSS } = __m["js/brand-assets.js"];
 const { watchTables } = __m["js/core/responsive.js"];
+const { previewStore, previewChoices } = __m["js/core/preview.js"];
 const { createLocalStore, indexedDbKv } = __m["js/data/local-store.js"];
 const { createSupabaseStore } = __m["js/data/supabase-store.js"];
 const { viewHome } = __m["js/views/home.js"];
@@ -3870,12 +3971,15 @@ const { viewNetwork, viewManager } = __m["js/views/direction.js"];
 const { viewMaps } = __m["js/views/maps.js"];
 const VERSION = '1.0.0';
 
+// Navigazione (01/11): le offerte hanno una voce propria; il profilo è l'iniziale in alto a destra (telefono) o il nome in basso (computer)
 const NAV = [
   { id: 'home', label: 'Home', icon: '⌂' },
-  { id: 'agenda', label: 'Agenda', icon: '☰' },
+  { id: 'agenda', label: 'Clienti', icon: '☰' },
+  { id: 'preventivi', label: 'Offerte', icon: '€' },
   { id: 'mappe', label: 'Mappe', icon: '◎' },
   { id: 'bacheca', label: 'Bacheca', icon: '✓', agent: true },
 ];
+const initials = name => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '•';
 
 const app = {
   store: null, session: null, cache: {},
@@ -3883,6 +3987,19 @@ const app = {
   async products() { return this.cache.products ||= await this.store.products(); },
   go(route) { if (location.hash !== '#/' + route) location.hash = '#/' + route; else render(); },
   invalidate() { delete this.cache.customers; },
+  // Anteprima come agente (solo Direzione, sola lettura)
+  real: null,
+  async startPreview(label) {
+    if (this.session?.role !== 'direzione' || !label) return;
+    this.real = { store: this.store, session: this.session };
+    this.store = previewStore(this.real.store, label);
+    this.session = { ...this.real.session, role: 'agente', assignee: label, name: label.split(' ').slice(1).concat(label.split(' ')[0]).join(' '), preview: { by: this.real.session.name }, canCommunicate: false };
+    this.cache = {}; this.go('home');
+  },
+  stopPreview() {
+    if (!this.real) return;
+    ({ store: this.store, session: this.session } = this.real); this.real = null; this.cache = {}; this.go('profilo');
+  },
 };
 
 // Aspetto grafico (decisione Tommaso 01/11): Chiara (predefinita) o Scura. Le proposte Classica e Diagonale sono state tolte.
@@ -3906,7 +4023,7 @@ function deviceKind() {
 }
 let lastOpenLog = 0;
 function logOpen(force = false) {
-  if (!app.session || !app.store?.logOpen || (!force && Date.now() - lastOpenLog < 15 * 60e3)) return;
+  if (!app.session || app.session.preview || !app.store?.logOpen || (!force && Date.now() - lastOpenLog < 15 * 60e3)) return;
   lastOpenLog = Date.now(); app.store.logOpen(deviceKind());
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { logOpen(); checkUpdate(); } });
@@ -3976,18 +4093,22 @@ function localStorageGet(k) { try { return localStorage.getItem(k); } catch { re
 function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch { /* facoltativo */ } }
 
 function shell(active, content) {
-  const isDir = app.session.role === 'direzione';
+  const isDir = app.session.role === 'direzione', pv = app.session.preview;
   const items = NAV.filter(n => !n.agent || !isDir);
   const nav = items.map(n => h('a', { href: '#/' + n.id, class: 'nav-item' + (active === n.id ? ' active' : '') }, h('span', { class: 'ico', 'aria-hidden': 'true' }, n.icon), h('span', {}, n.label)));
-  const who = h('div', { class: 'who' }, h('a', { href: '#/profilo', class: 'who-name' }, h('strong', {}, app.session.name)), h('small', {}, isDir ? 'Direzione' : (app.session.assignee || 'Agente')),
+  const who = h('div', { class: 'who' }, h('a', { href: '#/profilo', class: 'who-name' }, h('strong', {}, pv ? pv.by : app.session.name)), h('small', {}, pv ? 'Direzione · anteprima' : isDir ? 'Direzione' : (app.session.assignee || 'Agente')),
     h('button', { class: 'link', onclick: signOut }, 'Esci'));
-  return h('div', { class: 'shell' },
+  const bar = pv ? h('div', { class: 'preview-bar', role: 'status' }, h('span', {}, h('strong', {}, 'Anteprima '), app.session.assignee, h('small', {}, ' · sola lettura')),
+    h('button', { class: 'btn small', onclick: () => app.stopPreview() }, 'Esci')) : null;
+  return h('div', { class: 'shell' + (pv ? ' previewing' : '') },
     h('aside', { class: 'side' }, h('div', { class: 'brand' }, h('img', { class: 'logo-full', src: LOGO, alt: 'NORDTEX' }), h('img', { class: 'logo-mark', src: MARK_WHITE, alt: 'NORDTEX' }), h('img', { class: 'logo-mark-grey', src: MARK_GREY, alt: 'NORDTEX' }), h('span', { class: 'brand-sub' }, 'HUB commerciale')), h('nav', {}, nav), who),
-    h('main', { class: 'main', id: 'main' }, h('div', { class: 'mobile-brand' }, h('img', { src: LOGO, alt: 'NORDTEX' }), h('span', {}, 'HUB commerciale')), content),
-    h('nav', { class: 'tabbar' }, items.concat([{ id: 'profilo', label: 'Profilo', icon: '●' }]).map(n => h('a', { href: '#/' + n.id, class: active === n.id ? 'active' : '' }, h('span', { class: 'ico' }, n.icon), h('small', {}, n.label)))));
+    h('main', { class: 'main', id: 'main' }, bar,
+      h('div', { class: 'mobile-brand' }, h('div', { class: 'mb-left' }, h('img', { src: LOGO, alt: 'NORDTEX' }), h('span', {}, 'HUB')),
+        h('a', { href: '#/profilo', class: 'avatar' + (active === 'profilo' ? ' on' : ''), title: 'Profilo', 'aria-label': 'Profilo' }, initials(pv ? pv.by : app.session.name))), content),
+    h('nav', { class: 'tabbar' }, items.map(n => h('a', { href: '#/' + n.id, class: active === n.id ? 'active' : '' }, h('span', { class: 'ico' }, n.icon), h('small', {}, n.label)))));
 }
 
-function signOut() { app.store.signOut(); app.session = null; app.cache = {}; app.go(''); }
+function signOut() { if (app.real) app.stopPreview(); app.store.signOut(); app.session = null; app.cache = {}; app.go(''); }
 
 function download(name, text) {
   const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: 'application/json' })), download: name });
@@ -4005,6 +4126,17 @@ function passwordCard() {
 }
 
 // Profilo: dati utente, uscita, backup (versione locale), accesso alle pagine Direzione da telefono
+async function previewCard() {
+  if (app.session.preview) return h('section', { class: 'card' }, h('h2', {}, 'Anteprima agente'),
+    h('p', { class: 'muted' }, `Stai vedendo l'app come ${app.session.assignee}. Le modifiche sono bloccate.`), h('button', { class: 'btn primary', onclick: () => app.stopPreview() }, 'Esci dall\'anteprima'));
+  if (app.session.role !== 'direzione') return '';
+  const choices = previewChoices(await app.customers(), app.store.assignees || []);
+  const sel = h('select', { 'aria-label': 'Agente' }, choices.map(c => h('option', { value: c.name }, c.role ? `${c.name} — ${c.role}` : c.name)));
+  return h('section', { class: 'card' }, h('h2', {}, 'Vedi l\'app come un agente'),
+    h('p', { class: 'muted' }, 'Mostra Home, clienti, offerte e mappe esattamente come le vede l\'agente scelto. In anteprima non si può modificare nulla.'),
+    h('div', { class: 'row' }, sel, h('button', { class: 'btn primary', onclick: () => app.startPreview(sel.value) }, 'Apri anteprima')));
+}
+
 async function viewAccount() {
   const s = app.session, isDir = s.role === 'direzione', local = app.store.mode === 'locale';
   const exp = async () => { const b = await app.store.exportBackup(); download(`NORDTEX_HUB_backup_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(b, null, 1)); toast('Backup scaricato'); };
@@ -4014,12 +4146,13 @@ async function viewAccount() {
     e.target.value = '';
   } });
   return h('div', { class: 'page' },
-    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, s.name), h('p', { class: 'muted' }, isDir ? 'Direzione' : (s.assignee || 'Agente')))),
+    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, s.preview ? s.preview.by : s.name), h('p', { class: 'muted' }, s.preview ? 'Direzione · anteprima come ' + s.assignee : isDir ? 'Direzione' : (s.assignee || 'Agente')))),
     isDir ? h('section', { class: 'card' }, h('h2', {}, 'Direzione'), h('div', { class: 'actions' }, h('a', { class: 'btn', href: '#/rete' }, 'Attività rete'), h('a', { class: 'btn', href: '#/manager' }, 'Area manager'))) : '',
+    await previewCard(),
     local ? h('section', { class: 'card' }, h('h2', {}, 'Dati di questo dispositivo'),
       h('p', { class: 'muted' }, 'Nella versione locale note, referenti, offerte e bacheca restano solo in questo browser. Scarica un backup regolarmente; con la versione online i dati saranno condivisi.'),
       h('div', { class: 'actions' }, h('button', { class: 'btn primary', onclick: () => exp().catch(e => toast(e.message, 'error')) }, 'Scarica backup'), h('label', { class: 'btn' }, 'Importa backup', fileIn))) : '',
-    !local ? passwordCard() : '',
+    !local && !s.preview ? passwordCard() : '',
     h('section', { class: 'card' }, h('h2', {}, 'Aspetto'),
       h('div', { class: 'looks' }, LOOKS.map(([v, l]) => h('label', { class: 'look-opt' }, h('input', { type: 'radio', name: 'look', value: v, checked: currentLook() === v, onchange: () => { applyLook(v); app.go('profilo'); } }), h('span', { class: 'look-sw ' + v }), l)))),
     h('section', { class: 'card' }, h('h2', {}, 'Informazioni'),
@@ -4044,7 +4177,7 @@ async function render() {
   let content;
   try { content = await views[key](app, ...args); } catch (e) { console.error(e); content = h('div', { class: 'page' }, h('p', { class: 'error' }, e.message)); }
   if (seq !== renderSeq) return;
-  const activeNav = key === 'offerta' || key === 'preventivi' ? 'agenda' : key;
+  const activeNav = key === 'offerta' ? 'preventivi' : key;
   root.replaceChildren(shell(activeNav, content));
   document.getElementById('main')?.scrollTo?.(0, 0);
 }
