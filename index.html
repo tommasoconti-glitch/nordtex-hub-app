@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="2aaf600d8bdd">
+<meta name="ntx-build" content="6870996e3f39">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -463,9 +463,15 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
   .qd-act{display:flex;gap:6px;flex:none}
   .page.editor{padding-bottom:90px}
 }
+/* Nuova offerta: scelta del cliente in una finestra (01/11) */
+.modal.pick .modal-body{display:flex;flex-direction:column;gap:8px}
+.pick-list{display:flex;flex-direction:column;max-height:min(60vh,460px);overflow:auto}
+.pick-item{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:2px;padding:10px 6px;border:0;border-top:1px solid var(--line);background:none;color:var(--ink);cursor:pointer;font:inherit}
+.pick-item:first-of-type{border-top:0} .pick-item:hover{background:var(--nt-lime-soft)} .pick-item:disabled{opacity:.5;cursor:not-allowed}
+.pick-hint{padding:2px 6px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"2aaf600d8bdd"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"6870996e3f39"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2256,94 +2262,6 @@ async function managerSection(app) {
 
 return { viewNetwork, networkSection, viewManager, managerSection };
 })();
-__m["js/views/home.js"] = (function () {
-const { h, fill, eur, dateIt, today, telLinks } = __m["js/ui.js"];
-const { boardSection } = __m["js/views/board.js"];
-const { networkSection, managerSection } = __m["js/views/direction.js"];
-const { openActions } = __m["js/views/actions.js"];
-
-const TABS = [['attivita', 'Attività rete'], ['bacheca', 'Bacheca'], ['manager', 'Area manager']];
-const getTab = () => { try { return localStorage.getItem('ntx-home-tab') || 'attivita'; } catch { return 'attivita'; } };
-const setTab = t => { try { localStorage.setItem('ntx-home-tab', t); } catch { /* facoltativo */ } };
-
-async function viewHome(app, tabArg) {
-  const s = app.session, isDir = s.role === 'direzione';
-  const [customers, quotes, posts, actions, notes] = await Promise.all([app.customers(), app.store.quotes(), app.store.posts(), openActions(app), app.store.notes()]);
-  const comms = posts.filter(p => p.kind !== 'follow-up');   // i follow-up assegnati stanno tra i follow-up, non tra le comunicazioni
-  // dove porta un follow-up: offerta (promemoria offerte), cliente se collegato, altrimenti la bacheca
-  const actionHref = a => a.quoteReminder ? `#/offerta/${a.quoteReminder.quote.id}` : a.note.customerId ? `#/agenda/${a.note.customerId}` : '#/bacheca';
-  const count = st => customers.filter(c => c.status === st).length;
-  const open = quotes.filter(q => q.status === 'Bozza' || q.status === 'Inviata');
-  const overdue = actions.filter(a => a.state === 'scaduto').length, todayN = actions.filter(a => a.state === 'oggi').length;
-  const tile = (label, value, sub, href) => h('a', { class: 'kpi', href }, h('small', {}, label), h('strong', {}, value), sub ? h('span', {}, sub) : null);
-  const head = h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, `Buongiorno, ${s.name.split(' ')[0]}`), h('p', { class: 'muted' }, isDir ? 'Direzione commerciale · tutta la rete' : `Portafoglio ${s.assignee}`)));
-  const foot = h('p', { class: 'fine' }, `Oggi ${dateIt(today())} · Archivio ${app.store.mode === 'locale' ? 'locale su questo dispositivo' : 'condiviso'}`);
-
-  if (isDir) {
-    const d30 = new Date(Date.now() - 30 * 864e5).toISOString();
-    let tab = TABS.some(t => t[0] === tabArg) ? tabArg : getTab();
-    const body = h('div', { class: 'tab-body' });
-    const tabsEl = h('div', { class: 'tabs', role: 'tablist' });
-    const draw = async () => {
-      setTab(tab);
-      fill(tabsEl, TABS.map(([id, label]) => h('button', { role: 'tab', 'aria-selected': String(id === tab), class: 'tab' + (id === tab ? ' on' : ''), onclick: () => { tab = id; draw(); } }, label)));
-      const refresh = () => draw();
-      fill(body, h('p', { class: 'muted' }, 'Caricamento…'));
-      fill(body, tab === 'bacheca' ? await boardSection(app, refresh) : tab === 'manager' ? await managerSection(app) : await networkSection(app, refresh));
-    };
-    await draw();
-    return h('div', { class: 'page' }, head,
-      h('section', { class: 'kpis' },
-        tile('Clienti in rete', customers.length.toLocaleString('it-IT'), `${count('Attivo')} attivi · ${count('Da recuperare')} da recuperare`, '#/agenda'),
-        tile('Attività ultimi 30 gg', notes.filter(n => n.createdAt >= d30).length, 'note, visite, telefonate', '#/home/attivita'),
-        tile('Follow-up rete', actions.length, overdue ? `${overdue} scaduti · ${todayN} oggi` : `${todayN} oggi`, '#/home/bacheca'),
-        tile('Offerte aperte', open.length, eur(open.reduce((t, q) => t + (q.total || 0), 0)), '#/preventivi')),
-      tabsEl, body, foot);
-  }
-
-  // Agente: la Home è "cosa fare oggi" (01/11): follow-up e promemoria offerte scaduti o di oggi, poi clienti da recuperare da sentire
-  const urgent = actions.filter(a => a.state === 'scaduto' || a.state === 'oggi');
-  const upcoming = actions.filter(a => a.state !== 'scaduto' && a.state !== 'oggi').slice(0, 5);
-  const d60 = new Date(Date.now() - 60 * 864e5).toISOString();
-  const heard = new Set(notes.filter(n => n.createdAt >= d60).map(n => n.customerId));
-  const toCall = customers.filter(c => c.status === 'Da recuperare' && !heard.has(c.id))
-    .sort((a, b) => (b.rev2025 || 0) - (a.rev2025 || 0) || a.name.localeCompare(b.name, 'it')).slice(0, 5);
-  const custOf = a => app.store.customer(a.note.customerId);
-  const actionItem = a => { const c = custOf(a); return h('li', { class: 'todo' },
-    h('a', { href: actionHref(a), class: 'todo-main' }, h('span', { class: 'due ' + a.state.replace(' ', '-') }, a.state === 'oggi' ? 'oggi' : a.due ? dateIt(a.due) : 'subito'),
-      h('span', { class: 'todo-text' }, h('strong', {}, a.title), c ? h('small', { class: 'muted' }, c.name + (c.city ? ' · ' + c.city : '')) : null)),
-    c?.phone ? h('span', { class: 'todo-tel' }, telLinks(c.phone.split(';')[0])) : null); };
-  const callItem = c => h('li', { class: 'todo' },
-    h('a', { href: '#/agenda/' + c.id, class: 'todo-main' }, h('span', { class: 'due warn' }, 'recupera'),
-      h('span', { class: 'todo-text' }, h('strong', {}, c.name), h('small', { class: 'muted' }, [c.city, c.rev2025 ? 'acquistato 2025 ' + eur(c.rev2025) : ''].filter(Boolean).join(' · ')))),
-    c.phone ? h('span', { class: 'todo-tel' }, telLinks(c.phone.split(';')[0])) : null);
-
-  return h('div', { class: 'page' }, head,
-    h('section', { class: 'kpis compact' },
-      tile('I miei clienti', customers.length.toLocaleString('it-IT'), `${count('Attivo')} attivi`, '#/agenda'),
-      tile('Da recuperare', count('Da recuperare'), 'nessun ordine 2026', '#/agenda/stato/Da recuperare'),
-      tile('Follow-up', actions.length, overdue ? `${overdue} scaduti` : `${todayN} oggi`, '#/bacheca'),
-      tile('Offerte aperte', open.length, eur(open.reduce((t, q) => t + (q.total || 0), 0)), '#/preventivi')),
-    h('section', { class: 'card' }, h('h2', {}, 'Da fare oggi'),
-      urgent.length ? h('ul', { class: 'todo-list' }, urgent.map(actionItem))
-        : h('p', { class: 'muted' }, 'Nessun follow-up scaduto o in scadenza oggi.'),
-      toCall.length ? [h('h3', { class: 'todo-sub' }, 'Clienti da recuperare da sentire'),
-        h('p', { class: 'fine' }, 'Hanno comprato nel 2025 ma non nel 2026 e non hanno note negli ultimi 60 giorni; prima i più importanti.'),
-        h('ul', { class: 'todo-list' }, toCall.map(callItem)),
-        h('a', { class: 'more', href: '#/agenda/stato/Da recuperare' }, 'Tutti i clienti da recuperare →')] : null),
-    h('div', { class: 'grid2' },
-      h('section', { class: 'card' }, h('h2', {}, 'Prossimi follow-up'),
-        upcoming.length ? h('ul', { class: 'todo-list' }, upcoming.map(actionItem))
-          : h('p', { class: 'muted' }, 'Nessun follow-up in programma. Si creano dalle note nella scheda cliente.')),
-      h('section', { class: 'card' }, h('h2', {}, 'Comunicazioni della Direzione'),
-        comms.length ? comms.slice(0, 3).map(p => h('div', { class: 'post' + (p.pinned ? ' pinned' : '') }, h('strong', {}, p.title), p.body ? h('p', {}, p.body) : null, h('small', { class: 'muted post-meta' }, `${p.authorName} · ${dateIt(p.createdAt)}${p.due ? ' · scadenza ' + dateIt(p.due) : ''}`)))
-          : h('p', { class: 'muted' }, 'Nessuna comunicazione.'),
-        h('a', { class: 'more', href: '#/bacheca' }, 'Apri la bacheca →'))),
-    foot);
-}
-
-return { viewHome, openActions };
-})();
 __m["js/core/geo.js"] = (function () {
 // Sigla provincia -> regione (nomi come nelle tabelle trasporto del listino n.05)
 const REGIONI = {
@@ -3291,6 +3209,7 @@ const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions
 const { makeLine, totals, lineNet, lineAmount, priceLevel, canQuote, searchProducts, totalDiscount, palletsFor, PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL } = __m["js/core/pricing.js"];
 const { regionOf } = __m["js/core/geo.js"];
 const { quoteCls } = __m["js/views/agenda.js"];
+const { buildIndex, searchCustomers } = __m["js/core/search.js"];
 const { OFFER_HEADER, OFFER_FOOTER, OFFER_HEADER_JPG, OFFER_FOOTER_JPG } = __m["js/brand-assets.js"];
 const { quotePdf } = __m["js/core/quote-pdf.js"];
 const { mailtoUrl, quoteMailBody, quoteMailIntro, openMailto } = __m["js/core/mailto.js"];
@@ -3313,13 +3232,13 @@ async function viewQuotes(app) {
     const rows = quotes.filter(q => (!listState.status || q.status === listState.status) && (!w || [q.number, q.customer?.name, q.ownerName].join(' ').toLocaleLowerCase('it').includes(w)));
     fill(body, ...rows.map(q => h('tr', { onclick: () => app.go('offerta/' + q.id) }, h('td', {}, h('strong', {}, q.number)), h('td', {}, q.customer?.name || ''),
       h('td', {}, h('span', { class: 'badge ' + quoteCls(q.status) }, q.status)), h('td', {}, dateIt(q.updatedAt)), isDir ? h('td', {}, q.ownerName) : null, h('td', { class: 'num' }, eur(q.total)))));
-    if (!rows.length) fill(body, h('tr', {}, h('td', { colspan: 6 }, emptyState(quotes.length ? 'Nessuna offerta con questi filtri.' : 'Nessuna offerta. Si crea dalla scheda cliente in Agenda (pulsante “+ Offerta”).'))));
+    if (!rows.length) fill(body, h('tr', {}, h('td', { colspan: 6 }, emptyState(quotes.length ? 'Nessuna offerta con questi filtri.' : 'Nessuna offerta. Tocca “+ Nuova offerta” e scegli il cliente.'))));
   };
   draw();
   const byStatus = s => quotes.filter(q => q.status === s);
   return h('div', { class: 'page' },
     h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Offerte'), h('p', { class: 'muted' }, 'Prezzi dal listino n.05 del 01/10/2026.')),
-      h('a', { class: 'btn primary', href: '#/agenda' }, '+ Nuova offerta')),
+      h('button', { class: 'btn primary', onclick: () => startNewQuote(app) }, '+ Nuova offerta')),
     h('section', { class: 'kpis' }, QUOTE_STATES.map(s => h('div', { class: 'kpi' }, h('small', {}, s), h('strong', {}, byStatus(s).length), h('span', {}, eur(byStatus(s).reduce((t, q) => t + (q.total || 0), 0)))))),
     h('div', { class: 'list-tools row' }, h('input', { type: 'search', placeholder: 'Cerca numero, cliente…', value: listState.q, oninput: debounce(e => { listState.q = e.target.value; draw(); }) }),
       h('select', { onchange: e => { listState.status = e.target.value; draw(); } }, h('option', { value: '' }, 'Tutti gli stati'), QUOTE_STATES.map(s => h('option', { selected: s === listState.status }, s)))),
@@ -3686,7 +3605,124 @@ function printQuote(q) {
   setTimeout(() => { window.print(); document.title = prev; }, 80);
 }
 
-return { viewQuotes, outcomeDialog, resolveOutcome, viewQuoteEditor, printQuote };
+// Nuova offerta in un passaggio (01/11): si sceglie il cliente in una finestra e si apre subito l'offerta
+let pickIndex = { src: null, ix: null };
+async function startNewQuote(app) {
+  const all = await app.customers();
+  if (pickIndex.src !== all) pickIndex = { src: all, ix: buildIndex(all) };
+  const quotes = await app.store.quotes().catch(() => []);
+  const recentIds = [...new Set(quotes.slice().sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))).map(q => q.customerId))];
+  const recent = recentIds.map(id => app.store.customer(id)).filter(Boolean).slice(0, 6);
+  const list = h('div', { class: 'pick-list' });
+  const close = () => back.remove();
+  const choose = c => { close(); app.go('offerta/nuova/' + c.id); };
+  const item = c => h('button', { class: 'pick-item', disabled: !!c.salesBlockedSince, onclick: () => choose(c) }, h('strong', {}, c.name), h('small', { class: 'muted' }, c.salesBlockedSince ? 'Vendita bloccata in RADIX' : [c.city, c.prov, c.status].filter(Boolean).join(' · ')));
+  const draw = q => {
+    const rows = q.trim() ? searchCustomers(pickIndex.ix, q).slice(0, 12).map(r => r.c) : recent;
+    fill(list, q.trim() ? null : (recent.length ? h('small', { class: 'muted pick-hint' }, 'Clienti delle ultime offerte') : h('small', { class: 'muted pick-hint' }, 'Scrivi nome, città, P.IVA o numero cliente')),
+      ...rows.map(item), q.trim() && !rows.length ? h('p', { class: 'muted' }, 'Nessun cliente trovato. Un cliente nuovo si crea da Clienti › “+ Nuovo cliente”.') : null);
+  };
+  const input = h('input', { type: 'search', enterkeyhint: 'search', autocomplete: 'off', placeholder: 'Cerca il cliente…', 'aria-label': 'Cerca il cliente',
+    oninput: debounce(e => draw(e.target.value), 100),
+    onkeydown: e => { if (e.key === 'Enter') { e.preventDefault(); list.querySelector('.pick-item')?.click(); } if (e.key === 'Escape') close(); } });
+  const back = h('div', { class: 'modal-back', onclick: e => { if (e.target === back) close(); } },
+    h('div', { class: 'modal pick', role: 'dialog', 'aria-label': 'Nuova offerta' },
+      h('div', { class: 'modal-head' }, h('h3', {}, 'Nuova offerta: per quale cliente?'), h('button', { class: 'icon-btn', 'aria-label': 'Chiudi', onclick: close }, '✕')),
+      h('div', { class: 'modal-body' }, input, list)));
+  draw(''); document.body.append(back); input.focus();
+}
+
+return { viewQuotes, outcomeDialog, resolveOutcome, viewQuoteEditor, printQuote, startNewQuote };
+})();
+__m["js/views/home.js"] = (function () {
+const { h, fill, eur, dateIt, today, telLinks } = __m["js/ui.js"];
+const { boardSection } = __m["js/views/board.js"];
+const { networkSection, managerSection } = __m["js/views/direction.js"];
+const { openActions } = __m["js/views/actions.js"];
+const { startNewQuote } = __m["js/views/quotes.js"];
+
+const TABS = [['attivita', 'Attività rete'], ['bacheca', 'Bacheca'], ['manager', 'Area manager']];
+const getTab = () => { try { return localStorage.getItem('ntx-home-tab') || 'attivita'; } catch { return 'attivita'; } };
+const setTab = t => { try { localStorage.setItem('ntx-home-tab', t); } catch { /* facoltativo */ } };
+
+async function viewHome(app, tabArg) {
+  const s = app.session, isDir = s.role === 'direzione';
+  const [customers, quotes, posts, actions, notes] = await Promise.all([app.customers(), app.store.quotes(), app.store.posts(), openActions(app), app.store.notes()]);
+  const comms = posts.filter(p => p.kind !== 'follow-up');   // i follow-up assegnati stanno tra i follow-up, non tra le comunicazioni
+  // dove porta un follow-up: offerta (promemoria offerte), cliente se collegato, altrimenti la bacheca
+  const actionHref = a => a.quoteReminder ? `#/offerta/${a.quoteReminder.quote.id}` : a.note.customerId ? `#/agenda/${a.note.customerId}` : '#/bacheca';
+  const count = st => customers.filter(c => c.status === st).length;
+  const open = quotes.filter(q => q.status === 'Bozza' || q.status === 'Inviata');
+  const overdue = actions.filter(a => a.state === 'scaduto').length, todayN = actions.filter(a => a.state === 'oggi').length;
+  const tile = (label, value, sub, href) => h('a', { class: 'kpi', href }, h('small', {}, label), h('strong', {}, value), sub ? h('span', {}, sub) : null);
+  const head = h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, `Buongiorno, ${s.name.split(' ')[0]}`), h('p', { class: 'muted' }, isDir ? 'Direzione commerciale · tutta la rete' : `Portafoglio ${s.assignee}`)),
+    h('button', { class: 'btn primary', onclick: () => startNewQuote(app) }, '+ Nuova offerta'));
+  const foot = h('p', { class: 'fine' }, `Oggi ${dateIt(today())} · Archivio ${app.store.mode === 'locale' ? 'locale su questo dispositivo' : 'condiviso'}`);
+
+  if (isDir) {
+    const d30 = new Date(Date.now() - 30 * 864e5).toISOString();
+    let tab = TABS.some(t => t[0] === tabArg) ? tabArg : getTab();
+    const body = h('div', { class: 'tab-body' });
+    const tabsEl = h('div', { class: 'tabs', role: 'tablist' });
+    const draw = async () => {
+      setTab(tab);
+      fill(tabsEl, TABS.map(([id, label]) => h('button', { role: 'tab', 'aria-selected': String(id === tab), class: 'tab' + (id === tab ? ' on' : ''), onclick: () => { tab = id; draw(); } }, label)));
+      const refresh = () => draw();
+      fill(body, h('p', { class: 'muted' }, 'Caricamento…'));
+      fill(body, tab === 'bacheca' ? await boardSection(app, refresh) : tab === 'manager' ? await managerSection(app) : await networkSection(app, refresh));
+    };
+    await draw();
+    return h('div', { class: 'page' }, head,
+      h('section', { class: 'kpis' },
+        tile('Clienti in rete', customers.length.toLocaleString('it-IT'), `${count('Attivo')} attivi · ${count('Da recuperare')} da recuperare`, '#/agenda'),
+        tile('Attività ultimi 30 gg', notes.filter(n => n.createdAt >= d30).length, 'note, visite, telefonate', '#/home/attivita'),
+        tile('Follow-up rete', actions.length, overdue ? `${overdue} scaduti · ${todayN} oggi` : `${todayN} oggi`, '#/home/bacheca'),
+        tile('Offerte aperte', open.length, eur(open.reduce((t, q) => t + (q.total || 0), 0)), '#/preventivi')),
+      tabsEl, body, foot);
+  }
+
+  // Agente: la Home è "cosa fare oggi" (01/11): follow-up e promemoria offerte scaduti o di oggi, poi clienti da recuperare da sentire
+  const urgent = actions.filter(a => a.state === 'scaduto' || a.state === 'oggi');
+  const upcoming = actions.filter(a => a.state !== 'scaduto' && a.state !== 'oggi').slice(0, 5);
+  const d60 = new Date(Date.now() - 60 * 864e5).toISOString();
+  const heard = new Set(notes.filter(n => n.createdAt >= d60).map(n => n.customerId));
+  const toCall = customers.filter(c => c.status === 'Da recuperare' && !heard.has(c.id))
+    .sort((a, b) => (b.rev2025 || 0) - (a.rev2025 || 0) || a.name.localeCompare(b.name, 'it')).slice(0, 5);
+  const custOf = a => app.store.customer(a.note.customerId);
+  const actionItem = a => { const c = custOf(a); return h('li', { class: 'todo' },
+    h('a', { href: actionHref(a), class: 'todo-main' }, h('span', { class: 'due ' + a.state.replace(' ', '-') }, a.state === 'oggi' ? 'oggi' : a.due ? dateIt(a.due) : 'subito'),
+      h('span', { class: 'todo-text' }, h('strong', {}, a.title), c ? h('small', { class: 'muted' }, c.name + (c.city ? ' · ' + c.city : '')) : null)),
+    c?.phone ? h('span', { class: 'todo-tel' }, telLinks(c.phone.split(';')[0])) : null); };
+  const callItem = c => h('li', { class: 'todo' },
+    h('a', { href: '#/agenda/' + c.id, class: 'todo-main' }, h('span', { class: 'due warn' }, 'recupera'),
+      h('span', { class: 'todo-text' }, h('strong', {}, c.name), h('small', { class: 'muted' }, [c.city, c.rev2025 ? 'acquistato 2025 ' + eur(c.rev2025) : ''].filter(Boolean).join(' · ')))),
+    c.phone ? h('span', { class: 'todo-tel' }, telLinks(c.phone.split(';')[0])) : null);
+
+  return h('div', { class: 'page' }, head,
+    h('section', { class: 'kpis compact' },
+      tile('I miei clienti', customers.length.toLocaleString('it-IT'), `${count('Attivo')} attivi`, '#/agenda'),
+      tile('Da recuperare', count('Da recuperare'), 'nessun ordine 2026', '#/agenda/stato/Da recuperare'),
+      tile('Follow-up', actions.length, overdue ? `${overdue} scaduti` : `${todayN} oggi`, '#/bacheca'),
+      tile('Offerte aperte', open.length, eur(open.reduce((t, q) => t + (q.total || 0), 0)), '#/preventivi')),
+    h('section', { class: 'card' }, h('h2', {}, 'Da fare oggi'),
+      urgent.length ? h('ul', { class: 'todo-list' }, urgent.map(actionItem))
+        : h('p', { class: 'muted' }, 'Nessun follow-up scaduto o in scadenza oggi.'),
+      toCall.length ? [h('h3', { class: 'todo-sub' }, 'Clienti da recuperare da sentire'),
+        h('p', { class: 'fine' }, 'Hanno comprato nel 2025 ma non nel 2026 e non hanno note negli ultimi 60 giorni; prima i più importanti.'),
+        h('ul', { class: 'todo-list' }, toCall.map(callItem)),
+        h('a', { class: 'more', href: '#/agenda/stato/Da recuperare' }, 'Tutti i clienti da recuperare →')] : null),
+    h('div', { class: 'grid2' },
+      h('section', { class: 'card' }, h('h2', {}, 'Prossimi follow-up'),
+        upcoming.length ? h('ul', { class: 'todo-list' }, upcoming.map(actionItem))
+          : h('p', { class: 'muted' }, 'Nessun follow-up in programma. Si creano dalle note nella scheda cliente.')),
+      h('section', { class: 'card' }, h('h2', {}, 'Comunicazioni della Direzione'),
+        comms.length ? comms.slice(0, 3).map(p => h('div', { class: 'post' + (p.pinned ? ' pinned' : '') }, h('strong', {}, p.title), p.body ? h('p', {}, p.body) : null, h('small', { class: 'muted post-meta' }, `${p.authorName} · ${dateIt(p.createdAt)}${p.due ? ' · scadenza ' + dateIt(p.due) : ''}`)))
+          : h('p', { class: 'muted' }, 'Nessuna comunicazione.'),
+        h('a', { class: 'more', href: '#/bacheca' }, 'Apri la bacheca →'))),
+    foot);
+}
+
+return { viewHome, openActions };
 })();
 __m["js/vendor/leaflet.js"] = (function () {
 // Leaflet 1.9.3 (BSD-2-Clause, (c) Vladimir Agafonkin, CloudMade) — incluso nel sito, nessuna libreria esterna caricata dalla rete.
