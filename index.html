@@ -227,17 +227,10 @@ mark{background:#fff1a8;color:inherit;border-radius:2px;padding:0 1px}
 .btn.primary.attn{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 30%,transparent)}
 .looks{display:flex;flex-direction:column;gap:8px} .look-opt{display:flex;align-items:center;gap:10px;cursor:pointer}
 .look-sw{width:44px;height:28px;border-radius:6px;border:1px solid var(--line);flex:none}
-.look-sw.classica{background:linear-gradient(90deg,#676568 40%,#fff 40%);box-shadow:inset -6px 0 #D40E41}
 .look-sw.chiara{background:linear-gradient(90deg,#fff 40%,#f5f6f8 40%);box-shadow:inset 0 -5px #BCBF00}
-.look-sw.diagonale{background:linear-gradient(115deg,#BCBF00 45%,#676568 45%)}
+.look-sw.scura{background:linear-gradient(90deg,#1f2226 40%,#16181b 40%);box-shadow:inset 0 -5px #BCBF00}
+.look-opt input{width:auto;flex:none;margin:0}
 
-/* --- 1. Classica: menu grigio NORDTEX, N bianca, accento rosso, dettaglio lime --- */
-:root[data-look="classica"]{ --brand:var(--nt-grey); --accent:var(--nt-red); }
-:root[data-look="classica"] .brand .logo-full{display:none} :root[data-look="classica"] .brand-sub{color:#e6e8e9}
-:root[data-look="classica"] .nav-item{color:#e9ebec} :root[data-look="classica"] .nav-item.active{background:rgba(255,255,255,.14);box-shadow:inset 3px 0 var(--nt-lime)}
-:root[data-look="classica"] .btn.primary{background:var(--nt-red);border-color:var(--nt-red)} :root[data-look="classica"] .btn.primary:hover{background:var(--nt-red-dark)}
-:root[data-look="classica"] .who{border-color:rgba(255,255,255,.2)} :root[data-look="classica"] .who small,:root[data-look="classica"] .who .link{color:#d5d9db}
-:root[data-look="classica"] .tabbar a.active{color:var(--nt-red)} :root[data-look="classica"] .page-head h1::after{content:"";display:block;width:44px;height:4px;background:var(--nt-lime);margin-top:8px;border-radius:2px}
 
 /* --- 2. Chiara: menu bianco con logo a colori, pulsanti grigi, dettagli lime e rosso --- */
 :root[data-look="chiara"]{ --brand:var(--nt-grey); --accent:var(--nt-red); }
@@ -250,25 +243,10 @@ mark{background:#fff1a8;color:inherit;border-radius:2px;padding:0 1px}
 :root[data-look="chiara"] .kpi{border-top:3px solid var(--nt-lime)} :root[data-look="chiara"] .tabbar a.active{color:var(--nt-red)}
 :root[data-look="chiara"] .tab.on{border-bottom-color:var(--nt-lime)}
 
-/* --- 3. Diagonale: lime e grigio a tagli obliqui, come la copertina del listino --- */
-:root[data-look="diagonale"]{ --brand:var(--nt-grey-dark); --accent:var(--nt-lime); --bg:#f4f5f2; }
-:root[data-look="diagonale"] .side{background:linear-gradient(160deg,var(--nt-lime) 0 150px,var(--nt-grey) 150px)}
-:root[data-look="diagonale"] .brand .logo-full{display:none} :root[data-look="diagonale"] .brand .logo-mark{width:58px;filter:drop-shadow(0 1px 0 rgba(0,0,0,.1))}
-:root[data-look="diagonale"] .brand-sub{color:#2f3335} :root[data-look="diagonale"] .brand{padding-bottom:34px}
-:root[data-look="diagonale"] .nav-item{color:#eef0f0} :root[data-look="diagonale"] .nav-item.active{background:var(--nt-lime);color:#1f2224}
-:root[data-look="diagonale"] .who small,:root[data-look="diagonale"] .who .link{color:#d5d9db}
-:root[data-look="diagonale"] .btn.primary{background:var(--nt-lime);border-color:var(--nt-lime);color:#1f2224} :root[data-look="diagonale"] .btn.primary:hover{background:#a8aa00}
-:root[data-look="diagonale"] .page-head{position:relative;padding-left:18px} :root[data-look="diagonale"] .page-head::before{content:"";position:absolute;left:0;top:4px;bottom:4px;width:8px;background:var(--nt-lime);transform:skewX(-14deg)}
-:root[data-look="diagonale"] .tab.on{border-bottom-color:var(--nt-red)} :root[data-look="diagonale"] .tabbar a.active{color:var(--nt-grey-dark)} :root[data-look="diagonale"] .tabbar{border-top:3px solid var(--nt-lime)}
-:root[data-look="diagonale"] .kpi strong{color:var(--nt-grey-dark)} :root[data-look="diagonale"] .chip.on{background:var(--nt-grey-dark);border-color:var(--nt-grey-dark)}
-:root[data-look="diagonale"] .login{border-top:6px solid var(--nt-lime)}
-:root[data-look="diagonale"] body{background:linear-gradient(115deg,transparent 62%,rgba(188,190,0,.10) 62%) fixed,var(--bg)}
 
 /* login: sfondo con la N obliqua per tutte le versioni */
 .login{position:relative}
-:root[data-look="classica"] #app:has(.login){min-height:100vh;background:linear-gradient(115deg,var(--bg) 58%,var(--nt-grey) 58% 72%,var(--nt-lime) 72%)}
 :root[data-look="chiara"] #app:has(.login){min-height:100vh;background:linear-gradient(115deg,var(--bg) 70%,var(--nt-lime-soft) 70%)}
-:root[data-look="diagonale"] #app:has(.login){min-height:100vh;background:linear-gradient(115deg,var(--nt-lime) 0 34%,var(--bg) 34% 66%,var(--nt-grey) 66%)}
 @media (max-width:1100px) and (min-width:761px){ .brand .logo-full{width:44px} .brand-sub{display:none} .brand{align-items:center;padding:4px 0 18px} }
 #app:has(.login){display:flow-root}
 /* ===== Proposta 2 "Chiara" (scelta 31/10): rifiniture ===== */
@@ -371,6 +349,46 @@ mark{background:#fff1a8;color:inherit;border-radius:2px;padding:0 1px}
 .tour-name{display:flex;flex-direction:column;min-width:0} .tour-name small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padding:0;margin:8px 0;columns:2;font-size:.85rem}
 @media (max-width:700px){ul.plain{columns:1}.map-selects select,.map-selects input{max-width:none;width:100%}}
+
+/* ===== Aspetto "Scura" (01/11): stessi elementi di Chiara, colori scuri ===== */
+:root[data-scheme="dark"]{ color-scheme:dark;
+  --bg:#16181b; --surface:#1f2226; --ink:#e8eaed; --muted:#a0a8b2; --line:#30353b; --shadow:none;
+  --ok:#4cc27f; --ok-bg:#16301f; --warn:#f0b44c; --warn-bg:#33270f; --bad:#ff7b72; --bad-bg:#3a1b1b; --info-bg:#172840;
+  --nt-lime-soft:#30321a; --nt-lime-ink:#e3e58a; --nt-grey:#b9b7bb; --brand:#4b4a4d; }
+:root[data-scheme="dark"] body{background:var(--bg);color:var(--ink)}
+:root[data-scheme="dark"] a{color:#8ab4ff}
+:root[data-scheme="dark"] .side{background:#1b1d21!important;border-right-color:var(--line)!important}
+:root[data-scheme="dark"] .brand .logo-full,:root[data-scheme="dark"] .mobile-brand img,:root[data-scheme="dark"] .brand-lg img{background:#fff;border-radius:8px;padding:5px 8px}
+:root[data-scheme="dark"] .nav-item{color:#c9ced4!important} :root[data-scheme="dark"] .nav-item:hover{background:#262a2f!important}
+:root[data-scheme="dark"] .nav-item.active{background:var(--nt-lime-soft)!important;color:#f1f2c8!important}
+:root[data-scheme="dark"] .who strong{color:var(--ink)!important}
+:root[data-scheme="dark"] input,:root[data-scheme="dark"] select,:root[data-scheme="dark"] textarea{background:#16181b;border-color:#3a4047;color:var(--ink)}
+:root[data-scheme="dark"] .btn:hover,:root[data-scheme="dark"] .icon-btn:hover{background:#2a2e34}
+:root[data-scheme="dark"] .btn.primary{background:#5a5e64!important;border-color:#5a5e64!important;color:#fff}
+:root[data-scheme="dark"] .badge,:root[data-scheme="dark"] .badge.muted,:root[data-scheme="dark"] .badge.dark,:root[data-scheme="dark"] .due,:root[data-scheme="dark"] .lvl.blocked,:root[data-scheme="dark"] .tl-radix .badge.muted{background:#2c3137;color:#c9ced4}
+:root[data-scheme="dark"] .badge.ok{background:var(--ok-bg);color:var(--ok)} :root[data-scheme="dark"] .badge.warn{background:var(--warn-bg);color:var(--warn)} :root[data-scheme="dark"] .badge.bad{background:var(--bad-bg);color:var(--bad)}
+:root[data-scheme="dark"] .alert.warn{color:#f5cf8a} :root[data-scheme="dark"] .alert.info{color:#a9c7ff}
+:root[data-scheme="dark"] .table thead th{background:#24282d!important;color:#b9c0c8!important;border-color:var(--line)}
+:root[data-scheme="dark"] .table td{border-color:#2a2f35!important} :root[data-scheme="dark"] .table tbody tr:hover,:root[data-scheme="dark"] .table tr.cur td{background:#24282d}
+:root[data-scheme="dark"] .citem:hover{background:#24282d} :root[data-scheme="dark"] .citem.sel{background:var(--nt-lime-soft)!important}
+:root[data-scheme="dark"] .bars div,:root[data-scheme="dark"] .gl-tile,:root[data-scheme="dark"] .meter,:root[data-scheme="dark"] .tp-bar,:root[data-scheme="dark"] .send-steps,:root[data-scheme="dark"] .econ-box.dir{background:#262a2f}
+:root[data-scheme="dark"] .send-step .n{background:#3a4047;color:var(--ink)}
+:root[data-scheme="dark"] .note-radix,:root[data-scheme="dark"] .post.pinned,:root[data-scheme="dark"] .warnrow{background:#2b2717}
+:root[data-scheme="dark"] .result{background:var(--surface)} :root[data-scheme="dark"] .result:hover{background:#24282d;border-color:#3a4047}
+:root[data-scheme="dark"] .modal{background:var(--surface);color:var(--ink)}
+:root[data-scheme="dark"] .tabbar{background:rgba(27,29,33,.96)!important}
+:root[data-scheme="dark"] .chip{background:var(--surface);color:var(--ink)} :root[data-scheme="dark"] .chip.on{background:#5a5e64!important;border-color:#5a5e64!important;color:#fff}
+:root[data-scheme="dark"] .purchases .hint.propose{background:var(--ok-bg);color:var(--ok)} :root[data-scheme="dark"] .purchases .hint.lost{background:var(--warn-bg);color:var(--warn)}
+:root[data-scheme="dark"] .tag-dir{background:#3a1b24;color:#ff8fa6}
+:root[data-scheme="dark"] mark{background:#5c5214;color:#fff}
+:root[data-scheme="dark"] #app:has(.login){background:linear-gradient(115deg,var(--bg) 70%,var(--nt-lime-soft) 70%)!important}
+:root[data-scheme="dark"] .leaflet-tile{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9)}
+:root[data-scheme="dark"] .leaflet-container{background:#1b1d21}
+:root[data-scheme="dark"] .leaflet-popup-content-wrapper,:root[data-scheme="dark"] .leaflet-popup-tip{background:var(--surface);color:var(--ink)}
+:root[data-scheme="dark"] .mail-preview{background:#fff}
+:root[data-scheme="dark"] .tp-verdict:not(.green):not(.yellow):not(.red){background:var(--surface)} :root[data-scheme="dark"] .tp-verdict .btn{background:var(--surface)}
+:root[data-scheme="dark"] .citem,:root[data-scheme="dark"] .citem .cname>span,:root[data-scheme="dark"] a.btn{color:var(--ink)}
+:root[data-scheme="dark"] .gl-bar i{background:#46505b} :root[data-scheme="dark"] .gl-bar.cur i{background:#c9ced4}
 
 </style>
 <script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8"};</script>
@@ -3705,9 +3723,16 @@ const app = {
   invalidate() { delete this.cache.customers; },
 };
 
-// Aspetto grafico (proposte da valutare): classica, chiara, diagonale
-const LOOKS = [['chiara', 'Chiara — menu bianco con logo, dettagli lime (scelta)'], ['classica', 'Classica NORDTEX — menu grigio, accento rosso'], ['diagonale', 'Diagonale — lime e grigio, come la copertina del listino']];
-function applyLook(v) { const ok = LOOKS.some(l => l[0] === v) ? v : 'chiara'; document.documentElement.dataset.look = ok; localStorageSet('ntx-look', ok); }
+// Aspetto grafico (decisione Tommaso 01/11): Chiara (predefinita) o Scura. Le proposte Classica e Diagonale sono state tolte.
+const LOOKS = [['chiara', 'Chiara — sfondo bianco, dettagli lime'], ['scura', 'Scura — sfondo scuro, riposa la vista di sera']];
+const currentLook = () => (document.documentElement.dataset.scheme === 'dark' ? 'scura' : 'chiara');
+function applyLook(v) {
+  const ok = LOOKS.some(l => l[0] === v) ? v : 'chiara';
+  document.documentElement.dataset.look = 'chiara';   // le rifiniture grafiche sono quelle di "Chiara", la scura cambia i colori
+  document.documentElement.dataset.scheme = ok === 'scura' ? 'dark' : 'light';
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', ok === 'scura' ? '#16181b' : '#ffffff');
+  localStorageSet('ntx-look', ok);
+}
 
 async function boot() {
   document.head.append(h('style', {}, FONT_CSS));
@@ -3798,7 +3823,7 @@ async function viewAccount() {
       h('div', { class: 'actions' }, h('button', { class: 'btn primary', onclick: () => exp().catch(e => toast(e.message, 'error')) }, 'Scarica backup'), h('label', { class: 'btn' }, 'Importa backup', fileIn))) : '',
     !local ? passwordCard() : '',
     h('section', { class: 'card' }, h('h2', {}, 'Aspetto'),
-      h('div', { class: 'looks' }, LOOKS.map(([v, l]) => h('label', { class: 'look-opt' }, h('input', { type: 'radio', name: 'look', value: v, checked: document.documentElement.dataset.look === v, onchange: () => { applyLook(v); app.go('profilo'); } }), h('span', { class: 'look-sw ' + v }), l)))),
+      h('div', { class: 'looks' }, LOOKS.map(([v, l]) => h('label', { class: 'look-opt' }, h('input', { type: 'radio', name: 'look', value: v, checked: currentLook() === v, onchange: () => { applyLook(v); app.go('profilo'); } }), h('span', { class: 'look-sw ' + v }), l)))),
     h('section', { class: 'card' }, h('h2', {}, 'Informazioni'),
       h('p', { class: 'muted' }, `NORDTEX HUB v${VERSION} · modalità ${local ? 'locale' : 'online'}`),
       ...(app.store.sources || []).map(x => h('p', { class: 'fine' }, `${x.name} · sha256 ${String(x.sha256).slice(0, 12)}…`)),
