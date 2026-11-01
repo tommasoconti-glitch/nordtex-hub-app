@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="a37464f8f2f5">
+<meta name="ntx-build" content="2ee6ac76d492">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -543,9 +543,33 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 @media (max-width:760px){.today-text small{white-space:normal}}
 .today-row:hover,.more-item:hover,.tabbar a:hover,.kpi:hover{text-decoration:none} @media (hover:hover){.today-row:hover .today-text strong{text-decoration:underline}}
 .todo-main:hover{text-decoration:none} @media (hover:hover){.todo-main:hover strong{text-decoration:underline}}
+/* Clienti (01/11 sera): bollini nell'elenco, azioni in una riga, scheda riordinata */
+.cflags{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
+.flag{font-size:.68rem;font-weight:600;padding:1px 6px;border-radius:6px;background:#eef1f5;color:#475467}
+.flag.bad{background:var(--bad-bg);color:var(--bad)} .flag.warn{background:var(--warn-bg);color:var(--warn)} .flag.info{background:var(--info-bg,#e8f0fd);color:#1d5fbf}
+.cmeta{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15} .cmeta small{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.cactions{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 14px}
+.act{display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink,#2a2a2d);font:inherit;font-weight:600;cursor:pointer;text-decoration:none}
+.act:hover{text-decoration:none;border-color:#c9ccd2} .act.primary{background:var(--grey,#676568);color:#fff;border-color:transparent} .act[disabled]{opacity:.45;cursor:not-allowed}
+.act-ico{font-size:1rem;line-height:1}
+@media (max-width:760px){
+  .cactions{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  .act{flex-direction:column;gap:3px;padding:8px 2px;font-size:.72rem;font-weight:600}
+  .act-ico{font-size:1.15rem}
+}
+.sub-h{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px}
+.fold-in{margin-top:10px} .fold-in>summary{cursor:pointer;color:#1d4ed8;font-weight:600;list-style:none} .fold-in>summary::-webkit-details-marker{display:none}
+.fold-in>summary::before{content:'▸ '} .fold-in[open]>summary::before{content:'▾ '}
+.pc-grid{margin:8px 0 4px;font-size:.86rem}
+.pc-row{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,minmax(64px,auto));gap:8px;padding:6px 0;border-bottom:1px solid var(--line);align-items:baseline}
+.pc-row .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap} .pc-head{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.pc-name{min-width:0;overflow-wrap:anywhere}
+@media (max-width:760px){.pc-grid{font-size:.78rem}.pc-row{grid-template-columns:minmax(0,1fr) repeat(3,58px);gap:4px}}
+.call-list{list-style:none;margin:0;padding:0} .call-list li+li{border-top:1px solid var(--line)}
+.call-row{display:flex;gap:12px;align-items:center;padding:12px 4px;text-decoration:none;color:inherit} .call-row span:last-child{display:flex;flex-direction:column}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a37464f8f2f5"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"2ee6ac76d492"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1761,6 +1785,7 @@ async function radixOfferDialog(app, o) {
   return !!res;
 }
 
+function radixOfferRow(app, o, refresh, opts) { return row(app, o, refresh, opts); }
 function row(app, o, refresh, { showCustomer = true } = {}) {
   const c = o.customerId ? app.store.customer(o.customerId) : null;
   const d = radixOfferDue(o), st = dueState(o);
@@ -1829,7 +1854,7 @@ async function radixFollowupBlock(app, refresh) {
     h('a', { class: 'more', href: '#/preventivi/radix' }, urgent.length > 5 ? `Tutte le ${urgent.length} →` : 'Apri Offerte › Da RADIX →'));
 }
 
-return { radixOfferOpen, dueState, radixOfferDialog, radixOffersPanel, radixOffersCard, radixFollowupBlock };
+return { radixOfferOpen, dueState, radixOfferDialog, radixOfferRow, radixOffersPanel, radixOffersCard, radixFollowupBlock };
 })();
 __m["js/core/search.js"] = (function () {
 // Ricerca clienti: tollerante ad accenti, punteggiatura, forme societarie e piccoli errori di battitura.
@@ -1961,16 +1986,43 @@ __m["js/views/agenda.js"] = (function () {
 const { h, fill, eur, dateIt, dateTimeIt, statusBadge, toast, modal, field, emptyState, debounce, telLinks, today } = __m["js/ui.js"];
 const { dictationAvailable, startDictation } = __m["js/core/dictation.js"];
 const { recordingAvailable, startRecording, mmss } = __m["js/core/recorder.js"];
-const { radixOffersCard } = __m["js/views/radix-offers.js"];
+const { radixOfferRow, radixOfferOpen, dueState: rxDueState } = __m["js/views/radix-offers.js"];
+const { openActions } = __m["js/views/actions.js"];
 const { CONTACT_KINDS, NOTE_OUTCOMES, STATUS_ORDER, STATUS_INFO, MANUAL_STATUSES, TYPOLOGIES, dueState, assigneeFor } = __m["js/data/model.js"];
 const { buildIndex, searchCustomers, highlight } = __m["js/core/search.js"];
 const { purchaseSummary, SALES_YEARS } = __m["js/core/purchases.js"];
-const state = { q: '', status: '', prov: '', assignee: '', sort: 'pertinenza', limit: 200 };
-const SORTS = { pertinenza: 'Stato / pertinenza', nome: 'Nome A-Z', recente: 'Acquisto più recente', fermi: 'Fermi da più tempo' };
+// 01/11 sera (Tommaso: "si può migliorare?"): all'apertura solo i clienti su cui lavorare (attivi, da recuperare, potenziali),
+// in ordine "da seguire prima"; la ricerca cerca sempre in tutti i clienti.
+const WORK = ['Attivo', 'Da recuperare', 'Potenziale'];
+const state = { q: '', status: 'lavoro', prov: '', assignee: '', sort: 'priorita', limit: 200 };
+const SORTS = { priorita: 'Da seguire prima', nome: 'Nome A-Z', recente: 'Acquisto più recente', fermi: 'Fermi da più tempo' };
+const matchStatus = (c, st, searching) => !st || (st === 'lavoro' ? (searching || WORK.includes(c.status)) : st === 'tutti' || c.status === st);
 let indexCache = { src: null, ix: null };
 
+// Segnali per l'ordine "da seguire prima" e per i bollini sulle righe (follow-up, offerte, contatti recenti)
+async function listSignals(app) {
+  const d60 = new Date(Date.now() - 60 * 864e5).toISOString();
+  const [actions, rx, quotes, notes, rxNotes] = await Promise.all([openActions(app).catch(() => []), app.store.radixOffers ? app.store.radixOffers().catch(() => []) : [],
+    app.store.quotes().catch(() => []), app.store.notes().catch(() => []), app.store.radixNotes ? app.store.radixNotes({ since: d60.slice(0, 10) }).catch(() => []) : []]);
+  const sig = new Map(); const get = id => { if (!sig.has(id)) sig.set(id, { late: 0, rxDue: 0, open: 0, contact: false }); return sig.get(id); };
+  for (const a of actions) if (a.note?.customerId && (a.state === 'scaduto' || a.state === 'oggi')) get(a.note.customerId).late++;
+  for (const o of rx) if (o.customerId && radixOfferOpen(o)) { const g = get(o.customerId); g.open++; if (rxDueState(o)) g.rxDue++; }
+  for (const q of quotes) if (q.status === 'Bozza' || q.status === 'Inviata') get(q.customerId).open++;
+  for (const n of notes) if (n.createdAt >= d60) get(n.customerId).contact = true;
+  for (const n of rxNotes) if (n.date >= d60.slice(0, 10)) get(n.customerId).contact = true;
+  return sig;
+}
+const NOSIG = { late: 0, rxDue: 0, open: 0, contact: false };
+// livello di priorità: 0 follow-up scaduto o offerta da sentire, 1 offerta aperta, 2 da recuperare, 3 attivo non sentito da 60 gg, 4 altri attivi/potenziali, 5 il resto
+function tier(c, g) {
+  if (g.late || g.rxDue) return 0; if (g.open) return 1; if (c.status === 'Da recuperare') return 2;
+  if (c.status === 'Attivo' && !g.contact) return 3; if (WORK.includes(c.status)) return 4; return 5;
+}
+
 async function viewAgenda(app, a1, a2) {
-  if (a1 === 'stato') { state.status = a2 || ''; a1 = null; }
+  if (a1 === 'stato') { state.status = a2 || 'lavoro'; a1 = null; }
+  if (!app.cache.listSignals || app.cache.listSignalsAt < Date.now() - 60000) { app.cache.listSignals = await listSignals(app); app.cache.listSignalsAt = Date.now(); }
+  const sig = app.cache.listSignals;
   const all = await app.customers();
   if (indexCache.src !== all) indexCache = { src: all, ix: buildIndex(all) };
   const isDir = app.session.role === 'direzione';
@@ -1985,18 +2037,24 @@ async function viewAgenda(app, a1, a2) {
     const by = { nome: (a, b) => a.c.name.localeCompare(b.c.name, 'it'),
       recente: (a, b) => (b.c.lastInvoice || '').localeCompare(a.c.lastInvoice || '') || a.c.name.localeCompare(b.c.name, 'it'),
       fermi: (a, b) => (a.c.lastInvoice || '9999').localeCompare(b.c.lastInvoice || '9999') || a.c.name.localeCompare(b.c.name, 'it'),
-      pertinenza: state.q ? (a, b) => b.score - a.score || a.c.name.localeCompare(b.c.name, 'it')
-        : (a, b) => STATUS_ORDER.indexOf(a.c.status) - STATUS_ORDER.indexOf(b.c.status) || a.c.name.localeCompare(b.c.name, 'it') }[state.sort];
+      priorita: state.q ? (a, b) => b.score - a.score || a.c.name.localeCompare(b.c.name, 'it')
+        : (a, b) => { const ta = tier(a.c, sig.get(a.c.id) || NOSIG), tb = tier(b.c, sig.get(b.c.id) || NOSIG);
+          return ta - tb || (ta === 2 ? (b.c.rev2025 || 0) - (a.c.rev2025 || 0) : ta === 3 || ta === 4 ? (b.c.rev2026 || 0) - (a.c.rev2026 || 0) : 0)
+            || STATUS_ORDER.indexOf(a.c.status) - STATUS_ORDER.indexOf(b.c.status) || a.c.name.localeCompare(b.c.name, 'it'); } }[state.sort] || ((a, b) => a.c.name.localeCompare(b.c.name, 'it'));
     return rows.slice().sort(by);
   }
   function drawChips(rows) {
     const n = Object.fromEntries(STATUS_ORDER.map(s => [s, 0])); for (const r of rows) n[r.c.status] = (n[r.c.status] || 0) + 1;
-    fill(chipsBox, STATUS_ORDER.filter(s => n[s] || state.status === s).map(s => h('button', { class: 'chip' + (state.status === s ? ' on' : ''), 'aria-pressed': String(state.status === s), title: STATUS_INFO[s].rule,
-      onclick: () => { state.status = state.status === s ? '' : s; state.limit = 200; drawList(); } }, h('span', { class: 'dot ' + STATUS_INFO[s].cls }), s, h('b', {}, n[s].toLocaleString('it-IT')))));
+    const work = rows.filter(r => WORK.includes(r.c.status)).length;
+    const chip = (key, label, count, dot, title) => h('button', { class: 'chip' + (state.status === key ? ' on' : ''), 'aria-pressed': String(state.status === key), title: title || '',
+      onclick: () => { state.status = key; state.limit = 200; drawList(); } }, dot ? h('span', { class: 'dot ' + dot }) : null, label, h('b', {}, count.toLocaleString('it-IT')));
+    fill(chipsBox, chip('lavoro', 'Da lavorare', work, null, 'Attivi, da recuperare e potenziali'),
+      STATUS_ORDER.filter(s => n[s] || state.status === s).map(s => chip(s, s, n[s], STATUS_INFO[s].cls, STATUS_INFO[s].rule)),
+      chip('tutti', 'Tutti', rows.length, null, 'Tutti i clienti'));
   }
   function drawList() {
     const b = base(); drawChips(b);
-    const rows = sorted(b.filter(r => !state.status || r.c.status === state.status));
+    const rows = sorted(b.filter(r => matchStatus(r.c, state.status, !!state.q.trim())));
     shown = rows;
     const fuzzy = rows[0]?.fuzzy;
     counter.textContent = `${rows.length.toLocaleString('it-IT')} clienti` + (fuzzy ? ' · nessun risultato esatto, mostro i più simili' : '');
@@ -2005,8 +2063,8 @@ async function viewAgenda(app, a1, a2) {
       return h('a', { href: '#/agenda/' + c.id, role: 'option', 'aria-selected': String(selected?.id === c.id), class: 'citem' + (selected?.id === c.id ? ' sel' : '') },
         h('span', { class: 'dot ' + info.cls, title: `${c.status}: ${info.rule}` }),
         h('span', { class: 'cname' }, h('span', {}, highlight(c.name, state.q).map(p => typeof p === 'string' ? p : h('mark', {}, p.mark))),
-          h('small', {}, [c.city, c.prov].filter(Boolean).join(' · ') + (isDir ? ' · ' + c.assignee : ''))),
-        h('span', { class: 'cmeta', title: c.lastInvoice ? 'Ultima fattura ' + dateIt(c.lastInvoice) : 'Mai fatturato' }, c.lastInvoice ? sinceShort(c.monthsSince) : '—'));
+          h('small', {}, [c.city, c.prov].filter(Boolean).join(' · ') + (isDir ? ' · ' + c.assignee : '')), flags(sig.get(c.id))),
+        h('span', { class: 'cmeta', title: c.lastInvoice ? 'Ultima fattura ' + dateIt(c.lastInvoice) : 'Mai fatturato' }, c.lastInvoice ? h('small', {}, 'acquisto') : null, c.lastInvoice ? sinceShort(c.monthsSince) : '—'));
     }),
       rows.length > state.limit ? h('button', { class: 'btn ghost', onclick: () => { state.limit += 300; drawList(); } }, `Mostra altri (${rows.length - state.limit})`) : null,
       rows.length ? null : emptyState(state.q ? `Nessun cliente trovato per “${state.q}”. Prova con una parte del nome, la città, la P.IVA o il numero cliente.` : 'Nessun cliente con questi filtri.',
@@ -2040,12 +2098,18 @@ async function viewAgenda(app, a1, a2) {
   return h('div', { class: 'split' + (selected ? ' has-sel' : '') }, left, right);
 }
 
+// bollini sulla riga: cosa c'è in sospeso con il cliente
+function flags(g) {
+  if (!g) return null;
+  const f = [g.late ? ['bad', 'follow-up scaduto'] : null, g.rxDue ? ['warn', 'offerta da sentire'] : g.open ? ['info', g.open === 1 ? 'offerta aperta' : g.open + ' offerte aperte'] : null].filter(Boolean);
+  return f.length ? h('span', { class: 'cflags' }, f.map(([cls, t]) => h('span', { class: 'flag ' + cls }, t))) : null;
+}
 const sinceShort = m => m === null || m === undefined ? '—' : m < 1 ? 'questo mese' : m === 1 ? '1 mese' : m < 12 ? `${m} mesi` : `${Math.floor(m / 12)} ann${Math.floor(m / 12) === 1 ? 'o' : 'i'}${m % 12 ? ' ' + (m % 12) + ' m' : ''}`;
 const sinceLong = m => m === null || m === undefined ? '' : m < 1 ? 'questo mese' : m === 1 ? '1 mese fa' : `${m} mesi fa`;
 const daysAgo = iso => Math.floor((Date.now() - new Date(iso).getTime()) / 864e5);
 
 // Colpo d'occhio: stato, acquisti, contatti, follow-up, offerte in un solo riquadro
-function glance(app, c, notes, quotes) {
+function glance(app, c, notes, quotes, rxOpen = []) {
   const info = STATUS_INFO[c.status] || STATUS_INFO['Mai fatturato'];
   const ch = c.statusChange;
   const last = notes[0];
@@ -2079,7 +2143,8 @@ function glance(app, c, notes, quotes) {
       tile(c.monthsSince > 12 ? 'bad' : c.monthsSince > 6 ? 'warn' : '', 'Ultimo acquisto', c.lastInvoice ? dateIt(c.lastInvoice) : 'Mai', c.lastInvoice ? sinceLong(c.monthsSince) : c.origin === 'HUB' ? 'nuovo cliente' : 'nessuna fattura dal 2009'),
       tile(contactAge === null || contactAge > 90 ? 'warn' : '', 'Ultimo contatto', last ? dateIt(last.createdAt) : 'Nessuno', last ? `${last.kind} · ${last.authorName || ''}`.replace(/ · $/, '') : 'registra visita o telefonata'),
       tile(next && dueState(next) === 'scaduto' ? 'bad' : next && dueState(next) === 'oggi' ? 'warn' : '', 'Prossimo follow-up', next ? (next.due ? dateIt(next.due) : 'Senza data') : 'Nessuno', next ? next.title : (open.length ? '' : 'nessuna azione aperta')),
-      tile('', 'Offerte aperte', openQ.length ? eur(openQ.reduce((s, q) => s + (q.total || 0), 0)) : '0', openQ.length ? `${openQ.length} in corso` + (won.length ? ` · ${won.length} accettate` : '') : (won.length ? `${won.length} accettate` : 'nessuna'))),
+      (n => tile('', 'Offerte aperte', n ? eur(openQ.reduce((s, q) => s + (q.total || 0), 0) + rxOpen.reduce((s, o) => s + (o.total || 0), 0)) : '0',
+        n ? `${n} in corso` + (rxOpen.length ? ` (${rxOpen.length} RADIX)` : '') + (won.length ? ` · ${won.length} accettate` : '') : (won.length ? `${won.length} accettate` : 'nessuna')))(openQ.length + rxOpen.length)),
     c.origin === 'HUB' && !c.invTotal ? null : h('div', { class: 'gl-trend' },
       h('div', { class: 'gl-bars', role: 'img', 'aria-label': (hasRev ? 'Fatturato' : 'Fatture') + ' per anno: ' + series.map(([y, v]) => `${y} ${v || 0}`).join(', ') },
         series.map(([y, v]) => h('div', { class: 'gl-bar' + (y === '2026' ? ' cur' : '') },
@@ -2108,27 +2173,49 @@ function purchasesCard(c) {
   const p = purchaseSummary(c);
   if (!p.has) return c.salesAsOf ? h('section', { class: 'card' }, h('h2', {}, 'Cosa compra'), h('p', { class: 'muted' }, 'Nessun acquisto dal 2024.')) : null;
   const e0 = v => Math.round(v).toLocaleString('it-IT', { useGrouping: 'always' }) + ' €';
-  const cell = v => h('td', { class: 'num' + (v ? '' : ' muted') }, v ? e0(v) : '—');
+  const last = SALES_YEARS[SALES_YEARS.length - 1];
+  // griglia compatta (non tabella): sul telefono resta leggibile, una riga per famiglia
+  const grid = h('div', { class: 'pc-grid' },
+    h('div', { class: 'pc-row pc-head' }, h('span', {}, 'Famiglia'), SALES_YEARS.map(y => h('span', { class: 'num' }, y === last ? y + '*' : y))),
+    p.rows.map(r => h('div', { class: 'pc-row' + (r.other ? ' muted' : '') }, h('span', { class: 'pc-name' }, r.name), r.years.map(v => h('span', { class: 'num' + (v ? '' : ' muted') }, v ? e0(v) : '—')))));
+  const lead = p.rows.filter(r => !r.other).slice(0, 3).map(r => r.name).join(', ');
   return h('section', { class: 'card purchases' },
-    h('div', { class: 'card-head' }, h('h2', {}, 'Cosa compra'), h('small', { class: 'muted' }, 'Imponibile fatturato · RADIX al ' + dateIt(c.salesAsOf) + ' · * anno in corso')),
+    h('div', { class: 'card-head' }, h('h2', {}, 'Cosa compra'), h('small', { class: 'muted' }, 'RADIX al ' + dateIt(c.salesAsOf))),
     p.hints.length ? h('ul', { class: 'hints' }, p.hints.map(x => h('li', { class: 'hint ' + x.kind }, x.kind === 'propose' ? '➜ ' : '▼ ', x.text))) : null,
-    h('div', { class: 'table-wrap' }, h('table', { class: 'table static' },
-      h('thead', {}, h('tr', {}, h('th', {}, 'Famiglia'), SALES_YEARS.map(y => h('th', { class: 'num', title: y === SALES_YEARS[SALES_YEARS.length - 1] ? 'Anno in corso' : '' }, y === SALES_YEARS[SALES_YEARS.length - 1] ? y + '*' : y)))),
-      h('tbody', {}, p.rows.map(r => h('tr', { class: r.other ? 'muted' : '' }, h('td', {}, r.name), r.years.map(cell)))))),
-    p.top.length ? h('details', { class: 'top-items' }, h('summary', {}, 'Articoli più acquistati dal 2024'),
-      h('ul', { class: 'list' }, p.top.map(t => h('li', {}, h('div', {}, h('strong', {}, t.d)), h('small', { class: 'muted' }, `${t.c || ''} · ${e0(t.v)} · ultimo acquisto ${t.y}`))))) : null);
+    lead ? h('p', { class: 'muted small' }, 'Principali famiglie: ' + lead) : null,
+    h('details', { class: 'fold-in' }, h('summary', {}, 'Dettaglio per famiglia e anno'), grid, h('small', { class: 'muted' }, 'Imponibile fatturato · * anno in corso'),
+      p.top.length ? h('details', { class: 'top-items' }, h('summary', {}, 'Articoli più acquistati dal 2024'),
+        h('ul', { class: 'list' }, p.top.map(t => h('li', {}, h('div', {}, h('strong', {}, t.d)), h('small', { class: 'muted' }, `${t.c || ''} · ${e0(t.v)} · ultimo acquisto ${t.y}`))))) : null));
 }
 
 async function customerCard(app, c) {
-  const [notes, contacts, quotes] = await Promise.all([app.store.notes(c.id), app.store.contacts(c.id), app.store.quotes(c.id)]);
+  const [notes, contacts, quotes, rxAll] = await Promise.all([app.store.notes(c.id), app.store.contacts(c.id), app.store.quotes(c.id),
+    app.store.radixOffers ? app.store.radixOffers({ customerId: c.id }).catch(() => []) : []]);
   const addr = [c.street, [c.cap, c.city].filter(Boolean).join(' '), c.prov ? `(${c.prov})` : ''].filter(Boolean).join(', ');
   const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([c.street, c.cap, c.city, c.prov].filter(Boolean).join(' '));
-  const firstEmail = String(c.email || '').split(/[;\s\[]/)[0];
+  const emails = String(c.email || '').split(/;+/).map(e => e.trim()).filter(e => e.includes('@'));
+  const firstEmail = (emails[0] || '').split(/[\s\[]/)[0];
   const blocked = c.blockedSince || c.salesBlockedSince;
   const provisional = String(c.assignee).startsWith('EX_AREA');
   const refresh = () => app.go('agenda/' + c.id);
   const row = (k, v) => v === null || v === undefined || v === '' ? null : h('div', { class: 'kv' }, h('span', {}, k), h('div', {}, v));
-  const rxCard = await radixOffersCard(app, c, refresh);
+  const phones = phoneList(c, contacts);
+  const openQ = quotes.filter(q => q.status === 'Bozza' || q.status === 'Inviata'), pastQ = quotes.filter(q => !openQ.includes(q));
+  const rxOpen = rxAll.filter(radixOfferOpen), rxPast = rxAll.filter(o => !radixOfferOpen(o));
+  const openActs = notes.flatMap(n => (n.actions || []).filter(a => !a.done).map(a => ({ a, n }))).sort((x, y) => (x.a.due || '9999').localeCompare(y.a.due || '9999'));
+  const toggle = async (n, a) => { try { await app.store.toggleAction(n.id, a.id); toast('Follow-up completato'); refresh(); } catch (e) { toast(e.message, 'error'); } };
+  const act = (label, icon, { primary, ...attrs }) => h(attrs.href ? 'a' : 'button', { class: 'act' + (primary ? ' primary' : ''), ...attrs }, h('span', { class: 'act-ico', 'aria-hidden': 'true' }, icon), h('span', {}, label));
+  const noteItem = n => h('li', { class: n.source === 'RADIX' ? 'tl-radix' : '' },
+    h('div', { class: 'tl-head' }, h('span', { class: 'badge muted' }, n.kind), n.outcome ? h('span', { class: 'badge' }, n.outcome) : null, h('small', { class: 'muted' }, `${n.source === 'RADIX' ? dateIt(n.createdAt) : dateTimeIt(n.createdAt)} · ${n.authorName}`)),
+    n.source === 'RADIX' ? radixBody(n) : (n.audio && n.body === 'Nota vocale' ? null : h('p', {}, n.body)),
+    n.audio ? noteVoice(app, n, refresh) : null,
+    (n.actions || []).length ? h('ul', { class: 'checks' }, n.actions.map(a => h('li', {}, h('label', {}, h('input', { type: 'checkbox', checked: a.done, onchange: () => toggle(n, a) }),
+      h('span', { class: a.done ? 'done' : '' }, a.title), a.due ? h('span', { class: 'due ' + dueState(a).replace(' ', '-') }, dateIt(a.due)) : null)))) : null);
+  const quoteRow = q => h('li', { class: 'rx-offer' }, h('a', { href: '#/offerta/' + q.id, class: 'rx-main plain' },
+      h('div', { class: 'rx-top' }, h('strong', {}, q.number), h('span', { class: 'badge ' + quoteCls(q.status) }, q.status)),
+      h('small', { class: 'muted' }, `offerta dall'app · aggiornata ${dateIt(q.updatedAt)}${q.ownerName ? ' · ' + q.ownerName : ''}`)),
+    h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, eur(q.total))));
+  const recent = notes.slice(0, 3), older = notes.slice(3);
 
   return h('article', { class: 'ccard' },
     h('a', { class: 'back', href: '#/agenda' }, '← Elenco'),
@@ -2136,43 +2223,60 @@ async function customerCard(app, c) {
       h('div', {}, h('h1', {}, c.name), c.extra ? h('p', { class: 'muted' }, c.extra) : null,
         h('div', { class: 'badges' }, h('span', { class: 'badge ' + (STATUS_INFO[c.status]?.cls || 'muted'), title: STATUS_INFO[c.status]?.rule }, h('span', { class: 'dot ' + (STATUS_INFO[c.status]?.cls || 'muted') }), ' ', c.status), blocked ? h('span', { class: 'badge bad' }, c.salesBlockedSince ? 'Vendita bloccata dal ' + dateIt(c.salesBlockedSince) : 'Cliente bloccato dal ' + dateIt(c.blockedSince)) : null,
           h('span', { class: 'badge muted' }, (c.attribution === 'Direzionale' ? 'Direzionale' : c.assignee) + (provisional ? ' · area in valutazione' : '')),
-          c.typology && c.typology !== '(non indicata)' ? h('span', { class: 'badge muted' }, c.typology) : null)),
-      h('div', { class: 'actions' },
-        h('button', { class: 'btn primary', disabled: !!c.salesBlockedSince, title: c.salesBlockedSince ? 'Vendita bloccata in RADIX' : '', onclick: () => app.go('offerta/nuova/' + c.id) }, '+ Offerta'),
-        h('button', { class: 'btn', onclick: () => noteDialog(app, c).then(ok => ok && refresh()) }, '+ Nota'),
-        firstEmail.includes('@') ? h('a', { class: 'btn', href: 'mailto:' + firstEmail }, 'Email') : null,
-        addr ? h('a', { class: 'btn', href: mapsUrl, target: '_blank', rel: 'noopener' }, 'Mappa') : null)),
+          c.city ? h('span', { class: 'badge muted' }, [c.city, c.prov].filter(Boolean).join(' ')) : null))),
+    // azioni in una riga (telefono: icone con etichetta). "Chiama" con più numeri apre la scelta.
+    h('nav', { class: 'cactions', 'aria-label': 'Azioni sul cliente' },
+      phones.length === 1 ? act('Chiama', '☎', { href: 'tel:' + phones[0].tel }) : phones.length ? act('Chiama', '☎', { type: 'button', onclick: () => callDialog(c, phones) }) : null,
+      act('Nota', '✎', { type: 'button', onclick: () => noteDialog(app, c).then(ok => ok && refresh()) }),
+      act('Offerta', '€', { type: 'button', primary: true, disabled: !!c.salesBlockedSince, title: c.salesBlockedSince ? 'Vendita bloccata in RADIX' : '', onclick: () => app.go('offerta/nuova/' + c.id) }),
+      firstEmail ? act('Email', '✉', { href: 'mailto:' + firstEmail }) : null,
+      addr ? act('Mappa', '◎', { href: mapsUrl, target: '_blank', rel: 'noopener' }) : null),
     blocked ? h('p', { class: 'alert bad' }, 'Attenzione: blocco presente in RADIX. Verificare con l\'amministrazione prima di proporre forniture.') : null,
     c.review ? h('p', { class: 'alert warn' }, 'Da verificare: ' + c.review) : null,
+    c.annotation ? h('p', { class: 'alert info' }, h('strong', {}, 'Annotazione RADIX: '), c.annotation) : null,
     c.origin === 'HUB' ? h('p', { class: 'alert info' }, 'Cliente non ancora presente in RADIX: al primo ordine va aperta l\'anagrafica in RADIX (con P.IVA), poi l\'aggiornamento settimanale lo collegherà.') : null,
-    glance(app, c, notes, quotes),
+    glance(app, c, notes, quotes, rxOpen),
+    // In corso: offerte (app e RADIX insieme) e follow-up aperti, cioè quello su cui agire
+    h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'In corso')),
+      openActs.length ? [h('h3', { class: 'sub-h' }, 'Follow-up'), h('ul', { class: 'checks' }, openActs.map(({ a, n }) => h('li', {}, h('label', {}, h('input', { type: 'checkbox', onchange: () => toggle(n, a) }), h('span', {}, a.title)),
+        a.due ? h('span', { class: 'due ' + dueState(a).replace(' ', '-') }, dateIt(a.due)) : null, h('small', { class: 'muted' }, ' · ' + (n.authorName || '')))))] : null,
+      openQ.length || rxOpen.length ? [h('h3', { class: 'sub-h' }, 'Offerte aperte'), h('ul', { class: 'rx-list' }, openQ.map(quoteRow), rxOpen.map(o => radixOfferRow(app, o, refresh, { showCustomer: false })))] : null,
+      !openActs.length && !openQ.length && !rxOpen.length ? h('p', { class: 'muted' }, 'Niente in corso: nessuna offerta aperta né follow-up. Registra un contatto con «Nota» o prepara un\'offerta.') : null,
+      pastQ.length || rxPast.length ? h('details', { class: 'fold-in' }, h('summary', {}, `Offerte chiuse (${pastQ.length + rxPast.length})`),
+        h('ul', { class: 'rx-list' }, pastQ.map(quoteRow), rxPast.map(o => radixOfferRow(app, o, refresh, { showCustomer: false })))) : null),
+    // Ultime attività: le 3 più recenti, il resto a richiesta
+    h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'Ultime attività'), h('button', { class: 'btn small', onclick: () => noteDialog(app, c).then(ok => ok && refresh()) }, '+ Nota')),
+      notes.length ? [h('ol', { class: 'timeline' }, recent.map(noteItem)),
+        older.length ? h('details', { class: 'fold-in' }, h('summary', {}, `Vedi tutte (${notes.length})`), h('ol', { class: 'timeline' }, older.map(noteItem))) : null]
+        : h('p', { class: 'muted' }, 'Nessuna attività registrata. Aggiungi la prima nota: visita, telefonata o email, con un follow-up.')),
     purchasesCard(c),
-    h('div', { class: 'grid2' },
-      h('section', { class: 'card' }, h('h2', {}, 'Anagrafica'),
-        row('Indirizzo', addr), row('Telefono', telLinks(c.phone)), row('Email', c.email ? String(c.email).split(';').map((e, i) => [i ? h('br') : null, h('a', { href: 'mailto:' + e.split(' ')[0].trim() }, e.trim())]) : null),
-        row('P.IVA', c.vat), row('Pagamento concordato', c.paymentTerms), row('Cod. fiscale', c.cf !== c.vat ? c.cf : null), row('N° cliente', c.origin === 'HUB' ? 'Non ancora in RADIX' : c.number),
-        c.changedVsRadix ? row('In RADIX', `${c.radixOwner} (${c.radixAgent})`) : row('Codice agente RADIX', c.radixAgent)),
-      h('section', { class: 'card' }, h('h2', {}, 'Annotazioni'),
-        c.annotation ? h('div', { class: 'note-radix' }, h('small', {}, 'Annotazione RADIX'), h('p', {}, c.annotation)) : h('p', { class: 'muted' }, 'Nessuna annotazione in RADIX.'),
-        c.typology && c.typology !== '(non indicata)' ? row('Tipologia', c.typology) : null,
-        row('Assegnato a', (c.attribution === 'Direzionale' ? 'Direzionale' : c.assignee) + (provisional ? ' (area in valutazione)' : '')))),
-    h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'Referenti'), h('button', { class: 'btn small', onclick: () => contactDialog(app, c).then(ok => ok && refresh()) }, '+ Referente')),
+    // Dati e contatti: chiuso, si apre quando serve
+    h('details', { class: 'card fold-box' }, h('summary', {}, 'Dati e contatti'),
+      h('div', { class: 'grid2' },
+        h('div', {}, row('Indirizzo', addr), row('Telefono', telLinks(c.phone)), row('Email', emails.length ? emails.map((e, i) => [i ? h('br') : null, h('a', { href: 'mailto:' + e.split(/[\s\[]/)[0] }, e)]) : null),
+          row('P.IVA', c.vat), row('Cod. fiscale', c.cf !== c.vat ? c.cf : null)),
+        h('div', {}, row('Pagamento concordato', c.paymentTerms), row('N° cliente', c.origin === 'HUB' ? 'Non ancora in RADIX' : c.number),
+          c.changedVsRadix ? row('In RADIX', `${c.radixOwner} (${c.radixAgent})`) : row('Codice agente RADIX', c.radixAgent),
+          c.typology && c.typology !== '(non indicata)' ? row('Tipologia', c.typology) : null,
+          row('Assegnato a', (c.attribution === 'Direzionale' ? 'Direzionale' : c.assignee) + (provisional ? ' (area in valutazione)' : '')))),
+      h('div', { class: 'card-head' }, h('h3', {}, 'Referenti'), h('button', { class: 'btn small', onclick: () => contactDialog(app, c).then(ok => ok && refresh()) }, '+ Referente')),
       contacts.length ? h('ul', { class: 'list' }, contacts.map(p => h('li', {}, h('div', {}, h('strong', {}, p.name), p.role ? h('small', { class: 'muted' }, ' · ' + p.role) : null),
         h('div', { class: 'muted' }, p.phone ? h('a', { href: 'tel:' + p.phone.replace(/[^\d+]/g, '') }, p.phone) : null, p.phone && p.email ? ' · ' : '', p.email ? h('a', { href: 'mailto:' + p.email }, p.email) : null),
-        h('button', { class: 'link', onclick: () => contactDialog(app, c, p).then(ok => ok && refresh()) }, 'Modifica')))) : h('p', { class: 'muted' }, 'Nessun referente registrato.')),
-    h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'Visite, telefonate e note'), h('button', { class: 'btn small', onclick: () => noteDialog(app, c).then(ok => ok && refresh()) }, '+ Nota')),
-      notes.length ? h('ol', { class: 'timeline' }, notes.map(n => h('li', { class: n.source === 'RADIX' ? 'tl-radix' : '' },
-        h('div', { class: 'tl-head' }, h('span', { class: 'badge muted' }, n.kind), n.outcome ? h('span', { class: 'badge' }, n.outcome) : null, h('small', { class: 'muted' }, `${n.source === 'RADIX' ? dateIt(n.createdAt) : dateTimeIt(n.createdAt)} · ${n.authorName}`)),
-        n.source === 'RADIX' ? radixBody(n) : (n.audio && n.body === 'Nota vocale' ? null : h('p', {}, n.body)),
-        n.audio ? noteVoice(app, n, refresh) : null,
-        n.actions.length ? h('ul', { class: 'checks' }, n.actions.map(a => h('li', {}, h('label', {}, h('input', { type: 'checkbox', checked: a.done, onchange: async () => { try { await app.store.toggleAction(n.id, a.id); refresh(); } catch (e) { toast(e.message, 'error'); } } }),
-          h('span', { class: a.done ? 'done' : '' }, a.title), a.due ? h('span', { class: 'due ' + dueState(a).replace(' ', '-') }, dateIt(a.due)) : null)))) : null)))
-        : h('p', { class: 'muted' }, 'Nessuna attività registrata. Aggiungi la prima nota: visita, telefonata o email, con un follow-up.')),
-    h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'Offerte'), h('button', { class: 'btn small', disabled: !!c.salesBlockedSince, onclick: () => app.go('offerta/nuova/' + c.id) }, '+ Offerta')),
-      quotes.length ? h('table', { class: 'table' }, h('tbody', {}, quotes.map(q => h('tr', { onclick: () => app.go('offerta/' + q.id) },
-        h('td', {}, h('strong', {}, q.number)), h('td', {}, h('span', { class: 'badge ' + quoteCls(q.status) }, q.status)), h('td', {}, dateIt(q.updatedAt)), h('td', { class: 'num' }, eur(q.total))))))
-        : h('p', { class: 'muted' }, 'Nessuna offerta per questo cliente.')),
-    rxCard);
+        h('button', { class: 'link', onclick: () => contactDialog(app, c, p).then(ok => ok && refresh()) }, 'Modifica')))) : h('p', { class: 'muted' }, 'Nessun referente registrato.')));
+}
+
+// Numeri del cliente (anagrafica RADIX + referenti), con l'etichetta scritta accanto quando c'è
+function phoneList(c, contacts) {
+  const out = [], seen = new Set();
+  const add = (raw, who) => { const m = String(raw || '').match(/[+\d][\d\s/.-]{5,}/); if (!m) return; const tel = m[0].replace(/[^\d+]/g, ''); if (seen.has(tel)) return; seen.add(tel);
+    const label = (who || String(raw).replace(m[0], '').replace(/[\[\]]/g, '').trim()) || ''; out.push({ tel, shown: m[0].trim(), label }); };
+  String(c.phone || '').split(/;+/).forEach(p => add(p));
+  (contacts || []).forEach(p => p.phone && add(p.phone, p.name + (p.role ? ' · ' + p.role : '')));
+  return out;
+}
+function callDialog(c, phones) {
+  return modal('Chiama — ' + c.name, h('ul', { class: 'call-list' }, phones.map(p => h('li', {}, h('a', { class: 'call-row', href: 'tel:' + p.tel }, h('span', { class: 'act-ico' }, '☎'),
+    h('span', {}, h('strong', {}, p.shown), p.label ? h('small', { class: 'muted' }, p.label) : null))))), [{ label: 'Chiudi', value: false }]);
 }
 
 const quoteCls = s => ({ Bozza: 'muted', Inviata: 'warn', Accettata: 'ok', Persa: 'bad' }[s] || 'muted');
