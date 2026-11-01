@@ -2456,7 +2456,7 @@ const ZONES_NATURHELD = [['Trentino-Alto Adige,Veneto,Friuli-Venezia Giulia,Lomb
   ['Marche', 500, 650], ['Umbria', 650, 800], ['Lazio', 850, null], ['Abruzzo', 1000, null], ['Molise', 1200, null], ['Campania', 1300, null], ['Puglia', 1400, null], ['Basilicata', 1550, null], ['Calabria', 2000, null]];
 const ZONES_OTHER = [['Trentino-Alto Adige,Veneto,Friuli-Venezia Giulia,Lombardia,Emilia-Romagna', 0, 150], ['Piemonte,Valle d\'Aosta,Liguria', 300, 450], ['Marche,Toscana,Umbria', 400, 550], ['Lazio,Abruzzo', 600, 750],
   ['Campania,Molise', 900, 1050], ['Puglia,Basilicata', 1050, null], ['Calabria', 1200, null], ['Sicilia', 2300, null], ['Sardegna', 2800, null]];
-// Lana minerale (pag. 35): supplemento €/m³ per provincia, carico completo 76 m³; parziali "da chiarire"
+// Lana minerale Holcim (pag. 36): zona 1 compreso, altre zone supplemento €/m³ per provincia; carico completo 76 m³; parziali "sovrapprezzo da chiarire"
 const M3_ZONES = [[0, 'TS GO UD PN VE TV BL PD VR TN BZ MN'], [2, 'VI RO BS BG CR LO MB MI PV PC PR RE MO FE BO AL'],
   [4, 'SO LC CO VA VB NO BI VC AT TO SV GE SP RA FC RN MS LU PT PO FI PI LI AR SI'], [6, 'AO CN IM GR PU AN MC PG VT'], [8, 'FM AP TR RI RM TE PE AQ CH'],
   [10, 'LT FR IS CB'], [12, 'CE BN NA AV SA FG BT'], [14, 'BA TA PZ MT'], [16, 'BR LE CS'], [18, 'CZ KR'], [20, 'VV RC'], [26, 'ME CT'], [30, 'RG SR EN'],
@@ -2471,7 +2471,7 @@ function regimeFor(p) {
   if (prod === 'NATURHELD') return { id: 'naturheld', kind: 'zone', label: 'Fibra di legno NATURHELD · consegna diretta dal produttore', page: 11, table: ZONES_NATURHELD, loadM3: 70, minPartial: 12, secondKm: 2 };
   if (prod === 'STEICO') return { id: 'steico', kind: 'zone', label: 'Fibra di legno STEICO · consegna diretta dal produttore', page: 28, table: ZONES_OTHER, loadM3: 70, minPartial: 12, secondKm: 2 };
   if (fam === 'Legno microlamellare') return { id: 'microlamellare', kind: 'zone', label: 'Legno microlamellare · consegna diretta dal produttore', page: 73, table: ZONES_OTHER, loadM3: 70, minPartial: 12, secondKm: 2, note: 'Sovrapprezzo € 100/consegna per quantità inferiori al pacco completo (pag. 73)' };
-  if (prod === 'HOLCIM' && fam === 'Lana minerale') return { id: 'lana', kind: 'm3zone', label: 'Lana minerale · carico completo 76 m³', page: 35, loadM3: 76 };
+  if (prod === 'HOLCIM' && fam === 'Lana minerale') return { id: 'lana', kind: 'm3zone', label: 'Lana minerale Holcim · consegna diretta, carico completo 76 m³', page: 36, loadM3: 76 };
   if (/POLICELL|VITREX/.test(txt) && fam === 'Vetro cellulare') {
     // pag. 43: la tariffa 2,10 €/km è per i BigBag su centinato (22 BigBag da 3 m³); lo sfuso viaggia solo su walking floor (3,10 €/km)
     if (/SFUS/.test(txt)) return { id: 'policell-sfuso', kind: 'km', label: 'Vetro cellulare sfuso · walking floor, tariffa a km', page: 43, origin: ORIGINS.policell, rates: { walkingfloor: 3.1 }, fixedVehicle: 'walkingfloor', loadM3: 90,
@@ -2549,9 +2549,13 @@ function groupCost(regime, { fraction, pallets, m3 }, ctx) {
     return { cost: vehicles * ctx.km * rate, vehicles, warn, detail: `${vehicles} ${vehicles === 1 ? 'mezzo' : 'mezzi'} ${vtype === 'walkingfloor' ? 'walking floor' : 'centinati'} × ${ctx.km} km × ${rate.toFixed(2).replace('.', ',')} €/km` };
   }
   if (regime.kind === 'm3zone') {
-    const r = m3ZoneRate(ctx.prov); if (r === null) return { cost: null, reason: 'Provincia di consegna non in tabella (pag. 35)' };
-    if (fraction < 1 - eps) return { cost: null, vehicles: 1, reason: 'Carico parziale: sovrapprezzo da chiarire (pag. 35)', rate: r };
-    return { cost: (m3 || 0) * r, vehicles: Math.ceil(fraction - eps), detail: `${(m3 || 0).toFixed(1).replace('.', ',')} m³ × ${r} €/m³ (zona provincia ${up(ctx.prov)})`, rate: r };
+    const r = m3ZoneRate(ctx.prov); if (r === null) return { cost: null, reason: 'Provincia di consegna non in tabella (pag. 36)' };
+    if (!(m3 > 0)) return { cost: null, reason: 'Volume (m³) non ricavabile per questo articolo' };
+    const vehicles = Math.max(1, Math.ceil(fraction - eps)), lastFill = fraction - (vehicles - 1);
+    const detail = r ? `${m3.toFixed(1).replace('.', ',')} m³ × ${r.toFixed(2).replace('.', ',')} €/m³ (supplemento zona, provincia ${up(ctx.prov)})` : `zona 1 (provincia ${up(ctx.prov)}): trasporto compreso nel prezzo`;
+    // pag. 36: "Sovrapprezzi per carichi parziali da chiarire" → il supplemento a m³ vale sempre, il parziale resta da confermare
+    const warn = lastFill < 1 - eps ? `Carico parziale (${(lastFill * regime.loadM3).toFixed(0)} m³ su ${regime.loadM3}): il listino prevede un sovrapprezzo da chiarire con l'ufficio` : '';
+    return { cost: m3 * r, vehicles, detail, rate: r, warn };
   }
   // tabelle a zone: carico completo per mezzo + eventuale parziale (≥12 bancali)
   const row = regime.table.find(x => x[0].split(',').includes(ctx.region));
@@ -2789,8 +2793,8 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
     const hint = fs && fs.missingPallets ? `Per riempire il mezzo: +${fs.missingPallets} ${fs.missingPallets === 1 ? 'bancale' : 'bancali'}${fs.missingQty ? ` (+${qtyFmt(fs.missingQty, fs.unit)})` : ''}` : '';
     const kmErr = [...kmErrors.values()][0];
     const body = {
-      green: [h('strong', {}, `Trasporto ${eu(v.amount)}`), per, h('div', { class: 'muted' }, 'Calcolato dal listino n.05 e inserito nell\'offerta.')],
-      yellow: [h('strong', {}, `Trasporto stimato ${eu(v.amount)}`), per, h('div', { class: 'muted' }, 'Inserito nell\'offerta come stima da confermare: ' + v.reasons.join('; '))],
+      green: [h('strong', {}, v.amount === 0 ? 'Trasporto compreso nel prezzo' : `Trasporto ${eu(v.amount)}`), v.amount === 0 ? '' : per, h('div', { class: 'muted' }, 'Calcolato dal listino n.05 e inserito nell\'offerta.')],
+      yellow: [h('strong', {}, v.amount === 0 ? 'Trasporto compreso nel prezzo (da confermare)' : `Trasporto stimato ${eu(v.amount)}`), v.amount === 0 ? '' : per, h('div', { class: 'muted' }, 'Inserito nell\'offerta come stima da confermare: ' + v.reasons.join('; '))],
       red: [h('strong', {}, 'Trasporto da quotare: telefona all\'ufficio commerciale (0472 847 110)'), h('div', { class: 'muted' }, v.reasons.join('; '))],
       km: [h('strong', {}, kmErr ? 'Km non calcolati' : 'Calcolo dei km in corso…'), h('div', { class: 'muted' }, kmErr ? kmErr + '. Inserisci i km sola andata nei dettagli (c\'è il collegamento a Google Maps).' : 'Percorso dal produttore al cliente con passaggio dal Brennero.')],
     }[v.level];
