@@ -843,7 +843,9 @@ function createLocalStore({ data, kv }) {
       const rec = { id: uid(), quoteId, by: s.userId, byName: s.name, to, bcc, subject, total, channel: 'email personale', at: nowIso() };
       (await col('quoteSends')).push(rec); await save('quoteSends'); return rec;
     },
-    async agentEmails() { return []; },   // in locale le email degli agenti non ci sono (online: profili)
+    async agentEmails() { return []; },
+    async logOpen() {},
+    async accessSummary() { return null; },   // registro accessi solo nella versione online   // in locale le email degli agenti non ci sono (online: profili)
     // Nella versione locale non c'è un server di posta: l'invio è disponibile solo online
     async statusHistory(customerId) { mustSession(); if (!canSeeCustomer(customerId)) return []; return (await col('statusChanges')).map((x, i) => [x, i]).filter(([x]) => x.customerId === customerId).sort((a, b) => b[0].at.localeCompare(a[0].at) || b[1] - a[1]).map(([x]) => x); },
 
@@ -1135,6 +1137,13 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       return { ...p, id: (Array.isArray(r) ? r[0] : r)?.id || p.id };
     },
     async deletePost(id) { return api('/rest/v1/hub_board_posts?id=eq.' + id, { method: 'DELETE' }); },
+    // Registro aperture dell'app (migrazione 20261101150000): se non ancora applicata, l'app funziona lo stesso
+    async logOpen(device) { if (!token) return; await api('/rest/v1/rpc/hub_log_open', { method: 'POST', body: { p_device: device } }).catch(() => {}); },
+    async accessSummary() {
+      const rows = await api('/rest/v1/rpc/hub_access_summary', { method: 'POST', body: {} }).catch(() => null);
+      return rows && rows.map(r => ({ userId: r.user_id, name: r.display_name, role: r.role, active: r.active, lastSignIn: r.last_sign_in, lastOpen: r.last_open,
+        device: r.last_device, opens7: r.opens_7, opens30: r.opens_30, days30: r.days_30 }));
+    },
     async followupDone(id, done = true) { return api('/rest/v1/rpc/hub_followup_done', { method: 'POST', body: { p_id: id, p_done: !!done } }); },
     // km camion via Brennero calcolati sul server (funzione hub-route, cache condivisa)
     async route(origin, destination) {
@@ -2066,6 +2075,30 @@ async function viewManager(app) {
   return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Area manager'), h('p', { class: 'muted' }, 'Portafoglio, presidio e offerte per assegnatario.'))), await managerSection(app));
 }
 
+// Accessi all'app: ultima apertura e frequenza d'uso per persona (solo Direzione, solo versione online)
+const agoIt = iso => {
+  if (!iso) return 'mai';
+  const d = new Date(iso), days = Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(iso).setHours(0, 0, 0, 0)) / 864e5);
+  const hm = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  return days <= 0 ? 'oggi ' + hm : days === 1 ? 'ieri ' + hm : days < 7 ? `${days} giorni fa` : dateIt(iso.slice(0, 10));
+};
+async function accessCard(app) {
+  const rows = app.store.accessSummary ? await app.store.accessSummary() : null;
+  const head = h('h2', {}, 'Accessi all\'app');
+  if (!rows) return h('section', { class: 'card' }, head, h('p', { class: 'muted' }, app.store.mode === 'supabase'
+    ? 'Registro accessi non ancora attivo: serve l\'aggiornamento del database (file 06).' : 'Il registro accessi è disponibile solo nella versione online.'));
+  const th = (...xs) => h('tr', {}, xs.map(x => h('th', { class: x.n ? 'num' : '' }, x.t || x)));
+  return h('section', { class: 'card' }, head,
+    h('p', { class: 'muted' }, 'Una apertura = l\'app aperta o ripresa dopo almeno 15 minuti. "Ultimo login" = ultima volta con email e password.'),
+    h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
+      h('thead', {}, th('Persona', 'Ultima apertura', 'Dispositivo', { t: 'Aperture 7 gg', n: 1 }, { t: 'Aperture 30 gg', n: 1 }, { t: 'Giorni d\'uso 30 gg', n: 1 }, 'Ultimo login')),
+      h('tbody', {}, rows.map(r => h('tr', { class: r.active ? '' : 'muted' },
+        h('td', {}, h('strong', {}, r.name), h('br'), h('small', { class: 'muted' }, (r.role === 'direzione' ? 'Direzione' : 'Agente') + (r.active ? '' : ' · disattivato'))),
+        h('td', {}, h('span', { class: r.lastOpen ? '' : 'warn-text' }, agoIt(r.lastOpen))), h('td', {}, r.device || '—'),
+        h('td', { class: 'num' }, r.opens7), h('td', { class: 'num' }, r.opens30), h('td', { class: 'num' }, r.days30),
+        h('td', {}, r.lastSignIn ? dateTimeIt(r.lastSignIn) : 'mai')))))));
+}
+
 // Regole provvigioni: fasce di sconto complessivo → percentuale sulla merce netta; generali o per singolo agente
 async function commissionCard(app, refresh) {
   const stored = await app.store.getSetting('commissions').catch(() => null);
@@ -2119,7 +2152,7 @@ async function managerSection(app) {
   }).sort((a, b) => b.active + b.recover - (a.active + a.recover));
   const sum = k => rows.reduce((t, r) => t + r[k], 0);
   const th = (...xs) => h('tr', {}, xs.map(x => h('th', { class: x.n ? 'num' : '' }, x.t || x)));
-  return h('div', { class: 'section-body' }, await commissionCard(app),
+  return h('div', { class: 'section-body' }, await accessCard(app), await commissionCard(app),
     h('section', { class: 'kpis' }, [['Clienti', sum('total')], ['Attivi', sum('active')], ['Da recuperare', sum('recover')], ['Note ultimi 30 gg', sum('notes30')], ['Offerte aperte', eur(sum('openValue'))]]
       .map(([l, v]) => h('div', { class: 'kpi' }, h('small', {}, l), h('strong', {}, typeof v === 'number' ? v.toLocaleString('it-IT') : v)))),
     h('div', { class: 'table-wrap card' }, h('table', { class: 'table' },
@@ -3844,6 +3877,21 @@ function applyLook(v) {
   localStorageSet('ntx-look', ok);
 }
 
+// Registro aperture (solo online, lo legge la Direzione): all'avvio e al ritorno sull'app dopo almeno 15 minuti
+function deviceKind() {
+  const ua = navigator.userAgent || '';
+  if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'iPad';
+  if (/iPhone|iPod/.test(ua)) return 'iPhone';
+  if (/Android/.test(ua)) return 'Android';
+  return /Windows|Macintosh|Linux|CrOS/.test(ua) ? 'computer' : 'altro';
+}
+let lastOpenLog = 0;
+function logOpen(force = false) {
+  if (!app.session || !app.store?.logOpen || (!force && Date.now() - lastOpenLog < 15 * 60e3)) return;
+  lastOpenLog = Date.now(); app.store.logOpen(deviceKind());
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') logOpen(); });
+
 async function boot() {
   document.head.append(h('style', {}, FONT_CSS));
   watchTables(document.getElementById('app'));
@@ -3853,6 +3901,7 @@ async function boot() {
     if (cfg.mode === 'supabase') {
       app.store = createSupabaseStore({ url: cfg.supabaseUrl, key: cfg.supabaseKey });
       app.session = await app.store.restore().catch(() => null);
+      logOpen(true);
     } else {
       const data = window.NTX_DATA || await fetch(cfg.dataUrl || '../data-private/hub-data.json').then(r => { if (!r.ok) throw new Error('Dati non trovati'); return r.json(); });
       app.store = createLocalStore({ data, kv: indexedDbKv() });
@@ -3870,7 +3919,7 @@ function loginView() {
   if (s.mode === 'supabase') {
     const email = h('input', { type: 'email', autocomplete: 'username', placeholder: 'nome@nordtex.it' });
     const pw = h('input', { type: 'password', autocomplete: 'current-password', placeholder: 'Password' });
-    const submit = async e => { e.preventDefault(); try { app.session = await s.signIn(email.value, pw.value); app.go('home'); } catch (err) { toast(err.message, 'error'); } };
+    const submit = async e => { e.preventDefault(); try { app.session = await s.signIn(email.value, pw.value); logOpen(true); app.go('home'); } catch (err) { toast(err.message, 'error'); } };
     return h('form', { class: 'login', onsubmit: submit }, h('div', { class: 'brand-lg' }, h('img', { src: LOGO, alt: 'NORDTEX' }), h('span', {}, 'HUB commerciale')), email, pw, h('button', { class: 'btn primary', type: 'submit' }, 'Accedi'),
       h('p', { class: 'fine' }, 'Password dimenticata? Contatta la Direzione commerciale. · v' + VERSION));
   }
