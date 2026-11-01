@@ -421,6 +421,12 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 .fold-box>summary{color:var(--muted);font-size:.85rem;list-style:none} .fold-box>summary::-webkit-details-marker{display:none} .fold-box>summary::before{content:'▸ '} .fold-box[open]>summary::before{content:'▾ '} .fold-box:not([open]){padding-top:10px;padding-bottom:10px}
 
 .fold-box+.fold-box{margin-top:-6px}
+.pf-list details{border-top:1px solid var(--line)} .pf-list details:last-child{border-bottom:1px solid var(--line)}
+.pf-list summary{display:flex;align-items:baseline;gap:10px;padding:12px 2px;cursor:pointer;list-style:none} .pf-list summary::-webkit-details-marker{display:none}
+.pf-list summary::before{content:'▸';color:var(--muted);width:1em} .pf-list details[open] summary::before{content:'▾'}
+.pf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 18px;margin:0 0 14px 1.6em}
+.pf-grid dt{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)} .pf-grid dd{margin:2px 0 0;font-weight:600}
+@media (max-width:600px){.pf-grid{grid-template-columns:1fr 1fr;margin-left:1.2em} .pf-grid>div:first-child{grid-column:1/-1}}
 
 </style>
 <script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8"};</script>
@@ -2161,17 +2167,17 @@ async function managerSection(app) {
       openQ: open.length, openValue: open.reduce((t, q) => t + (q.total || 0), 0), won: qs.filter(q => q.status === 'Accettata').reduce((t, q) => t + (q.total || 0), 0) };
   }).sort((a, b) => b.active + b.recover - (a.active + a.recover));
   const sum = k => rows.reduce((t, r) => t + r[k], 0);
-  const th = (...xs) => h('tr', {}, xs.map(x => h('th', { class: x.n ? 'num' : '' }, x.t || x)));
   const commissions = await commissionCard(app);
   return h('div', { class: 'section-body' },
     h('section', { class: 'kpis' }, [['Clienti', sum('total')], ['Attivi', sum('active')], ['Da recuperare', sum('recover')], ['Note ultimi 30 gg', sum('notes30')], ['Offerte aperte', eur(sum('openValue'))]]
       .map(([l, v]) => h('div', { class: 'kpi' }, h('small', {}, l), h('strong', {}, typeof v === 'number' ? v.toLocaleString('it-IT') : v)))),
-    h('div', { class: 'table-wrap card' }, h('table', { class: 'table' },
-      h('thead', {}, th('Assegnatario', 'Zona', { t: 'Clienti', n: 1 }, { t: 'Attivi', n: 1 }, { t: 'Da recup.', n: 1 }, { t: 'Persi', n: 1 }, { t: 'Mai fatt.', n: 1 }, { t: 'Note 30 gg', n: 1 }, { t: 'Follow-up scaduti', n: 1 }, { t: 'Offerte aperte', n: 1 }, { t: 'Accettate', n: 1 })),
-      h('tbody', {}, rows.map(r => h('tr', { onclick: () => { app.go('agenda'); } },
-        h('td', {}, h('strong', {}, r.name), h('br'), h('small', { class: 'muted' }, r.role)), h('td', {}, h('small', {}, r.provinces)),
-        ...[r.total, r.active, r.recover, r.lost, r.never, r.notes30].map(v => h('td', { class: 'num' }, v)),
-        h('td', { class: 'num' + (r.overdue ? ' bad-text' : '') }, r.overdue), h('td', { class: 'num' }, `${r.openQ} · ${eur(r.openValue)}`), h('td', { class: 'num' }, eur(r.won))))))),
+    h('section', { class: 'card' }, h('h2', {}, 'Portafoglio per assegnatario'),
+      h('p', { class: 'muted' }, 'Clienti, stato e attività di ciascun agente e consulente. Tocca un nome per vedere i numeri.'),
+      h('div', { class: 'pf-list' }, rows.map(r => h('details', {},
+        h('summary', {}, h('strong', {}, r.name), r.role && r.role !== r.name ? h('small', { class: 'muted' }, r.role) : null),
+        h('dl', { class: 'pf-grid' }, [['Zona', r.provinces || '—'], ['Clienti', r.total], ['Attivi', r.active], ['Da recuperare', r.recover], ['Persi', r.lost], ['Mai fatturato', r.never],
+          ['Note ultimi 30 gg', r.notes30], ['Follow-up scaduti', r.overdue, r.overdue ? 'bad-text' : ''], ['Offerte aperte', `${r.openQ} · ${eur(r.openValue)}`], ['Offerte accettate', eur(r.won)]]
+          .map(([l, v, cls]) => h('div', {}, h('dt', {}, l), h('dd', { class: cls || '' }, typeof v === 'number' ? v.toLocaleString('it-IT') : v)))))))),
     rows.length ? null : emptyState('Nessun dato.'), commissions, accessCard(app));
 }
 
