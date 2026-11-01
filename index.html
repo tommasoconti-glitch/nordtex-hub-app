@@ -2462,6 +2462,10 @@ const M3_ZONES = [[0, 'TS GO UD PN VE TV BL PD VR TN BZ MN'], [2, 'VI RO BS BG C
   [10, 'LT FR IS CB'], [12, 'CE BN NA AV SA FG BT'], [14, 'BA TA PZ MT'], [16, 'BR LE CS'], [18, 'CZ KR'], [20, 'VV RC'], [26, 'ME CT'], [30, 'RG SR EN'],
   [32, 'PA AG CL'], [34, 'SS'], [36, 'TP OR NU'], [40, 'CA SU']];
 
+// Canapa (pag. 31): "quotazioni intese f.co destinazione (Italia settentrionale) per carichi completi diretti"
+const NORTH = ['Piemonte', "Valle d'Aosta", 'Lombardia', 'Liguria', 'Trentino-Alto Adige', 'Veneto', 'Friuli-Venezia Giulia', 'Emilia-Romagna'];
+const VAKUM_FREE_FROM = 2000;
+
 const up = s => String(s ?? '').toUpperCase();
 const unit = s => ({ MQ: 'M2', MC: 'M3' }[up(s).trim()] || up(s).trim());
 
@@ -2478,6 +2482,11 @@ function regimeFor(p) {
       warn: 'Sfuso solo su walking floor (3,10 €/km, pag. 43); capienza 90 m³ presa dalle descrizioni articolo RADIX, da confermare con l\'ufficio', note: 'Gennaio e agosto prezzi variabili' };
     return { id: 'policell', kind: 'km', label: 'Vetro cellulare BigBag · tariffa a km', page: 43, origin: ORIGINS.policell, rates: { centinato: 2.1, walkingfloor: 3.1 }, loadM3: 66, note: 'Massimo 22 BigBag da 3 m³ per autoarticolato; gennaio e agosto prezzi variabili' };
   }
+  if (fam === 'Canapa' && unit(p.saleUnit) === 'M2') return { id: 'canapa', kind: 'north', label: 'Canapa · franco destino Nord Italia per carichi completi', page: 31, regions: NORTH,
+    note: 'Carichi completi diretti franco destino nel Nord Italia; ordine minimo per consegna diretta 5 bancali; altrimenti franco partenza deposito previa verifica giacenze (pag. 31)' };
+  // consegna compresa per ordini VAKUM sopra 2.000 €: indicata dall'ufficio il 21/10/2026, non ancora scritta nel listino n.05 → sempre "da confermare"
+  if (fam === 'Sottovuoto Vakuum') return { id: 'vakum', kind: 'threshold', label: 'Sottovuoto VAKUM · consegna compresa sopra 2.000 €', minAmount: VAKUM_FREE_FROM,
+    warn: 'Consegna compresa sopra 2.000 €: regola indicata dall\'ufficio, non ancora nel listino n.05 (da confermare)' };
   if (fam === 'Blocchi in laterizio') {
     const leip = prod === 'UNIPOR' || Number(p.page) >= 96;
     // pag. 102: i blocchi riempiti Unipor (Silvacor = fibra di legno, Coriso = granulato minerale) si caricano a Puttenhausen
@@ -2510,6 +2519,7 @@ function lineLoad(p, qty, regime = regimeFor(p)) {
   if (pq) out.pallets = qty / pq;
   if (out.pallets !== null && p.palletWeight > 0) out.kg = out.pallets * p.palletWeight;
   if (!regime) { out.reason = 'Nessuna tariffa di trasporto nel listino per questo articolo'; return out; }
+  if (regime.kind === 'threshold') { out.fraction = 0; out.basis = 'importo ordine'; return out; }   // conta l'importo, non l'ingombro
   if (regime.maxPallets) {
     // accessori dei blocchi (collanti, rulli): viaggiano con i blocchi, ingombro trascurabile; da verificare se ordinati da soli
     if (out.pallets === null && isBlockAccessory(p)) { out.fraction = 0; out.basis = 'accessorio'; out.reason = `${accessoryLabel(p)} considerati senza ingombro né peso sul mezzo dei blocchi: verificare con l'ufficio`; return out; }
@@ -2536,8 +2546,24 @@ function m3ZoneRate(prov) {
 }
 
 // Costo di un gruppo (stesso regime/luogo di carico) per una data occupazione
-function groupCost(regime, { fraction, pallets, m3 }, ctx) {
+function groupCost(regime, { fraction, pallets, m3, amount }, ctx) {
   const eps = 1e-6;
+  const eur = n => n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  if (regime.kind === 'threshold') {
+    if (!(amount >= 0)) return { cost: null, vehicles: 1, reason: 'Importo delle righe non disponibile: quotazione ufficio' };
+    if (amount + eps >= regime.minAmount) return { cost: 0, vehicles: 1, detail: `ordine ${eur(amount)} (almeno ${eur(regime.minAmount)}): consegna compresa nel prezzo` };
+    return { cost: null, vehicles: 1, reason: `Ordine ${eur(amount)}, sotto ${eur(regime.minAmount)}: consegna da quotare con l'ufficio` };
+  }
+  if (regime.kind === 'north') {
+    const vehicles = Math.max(1, Math.ceil(fraction - eps));
+    if (!regime.regions.includes(ctx.region)) return { cost: null, vehicles, reason: `${ctx.region || 'Regione non indicata'}: franco destino solo nel Nord Italia, quotazione ufficio (pag. ${regime.page})` };
+    const full = Math.floor(fraction + eps), rest = fraction - full;
+    if (rest > eps) {
+      const restPal = pallets !== null && fraction > 0 ? Math.round(pallets * rest / fraction) : null;
+      return { cost: null, vehicles, reason: `Carico non completo${restPal !== null ? ` (${restPal} bancali sul ${full ? 'secondo ' : ''}mezzo)` : ''}: franco destino solo a carichi completi; consegna diretta da 5 bancali o ritiro dal deposito, quotazione ufficio` };
+    }
+    return { cost: 0, vehicles: full, detail: `${full} ${full === 1 ? 'carico completo' : 'carichi completi'}: franco destino, trasporto compreso nel prezzo` };
+  }
   if (regime.kind === 'km') {
     if (!(ctx.km > 0)) return { cost: null, vehicles: Math.max(1, Math.ceil(fraction - eps)), reason: 'Inserisci i km (sola andata, via Brennero)' };
     const vtype = regime.fixedVehicle || (regime.rates[ctx.vehicleType] ? ctx.vehicleType : 'centinato');
@@ -2583,14 +2609,15 @@ function planTransport(lines, ctx = {}) {
     if (!reg) { office.push({ index: i, description: l.product.description, reason: 'Nessuna tariffa nel listino: quotazione ufficio' }); continue; }
     const key = reg.id + (reg.origin ? ':' + reg.origin.address : '');
     if (!groups.has(key)) groups.set(key, { key, regime: reg, lines: [] });
-    groups.get(key).lines.push({ index: i, product: l.product, qty: l.qty, load: lineLoad(l.product, l.qty, reg) });
+    groups.get(key).lines.push({ index: i, product: l.product, qty: l.qty, amount: l.amount, load: lineLoad(l.product, l.qty, reg) });
   }
   const out = [];
   for (const g of groups.values()) {
     const reg = g.regime;
     const known = g.lines.every(x => x.load.fraction !== null);
     const sum = k => g.lines.reduce((s, x) => s + (x.load[k] ?? 0), 0);
-    const occ = { fraction: sum('fraction'), pallets: g.lines.every(x => x.load.pallets !== null) ? sum('pallets') : null, m3: g.lines.every(x => x.load.m3 !== null) ? sum('m3') : null };
+    const occ = { fraction: sum('fraction'), pallets: g.lines.every(x => x.load.pallets !== null) ? sum('pallets') : null, m3: g.lines.every(x => x.load.m3 !== null) ? sum('m3') : null,
+      amount: g.lines.every(x => Number.isFinite(x.amount)) ? g.lines.reduce((s, x) => s + x.amount, 0) : null };
     const c = { region, prov: ctx.prov, km: ctx.km?.[reg.origin?.address] ?? ctx.kmAll, vehicleType: ctx.vehicleType || 'centinato' };
     const res = known ? groupCost(reg, occ, c) : { cost: null, reason: g.lines.find(x => x.load.fraction === null).load.reason };
     // incidenza per riga, in proporzione all'ingombro
@@ -2686,7 +2713,7 @@ function googleMapsUrl(origin, destination) {
   return 'https://www.google.com/maps/dir/?' + q.toString();
 }
 
-return { LISTINO, BRENNERO, ORIGINS, regimeFor, isBlockAccessory, volumeM3, lineLoad, m3ZoneRate, planTransport, fillSummary, transportVerdict, googleMapsUrl };
+return { LISTINO, BRENNERO, ORIGINS, VAKUM_FREE_FROM, regimeFor, isBlockAccessory, volumeM3, lineLoad, m3ZoneRate, planTransport, fillSummary, transportVerdict, googleMapsUrl };
 })();
 __m["js/core/route.js"] = (function () {
 // Distanza stradale (sola andata) dal luogo di carico al cliente, con passaggio obbligato dal Brennero.
@@ -2728,6 +2755,7 @@ __m["js/views/transport-panel.js"] = (function () {
 const { h, fill, eur, num, toast } = __m["js/ui.js"];
 const { planTransport, googleMapsUrl, fillSummary, transportVerdict } = __m["js/core/logistics.js"];
 const { kmViaBrennero } = __m["js/core/route.js"];
+const { lineAmount } = __m["js/core/pricing.js"];
 const eu = (n, d = 2) => { if (n === null || n === undefined) return '—'; const [i, f] = Math.abs(Number(n)).toFixed(d).split('.'); return (n < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : '') + ' €'; };   // 1.452,00 €
 const qtyFmt = (n, u) => `${num(n, u === 'PZ' || u === 'SA' ? 0 : 2)} ${({ M2: 'm²', M3: 'm³', ML: 'ml' }[u] || (u || '').toLowerCase())}`;
 
@@ -2843,7 +2871,7 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
   }
 
   function redraw() {
-    const lines = q.lines.map(l => ({ product: { ...(byId.get(l.productId) || {}), description: l.description }, qty: l.qty })).filter(x => x.product.id);
+    const lines = q.lines.map(l => ({ product: { ...(byId.get(l.productId) || {}), description: l.description }, qty: l.qty, amount: lineAmount(l) })).filter(x => x.product.id);
     if (!lines.length) { fill(box, addr, h('p', { class: 'muted' }, 'Aggiungi prodotti per calcolare trasporto e carico.')); lastPlan = null; return; }
     const plan = planTransport(lines, { prov: q.delivery.prov, km: q.logistics.km, vehicleType: q.logistics.vehicleType });
     lastPlan = plan;
