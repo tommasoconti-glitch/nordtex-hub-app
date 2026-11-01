@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="ef62c898bf28">
+<meta name="ntx-build" content="5ed403eed5f0">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -516,7 +516,7 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 .transcript{background:var(--bg-soft,#f6f6f5);border-radius:8px;padding:8px 10px} .transcript p{margin:4px 0;white-space:pre-wrap}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ef62c898bf28"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"5ed403eed5f0"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2266,22 +2266,30 @@ async function noteDialog(app, c, preset = {}) {
   return res;
 }
 
-// Registratore nella finestra della nota: Registra → Ferma → ascolto di prova / Rifai
+// Registratore nella finestra della nota: Registra → Ferma → ascolto di prova / Rifai.
+// Durante la registrazione si aggiorna SOLO il contatore: il pulsante "Ferma" resta lo stesso elemento
+// (ridisegnarlo a ogni secondo faceva perdere il tocco sull'iPhone).
 function voiceRecorder() {
-  let rec = null, blob = null, url = null;
+  let rec = null, blob = null, url = null, starting = false;
   const box = h('div', { class: 'voice' });
-  const draw = (state, secs = 0) => {
-    if (url) { URL.revokeObjectURL(url); url = null; }
-    if (state === 'rec') return fill(box, h('button', { type: 'button', class: 'btn small rec on', onclick: () => rec?.stop() }, '■ Ferma'), h('span', { class: 'rec-time' }, '● ' + mmss(secs)), h('small', { class: 'muted' }, 'massimo 10 minuti'));
-    if (state === 'done' && blob) { url = URL.createObjectURL(blob);
-      return fill(box, h('audio', { controls: true, src: url, preload: 'metadata' }), h('button', { type: 'button', class: 'link', onclick: () => { blob = null; draw('idle'); } }, 'Elimina e rifai'),
-        h('small', { class: 'muted' }, 'Al salvataggio l\'audio resta nella scheda e arriva la trascrizione scritta.')); }
-    fill(box, h('button', { type: 'button', class: 'btn small rec', onclick: async () => {
-      try { rec = await startRecording({ onTick: s => draw('rec', s), onStop: b => { rec = null; blob = b; draw('done'); } }); draw('rec', 0); }
-      catch (e) { toast(e.name === 'NotAllowedError' ? 'Consenti l\'uso del microfono per registrare' : 'Microfono non disponibile: ' + e.message, 'error'); }
-    } }, '● Registra nota vocale'), h('small', { class: 'muted' }, 'Parli, l\'audio resta salvato e arriva anche scritto.'));
+  const time = h('span', { class: 'rec-time' });
+  const stopBtn = h('button', { type: 'button', class: 'btn small rec on', onclick: () => { stopBtn.disabled = true; stopBtn.textContent = 'Chiudo…'; rec?.stop(); } }, '■ Ferma');
+  const showIdle = () => fill(box, h('button', { type: 'button', class: 'btn small rec', onclick: start }, '● Registra nota vocale'), h('small', { class: 'muted' }, 'Parli, l\'audio resta salvato e arriva anche scritto.'));
+  const showRec = () => { stopBtn.disabled = false; stopBtn.textContent = '■ Ferma'; time.textContent = '● 0:00'; fill(box, stopBtn, time, h('small', { class: 'muted' }, 'massimo 10 minuti')); };
+  const showDone = () => {
+    if (url) URL.revokeObjectURL(url); url = URL.createObjectURL(blob);
+    fill(box, h('audio', { controls: true, src: url, preload: 'metadata' }), h('button', { type: 'button', class: 'link', onclick: () => { blob = null; showIdle(); } }, 'Elimina e rifai'),
+      h('small', { class: 'muted' }, 'Al salvataggio l\'audio resta nella scheda e arriva la trascrizione scritta.'));
   };
-  draw('idle');
+  async function start() {
+    if (starting || rec) return; starting = true;
+    try {
+      rec = await startRecording({ onTick: s => { time.textContent = '● ' + mmss(s); }, onStop: b => { rec = null; blob = b; if (blob.size) showDone(); else { toast('Registrazione vuota: riprova', 'error'); showIdle(); } } });
+      showRec();
+    } catch (e) { rec = null; toast(e.name === 'NotAllowedError' ? 'Consenti l\'uso del microfono per registrare (Impostazioni › Safari › Microfono)' : 'Microfono non disponibile: ' + (e.message || e.name), 'error'); showIdle(); }
+    finally { starting = false; }
+  }
+  showIdle();
   return { el: box, blob: () => blob, recording: () => !!rec, cancel() { rec?.cancel(); rec = null; } };
 }
 
