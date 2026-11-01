@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="b6efdd50db79">
+<meta name="ntx-build" content="aa168e3df3a7">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -519,7 +519,7 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 @media (max-width:760px){.head-actions{width:100%}.head-actions .btn{flex:1 1 0}}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"b6efdd50db79"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"aa168e3df3a7"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2777,27 +2777,33 @@ async function commissionCard(app, refresh) {
 }
 
 async function managerSection(app) {
-  const [customers, notes, quotes] = await Promise.all([app.customers(), app.store.notes(), app.store.quotes()]);
   const d30 = new Date(Date.now() - 30 * 864e5).toISOString(), today = new Date().toISOString().slice(0, 10);
+  // anche offerte aperte e note importate da RADIX (01/11): altrimenti il portafoglio mostra 0 finché non si usa l'app
+  const [customers, notes, quotes, rxOffers, rxNotes] = await Promise.all([app.customers(), app.store.notes(), app.store.quotes(),
+    app.store.radixOffers ? app.store.radixOffers().catch(() => []) : [], app.store.radixNotes ? app.store.radixNotes({ since: d30.slice(0, 10) }).catch(() => []) : []]);
   const roles = new Map(app.store.assignees.map(a => [a.name, a]));
   const rows = [...new Set(customers.map(c => c.assignee))].map(name => {
     const cs = customers.filter(c => c.assignee === name), ids = new Set(cs.map(c => c.id));
     const ns = notes.filter(n => ids.has(n.customerId)), qs = quotes.filter(q => ids.has(q.customerId));
     const open = qs.filter(q => q.status === 'Bozza' || q.status === 'Inviata');
+    const rx = rxOffers.filter(o => ids.has(o.customerId)), rxOpen = rx.filter(o => o.outcome === 'Da seguire' || o.outcome === 'Sentito');
+    const rxN = rxNotes.filter(x => ids.has(x.customerId) && x.date >= d30.slice(0, 10)).length;
     const n = st => cs.filter(c => c.status === st).length;
     return { name, role: roles.get(name)?.role || '', provinces: roles.get(name)?.provinces || '', total: cs.length, active: n('Attivo'), recover: n('Da recuperare'), lost: n('Perso'), never: n('Mai fatturato'),
-      notes30: ns.filter(x => x.createdAt >= d30).length, overdue: ns.flatMap(x => x.actions).filter(a => !a.done && a.due && a.due < today).length,
-      openQ: open.length, openValue: open.reduce((t, q) => t + (q.total || 0), 0), won: qs.filter(q => q.status === 'Accettata').reduce((t, q) => t + (q.total || 0), 0) };
+      notes30: ns.filter(x => x.createdAt >= d30).length + rxN, notesRx: rxN, overdue: ns.flatMap(x => x.actions || []).filter(a => !a.done && a.due && a.due < today).length,
+      openQ: open.length + rxOpen.length, openRx: rxOpen.length, openValue: open.reduce((t, q) => t + (q.total || 0), 0) + rxOpen.reduce((t, o) => t + (o.total || 0), 0),
+      won: qs.filter(q => q.status === 'Accettata').reduce((t, q) => t + (q.total || 0), 0) + rx.filter(o => o.outcome === 'Accettata').reduce((t, o) => t + (o.total || 0), 0) };
   }).sort((a, b) => b.active + b.recover - (a.active + a.recover));
   const sum = k => rows.reduce((t, r) => t + r[k], 0);
   const commissions = await commissionCard(app);
   return h('div', { class: 'section-body' },
     h('section', { class: 'card' }, h('h2', {}, 'Portafoglio per assegnatario'),
-      h('p', { class: 'muted' }, 'Clienti, stato e attività di ciascun agente e consulente. Tocca un nome per vedere i numeri.'),
+      h('p', { class: 'muted' }, 'Clienti, stato e attività di ciascun agente e consulente (comprese note e offerte aperte importate da RADIX, contate sul cliente). Tocca un nome per vedere i numeri.'),
       h('div', { class: 'pf-list' }, rows.map(r => h('details', {},
         h('summary', {}, h('strong', {}, r.name), r.role && r.role !== r.name ? h('small', { class: 'muted' }, r.role) : null),
         h('dl', { class: 'pf-grid' }, [['Zona', r.provinces || '—'], ['Clienti', r.total], ['Attivi', r.active], ['Da recuperare', r.recover], ['Persi', r.lost], ['Mai fatturato', r.never],
-          ['Note ultimi 30 gg', r.notes30], ['Follow-up scaduti', r.overdue, r.overdue ? 'bad-text' : ''], ['Offerte aperte', `${r.openQ} · ${eur(r.openValue)}`], ['Offerte accettate', eur(r.won)]]
+          ['Note ultimi 30 gg', r.notesRx ? `${r.notes30} (${r.notesRx} RADIX)` : r.notes30], ['Follow-up scaduti', r.overdue, r.overdue ? 'bad-text' : ''],
+          ['Offerte aperte', `${r.openQ} · ${eur(r.openValue)}` + (r.openRx ? ` (${r.openRx} RADIX)` : '')], ['Offerte accettate', eur(r.won)]]
           .map(([l, v, cls]) => h('div', {}, h('dt', {}, l), h('dd', { class: cls || '' }, typeof v === 'number' ? v.toLocaleString('it-IT') : v)))))))),
     rows.length ? null : emptyState('Nessun dato.'), commissions, accessCard(app), backupCard(app));
 }
