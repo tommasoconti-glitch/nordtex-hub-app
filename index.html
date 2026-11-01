@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="34d92641f240">
+<meta name="ntx-build" content="4741fd194aeb">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -584,9 +584,11 @@ button.kpi{font:inherit;text-align:left;cursor:pointer;border:0} .kpi.on{outline
 .urg-head{display:flex;align-items:center;gap:8px;padding:14px 0 6px;border-bottom:2px solid var(--line);list-style:none}
 .urg-head .urg-dot{margin-top:0} .urg-head strong{font-size:.95rem} .urg-head small{color:var(--muted);margin-left:auto}
 .urg-head.subito{border-bottom-color:var(--bad,#D40E41)} .urg-head.settimana{border-bottom-color:#e09a00} .urg-head.dopo{border-bottom-color:#2e9e5b}
+/* Bacheca: comunicazioni in cima, follow-up sotto */
+.board-stack{display:flex;flex-direction:column;gap:16px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"34d92641f240"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"4741fd194aeb"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4454,8 +4456,10 @@ async function boardSection(app, refresh) {
   };
   const editor = (kind, p) => postDialog(app, kind, p).then(ok => ok && refresh());
   const rxBlock = await radixFollowupBlock(app, refresh);
-  return h('div', { class: 'section-body' },
-    h('div', { class: 'grid2' },
+  const rxTodo = await radixTodoBlock(app, refresh);
+  // 01/11 sera: la Bacheca fa due cose, prima le comunicazioni (a tutta larghezza), poi i follow-up
+  return h('div', { class: 'section-body board' },
+    h('div', { class: 'board-stack' },
       h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'Comunicazioni'),
           canWrite ? h('button', { class: 'btn small primary', onclick: () => editor('comunicazione') }, '+ Comunicazione') : null),
         posts.length ? posts.map(p => h('div', { class: 'post' + (p.pinned ? ' pinned' : '') }, h('strong', {}, (p.pinned ? '📌 ' : '') + p.title), p.body ? h('p', {}, p.body) : null,
@@ -4477,23 +4481,21 @@ async function boardSection(app, refresh) {
               : isDir ? h('small', { class: 'muted' }, ' · ' + a.note.authorName) : null,
             a.assigned?.body ? h('div', { class: 'fine' }, a.assigned.body) : null,
             a.assigned && canWrite ? h('button', { class: 'link', onclick: () => editor('follow-up', a.assigned) }, 'Modifica') : null))));
-        }) : rxBlock ? null : emptyState('Nessun follow-up aperto. Si creano con le note nella scheda cliente' + (canWrite ? ' o con "+ Follow-up a un agente".' : '.')),
-        rxBlock,
+        }) : rxBlock || rxTodo ? null : emptyState('Nessun follow-up aperto. Si creano con le note nella scheda cliente' + (canWrite ? ' o con "+ Follow-up a un agente".' : '.')),
+        rxBlock, rxTodo,
         isDir && doneAssigned.length ? h('details', { class: 'done-list' }, h('summary', {}, `Follow-up assegnati completati (${doneAssigned.length})`),
           h('ul', { class: 'checks' }, doneAssigned.map(p => h('li', { class: 'done' }, `${p.title} · ${p.audience[0]} · ${dateIt(p.doneAt)}`)))) : null)),
-    await radixCard(app, refresh));
+    h('p', { class: 'fine' }, 'Le note scritte in RADIX si leggono nella scheda di ogni cliente e in Attività rete.'));
 }
 
-// Note scritte in RADIX (ufficio, Direzione): promemoria con data non spuntati e note recenti.
-// RADIX resta la fonte: qui si leggono e, se serve, si trasformano in follow-up dell'app.
-async function radixCard(app, refresh) {
+// Promemoria scritti in RADIX con una data e non ancora chiusi (spunta OK in RADIX): blocco compatto dentro i follow-up.
+// "Crea follow-up" li porta nell'app. Le note RADIX senza data restano nella scheda cliente e in Attività rete.
+async function radixTodoBlock(app, refresh) {
   if (!app.store.radixNotes) return null;
   const today = new Date().toISOString().slice(0, 10), d30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
   const all = await app.store.radixNotes({ since: d30 }).catch(() => []);
-  // promemoria aperti da 30 giorni fa in avanti: quelli più vecchi non chiusi in RADIX sono ormai superati (Tommaso 01/11)
-  const todo = all.filter(n => n.appointment && !n.ok && n.appointment >= d30 && n.group !== 'Prezzi')   // nei Prezzi la data è la validità del prezzo, non un compito
-   .sort((a, b) => a.appointment.localeCompare(b.appointment));
-  const recent = all.filter(n => n.date >= d30 && !todo.includes(n)).sort((a, b) => b.date.localeCompare(a.date));
+  const todo = all.filter(n => n.appointment && !n.ok && n.appointment >= d30 && n.group !== 'Prezzi').sort((a, b) => a.appointment.localeCompare(b.appointment));
+  if (!todo.length) return null;
   const cust = id => app.store.customer(id);
   const toFollowup = async n => {
     const c = cust(n.customerId); if (!c) return;
@@ -4501,16 +4503,11 @@ async function radixCard(app, refresh) {
       due: n.appointment, body: `Da nota RADIX del ${dateIt(n.date)} (${n.authorName}): ${[n.subject, n.body].filter(Boolean).join(' — ')}` });
     if (ok) refresh();
   };
-  const item = (n, due) => { const c = cust(n.customerId); return h('li', { class: 'radix-item' },
-    h('div', {}, due ? h('span', { class: 'due ' + (n.appointment < today ? 'scaduto' : n.appointment === today ? 'oggi' : 'in-programma') }, dateIt(n.appointment)) : h('small', { class: 'muted' }, dateIt(n.date)),
-      ' ', h('a', { href: '#/agenda/' + n.customerId }, h('strong', {}, c?.name || 'Cliente')), h('small', { class: 'muted' }, ` · ${n.group} · ${n.authorName}`)),
-    h('div', { class: 'radix-text' }, [n.subject, n.body].filter(Boolean).join(' — ')),
-    !app.session.preview ? h('button', { class: 'link', onclick: () => toFollowup(n).catch(e => toast(e.message, 'error')) }, 'Crea follow-up') : null); };
-  return h('section', { class: 'card' }, h('h2', {}, 'Da RADIX: promemoria e note recenti'),
-    h('p', { class: 'muted' }, 'Le note scritte in RADIX da ufficio e Direzione, aggiornate a ogni esportazione. "Crea follow-up" le trasforma in un follow-up dell\'app; i promemoria si chiudono in RADIX (spunta OK).'),
-    todo.length ? [h('h3', {}, `Da fare (data in RADIX, non chiusi): ${todo.length}`), h('ul', { class: 'radix-list' }, todo.map(n => item(n, true)))] : null,
-    recent.length ? h('details', { class: 'radix-more', open: !todo.length }, h('summary', {}, `Note degli ultimi 30 giorni (${recent.length})`), h('ul', { class: 'radix-list' }, recent.map(n => item(n, false))))
-      : todo.length ? null : emptyState('Nessuna nota RADIX negli ultimi 30 giorni.'));
+  return h('div', { class: 'group rx-fu-block' }, h('h3', {}, `Promemoria RADIX (${todo.length})`), h('small', { class: 'muted' }, 'scritti in RADIX con una data, non ancora chiusi con OK'),
+    h('ul', { class: 'checks' }, todo.slice(0, 8).map(n => { const c = cust(n.customerId); return h('li', { class: 'rx-fu' },
+      h('span', { class: 'due ' + (n.appointment < today ? 'scaduto' : n.appointment === today ? 'oggi' : 'in-programma') }, dateIt(n.appointment)),
+      h('a', { href: '#/agenda/' + n.customerId, class: 'rx-fu-main' }, h('strong', {}, c?.name || 'Cliente'), h('small', { class: 'muted' }, ' ' + [n.subject, n.body].filter(Boolean).join(' — ').slice(0, 90))),
+      !app.session.preview ? h('button', { class: 'link', type: 'button', onclick: () => toFollowup(n).catch(e => toast(e.message, 'error')) }, 'Crea follow-up') : null); })));
 }
 
 // Email della comunicazione dalla casella di chi scrive (Tommaso, Marco): agenti in copia nascosta, nessun servizio esterno
