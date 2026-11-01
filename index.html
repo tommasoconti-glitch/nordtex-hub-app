@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="2ee6ac76d492">
+<meta name="ntx-build" content="febb9d51918b">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -567,9 +567,13 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 @media (max-width:760px){.pc-grid{font-size:.78rem}.pc-row{grid-template-columns:minmax(0,1fr) repeat(3,58px);gap:4px}}
 .call-list{list-style:none;margin:0;padding:0} .call-list li+li{border-top:1px solid var(--line)}
 .call-row{display:flex;gap:12px;align-items:center;padding:12px 4px;text-decoration:none;color:inherit} .call-row span:last-child{display:flex;flex-direction:column}
+/* ultima visita nell'elenco clienti */
+.cmeta{gap:2px;font-size:.78rem;white-space:nowrap} .cmeta small{display:inline;font-size:.62rem;letter-spacing:.04em}
+.vmeta.warn{color:var(--warn)} .vmeta.bad{color:var(--bad)} .vmeta.ok{color:var(--ok)}
+.warn-text{color:var(--warn)}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"2ee6ac76d492"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"febb9d51918b"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -921,6 +925,7 @@ function previewStore(store, label) {
       if (prop === 'radixNotes') return async (...a) => (await target.radixNotes(...a)).filter(n => ownCustomer(n.customerId));
       if (prop === 'radixOffers') { const role = (target.assignees || []).find(x => x.name === label)?.role || '';
         return async (...a) => (await target.radixOffers(...a)).filter(o => ownCustomer(o.customerId) && radixOfferForAgent(o, role)); }
+      if (prop === 'lastVisits') return async () => new Map([...(await target.lastVisits())].filter(([id]) => ownCustomer(id)));
       if (prop === 'posts') return async () => (await target.posts()).filter(p => (p.audience || []).length === 0 || p.audience.includes(label));
       if (prop === 'logOpen' || prop === 'accessSummary' || prop === 'dataCopy') return async () => null;
       if (WRITE.test(String(prop))) return async () => { throw new PreviewError(); };
@@ -1078,6 +1083,12 @@ function createLocalStore({ data, kv }) {
       (await col('quoteSends')).push(rec); await save('quoteSends'); return rec;
     },
     async agentEmails() { return []; },
+    async lastVisits() {
+      mustSession(); const out = new Map();
+      for (const n of await col('notes')) if (n.kind === 'Visita' && canSeeCustomer(n.customerId)) { const d = n.createdAt.slice(0, 10); if (!(out.get(n.customerId) >= d)) out.set(n.customerId, d); }
+      for (const n of data.radixNotes || []) if (n.group === 'Visita' && canSeeCustomer(n.customer) && !(out.get(n.customer) >= n.date)) out.set(n.customer, n.date);
+      return out;
+    },
     async radixNotes({ since } = {}) {
       mustSession();
       return (data.radixNotes || []).filter(n => canSeeCustomer(n.customer) && radixVisible(session, n) && (n.date >= (since || '2026-01-01') || (n.appointment && n.appointment !== 'None' && String(n.ok) !== 'True')))
@@ -1469,6 +1480,16 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       for (const n of [...(recent || []), ...(open || [])]) { if (seen.has(n.id)) continue; seen.add(n.id);
         const cid = custCode(n.customer_id); if (!cid) continue;
         out.push({ id: n.id, customerId: cid, date: n.note_date, group: n.grp, authorName: n.author_name || n.author_code, subject: n.subject || '', body: n.body || '', appointment: n.appointment, ok: !!n.ok }); }
+      return out;
+    },
+    // Ultima visita per cliente (01/11, "indicatore fondamentale"): note dell'app di tipo Visita + note RADIX del gruppo Visita
+    async lastVisits() {
+      const [own, rx] = await Promise.all([
+        pageAll('/rest/v1/hub_notes?select=customer_id,created_at&contact_kind=eq.Visita&order=created_at.desc').catch(() => []),
+        pageAll('/rest/v1/hub_radix_notes?select=customer_id,note_date&grp=eq.Visita&order=note_date.desc').catch(() => [])]);
+      const out = new Map();
+      for (const r of own) { const id = custCode(r.customer_id), d = String(r.created_at).slice(0, 10); if (id && !(out.get(id) >= d)) out.set(id, d); }
+      for (const r of rx) { const id = custCode(r.customer_id), d = r.note_date; if (id && !(out.get(id) >= d)) out.set(id, d); }
       return out;
     },
     // Offerte aperte importate da RADIX (migrazione 20261101170000): tabella assente = elenco vuoto
@@ -1995,21 +2016,23 @@ const { purchaseSummary, SALES_YEARS } = __m["js/core/purchases.js"];
 // in ordine "da seguire prima"; la ricerca cerca sempre in tutti i clienti.
 const WORK = ['Attivo', 'Da recuperare', 'Potenziale'];
 const state = { q: '', status: 'lavoro', prov: '', assignee: '', sort: 'priorita', limit: 200 };
-const SORTS = { priorita: 'Da seguire prima', nome: 'Nome A-Z', recente: 'Acquisto più recente', fermi: 'Fermi da più tempo' };
+const SORTS = { priorita: 'Da seguire prima', visita: 'Non visitati da più tempo', nome: 'Nome A-Z', recente: 'Acquisto più recente', fermi: 'Fermi da più tempo' };
 const matchStatus = (c, st, searching) => !st || (st === 'lavoro' ? (searching || WORK.includes(c.status)) : st === 'tutti' || c.status === st);
 let indexCache = { src: null, ix: null };
 
 // Segnali per l'ordine "da seguire prima" e per i bollini sulle righe (follow-up, offerte, contatti recenti)
 async function listSignals(app) {
   const d60 = new Date(Date.now() - 60 * 864e5).toISOString();
-  const [actions, rx, quotes, notes, rxNotes] = await Promise.all([openActions(app).catch(() => []), app.store.radixOffers ? app.store.radixOffers().catch(() => []) : [],
-    app.store.quotes().catch(() => []), app.store.notes().catch(() => []), app.store.radixNotes ? app.store.radixNotes({ since: d60.slice(0, 10) }).catch(() => []) : []]);
+  const [actions, rx, quotes, notes, rxNotes, visits] = await Promise.all([openActions(app).catch(() => []), app.store.radixOffers ? app.store.radixOffers().catch(() => []) : [],
+    app.store.quotes().catch(() => []), app.store.notes().catch(() => []), app.store.radixNotes ? app.store.radixNotes({ since: d60.slice(0, 10) }).catch(() => []) : [],
+    app.store.lastVisits ? app.store.lastVisits().catch(() => new Map()) : new Map()]);
   const sig = new Map(); const get = id => { if (!sig.has(id)) sig.set(id, { late: 0, rxDue: 0, open: 0, contact: false }); return sig.get(id); };
   for (const a of actions) if (a.note?.customerId && (a.state === 'scaduto' || a.state === 'oggi')) get(a.note.customerId).late++;
   for (const o of rx) if (o.customerId && radixOfferOpen(o)) { const g = get(o.customerId); g.open++; if (rxDueState(o)) g.rxDue++; }
   for (const q of quotes) if (q.status === 'Bozza' || q.status === 'Inviata') get(q.customerId).open++;
   for (const n of notes) if (n.createdAt >= d60) get(n.customerId).contact = true;
   for (const n of rxNotes) if (n.date >= d60.slice(0, 10)) get(n.customerId).contact = true;
+  sig.visits = visits;
   return sig;
 }
 const NOSIG = { late: 0, rxDue: 0, open: 0, contact: false };
@@ -2035,6 +2058,7 @@ async function viewAgenda(app, a1, a2) {
   function base() { return searchCustomers(indexCache.ix, state.q).filter(r => (!state.prov || r.c.prov === state.prov) && (!state.assignee || r.c.assignee === state.assignee)); }
   function sorted(rows) {
     const by = { nome: (a, b) => a.c.name.localeCompare(b.c.name, 'it'),
+      visita: (a, b) => (sig.visits?.get(a.c.id) || '0000').localeCompare(sig.visits?.get(b.c.id) || '0000') || (b.c.rev2026 || 0) - (a.c.rev2026 || 0) || a.c.name.localeCompare(b.c.name, 'it'),
       recente: (a, b) => (b.c.lastInvoice || '').localeCompare(a.c.lastInvoice || '') || a.c.name.localeCompare(b.c.name, 'it'),
       fermi: (a, b) => (a.c.lastInvoice || '9999').localeCompare(b.c.lastInvoice || '9999') || a.c.name.localeCompare(b.c.name, 'it'),
       priorita: state.q ? (a, b) => b.score - a.score || a.c.name.localeCompare(b.c.name, 'it')
@@ -2064,7 +2088,8 @@ async function viewAgenda(app, a1, a2) {
         h('span', { class: 'dot ' + info.cls, title: `${c.status}: ${info.rule}` }),
         h('span', { class: 'cname' }, h('span', {}, highlight(c.name, state.q).map(p => typeof p === 'string' ? p : h('mark', {}, p.mark))),
           h('small', {}, [c.city, c.prov].filter(Boolean).join(' · ') + (isDir ? ' · ' + c.assignee : '')), flags(sig.get(c.id))),
-        h('span', { class: 'cmeta', title: c.lastInvoice ? 'Ultima fattura ' + dateIt(c.lastInvoice) : 'Mai fatturato' }, c.lastInvoice ? h('small', {}, 'acquisto') : null, c.lastInvoice ? sinceShort(c.monthsSince) : '—'));
+        h('span', { class: 'cmeta' }, h('span', { title: c.lastInvoice ? 'Ultima fattura ' + dateIt(c.lastInvoice) : 'Mai fatturato' }, h('small', {}, 'acq. '), c.lastInvoice ? sinceShort(c.monthsSince) : '—'),
+          visitMeta(sig.visits?.get(c.id))));
     }),
       rows.length > state.limit ? h('button', { class: 'btn ghost', onclick: () => { state.limit += 300; drawList(); } }, `Mostra altri (${rows.length - state.limit})`) : null,
       rows.length ? null : emptyState(state.q ? `Nessun cliente trovato per “${state.q}”. Prova con una parte del nome, la città, la P.IVA o il numero cliente.` : 'Nessun cliente con questi filtri.',
@@ -2104,12 +2129,19 @@ function flags(g) {
   const f = [g.late ? ['bad', 'follow-up scaduto'] : null, g.rxDue ? ['warn', 'offerta da sentire'] : g.open ? ['info', g.open === 1 ? 'offerta aperta' : g.open + ' offerte aperte'] : null].filter(Boolean);
   return f.length ? h('span', { class: 'cflags' }, f.map(([cls, t]) => h('span', { class: 'flag ' + cls }, t))) : null;
 }
+// ultima visita sulla riga: "vis. 3 mesi" (giallo oltre 90 giorni, rosso oltre 180 o mai)
+const visitAge = d => d ? Math.floor((Date.now() - new Date(d + 'T12:00:00').getTime()) / 864e5) : null;
+const visitCls = days => days === null ? 'bad' : days > 180 ? 'bad' : days > 90 ? 'warn' : 'ok';
+function visitMeta(d) {
+  const days = visitAge(d), m = days === null ? null : Math.floor(days / 30.4);
+  return h('span', { class: 'vmeta ' + visitCls(days), title: d ? 'Ultima visita ' + dateIt(d) : 'Nessuna visita registrata' }, h('small', {}, 'vis. '), days === null ? 'mai' : days < 7 ? 'settimana' : m < 1 ? `${days} gg` : sinceShort(m));
+}
 const sinceShort = m => m === null || m === undefined ? '—' : m < 1 ? 'questo mese' : m === 1 ? '1 mese' : m < 12 ? `${m} mesi` : `${Math.floor(m / 12)} ann${Math.floor(m / 12) === 1 ? 'o' : 'i'}${m % 12 ? ' ' + (m % 12) + ' m' : ''}`;
 const sinceLong = m => m === null || m === undefined ? '' : m < 1 ? 'questo mese' : m === 1 ? '1 mese fa' : `${m} mesi fa`;
 const daysAgo = iso => Math.floor((Date.now() - new Date(iso).getTime()) / 864e5);
 
 // Colpo d'occhio: stato, acquisti, contatti, follow-up, offerte in un solo riquadro
-function glance(app, c, notes, quotes, rxOpen = []) {
+function glance(app, c, notes, quotes, rxOpen = [], lastVisit = null) {
   const info = STATUS_INFO[c.status] || STATUS_INFO['Mai fatturato'];
   const ch = c.statusChange;
   const last = notes[0];
@@ -2141,7 +2173,9 @@ function glance(app, c, notes, quotes, rxOpen = []) {
       h('button', { class: 'btn small gl-change', onclick: () => statusDialog(app, c).then(ok => ok && app.go('agenda/' + c.id)) }, 'Cambia stato')),
     h('div', { class: 'gl-grid' },
       tile(c.monthsSince > 12 ? 'bad' : c.monthsSince > 6 ? 'warn' : '', 'Ultimo acquisto', c.lastInvoice ? dateIt(c.lastInvoice) : 'Mai', c.lastInvoice ? sinceLong(c.monthsSince) : c.origin === 'HUB' ? 'nuovo cliente' : 'nessuna fattura dal 2009'),
-      tile(contactAge === null || contactAge > 90 ? 'warn' : '', 'Ultimo contatto', last ? dateIt(last.createdAt) : 'Nessuno', last ? `${last.kind} · ${last.authorName || ''}`.replace(/ · $/, '') : 'registra visita o telefonata'),
+      (() => { const vd = lastVisit ? lastVisit.createdAt.slice(0, 10) : null, days = visitAge(vd), cls = visitCls(days);
+        const contact = last && last !== lastVisit ? `ultimo contatto ${dateIt(last.createdAt)} (${String(last.kind || '').replace('RADIX · ', '').toLowerCase()})` : '';
+        return tile(cls === 'ok' ? '' : cls, 'Ultima visita', vd ? dateIt(vd) : 'Mai', [vd ? (days < 1 ? 'oggi' : days === 1 ? 'ieri' : `${days} giorni fa`) + (lastVisit.authorName ? ' · ' + lastVisit.authorName : '') : 'nessuna visita registrata', contact].filter(Boolean).join(' · ')); })(),
       tile(next && dueState(next) === 'scaduto' ? 'bad' : next && dueState(next) === 'oggi' ? 'warn' : '', 'Prossimo follow-up', next ? (next.due ? dateIt(next.due) : 'Senza data') : 'Nessuno', next ? next.title : (open.length ? '' : 'nessuna azione aperta')),
       (n => tile('', 'Offerte aperte', n ? eur(openQ.reduce((s, q) => s + (q.total || 0), 0) + rxOpen.reduce((s, o) => s + (o.total || 0), 0)) : '0',
         n ? `${n} in corso` + (rxOpen.length ? ` (${rxOpen.length} RADIX)` : '') + (won.length ? ` · ${won.length} accettate` : '') : (won.length ? `${won.length} accettate` : 'nessuna')))(openQ.length + rxOpen.length)),
@@ -2191,6 +2225,7 @@ function purchasesCard(c) {
 async function customerCard(app, c) {
   const [notes, contacts, quotes, rxAll] = await Promise.all([app.store.notes(c.id), app.store.contacts(c.id), app.store.quotes(c.id),
     app.store.radixOffers ? app.store.radixOffers({ customerId: c.id }).catch(() => []) : []]);
+  const lastVisit = notes.find(n => n.kind === 'Visita' || (n.source === 'RADIX' && /visita/i.test(n.kind || '')));
   const addr = [c.street, [c.cap, c.city].filter(Boolean).join(' '), c.prov ? `(${c.prov})` : ''].filter(Boolean).join(', ');
   const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([c.street, c.cap, c.city, c.prov].filter(Boolean).join(' '));
   const emails = String(c.email || '').split(/;+/).map(e => e.trim()).filter(e => e.includes('@'));
@@ -2235,7 +2270,7 @@ async function customerCard(app, c) {
     c.review ? h('p', { class: 'alert warn' }, 'Da verificare: ' + c.review) : null,
     c.annotation ? h('p', { class: 'alert info' }, h('strong', {}, 'Annotazione RADIX: '), c.annotation) : null,
     c.origin === 'HUB' ? h('p', { class: 'alert info' }, 'Cliente non ancora presente in RADIX: al primo ordine va aperta l\'anagrafica in RADIX (con P.IVA), poi l\'aggiornamento settimanale lo collegherà.') : null,
-    glance(app, c, notes, quotes, rxOpen),
+    glance(app, c, notes, quotes, rxOpen, lastVisit),
     // In corso: offerte (app e RADIX insieme) e follow-up aperti, cioè quello su cui agire
     h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'In corso')),
       openActs.length ? [h('h3', { class: 'sub-h' }, 'Follow-up'), h('ul', { class: 'checks' }, openActs.map(({ a, n }) => h('li', {}, h('label', {}, h('input', { type: 'checkbox', onchange: () => toggle(n, a) }), h('span', {}, a.title)),
@@ -4577,8 +4612,10 @@ async function commissionCard(app, refresh) {
 async function managerSection(app) {
   const d30 = new Date(Date.now() - 30 * 864e5).toISOString(), today = new Date().toISOString().slice(0, 10);
   // anche offerte aperte e note importate da RADIX (01/11): altrimenti il portafoglio mostra 0 finché non si usa l'app
-  const [customers, notes, quotes, rxOffers, rxNotes] = await Promise.all([app.customers(), app.store.notes(), app.store.quotes(),
-    app.store.radixOffers ? app.store.radixOffers().catch(() => []) : [], app.store.radixNotes ? app.store.radixNotes({ since: d30.slice(0, 10) }).catch(() => []) : []]);
+  const [customers, notes, quotes, rxOffers, rxNotes, visits] = await Promise.all([app.customers(), app.store.notes(), app.store.quotes(),
+    app.store.radixOffers ? app.store.radixOffers().catch(() => []) : [], app.store.radixNotes ? app.store.radixNotes({ since: d30.slice(0, 10) }).catch(() => []) : [],
+    app.store.lastVisits ? app.store.lastVisits().catch(() => new Map()) : new Map()]);
+  const d90 = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
   const roles = new Map(app.store.assignees.map(a => [a.name, a]));
   const rows = [...new Set(customers.map(c => c.assignee))].map(name => {
     const cs = customers.filter(c => c.assignee === name), ids = new Set(cs.map(c => c.id));
@@ -4587,8 +4624,9 @@ async function managerSection(app) {
     const rx = rxOffers.filter(o => ids.has(o.customerId)), rxOpen = rx.filter(o => o.outcome === 'Da seguire' || o.outcome === 'Sentito');
     const rxN = rxNotes.filter(x => ids.has(x.customerId) && x.date >= d30.slice(0, 10)).length;
     const n = st => cs.filter(c => c.status === st).length;
+    const act = cs.filter(c => c.status === 'Attivo'), visited = act.filter(c => (visits.get(c.id) || '') >= d90).length;
     return { name, role: roles.get(name)?.role || '', provinces: roles.get(name)?.provinces || '', total: cs.length, active: n('Attivo'), recover: n('Da recuperare'), lost: n('Perso'), never: n('Mai fatturato'),
-      notes30: ns.filter(x => x.createdAt >= d30).length + rxN, notesRx: rxN, overdue: ns.flatMap(x => x.actions || []).filter(a => !a.done && a.due && a.due < today).length,
+      visited, activeN: act.length, notes30: ns.filter(x => x.createdAt >= d30).length + rxN, notesRx: rxN, overdue: ns.flatMap(x => x.actions || []).filter(a => !a.done && a.due && a.due < today).length,
       openQ: open.length + rxOpen.length, openRx: rxOpen.length, openValue: open.reduce((t, q) => t + (q.total || 0), 0) + rxOpen.reduce((t, o) => t + (o.total || 0), 0),
       won: qs.filter(q => q.status === 'Accettata').reduce((t, q) => t + (q.total || 0), 0) + rx.filter(o => o.outcome === 'Accettata').reduce((t, o) => t + (o.total || 0), 0) };
   }).sort((a, b) => b.active + b.recover - (a.active + a.recover));
@@ -4600,6 +4638,7 @@ async function managerSection(app) {
       h('div', { class: 'pf-list' }, rows.map(r => h('details', {},
         h('summary', {}, h('strong', {}, r.name), r.role && r.role !== r.name ? h('small', { class: 'muted' }, r.role) : null),
         h('dl', { class: 'pf-grid' }, [['Zona', r.provinces || '—'], ['Clienti', r.total], ['Attivi', r.active], ['Da recuperare', r.recover], ['Persi', r.lost], ['Mai fatturato', r.never],
+          ['Attivi visitati 90 gg', r.activeN ? `${r.visited} su ${r.activeN}` : '—', r.activeN && r.visited / r.activeN < 0.5 ? 'warn-text' : ''],
           ['Note ultimi 30 gg', r.notesRx ? `${r.notes30} (${r.notesRx} RADIX)` : r.notes30], ['Follow-up scaduti', r.overdue, r.overdue ? 'bad-text' : ''],
           ['Offerte aperte', `${r.openQ} · ${eur(r.openValue)}` + (r.openRx ? ` (${r.openRx} RADIX)` : '')], ['Offerte accettate', eur(r.won)]]
           .map(([l, v, cls]) => h('div', {}, h('dt', {}, l), h('dd', { class: cls || '' }, typeof v === 'number' ? v.toLocaleString('it-IT') : v)))))))),
