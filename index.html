@@ -1087,7 +1087,208 @@ async function openActions(app) {
 
 return { openActions };
 })();
+__m["js/core/pricing.js"] = (function () {
+// Calcolo offerte NORDTEX HUB.
+// Prezzi sempre dal Master prodotti (listino n.05); nessuna conversione di unità inventata.
+
+const PRICE_LEVEL = Object.freeze({ OK: 'ok', WARN: 'warn', BLOCKED: 'blocked' });
+const DISCOUNT_ALERT = 52.5; // Condizioni agenti 2026: sconto massimo previsto 50+5 (52,5% complessivo); oltre serve autorizzazione Direzione
+const DISCOUNT_ALERT_LABEL = '50+5 (52,5%)';
+
+const UNITS = new Set(['M2', 'M3', 'PZ', 'ML', 'CONF', 'ROTOLO', 'KG', 'SACCO', 'BIGBAG']);
+const txt = x => String(x ?? '').trim();
+const normUnit = x => ({ MQ: 'M2', MC: 'M3' }[txt(x).toUpperCase()] || txt(x).toUpperCase());
+const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
+
+// Livello di affidabilità del prezzo di un articolo del Master.
+function priceLevel(p) {
+  const reasons = [];
+  if (!(typeof p.price === 'number' && Number.isFinite(p.price) && p.price > 0)) {
+    return { level: PRICE_LEVEL.BLOCKED, reasons: ['Prezzo non pubblicato o pari a zero: quotazione ufficio'] };
+  }
+  const sale = normUnit(p.saleUnit), unit = normUnit(p.priceUnit), list = normUnit(p.listPriceUnit);
+  if (!UNITS.has(sale) || !UNITS.has(unit) || !UNITS.has(list) || sale !== unit || unit !== list) {
+    return { level: PRICE_LEVEL.BLOCKED, reasons: ['Unità di vendita e di prezzo non coerenti: serve conversione documentata'] };
+  }
+  if (txt(p.priceStatus) !== 'RISCONTRO DOCUMENTALE OK') reasons.push('Stato prezzo nel Master: ' + (txt(p.priceStatus) || 'non indicato'));
+  if (txt(p.anomalies)) reasons.push('Anomalie aperte: ' + txt(p.anomalies));
+  return { level: reasons.length ? PRICE_LEVEL.WARN : PRICE_LEVEL.OK, reasons };
+}
+
+// policy: 'avvisa' = articoli con anomalie ammessi con segnalazione; 'rigida' = solo prezzi verificati
+function canQuote(p, policy = 'avvisa') {
+  const l = priceLevel(p).level;
+  return l === PRICE_LEVEL.OK || (l === PRICE_LEVEL.WARN && policy === 'avvisa');
+}
+
+function validDiscounts(d) {
+  return Array.isArray(d) && d.length === 3 && d.every(x => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 100);
+}
+
+function totalDiscount(d) { return round2((1 - d.reduce((v, x) => v * (1 - x / 100), 1)) * 100); }
+
+// Riga di offerta: fotografa il prodotto al momento dell'inserimento.
+function makeLine(p, qty, discounts = [0, 0, 0], policy = 'avvisa') {
+  if (!canQuote(p, policy)) throw new Error('Articolo non quotabile: ' + priceLevel(p).reasons.join('; '));
+  if (!(typeof qty === 'number' && Number.isFinite(qty) && qty > 0)) throw new Error('Quantità non valida');
+  if (!validDiscounts(discounts)) throw new Error('Sconti non validi (0–100%)');
+  const pl = priceLevel(p);
+  return {
+    productId: p.id, listCode: p.listCode || '', radixCode: p.radixCode || '', description: p.description,
+    family: p.family, producer: p.producer || '', unit: normUnit(p.saleUnit), listPrice: p.price,
+    qty, discounts: [...discounts], level: pl.level, warnings: pl.reasons,
+    palletQuantity: p.palletQuantity ?? null, palletUnit: p.palletUnit ?? null,
+  };
+}
+
+function lineNet(l) { return l.listPrice * l.discounts.reduce((v, d) => v * (1 - d / 100), 1); }
+function lineAmount(l) { return round2(lineNet(l) * l.qty); }
+
+// Totali documento. freight null = trasporto da definire (mai trattato come zero).
+function totals(q) {
+  const lines = q.lines || [];
+  for (const l of lines) {
+    if (!(l.qty > 0) || !validDiscounts(l.discounts) || !(l.listPrice > 0)) throw new Error('Riga non valida: ' + (l.description || l.productId));
+  }
+  const goods = round2(lines.reduce((s, l) => s + lineAmount(l), 0));
+  const listValue = round2(lines.reduce((s, l) => s + round2(l.listPrice * l.qty), 0));
+  const extras = Number(q.extras) || 0;
+  const freight = q.freight === null || q.freight === undefined || q.freight === '' ? null : Number(q.freight);
+  if (freight !== null && !(Number.isFinite(freight) && freight >= 0)) throw new Error('Trasporto non valido');
+  const vatRate = q.vatRate === undefined || q.vatRate === null || q.vatRate === '' ? 22 : Number(q.vatRate);
+  if (!(Number.isFinite(vatRate) && vatRate >= 0 && vatRate <= 100)) throw new Error('IVA non valida');
+  const taxable = round2(goods + extras + (freight ?? 0));
+  const vat = round2(taxable * vatRate / 100);
+  return {
+    listValue, discountValue: round2(listValue - goods), goods, extras, freight, taxable, vatRate, vat,
+    total: round2(taxable + vat), freightPending: freight === null,
+    warnings: lines.filter(l => l.level === PRICE_LEVEL.WARN).length,
+    discountAlerts: lines.filter(l => totalDiscount(l.discounts) > DISCOUNT_ALERT).length,
+  };
+}
+
+function searchProducts(products, query, limit = 60) {
+  const words = txt(query).toLocaleLowerCase('it').split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const out = [];
+  for (const p of products) {
+    const hay = [p.listCode, p.radixCode, p.description, p.family, p.subfamily, p.producer, p.id, p.thickness && Math.round(p.thickness) + ' ' + Math.round(p.thickness) + 'mm', p.length && p.width && Math.round(p.length) + 'x' + Math.round(p.width)].map(txt).join(' ').toLocaleLowerCase('it');
+    if (words.every(w => hay.includes(w))) { out.push(p); if (out.length >= limit) break; }
+  }
+  return out;
+}
+
+// Bancali occupati (solo se il Master documenta quantità per bancale nella stessa unità)
+function palletsFor(l) {
+  if (!(l.palletQuantity > 0) || normUnit(l.palletUnit) !== l.unit) return null;
+  return l.qty / l.palletQuantity;
+}
+
+return { PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL, normUnit, round2, priceLevel, canQuote, validDiscounts, totalDiscount, makeLine, lineNet, lineAmount, totals, searchProducts, palletsFor };
+})();
+__m["js/core/quote-doc.js"] = (function () {
+// Documento offerta nel formato NORDTEX/RADIX (modello: offerte 1051, 1313, 1324 del 2026, Crystal Reports):
+// testata con logo, Deposito di uscita · Cantiere · Spett.le (codice cliente), barra "OFFERTA NR. … - data",
+// righe Descrizione/Codice/U.M./Quantità/Prezzo/Sconto %/Imp.netto, totali, condizioni, clausole, piè di pagina aziendale.
+// Modulo puro (stringa HTML con stili in linea): stampa/PDF nell'app ed email dalla funzione server.
+const { totals, lineAmount, palletsFor } = __m["js/core/pricing.js"];
+// Depositi NORDTEX: elenco e indirizzi dal sito nordtex.it (31/10/2026); telefoni di Lecco e Polymax dalle offerte RADIX
+const DEPOTS = {
+  diretta: { label: 'Consegna diretta dal produttore', lines: ['CONSEGNA DIRETTA'] },
+  SEDE: { label: 'Sede NORDTEX – Chiusa (BZ)', lines: ['SEDE NORDTEX', "PRATO DELL'OSPIZIO", '39043 CHIUSA (BZ)'], pickup: ['Sede NORDTEX', "Prato dell'Ospizio", 'IT-39043 Chiusa (BZ)'] },
+  LECCO: { label: 'Deposito Lecco – Fornaci Giussani (Inverigo CO)', lines: ['DEPOSITO LECCO -', 'FORNACI GIUSSANI', 'VIA ARISTIDE MAGNI 98', '22044 INVERIGO (CO)', 'Tel:031607100'],
+    pickup: ['Fornace Giussani', 'Via Aristide Magni, 98', 'IT-22044 Inverigo (CO)'] },
+  CASALE: { label: 'Deposito Piemonte – Savallo Autotrasporti (Casale Monferrato AL)', lines: ['DEPOSITO PIEMONTE -', 'SAVALLO AUTOTRASPORTI', 'STRADA VALENZA 7', '15033 CASALE MONFERRATO (AL)'],
+    pickup: ['Savallo Autotrasporti', 'Strada Valenza, 7', 'IT-15033 Casale Monferrato (AL)'] },
+  CASTELFRAN: { label: 'Deposito Veneto – Polymax Italia (Castelfranco Veneto TV)', lines: ['POLYMAX', 'VIA FUSINA 12', '31033 CASTELFRANCO', 'VENETO (TV)', 'Tel:0423493544', 'Fax:0423497841'],
+    pickup: ['Polymax', 'Via Fusina 12', 'IT-31033 Castelfranco Veneto (TV)'] },
+  TORRI: { label: 'Deposito Veneto – Loewenstark (Torri di Quartesolo VI)', lines: ['DEPOSITO VENETO -', 'LOEWENSTARK SRL', 'VIA CAMISANA 15', '36040 TORRI DI QUARTESOLO (VI)'],
+    pickup: ['Loewenstark srl', 'Via Camisana, 15', 'IT-36040 Torri di Quartesolo (VI)'] },
+  MARCHE: { label: 'Deposito Marche – SPEA Tecnologie Edili (Morrovalle MC)', lines: ['DEPOSITO MARCHE -', 'SPEA TECNOLOGIE EDILI SRL', 'CONTRADA SARROCCIANO', '62010 MORROVALLE (MC)'],
+    pickup: ['SPEA Tecnologie Edili srl', 'Contrada Sarrocciano', 'IT-62010 Morrovalle (MC)'] },
+};
+const TRANSPORT_BY = ['DESTINATARIO', 'VETTORE', 'MITTENTE'];
+const CLAUSES = ['Quotazioni valide salvo variazioni imposte dal produttore/fornitore. Non si accettano resi.', 'Non ci assumiamo responsabilità per ritardi e danni nelle consegne dovute ai vettori.'];
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// formato numeri come RADIX: separatore migliaia sempre presente (2.577,25), decimali fissi
+const fmtN = (v, d) => { const [i, f] = Math.abs(Number(v)).toFixed(d).split('.'); return (Number(v) < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : ''); };
+const n = fmtN;
+const dotDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}.${String(x.getMonth() + 1).padStart(2, '0')}.${x.getFullYear()}`; };
+const UM = { M2: 'MQ', M3: 'M3', PZ: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CF', ROTOLO: 'RT', SACCO: 'SC', BIGBAG: 'BB' };
+const UL = { M2: 'm²', M3: 'm³', ML: 'ml', PZ: 'pz', KG: 'kg' };
+const discText = d => d.filter(x => x).map(x => n(x, x % 1 ? 1 : 0)).join('+');
+const customerCode = q => (q.customerId && !String(q.customerId).startsWith('H-') ? String(q.customerId) : '');
+
+// Righe aggiuntive di descrizione, come in RADIX: "(30,78m²/Pal)" e "4 bancali"
+function lineExtra(l) {
+  const out = [], pal = palletsFor(l);
+  if (l.palletQuantity > 0 && pal !== null) {
+    out.push(`(${n(l.palletQuantity, l.palletQuantity % 1 ? 3 : 0).replace(/0+$/, '').replace(/,$/, '')}${UL[l.unit] || l.unit.toLowerCase()}/Pal)`);
+    out.push(Math.abs(pal - Math.round(pal)) < 1e-6 ? `${Math.round(pal)} ${Math.round(pal) === 1 ? 'bancale' : 'bancali'}` : `circa ${n(pal, 1)} bancali`);
+  }
+  return out;
+}
+
+function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
+  const t = totals(q);
+  const created = q.createdAt ? new Date(q.createdAt) : now;
+  const until = new Date(created.getTime() + (q.validDays || 30) * 864e5);
+  const c = q.customer || {}, depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
+  const F = 'font-family:Verdana,Arial,Helvetica,sans-serif;color:#000';
+  const cell = 'padding:5px 4px;vertical-align:top;font-size:8.5pt';
+  const num = cell + ';text-align:right;white-space:nowrap';
+  const head = (x, right) => `<th style="background:#c8c8c8;font-size:7.5pt;font-weight:bold;padding:3px 4px;text-align:${right ? 'right' : 'left'}">${x}</th>`;
+  const block = (title, lines) => `<td style="width:33%;vertical-align:top;font-size:8.5pt;line-height:1.45;padding-right:10px">${title ? `<div style="font-weight:bold;margin-bottom:6px">${title}</div>` : ''}${lines.filter(Boolean).map(esc).join('<br>')}</td>`;
+  const row = (desc, code, um, qty, price, disc, amount) => `<tr><td style="${cell};width:40%">${desc}</td><td style="${cell}">${esc(code)}</td><td style="${cell}">${esc(um)}</td>`
+    + `<td style="${num}">${qty}</td><td style="${num}">${price}</td><td style="${num};text-align:center">${disc}</td><td style="${num}">${amount}</td></tr>`;
+  const site = String(q.site || '').trim();
+  const rows = q.lines.map(l => row([esc(l.description), ...lineExtra(l).map(esc)].join('<br>'), l.radixCode || l.listCode || '', UM[l.unit] || l.unit,
+    l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), n(l.listPrice, 3), discText(l.discounts), n(lineAmount(l), 2)));
+  if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), '', n(t.extras, 2)));
+  if (t.freight) rows.push(row(['Servizio di trasporto' + (q.freightNote ? ': ' + esc(q.freightNote) : '')].join(''), 'N14126', 'NR', '1,00', n(t.freight, 3), '', n(t.freight, 2)));
+  const notes = [];
+  if (depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO') notes.push(`Materiale disponibile per il ritiro presso:<br><b>${depot.pickup.map(esc).join('<br>')}</b><br><b>Prezzo franco partenza</b> dal deposito`);
+  if (t.freightPending && !(depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO')) notes.push('Trasporto: da definire.');   // ritiro al deposito: nessun trasporto
+  if (q.notes) notes.push(esc(q.notes).replace(/\n/g, '<br>'));
+  const noteRows = notes.map(x => `<tr><td colspan="7" style="${cell};padding-top:8px">${x}</td></tr>`).join('');
+  const tot = (k, v, bold) => `<tr><td style="font-size:8.5pt;padding:2px 4px">${k}</td><td style="font-size:8.5pt;padding:2px 4px;text-align:right${bold ? ';font-weight:bold' : ''}">${v}</td></tr>`;
+  const brand = header ? `<img src="${header}" alt="NORDTEX – For a better living" style="width:100%;display:block">`
+    : `<div style="font:italic 900 22pt Arial,sans-serif;letter-spacing:2px"><span style="color:#D40E41">NORD</span><span style="color:#676568">TEX</span> <span style="font:italic 400 12pt Georgia,serif;color:#333;letter-spacing:0">For a better living</span></div>`;
+  const foot = footer ? `<img src="${footer}" alt="Nordtex Srl" style="width:100%;display:block;margin-top:28px">`
+    : `<div style="margin-top:28px;font-size:7.5pt;color:#666;line-height:1.4"><b style="color:#D40E41">Nordtex Srl</b> · Società unipersonale · Via Prati all'Ospizio 6, 39043 Chiusa (BZ) · Tel. 0472 847 110 · info@nordtex.it · www.nordtex.it<br>P.I/C.F/RI BZ: 02623660988 · REA BZ-0189070 · Codice SDI: T04ZHR3</div>`;
+  return `<div class="nt-doc" style="${F};max-width:780px;margin:0 auto;background:#fff">
+${brand}
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px"><tr>
+${block('Deposito di uscita', depot.lines)}${block(site ? 'Cantiere' : '', site ? site.split('\n') : [])}
+<td style="width:34%;vertical-align:top;font-size:8.5pt;line-height:1.45"><div style="font-weight:bold;margin-bottom:6px">Spett.le<span style="float:right;font-weight:normal;font-size:7.5pt">${customerCode(q) ? '(' + esc(customerCode(q)) + ')' : ''}</span></div>${[c.name, c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' '), c.phone ? 'Tel.' + c.phone : '', c.email ? 'Email:' + c.email : '', c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean).map(esc).join('<br>')}</td>
+</tr></table>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px"><tr><td style="background:#c8c8c8;width:58%;text-align:center;font-weight:bold;font-size:10pt;padding:4px">OFFERTA NR. ${esc(q.number || 'BOZZA')} - ${dotDate(created)}</td><td></td></tr></table>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;border-collapse:collapse"><thead><tr>${head('Descrizione')}${head('Codice')}${head('U.M.')}${head('Quantità', 1)}${head('Prezzo', 1)}${head('Sconto %', 1)}${head('Imp.netto', 1)}</tr></thead>
+<tbody>${rows.join('')}${noteRows}</tbody></table>
+<table cellpadding="0" cellspacing="0" style="margin:14px 0 0 auto;width:42%;border-top:1px solid #000;border-collapse:collapse">
+${tot('Totale merce:', n(t.taxable, 2))}<tr><td colspan="2" style="height:10px"></td></tr>${tot('Totale imponibile:', n(t.taxable, 2))}${tot(`Totale iva${t.vatRate !== 22 ? ' (' + n(t.vatRate, 0) + '%)' : ''}:`, n(t.vat, 2))}${tot('Totale offerta:', n(t.total, 2), true)}</table>
+<div style="margin-top:40px;font-size:8.5pt;line-height:1.6">Prezzi al netto dell'IVA.<br>
+<table cellpadding="0" cellspacing="0" style="font-size:8.5pt"><tr><td style="padding-right:8px">Condizione di pagamento</td><td>: <b>${esc(q.payment || 'DA CONCORDARE')}</b></td></tr>
+<tr><td>Trasporto a cura</td><td>: <b>${esc(q.transportBy || 'DESTINATARIO')}</b></td></tr><tr><td>Validità</td><td>: <b>${dotDate(until)}</b></td></tr></table></div>
+<div style="margin-top:14px;font-size:8.5pt;font-weight:bold;text-decoration:underline;line-height:1.6">${CLAUSES.map(esc).join('<br>')}</div>
+<div style="margin-top:14px;font-size:8.5pt">Ringraziamo per la gradita richiesta e inviamo cordiali saluti</div>
+<div style="margin:6px 0 0 50%;font-weight:bold;font-size:10pt">NORDTEX SRL</div>
+${foot}
+</div>`;
+}
+
+function quoteFileName(q, now = new Date()) {
+  const d = q.createdAt ? new Date(q.createdAt) : now;
+  const clean = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+  return [clean(q.customer?.name), customerCode(q), (/^OFF-\d{4}-\d+$/.test(q.number || '') ? q.number : 'OFF-' + clean(q.number || 'BOZZA')), d.toISOString().slice(0, 10)].filter(Boolean).join('_');
+}
+
+return { DEPOTS, TRANSPORT_BY, CLAUSES, fmtN, dotDate, UM, discText, customerCode, lineExtra, quoteDocHtml, quoteFileName };
+})();
 __m["js/core/mailto.js"] = (function () {
+const { totals } = __m["js/core/pricing.js"];
+const { DEPOTS, fmtN } = __m["js/core/quote-doc.js"];
 // Email preparata nel programma di posta di chi invia (Outlook, Mail, Gmail…): mittente = la casella personale.
 // Regola Direzione 31/10/2026: offerte e comunicazioni partono dalla posta dell'agente / di Tommaso / di Marco / di Christian.
 function mailtoUrl({ to = [], cc = [], bcc = [], subject = '', body = '' }) {
@@ -1099,9 +1300,25 @@ function mailtoUrl({ to = [], cc = [], bcc = [], subject = '', body = '' }) {
   if (body) q.push('body=' + encodeURIComponent(String(body).replace(/\r?\n/g, '\r\n')));
   return 'mailto:' + list(to).split(',').map(encodeURIComponent).join(',') + (q.length ? '?' + q.join('&') : '');
 }
-// testo dell'email dell'offerta (il documento è nel PDF allegato)
-function quoteMailBody(q, message, senderName, sheets = '') {
-  return `${String(message || '').trim()}\n\nIn allegato l'offerta n. ${q.number} in PDF.${sheets ? '\n\n' + sheets : ''}\n\n${senderName || ''}\nNORDTEX Srl`.replace(/\n{3,}/g, '\n\n').trim();
+// testo dell'email dell'offerta (solo testo: mailto non accetta formattazione né allegati; il PDF lo allega chi invia).
+// Niente firma: la aggiunge il programma di posta di chi invia (prova del 01/11: firma doppia in Outlook).
+const itDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`; };
+function quoteMailIntro(q, now = new Date()) {
+  return `Buongiorno,\n\ncome d'accordo vi inviamo in allegato la nostra offerta n. ${q.number} del ${itDate(q.createdAt || now)}.`;
+}
+function quoteMailSummary(q, now = new Date()) {
+  const t = totals(q);
+  const depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
+  const pickup = depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO';
+  const until = new Date(new Date(q.createdAt || now).getTime() + (q.validDays || 30) * 864e5);
+  const transport = pickup ? `franco deposito (${depot.pickup[0]})` : t.freightPending ? 'da definire'
+    : t.freight > 0 ? `compreso nell'offerta (${fmtN(t.freight, 2)} €)` : 'compreso';
+  return ['RIEPILOGO', `• Totale imponibile: ${fmtN(t.taxable, 2)} € + IVA`, `• Trasporto: ${transport}`,
+    `• Pagamento: ${q.payment || 'DA CONCORDARE'}`, `• Validità: fino al ${itDate(until)}`].join('\n');
+}
+function quoteMailBody(q, intro, sheets = '', now = new Date()) {
+  return [String(intro || '').trim(), quoteMailSummary(q, now), sheets, 'Restiamo a disposizione per qualsiasi chiarimento.\nCordiali saluti']
+    .filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n');
 }
 
 // apre il programma di posta senza lasciare la pagina (link temporaneo, niente navigazione)
@@ -1110,7 +1327,7 @@ function openMailto(url) {
   document.body.append(a); a.click(); a.remove();
 }
 
-return { mailtoUrl, quoteMailBody, openMailto };
+return { mailtoUrl, quoteMailIntro, quoteMailSummary, quoteMailBody, openMailto };
 })();
 __m["js/views/board.js"] = (function () {
 const { h, dateIt, toast, modal, field, emptyState } = __m["js/ui.js"];
@@ -1649,105 +1866,6 @@ async function statusDialog(app, c) {
 
 return { viewAgenda, quoteCls, newCustomerDialog };
 })();
-__m["js/core/pricing.js"] = (function () {
-// Calcolo offerte NORDTEX HUB.
-// Prezzi sempre dal Master prodotti (listino n.05); nessuna conversione di unità inventata.
-
-const PRICE_LEVEL = Object.freeze({ OK: 'ok', WARN: 'warn', BLOCKED: 'blocked' });
-const DISCOUNT_ALERT = 52.5; // Condizioni agenti 2026: sconto massimo previsto 50+5 (52,5% complessivo); oltre serve autorizzazione Direzione
-const DISCOUNT_ALERT_LABEL = '50+5 (52,5%)';
-
-const UNITS = new Set(['M2', 'M3', 'PZ', 'ML', 'CONF', 'ROTOLO', 'KG', 'SACCO', 'BIGBAG']);
-const txt = x => String(x ?? '').trim();
-const normUnit = x => ({ MQ: 'M2', MC: 'M3' }[txt(x).toUpperCase()] || txt(x).toUpperCase());
-const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
-
-// Livello di affidabilità del prezzo di un articolo del Master.
-function priceLevel(p) {
-  const reasons = [];
-  if (!(typeof p.price === 'number' && Number.isFinite(p.price) && p.price > 0)) {
-    return { level: PRICE_LEVEL.BLOCKED, reasons: ['Prezzo non pubblicato o pari a zero: quotazione ufficio'] };
-  }
-  const sale = normUnit(p.saleUnit), unit = normUnit(p.priceUnit), list = normUnit(p.listPriceUnit);
-  if (!UNITS.has(sale) || !UNITS.has(unit) || !UNITS.has(list) || sale !== unit || unit !== list) {
-    return { level: PRICE_LEVEL.BLOCKED, reasons: ['Unità di vendita e di prezzo non coerenti: serve conversione documentata'] };
-  }
-  if (txt(p.priceStatus) !== 'RISCONTRO DOCUMENTALE OK') reasons.push('Stato prezzo nel Master: ' + (txt(p.priceStatus) || 'non indicato'));
-  if (txt(p.anomalies)) reasons.push('Anomalie aperte: ' + txt(p.anomalies));
-  return { level: reasons.length ? PRICE_LEVEL.WARN : PRICE_LEVEL.OK, reasons };
-}
-
-// policy: 'avvisa' = articoli con anomalie ammessi con segnalazione; 'rigida' = solo prezzi verificati
-function canQuote(p, policy = 'avvisa') {
-  const l = priceLevel(p).level;
-  return l === PRICE_LEVEL.OK || (l === PRICE_LEVEL.WARN && policy === 'avvisa');
-}
-
-function validDiscounts(d) {
-  return Array.isArray(d) && d.length === 3 && d.every(x => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 100);
-}
-
-function totalDiscount(d) { return round2((1 - d.reduce((v, x) => v * (1 - x / 100), 1)) * 100); }
-
-// Riga di offerta: fotografa il prodotto al momento dell'inserimento.
-function makeLine(p, qty, discounts = [0, 0, 0], policy = 'avvisa') {
-  if (!canQuote(p, policy)) throw new Error('Articolo non quotabile: ' + priceLevel(p).reasons.join('; '));
-  if (!(typeof qty === 'number' && Number.isFinite(qty) && qty > 0)) throw new Error('Quantità non valida');
-  if (!validDiscounts(discounts)) throw new Error('Sconti non validi (0–100%)');
-  const pl = priceLevel(p);
-  return {
-    productId: p.id, listCode: p.listCode || '', radixCode: p.radixCode || '', description: p.description,
-    family: p.family, producer: p.producer || '', unit: normUnit(p.saleUnit), listPrice: p.price,
-    qty, discounts: [...discounts], level: pl.level, warnings: pl.reasons,
-    palletQuantity: p.palletQuantity ?? null, palletUnit: p.palletUnit ?? null,
-  };
-}
-
-function lineNet(l) { return l.listPrice * l.discounts.reduce((v, d) => v * (1 - d / 100), 1); }
-function lineAmount(l) { return round2(lineNet(l) * l.qty); }
-
-// Totali documento. freight null = trasporto da definire (mai trattato come zero).
-function totals(q) {
-  const lines = q.lines || [];
-  for (const l of lines) {
-    if (!(l.qty > 0) || !validDiscounts(l.discounts) || !(l.listPrice > 0)) throw new Error('Riga non valida: ' + (l.description || l.productId));
-  }
-  const goods = round2(lines.reduce((s, l) => s + lineAmount(l), 0));
-  const listValue = round2(lines.reduce((s, l) => s + round2(l.listPrice * l.qty), 0));
-  const extras = Number(q.extras) || 0;
-  const freight = q.freight === null || q.freight === undefined || q.freight === '' ? null : Number(q.freight);
-  if (freight !== null && !(Number.isFinite(freight) && freight >= 0)) throw new Error('Trasporto non valido');
-  const vatRate = q.vatRate === undefined || q.vatRate === null || q.vatRate === '' ? 22 : Number(q.vatRate);
-  if (!(Number.isFinite(vatRate) && vatRate >= 0 && vatRate <= 100)) throw new Error('IVA non valida');
-  const taxable = round2(goods + extras + (freight ?? 0));
-  const vat = round2(taxable * vatRate / 100);
-  return {
-    listValue, discountValue: round2(listValue - goods), goods, extras, freight, taxable, vatRate, vat,
-    total: round2(taxable + vat), freightPending: freight === null,
-    warnings: lines.filter(l => l.level === PRICE_LEVEL.WARN).length,
-    discountAlerts: lines.filter(l => totalDiscount(l.discounts) > DISCOUNT_ALERT).length,
-  };
-}
-
-function searchProducts(products, query, limit = 60) {
-  const words = txt(query).toLocaleLowerCase('it').split(/\s+/).filter(Boolean);
-  if (!words.length) return [];
-  const out = [];
-  for (const p of products) {
-    const hay = [p.listCode, p.radixCode, p.description, p.family, p.subfamily, p.producer, p.id, p.thickness && Math.round(p.thickness) + ' ' + Math.round(p.thickness) + 'mm', p.length && p.width && Math.round(p.length) + 'x' + Math.round(p.width)].map(txt).join(' ').toLocaleLowerCase('it');
-    if (words.every(w => hay.includes(w))) { out.push(p); if (out.length >= limit) break; }
-  }
-  return out;
-}
-
-// Bancali occupati (solo se il Master documenta quantità per bancale nella stessa unità)
-function palletsFor(l) {
-  if (!(l.palletQuantity > 0) || normUnit(l.palletUnit) !== l.unit) return null;
-  return l.qty / l.palletQuantity;
-}
-
-return { PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL, normUnit, round2, priceLevel, canQuote, validDiscounts, totalDiscount, makeLine, lineNet, lineAmount, totals, searchProducts, palletsFor };
-})();
 __m["js/core/margins.js"] = (function () {
 // Margine (solo Direzione) e provvigione agente sulle offerte.
 // Costo: "Prezzo acquisto RADIX" del Master (storico, attualità da verificare), usato solo se nella stessa unità di vendita.
@@ -2141,106 +2259,6 @@ class PdfDoc {
 }
 
 return { toWinAnsi, textWidth, wrapText, jpegSize, PdfDoc };
-})();
-__m["js/core/quote-doc.js"] = (function () {
-// Documento offerta nel formato NORDTEX/RADIX (modello: offerte 1051, 1313, 1324 del 2026, Crystal Reports):
-// testata con logo, Deposito di uscita · Cantiere · Spett.le (codice cliente), barra "OFFERTA NR. … - data",
-// righe Descrizione/Codice/U.M./Quantità/Prezzo/Sconto %/Imp.netto, totali, condizioni, clausole, piè di pagina aziendale.
-// Modulo puro (stringa HTML con stili in linea): stampa/PDF nell'app ed email dalla funzione server.
-const { totals, lineAmount, palletsFor } = __m["js/core/pricing.js"];
-// Depositi NORDTEX: elenco e indirizzi dal sito nordtex.it (31/10/2026); telefoni di Lecco e Polymax dalle offerte RADIX
-const DEPOTS = {
-  diretta: { label: 'Consegna diretta dal produttore', lines: ['CONSEGNA DIRETTA'] },
-  SEDE: { label: 'Sede NORDTEX – Chiusa (BZ)', lines: ['SEDE NORDTEX', "PRATO DELL'OSPIZIO", '39043 CHIUSA (BZ)'], pickup: ['Sede NORDTEX', "Prato dell'Ospizio", 'IT-39043 Chiusa (BZ)'] },
-  LECCO: { label: 'Deposito Lecco – Fornaci Giussani (Inverigo CO)', lines: ['DEPOSITO LECCO -', 'FORNACI GIUSSANI', 'VIA ARISTIDE MAGNI 98', '22044 INVERIGO (CO)', 'Tel:031607100'],
-    pickup: ['Fornace Giussani', 'Via Aristide Magni, 98', 'IT-22044 Inverigo (CO)'] },
-  CASALE: { label: 'Deposito Piemonte – Savallo Autotrasporti (Casale Monferrato AL)', lines: ['DEPOSITO PIEMONTE -', 'SAVALLO AUTOTRASPORTI', 'STRADA VALENZA 7', '15033 CASALE MONFERRATO (AL)'],
-    pickup: ['Savallo Autotrasporti', 'Strada Valenza, 7', 'IT-15033 Casale Monferrato (AL)'] },
-  CASTELFRAN: { label: 'Deposito Veneto – Polymax Italia (Castelfranco Veneto TV)', lines: ['POLYMAX', 'VIA FUSINA 12', '31033 CASTELFRANCO', 'VENETO (TV)', 'Tel:0423493544', 'Fax:0423497841'],
-    pickup: ['Polymax', 'Via Fusina 12', 'IT-31033 Castelfranco Veneto (TV)'] },
-  TORRI: { label: 'Deposito Veneto – Loewenstark (Torri di Quartesolo VI)', lines: ['DEPOSITO VENETO -', 'LOEWENSTARK SRL', 'VIA CAMISANA 15', '36040 TORRI DI QUARTESOLO (VI)'],
-    pickup: ['Loewenstark srl', 'Via Camisana, 15', 'IT-36040 Torri di Quartesolo (VI)'] },
-  MARCHE: { label: 'Deposito Marche – SPEA Tecnologie Edili (Morrovalle MC)', lines: ['DEPOSITO MARCHE -', 'SPEA TECNOLOGIE EDILI SRL', 'CONTRADA SARROCCIANO', '62010 MORROVALLE (MC)'],
-    pickup: ['SPEA Tecnologie Edili srl', 'Contrada Sarrocciano', 'IT-62010 Morrovalle (MC)'] },
-};
-const TRANSPORT_BY = ['DESTINATARIO', 'VETTORE', 'MITTENTE'];
-const CLAUSES = ['Quotazioni valide salvo variazioni imposte dal produttore/fornitore. Non si accettano resi.', 'Non ci assumiamo responsabilità per ritardi e danni nelle consegne dovute ai vettori.'];
-
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-// formato numeri come RADIX: separatore migliaia sempre presente (2.577,25), decimali fissi
-const fmtN = (v, d) => { const [i, f] = Math.abs(Number(v)).toFixed(d).split('.'); return (Number(v) < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : ''); };
-const n = fmtN;
-const dotDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}.${String(x.getMonth() + 1).padStart(2, '0')}.${x.getFullYear()}`; };
-const UM = { M2: 'MQ', M3: 'M3', PZ: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CF', ROTOLO: 'RT', SACCO: 'SC', BIGBAG: 'BB' };
-const UL = { M2: 'm²', M3: 'm³', ML: 'ml', PZ: 'pz', KG: 'kg' };
-const discText = d => d.filter(x => x).map(x => n(x, x % 1 ? 1 : 0)).join('+');
-const customerCode = q => (q.customerId && !String(q.customerId).startsWith('H-') ? String(q.customerId) : '');
-
-// Righe aggiuntive di descrizione, come in RADIX: "(30,78m²/Pal)" e "4 bancali"
-function lineExtra(l) {
-  const out = [], pal = palletsFor(l);
-  if (l.palletQuantity > 0 && pal !== null) {
-    out.push(`(${n(l.palletQuantity, l.palletQuantity % 1 ? 3 : 0).replace(/0+$/, '').replace(/,$/, '')}${UL[l.unit] || l.unit.toLowerCase()}/Pal)`);
-    out.push(Math.abs(pal - Math.round(pal)) < 1e-6 ? `${Math.round(pal)} ${Math.round(pal) === 1 ? 'bancale' : 'bancali'}` : `circa ${n(pal, 1)} bancali`);
-  }
-  return out;
-}
-
-function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
-  const t = totals(q);
-  const created = q.createdAt ? new Date(q.createdAt) : now;
-  const until = new Date(created.getTime() + (q.validDays || 30) * 864e5);
-  const c = q.customer || {}, depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
-  const F = 'font-family:Verdana,Arial,Helvetica,sans-serif;color:#000';
-  const cell = 'padding:5px 4px;vertical-align:top;font-size:8.5pt';
-  const num = cell + ';text-align:right;white-space:nowrap';
-  const head = (x, right) => `<th style="background:#c8c8c8;font-size:7.5pt;font-weight:bold;padding:3px 4px;text-align:${right ? 'right' : 'left'}">${x}</th>`;
-  const block = (title, lines) => `<td style="width:33%;vertical-align:top;font-size:8.5pt;line-height:1.45;padding-right:10px">${title ? `<div style="font-weight:bold;margin-bottom:6px">${title}</div>` : ''}${lines.filter(Boolean).map(esc).join('<br>')}</td>`;
-  const row = (desc, code, um, qty, price, disc, amount) => `<tr><td style="${cell};width:40%">${desc}</td><td style="${cell}">${esc(code)}</td><td style="${cell}">${esc(um)}</td>`
-    + `<td style="${num}">${qty}</td><td style="${num}">${price}</td><td style="${num};text-align:center">${disc}</td><td style="${num}">${amount}</td></tr>`;
-  const site = String(q.site || '').trim();
-  const rows = q.lines.map(l => row([esc(l.description), ...lineExtra(l).map(esc)].join('<br>'), l.radixCode || l.listCode || '', UM[l.unit] || l.unit,
-    l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), n(l.listPrice, 3), discText(l.discounts), n(lineAmount(l), 2)));
-  if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), '', n(t.extras, 2)));
-  if (t.freight) rows.push(row(['Servizio di trasporto' + (q.freightNote ? ': ' + esc(q.freightNote) : '')].join(''), 'N14126', 'NR', '1,00', n(t.freight, 3), '', n(t.freight, 2)));
-  const notes = [];
-  if (depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO') notes.push(`Materiale disponibile per il ritiro presso:<br><b>${depot.pickup.map(esc).join('<br>')}</b><br><b>Prezzo franco partenza</b> dal deposito`);
-  if (t.freightPending && !(depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO')) notes.push('Trasporto: da definire.');   // ritiro al deposito: nessun trasporto
-  if (q.notes) notes.push(esc(q.notes).replace(/\n/g, '<br>'));
-  const noteRows = notes.map(x => `<tr><td colspan="7" style="${cell};padding-top:8px">${x}</td></tr>`).join('');
-  const tot = (k, v, bold) => `<tr><td style="font-size:8.5pt;padding:2px 4px">${k}</td><td style="font-size:8.5pt;padding:2px 4px;text-align:right${bold ? ';font-weight:bold' : ''}">${v}</td></tr>`;
-  const brand = header ? `<img src="${header}" alt="NORDTEX – For a better living" style="width:100%;display:block">`
-    : `<div style="font:italic 900 22pt Arial,sans-serif;letter-spacing:2px"><span style="color:#D40E41">NORD</span><span style="color:#676568">TEX</span> <span style="font:italic 400 12pt Georgia,serif;color:#333;letter-spacing:0">For a better living</span></div>`;
-  const foot = footer ? `<img src="${footer}" alt="Nordtex Srl" style="width:100%;display:block;margin-top:28px">`
-    : `<div style="margin-top:28px;font-size:7.5pt;color:#666;line-height:1.4"><b style="color:#D40E41">Nordtex Srl</b> · Società unipersonale · Via Prati all'Ospizio 6, 39043 Chiusa (BZ) · Tel. 0472 847 110 · info@nordtex.it · www.nordtex.it<br>P.I/C.F/RI BZ: 02623660988 · REA BZ-0189070 · Codice SDI: T04ZHR3</div>`;
-  return `<div class="nt-doc" style="${F};max-width:780px;margin:0 auto;background:#fff">
-${brand}
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px"><tr>
-${block('Deposito di uscita', depot.lines)}${block(site ? 'Cantiere' : '', site ? site.split('\n') : [])}
-<td style="width:34%;vertical-align:top;font-size:8.5pt;line-height:1.45"><div style="font-weight:bold;margin-bottom:6px">Spett.le<span style="float:right;font-weight:normal;font-size:7.5pt">${customerCode(q) ? '(' + esc(customerCode(q)) + ')' : ''}</span></div>${[c.name, c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' '), c.phone ? 'Tel.' + c.phone : '', c.email ? 'Email:' + c.email : '', c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean).map(esc).join('<br>')}</td>
-</tr></table>
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px"><tr><td style="background:#c8c8c8;width:58%;text-align:center;font-weight:bold;font-size:10pt;padding:4px">OFFERTA NR. ${esc(q.number || 'BOZZA')} - ${dotDate(created)}</td><td></td></tr></table>
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;border-collapse:collapse"><thead><tr>${head('Descrizione')}${head('Codice')}${head('U.M.')}${head('Quantità', 1)}${head('Prezzo', 1)}${head('Sconto %', 1)}${head('Imp.netto', 1)}</tr></thead>
-<tbody>${rows.join('')}${noteRows}</tbody></table>
-<table cellpadding="0" cellspacing="0" style="margin:14px 0 0 auto;width:42%;border-top:1px solid #000;border-collapse:collapse">
-${tot('Totale merce:', n(t.taxable, 2))}<tr><td colspan="2" style="height:10px"></td></tr>${tot('Totale imponibile:', n(t.taxable, 2))}${tot(`Totale iva${t.vatRate !== 22 ? ' (' + n(t.vatRate, 0) + '%)' : ''}:`, n(t.vat, 2))}${tot('Totale offerta:', n(t.total, 2), true)}</table>
-<div style="margin-top:40px;font-size:8.5pt;line-height:1.6">Prezzi al netto dell'IVA.<br>
-<table cellpadding="0" cellspacing="0" style="font-size:8.5pt"><tr><td style="padding-right:8px">Condizione di pagamento</td><td>: <b>${esc(q.payment || 'DA CONCORDARE')}</b></td></tr>
-<tr><td>Trasporto a cura</td><td>: <b>${esc(q.transportBy || 'DESTINATARIO')}</b></td></tr><tr><td>Validità</td><td>: <b>${dotDate(until)}</b></td></tr></table></div>
-<div style="margin-top:14px;font-size:8.5pt;font-weight:bold;text-decoration:underline;line-height:1.6">${CLAUSES.map(esc).join('<br>')}</div>
-<div style="margin-top:14px;font-size:8.5pt">Ringraziamo per la gradita richiesta e inviamo cordiali saluti</div>
-<div style="margin:6px 0 0 50%;font-weight:bold;font-size:10pt">NORDTEX SRL</div>
-${foot}
-</div>`;
-}
-
-function quoteFileName(q, now = new Date()) {
-  const d = q.createdAt ? new Date(q.createdAt) : now;
-  const clean = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
-  return [clean(q.customer?.name), customerCode(q), (/^OFF-\d{4}-\d+$/.test(q.number || '') ? q.number : 'OFF-' + clean(q.number || 'BOZZA')), d.toISOString().slice(0, 10)].filter(Boolean).join('_');
-}
-
-return { DEPOTS, TRANSPORT_BY, CLAUSES, fmtN, dotDate, UM, discText, customerCode, lineExtra, quoteDocHtml, quoteFileName };
 })();
 __m["js/core/quote-pdf.js"] = (function () {
 // PDF dell'offerta nel formato NORDTEX/RADIX, generato nell'app (nessun servizio esterno): lo stesso contenuto di quote-doc.js.
@@ -2978,18 +2996,19 @@ function techSheetFor(p) {
   return { key: l.key, name: l.name, sheet: l.sheet, dop: l.dop, docs: l.docs.map(k => typeof k === 'string' ? TECH_SHEETS.common[k] : k).filter(Boolean) };
 }
 
-// righe di testo per l'email dell'offerta: una per linea di prodotto, senza doppioni
+// blocco di testo per l'email dell'offerta: una voce per linea di prodotto, senza doppioni
+function sheetEntries(products) {
+  const seen = new Set(), out = [];
+  for (const p of products) { const s = techSheetFor(p); if (!s || seen.has(s.key)) continue; seen.add(s.key); out.push(s); }
+  return out;
+}
 function sheetLinksText(products) {
-  const seen = new Set(), rows = [];
-  for (const p of products) {
-    const s = techSheetFor(p); if (!s || seen.has(s.key)) continue; seen.add(s.key);
-    const dop = s.dop.length ? `Dichiarazione di prestazione (DoP): ${s.dop.join(' ; ')}` : '';
-    rows.push(s.sheet ? `- ${s.name}: ${s.sheet}` + (dop ? `\n  ${dop}` : '') : `- ${s.name}: ${dop}`);
-  }
-  return rows.length ? 'Schede tecniche:\n' + rows.join('\n') : '';
+  const rows = sheetEntries(products).map(s => [s.name, s.sheet ? `   Scheda tecnica: ${s.sheet}` : '',
+    ...s.dop.map((u, i) => `   Dichiarazione di prestazione${s.dop.length > 1 ? ' ' + (i + 1) : ''}: ${u}`)].filter(Boolean).join('\n'));
+  return rows.length ? 'DOCUMENTAZIONE TECNICA\n' + rows.join('\n') : '';
 }
 
-return { sheetKeyFor, techSheetFor, sheetLinksText };
+return { sheetKeyFor, techSheetFor, sheetEntries, sheetLinksText };
 })();
 __m["js/views/quotes.js"] = (function () {
 const { h, fill, eur, num, dateIt, toast, modal, field, emptyState, debounce } = __m["js/ui.js"];
@@ -2999,13 +3018,13 @@ const { regionOf } = __m["js/core/geo.js"];
 const { quoteCls } = __m["js/views/agenda.js"];
 const { OFFER_HEADER, OFFER_FOOTER, OFFER_HEADER_JPG, OFFER_FOOTER_JPG } = __m["js/brand-assets.js"];
 const { quotePdf } = __m["js/core/quote-pdf.js"];
-const { mailtoUrl, quoteMailBody, openMailto } = __m["js/core/mailto.js"];
+const { mailtoUrl, quoteMailBody, quoteMailIntro, openMailto } = __m["js/core/mailto.js"];
 const { quoteMargin, quoteCommission, unitCost } = __m["js/core/margins.js"];
 const { transportPanel, stockFor } = __m["js/views/transport-panel.js"];
 const { conversionLines, quantityEquivalents } = __m["js/core/conversions.js"];
 const { quoteEmail, QUOTE_BCC, isEmail } = __m["js/core/quote-email.js"];
 const { quoteDocHtml, quoteFileName, DEPOTS, TRANSPORT_BY } = __m["js/core/quote-doc.js"];
-const { techSheetFor, sheetLinksText } = __m["js/core/tech-sheets.js"];
+const { techSheetFor, sheetLinksText, sheetEntries } = __m["js/core/tech-sheets.js"];
 const IMAGES = { header: OFFER_HEADER, footer: OFFER_FOOTER };
 
 const listState = { q: '', status: '' };
@@ -3262,11 +3281,12 @@ async function viewQuoteEditor(app, id, customerId) {
     const to = h('input', { type: 'email', value: options[0] || '', placeholder: 'email@cliente.it', list: 'to-list', autocomplete: 'off' });
     const dl = h('datalist', { id: 'to-list' }, options.map(o => h('option', { value: o })));
     const subject = h('input', { value: `Offerta NORDTEX n. ${q.number} – ${q.customer?.name || ''}`.trim() });
-    const msg = h('textarea', { rows: 4 }, `Buongiorno,\n\ncome d'accordo vi inviamo la nostra offerta n. ${q.number}. Restiamo a disposizione per qualsiasi chiarimento.\n\nCordiali saluti`);
+    const msg = h('textarea', { rows: 4 }, quoteMailIntro(q));
     const bccBox = h('input', { type: 'checkbox', checked: true });
-    const sheetsText = sheetLinksText(q.lines.map(l => byId.get(l.productId)).filter(Boolean));
+    const quoted = q.lines.map(l => byId.get(l.productId)).filter(Boolean);
+    const sheetsText = sheetLinksText(quoted);
     const sheetsBox = h('input', { type: 'checkbox', checked: !!sheetsText });
-    const sheetsInfo = sheetsText ? h('label', { class: 'check' }, sheetsBox, ` Aggiungi all'email i link a schede tecniche e DoP (${sheetsText.split('\n').filter(r => r.startsWith('- ')).length})`) : null;
+    const sheetsInfo = sheetsText ? h('label', { class: 'check' }, sheetsBox, ` Aggiungi all'email i link a schede tecniche e DoP (${sheetEntries(quoted).length})`) : null;
     const bccInfo = isDir ? h('label', { class: 'check' }, bccBox, ' Copia nascosta (Ccn) a ' + QUOTE_BCC.join(', ')) : h('p', { class: 'muted' }, 'Copia nascosta (Ccn) già inserita: ' + QUOTE_BCC.join(', ') + '. Non toglierla.');
     const pdf = () => quotePdf(q, { header: OFFER_HEADER_JPG, footer: OFFER_FOOTER_JPG });
     const done = { pdf: false, mail: false };
@@ -3281,7 +3301,7 @@ async function viewQuoteEditor(app, id, customerId) {
     const openMail = () => {
       const list = to.value.split(/[;,\s]+/).filter(Boolean);
       if (!list.length || !list.every(isEmail)) { toast('Indirizzo email del cliente non valido', 'error'); return; }
-      openMailto(mailtoUrl({ to: list, bcc: isDir && !bccBox.checked ? [] : QUOTE_BCC, subject: subject.value, body: quoteMailBody(q, msg.value, app.session.name, sheetsBox.checked ? sheetsText : '') }));
+      openMailto(mailtoUrl({ to: list, bcc: isDir && !bccBox.checked ? [] : QUOTE_BCC, subject: subject.value, body: quoteMailBody(q, msg.value, sheetsBox.checked ? sheetsText : '') }));
       done.mail = true; draw();
     };
     const step = (n, label, ok, btn) => h('div', { class: 'send-step' + (ok ? ' ok' : '') }, h('span', { class: 'n' }, ok ? '✓' : n), h('div', {}, label), btn);
@@ -3290,7 +3310,7 @@ async function viewQuoteEditor(app, id, customerId) {
       step(2, 'Apri l\'email già compilata nel tuo programma di posta e allega il PDF', done.mail, h('button', { class: 'btn small' + (done.pdf && !done.mail ? ' primary' : ''), type: 'button', onclick: openMail }, 'Apri email')),
       h('p', { class: 'fine' }, 'Su iPhone/iPad: il PDF finisce in File › Download; nell\'email tocca il testo e scegli "Allega file". Su computer trascina il PDF nell\'email.'));
     draw();
-    const res = await modal('Invia offerta ' + q.number, h('div', { class: 'form' }, field('A (cliente)', to), dl, field('Oggetto', subject), field('Messaggio', msg), sheetsInfo, bccInfo, st,
+    const res = await modal('Invia offerta ' + q.number, h('div', { class: 'form' }, field('A (cliente)', to), dl, field('Oggetto', subject), field('Messaggio (dopo il testo l\'app aggiunge riepilogo, schede tecniche e saluti; la firma la mette il tuo programma di posta)', msg), sheetsInfo, bccInfo, st,
       h('p', { class: 'fine' }, 'L\'email parte dalla tua casella: il cliente risponde a te.')),
       [{ label: 'Annulla', value: false }, { label: 'Ho inviato l\'email', primary: true, run: async () => {
         if (!done.mail) throw new Error('Prima apri l\'email (passo 2) e inviala dal tuo programma di posta');
