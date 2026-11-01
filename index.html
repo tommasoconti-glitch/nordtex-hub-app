@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="ab0f4b5af4e6">
+<meta name="ntx-build" content="e5a3887f7a5a">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -500,9 +500,15 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 .rx-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none}
 .rx-tot{font-weight:700;white-space:nowrap}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
+/* dettatura nota */
+.note-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.note-head>span{font-size:.82rem;font-weight:600;color:#344054}
+.dict{display:flex;align-items:center;gap:8px}
+.dict-live{color:var(--muted);font-style:italic;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dict-btn.on{background:var(--nt-red,#D40E41);color:#fff;border-color:transparent}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ab0f4b5af4e6"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"e5a3887f7a5a"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1673,6 +1679,45 @@ function openMailto(url) {
 
 return { mailtoUrl, quoteMailIntro, quoteMailSummary, quoteMailBody, openMailto };
 })();
+__m["js/core/dictation.js"] = (function () {
+// Dettatura gratuita (richiesta Tommaso 01/11/2026): il riconoscimento vocale del browser/telefono scrive nel campo di testo.
+// Nessun audio salvato e nessun costo. Dove non è disponibile (es. alcune app aggiunte alla schermata Home) si usa
+// il microfono della tastiera dell'iPhone, che fa la stessa cosa.
+const dictationAvailable = () => typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+// Unisce il testo dettato a quello già scritto, con lo spazio giusto e la maiuscola a inizio frase
+function appendDictated(current, said) {
+  const t = String(said || '').trim(); if (!t) return current;
+  const base = String(current || '').replace(/\s+$/, '');
+  if (!base) return t.charAt(0).toUpperCase() + t.slice(1);
+  const newSentence = /[.!?]$/.test(base);
+  return base + ' ' + (newSentence ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+}
+
+// Avvia la dettatura su una textarea. Ritorna { stop }. onState('ascolto' | 'fermo' | 'errore', messaggio)
+function startDictation(textarea, { onState = () => {}, onInterim = () => {} } = {}) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { onState('errore', 'unsupported'); return { stop() {} }; }
+  const r = new SR();
+  r.lang = 'it-IT'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
+  let stopped = false;
+  r.onresult = e => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const res = e.results[i];
+      if (res.isFinal) { textarea.value = appendDictated(textarea.value, res[0].transcript); textarea.dispatchEvent(new Event('input', { bubbles: true })); }
+      else interim += res[0].transcript;
+    }
+    onInterim(interim);
+  };
+  r.onerror = e => { stopped = true; onState('errore', e.error || 'errore'); };
+  r.onend = () => { onInterim(''); if (!stopped) onState('fermo'); stopped = true; };
+  try { r.start(); onState('ascolto'); } catch (e) { onState('errore', e.message); }
+  return { stop() { if (!stopped) { try { r.stop(); } catch { /* già fermo */ } } } };
+}
+
+return { dictationAvailable, appendDictated, startDictation };
+})();
 __m["js/views/radix-offers.js"] = (function () {
 // Offerte aperte importate da RADIX (richiesta Tommaso 01/11/2026): l'app le mostra a chi segue il cliente
 // (senza cliente HUB solo alla Direzione) e permette di segnare l'esito. Le offerte restano in RADIX: qui si seguono.
@@ -1879,6 +1924,7 @@ return { SALES_YEARS, purchaseSummary };
 })();
 __m["js/views/agenda.js"] = (function () {
 const { h, fill, eur, dateIt, dateTimeIt, statusBadge, toast, modal, field, emptyState, debounce, telLinks, today } = __m["js/ui.js"];
+const { dictationAvailable, startDictation } = __m["js/core/dictation.js"];
 const { radixOffersCard } = __m["js/views/radix-offers.js"];
 const { CONTACT_KINDS, NOTE_OUTCOMES, STATUS_ORDER, STATUS_INFO, MANUAL_STATUSES, TYPOLOGIES, dueState, assigneeFor } = __m["js/data/model.js"];
 const { buildIndex, searchCustomers, highlight } = __m["js/core/search.js"];
@@ -2100,11 +2146,31 @@ async function noteDialog(app, c, preset = {}) {
   const body = h('textarea', { rows: 5, placeholder: 'Cosa è emerso, prodotti di interesse, cantieri, concorrenza…' }, preset.body || '');
   const fu = h('input', { placeholder: 'es. richiamare per offerta fibra', value: preset.fu || '' });
   const due = h('input', { type: 'date', min: today(), value: preset.due && preset.due >= today() ? preset.due : '' });
-  return modal('Nuova nota — ' + c.name, h('div', { class: 'form' }, field('Tipo di contatto', kind), field('Esito', outcome), field('Nota', body),
+  return modal('Nuova nota — ' + c.name, h('div', { class: 'form' }, field('Tipo di contatto', kind), field('Esito', outcome),
+    h('div', { class: 'field' }, h('div', { class: 'note-head' }, h('span', {}, 'Nota'), dictateButton(body)), body),
     h('fieldset', {}, h('legend', {}, 'Follow-up (facoltativo)'), field('Cosa fare', fu), field('Entro il', due))),
   [{ label: 'Annulla', value: false }, { label: 'Salva nota', primary: true, run: async () => {
     await app.store.addNote({ customerId: c.id, kind: kind.value, outcome: outcome.value, body: body.value, actions: fu.value ? [{ title: fu.value, due: due.value || null }] : [] });
     toast('Nota salvata'); return true; } }]);
+}
+
+// Pulsante "Detta": il telefono scrive mentre parli (gratis). Se non disponibile, indica il microfono della tastiera.
+function dictateButton(textarea) {
+  const live = h('small', { class: 'dict-live' });
+  let session = null;
+  const btn = h('button', { type: 'button', class: 'btn small dict-btn', onclick: () => {
+    if (session) { session.stop(); return; }
+    if (!dictationAvailable()) { keyboardHint(); return; }
+    session = startDictation(textarea, {
+      onInterim: t => { live.textContent = t; },
+      onState: (st, msg) => {
+        if (st === 'ascolto') { btn.classList.add('on'); btn.textContent = '■ Ferma'; live.textContent = 'In ascolto… parla pure'; return; }
+        btn.classList.remove('on'); btn.textContent = '🎤 Detta'; live.textContent = ''; session = null;
+        if (st === 'errore') { if (msg === 'no-speech') toast('Non ho sentito niente: riprova', 'error'); else if (msg !== 'aborted') keyboardHint(); }
+      } });
+  } }, '🎤 Detta');
+  const keyboardHint = () => { toast('Su questo dispositivo usa il microfono 🎤 della tastiera per dettare'); textarea.focus(); };
+  return h('span', { class: 'dict' }, live, btn);
 }
 
 async function contactDialog(app, c, p = {}) {
@@ -2174,7 +2240,7 @@ async function statusDialog(app, c) {
   [{ label: 'Annulla', value: false }, { label: 'Salva stato', primary: true, run: async () => { await app.store.setStatus({ customerId: c.id, status: sel.value, reason: reason.value }); app.invalidate(); toast('Stato aggiornato: ' + sel.value); return true; } }]);
 }
 
-return { viewAgenda, quoteCls, noteDialog, newCustomerDialog };
+return { viewAgenda, quoteCls, noteDialog, dictateButton, newCustomerDialog };
 })();
 __m["js/views/board.js"] = (function () {
 const { h, dateIt, toast, modal, field, emptyState } = __m["js/ui.js"];
