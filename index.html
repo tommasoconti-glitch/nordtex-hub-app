@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="f9cc162d471a">
+<meta name="ntx-build" content="a37464f8f2f5">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -521,9 +521,31 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 .rx-fu-block{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
 .rx-fu{display:flex;align-items:center;gap:8px;flex-wrap:wrap} .rx-fu .due{margin-left:0}
 .rx-fu-main{flex:1 1 200px;min-width:0;text-decoration:none;color:inherit}
+/* menu: gruppo Direzione, contatore ordini, pagina Altro (telefono) */
+.nav-group{margin:14px 12px 4px;font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.nav-item .tab-count{margin-left:auto}
+.tabbar a{position:relative} .tab-dot{position:absolute;top:6px;right:calc(50% - 16px);width:8px;height:8px;border-radius:50%;background:var(--nt-red,#D40E41)}
+.more-list{display:flex;flex-direction:column;gap:10px}
+.more-item{display:flex;align-items:center;gap:14px;text-decoration:none;color:inherit;padding:14px 16px}
+.more-ico{width:38px;height:38px;border-radius:10px;background:var(--lime-soft,#f2f3d1);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex:none}
+.more-text{display:flex;flex-direction:column;flex:1;min-width:0} .more-go{font-size:1.4rem;color:var(--muted)}
+/* Home Direzione: Oggi + Andamento */
+.today-card h2{margin-bottom:6px}
+.today-list{list-style:none;margin:0;padding:0}
+.today-list li+li{border-top:1px solid var(--line)}
+.today-row{display:flex;align-items:center;gap:14px;padding:12px 2px;text-decoration:none;color:inherit}
+.today-n{min-width:52px;text-align:center;font-family:var(--head-font,inherit);font-weight:700;font-size:1.35rem;padding:6px 8px;border-radius:10px;background:#eef1f5;color:#344054}
+.today-n.bad{background:var(--bad-bg);color:var(--bad)} .today-n.warn{background:var(--warn-bg);color:var(--warn)}
+.today-text{display:flex;flex-direction:column;flex:1;min-width:0} .today-text small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.today-ok{color:var(--ok);font-weight:600;margin:6px 0}
+.section-title{font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px}
+.kpis.trend .kpi strong{font-size:1.35rem}
+@media (max-width:760px){.today-text small{white-space:normal}}
+.today-row:hover,.more-item:hover,.tabbar a:hover,.kpi:hover{text-decoration:none} @media (hover:hover){.today-row:hover .today-text strong{text-decoration:underline}}
+.todo-main:hover{text-decoration:none} @media (hover:hover){.todo-main:hover strong{text-decoration:underline}}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f9cc162d471a"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a37464f8f2f5"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1612,148 +1634,36 @@ function palletsFor(l) {
 
 return { PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL, normUnit, round2, priceLevel, canQuote, validDiscounts, totalDiscount, makeLine, lineNet, lineAmount, totals, searchProducts, palletsFor };
 })();
-__m["js/core/quote-doc.js"] = (function () {
-// Documento offerta nel formato NORDTEX/RADIX (modello: offerte 1051, 1313, 1324 del 2026, Crystal Reports):
-// testata con logo, Deposito di uscita · Cantiere · Spett.le (codice cliente), barra "OFFERTA NR. … - data",
-// righe Descrizione/Codice/U.M./Quantità/Prezzo/Sconto %/Imp.netto, totali, condizioni, clausole, piè di pagina aziendale.
-// Modulo puro (stringa HTML con stili in linea): stampa/PDF nell'app ed email dalla funzione server.
-const { totals, lineAmount, palletsFor } = __m["js/core/pricing.js"];
-// Depositi NORDTEX: elenco e indirizzi dal sito nordtex.it (31/10/2026); telefoni di Lecco e Polymax dalle offerte RADIX
-const DEPOTS = {
-  diretta: { label: 'Consegna diretta dal produttore', lines: ['CONSEGNA DIRETTA'] },
-  SEDE: { label: 'Sede NORDTEX – Chiusa (BZ)', lines: ['SEDE NORDTEX', "PRATO DELL'OSPIZIO", '39043 CHIUSA (BZ)'], pickup: ['Sede NORDTEX', "Prato dell'Ospizio", 'IT-39043 Chiusa (BZ)'] },
-  LECCO: { label: 'Deposito Lecco – Fornaci Giussani (Inverigo CO)', lines: ['DEPOSITO LECCO -', 'FORNACI GIUSSANI', 'VIA ARISTIDE MAGNI 98', '22044 INVERIGO (CO)', 'Tel:031607100'],
-    pickup: ['Fornace Giussani', 'Via Aristide Magni, 98', 'IT-22044 Inverigo (CO)'] },
-  CASALE: { label: 'Deposito Piemonte – Savallo Autotrasporti (Casale Monferrato AL)', lines: ['DEPOSITO PIEMONTE -', 'SAVALLO AUTOTRASPORTI', 'STRADA VALENZA 7', '15033 CASALE MONFERRATO (AL)'],
-    pickup: ['Savallo Autotrasporti', 'Strada Valenza, 7', 'IT-15033 Casale Monferrato (AL)'] },
-  CASTELFRAN: { label: 'Deposito Veneto – Polymax Italia (Castelfranco Veneto TV)', lines: ['POLYMAX', 'VIA FUSINA 12', '31033 CASTELFRANCO', 'VENETO (TV)', 'Tel:0423493544', 'Fax:0423497841'],
-    pickup: ['Polymax', 'Via Fusina 12', 'IT-31033 Castelfranco Veneto (TV)'] },
-  TORRI: { label: 'Deposito Veneto – Loewenstark (Torri di Quartesolo VI)', lines: ['DEPOSITO VENETO -', 'LOEWENSTARK SRL', 'VIA CAMISANA 15', '36040 TORRI DI QUARTESOLO (VI)'],
-    pickup: ['Loewenstark srl', 'Via Camisana, 15', 'IT-36040 Torri di Quartesolo (VI)'] },
-  MARCHE: { label: 'Deposito Marche – SPEA Tecnologie Edili (Morrovalle MC)', lines: ['DEPOSITO MARCHE -', 'SPEA TECNOLOGIE EDILI SRL', 'CONTRADA SARROCCIANO', '62010 MORROVALLE (MC)'],
-    pickup: ['SPEA Tecnologie Edili srl', 'Contrada Sarrocciano', 'IT-62010 Morrovalle (MC)'] },
+__m["js/core/geo.js"] = (function () {
+// Sigla provincia -> regione (nomi come nelle tabelle trasporto del listino n.05)
+const REGIONI = {
+  'Piemonte': 'TO VC NO CN AT AL BI VB',
+  "Valle d'Aosta": 'AO',
+  'Lombardia': 'VA CO SO MI BG BS PV CR MN LC LO MB',
+  'Trentino-Alto Adige': 'BZ TN',
+  'Veneto': 'VR VI BL TV VE PD RO',
+  'Friuli-Venezia Giulia': 'UD GO TS PN',
+  'Liguria': 'IM SV GE SP',
+  'Emilia-Romagna': 'PC PR RE MO BO FE RA FC RN',
+  'Toscana': 'MS LU PT FI LI PI AR SI GR PO',
+  'Umbria': 'PG TR',
+  'Marche': 'PU AN MC AP FM',
+  'Lazio': 'VT RI RM LT FR',
+  'Abruzzo': 'AQ TE PE CH',
+  'Molise': 'CB IS',
+  'Campania': 'CE BN NA AV SA',
+  'Puglia': 'FG BA TA BR LE BT',
+  'Basilicata': 'PZ MT',
+  'Calabria': 'CS CZ RC KR VV',
+  'Sicilia': 'TP PA ME AG CL EN CT RG SR',
+  'Sardegna': 'SS NU CA OR SU',
 };
-const TRANSPORT_BY = ['DESTINATARIO', 'VETTORE', 'MITTENTE'];
-const CLAUSES = ['Quotazioni valide salvo variazioni imposte dal produttore/fornitore. Non si accettano resi.', 'Non ci assumiamo responsabilità per ritardi e danni nelle consegne dovute ai vettori.'];
+const P2R = {};
+for (const [r, ps] of Object.entries(REGIONI)) for (const p of ps.split(' ')) P2R[p] = r;
+function regionOf(prov) { return P2R[String(prov || '').toUpperCase()] || (String(prov).toUpperCase() === 'EE' ? 'Estero' : ''); }
+const REGION_NAMES = Object.keys(REGIONI);
 
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-// formato numeri come RADIX: separatore migliaia sempre presente (2.577,25), decimali fissi
-const fmtN = (v, d) => { const [i, f] = Math.abs(Number(v)).toFixed(d).split('.'); return (Number(v) < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : ''); };
-const n = fmtN;
-const dotDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}.${String(x.getMonth() + 1).padStart(2, '0')}.${x.getFullYear()}`; };
-const UM = { M2: 'MQ', M3: 'M3', PZ: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CF', ROTOLO: 'RT', SACCO: 'SC', BIGBAG: 'BB' };
-const UL = { M2: 'm²', M3: 'm³', ML: 'ml', PZ: 'pz', KG: 'kg' };
-const discText = d => d.filter(x => x).map(x => n(x, x % 1 ? 1 : 0)).join('+');
-const customerCode = q => (q.customerId && !String(q.customerId).startsWith('H-') ? String(q.customerId) : '');
-
-// Righe aggiuntive di descrizione, come in RADIX: "(30,78m²/Pal)" e "4 bancali"
-function lineExtra(l) {
-  const out = [], pal = palletsFor(l);
-  if (l.palletQuantity > 0 && pal !== null) {
-    out.push(`(${n(l.palletQuantity, l.palletQuantity % 1 ? 3 : 0).replace(/0+$/, '').replace(/,$/, '')}${UL[l.unit] || l.unit.toLowerCase()}/Pal)`);
-    out.push(Math.abs(pal - Math.round(pal)) < 1e-6 ? `${Math.round(pal)} ${Math.round(pal) === 1 ? 'bancale' : 'bancali'}` : `circa ${n(pal, 1)} bancali`);
-  }
-  return out;
-}
-
-function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
-  const t = totals(q);
-  const created = q.createdAt ? new Date(q.createdAt) : now;
-  const until = new Date(created.getTime() + (q.validDays || 30) * 864e5);
-  const c = q.customer || {}, depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
-  const F = 'font-family:Verdana,Arial,Helvetica,sans-serif;color:#000';
-  const cell = 'padding:5px 4px;vertical-align:top;font-size:8.5pt';
-  const num = cell + ';text-align:right;white-space:nowrap';
-  const head = (x, right) => `<th style="background:#c8c8c8;font-size:7.5pt;font-weight:bold;padding:3px 4px;text-align:${right ? 'right' : 'left'}">${x}</th>`;
-  const block = (title, lines) => `<td style="width:33%;vertical-align:top;font-size:8.5pt;line-height:1.45;padding-right:10px">${title ? `<div style="font-weight:bold;margin-bottom:6px">${title}</div>` : ''}${lines.filter(Boolean).map(esc).join('<br>')}</td>`;
-  const row = (desc, code, um, qty, price, disc, amount) => `<tr><td style="${cell};width:40%">${desc}</td><td style="${cell}">${esc(code)}</td><td style="${cell}">${esc(um)}</td>`
-    + `<td style="${num}">${qty}</td><td style="${num}">${price}</td><td style="${num};text-align:center">${disc}</td><td style="${num}">${amount}</td></tr>`;
-  const site = String(q.site || '').trim();
-  const rows = q.lines.map(l => row([esc(l.description), ...lineExtra(l).map(esc)].join('<br>'), l.radixCode || l.listCode || '', UM[l.unit] || l.unit,
-    l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), n(l.listPrice, 3), discText(l.discounts), n(lineAmount(l), 2)));
-  if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), '', n(t.extras, 2)));
-  if (t.freight) rows.push(row(['Servizio di trasporto' + (q.freightNote ? ': ' + esc(q.freightNote) : '')].join(''), 'N14126', 'NR', '1,00', n(t.freight, 3), '', n(t.freight, 2)));
-  const notes = [];
-  if (depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO') notes.push(`Materiale disponibile per il ritiro presso:<br><b>${depot.pickup.map(esc).join('<br>')}</b><br><b>Prezzo franco partenza</b> dal deposito`);
-  if (t.freightPending && !(depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO')) notes.push('Trasporto: da definire.');   // ritiro al deposito: nessun trasporto
-  if (q.notes) notes.push(esc(q.notes).replace(/\n/g, '<br>'));
-  const noteRows = notes.map(x => `<tr><td colspan="7" style="${cell};padding-top:8px">${x}</td></tr>`).join('');
-  const tot = (k, v, bold) => `<tr><td style="font-size:8.5pt;padding:2px 4px">${k}</td><td style="font-size:8.5pt;padding:2px 4px;text-align:right${bold ? ';font-weight:bold' : ''}">${v}</td></tr>`;
-  const brand = header ? `<img src="${header}" alt="NORDTEX – For a better living" style="width:100%;display:block">`
-    : `<div style="font:italic 900 22pt Arial,sans-serif;letter-spacing:2px"><span style="color:#D40E41">NORD</span><span style="color:#676568">TEX</span> <span style="font:italic 400 12pt Georgia,serif;color:#333;letter-spacing:0">For a better living</span></div>`;
-  const foot = footer ? `<img src="${footer}" alt="Nordtex Srl" style="width:100%;display:block;margin-top:28px">`
-    : `<div style="margin-top:28px;font-size:7.5pt;color:#666;line-height:1.4"><b style="color:#D40E41">Nordtex Srl</b> · Società unipersonale · Via Prati all'Ospizio 6, 39043 Chiusa (BZ) · Tel. 0472 847 110 · info@nordtex.it · www.nordtex.it<br>P.I/C.F/RI BZ: 02623660988 · REA BZ-0189070 · Codice SDI: T04ZHR3</div>`;
-  return `<div class="nt-doc" style="${F};max-width:780px;margin:0 auto;background:#fff">
-${brand}
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px"><tr>
-${block('Deposito di uscita', depot.lines)}${block(site ? 'Cantiere' : '', site ? site.split('\n') : [])}
-<td style="width:34%;vertical-align:top;font-size:8.5pt;line-height:1.45"><div style="font-weight:bold;margin-bottom:6px">Spett.le<span style="float:right;font-weight:normal;font-size:7.5pt">${customerCode(q) ? '(' + esc(customerCode(q)) + ')' : ''}</span></div>${[c.name, c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' '), c.phone ? 'Tel.' + c.phone : '', c.email ? 'Email:' + c.email : '', c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean).map(esc).join('<br>')}</td>
-</tr></table>
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px"><tr><td style="background:#c8c8c8;width:58%;text-align:center;font-weight:bold;font-size:10pt;padding:4px">OFFERTA NR. ${esc(q.number || 'BOZZA')} - ${dotDate(created)}</td><td></td></tr></table>
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;border-collapse:collapse"><thead><tr>${head('Descrizione')}${head('Codice')}${head('U.M.')}${head('Quantità', 1)}${head('Prezzo', 1)}${head('Sconto %', 1)}${head('Imp.netto', 1)}</tr></thead>
-<tbody>${rows.join('')}${noteRows}</tbody></table>
-<table cellpadding="0" cellspacing="0" style="margin:14px 0 0 auto;width:42%;border-top:1px solid #000;border-collapse:collapse">
-${tot('Totale merce:', n(t.taxable, 2))}<tr><td colspan="2" style="height:10px"></td></tr>${tot('Totale imponibile:', n(t.taxable, 2))}${tot(`Totale iva${t.vatRate !== 22 ? ' (' + n(t.vatRate, 0) + '%)' : ''}:`, n(t.vat, 2))}${tot('Totale offerta:', n(t.total, 2), true)}</table>
-<div style="margin-top:40px;font-size:8.5pt;line-height:1.6">Prezzi al netto dell'IVA.<br>
-<table cellpadding="0" cellspacing="0" style="font-size:8.5pt"><tr><td style="padding-right:8px">Condizione di pagamento</td><td>: <b>${esc(q.payment || 'DA CONCORDARE')}</b></td></tr>
-<tr><td>Trasporto a cura</td><td>: <b>${esc(q.transportBy || 'DESTINATARIO')}</b></td></tr><tr><td>Validità</td><td>: <b>${dotDate(until)}</b></td></tr></table></div>
-<div style="margin-top:14px;font-size:8.5pt;font-weight:bold;text-decoration:underline;line-height:1.6">${CLAUSES.map(esc).join('<br>')}</div>
-<div style="margin-top:14px;font-size:8.5pt">Ringraziamo per la gradita richiesta e inviamo cordiali saluti</div>
-<div style="margin:6px 0 0 50%;font-weight:bold;font-size:10pt">NORDTEX SRL</div>
-${foot}
-</div>`;
-}
-
-function quoteFileName(q, now = new Date()) {
-  const d = q.createdAt ? new Date(q.createdAt) : now;
-  const clean = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
-  return [clean(q.customer?.name), customerCode(q), (/^OFF-\d{4}-\d+$/.test(q.number || '') ? q.number : 'OFF-' + clean(q.number || 'BOZZA')), d.toISOString().slice(0, 10)].filter(Boolean).join('_');
-}
-
-return { DEPOTS, TRANSPORT_BY, CLAUSES, fmtN, dotDate, UM, discText, customerCode, lineExtra, quoteDocHtml, quoteFileName };
-})();
-__m["js/core/mailto.js"] = (function () {
-const { totals } = __m["js/core/pricing.js"];
-const { DEPOTS, fmtN } = __m["js/core/quote-doc.js"];
-// Email preparata nel programma di posta di chi invia (Outlook, Mail, Gmail…): mittente = la casella personale.
-// Regola Direzione 31/10/2026: offerte e comunicazioni partono dalla posta dell'agente / di Tommaso / di Marco / di Christian.
-function mailtoUrl({ to = [], cc = [], bcc = [], subject = '', body = '' }) {
-  const list = a => [].concat(a).filter(Boolean).map(s => String(s).trim()).filter(Boolean).join(',');
-  const q = [];
-  if (list(cc)) q.push('cc=' + encodeURIComponent(list(cc)));
-  if (list(bcc)) q.push('bcc=' + encodeURIComponent(list(bcc)));
-  if (subject) q.push('subject=' + encodeURIComponent(subject));
-  if (body) q.push('body=' + encodeURIComponent(String(body).replace(/\r?\n/g, '\r\n')));
-  return 'mailto:' + list(to).split(',').map(encodeURIComponent).join(',') + (q.length ? '?' + q.join('&') : '');
-}
-// testo dell'email dell'offerta (solo testo: mailto non accetta formattazione né allegati; il PDF lo allega chi invia).
-// Niente firma: la aggiunge il programma di posta di chi invia (prova del 01/11: firma doppia in Outlook).
-const itDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`; };
-function quoteMailIntro(q, now = new Date()) {
-  return `Buongiorno,\n\ncome d'accordo vi inviamo in allegato la nostra offerta n. ${q.number} del ${itDate(q.createdAt || now)}.`;
-}
-function quoteMailSummary(q, now = new Date()) {
-  const t = totals(q);
-  const depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
-  const pickup = depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO';
-  const until = new Date(new Date(q.createdAt || now).getTime() + (q.validDays || 30) * 864e5);
-  const transport = pickup ? `franco deposito (${depot.pickup[0]})` : t.freightPending ? 'da definire'
-    : t.freight > 0 ? `compreso nell'offerta (${fmtN(t.freight, 2)} €)` : 'compreso';
-  return ['RIEPILOGO', `• Totale imponibile: ${fmtN(t.taxable, 2)} € + IVA`, `• Trasporto: ${transport}`,
-    `• Pagamento: ${q.payment || 'DA CONCORDARE'}`, `• Validità: fino al ${itDate(until)}`].join('\n');
-}
-function quoteMailBody(q, intro, sheets = '', now = new Date()) {
-  return [String(intro || '').trim(), quoteMailSummary(q, now), sheets, 'Restiamo a disposizione per qualsiasi chiarimento.\nCordiali saluti']
-    .filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n');
-}
-
-// apre il programma di posta senza lasciare la pagina (link temporaneo, niente navigazione)
-function openMailto(url) {
-  const a = document.createElement('a'); a.href = url; a.rel = 'noopener'; a.style.display = 'none';
-  document.body.append(a); a.click(); a.remove();
-}
-
-return { mailtoUrl, quoteMailIntro, quoteMailSummary, quoteMailBody, openMailto };
+return { regionOf, REGION_NAMES };
 })();
 __m["js/core/dictation.js"] = (function () {
 // Dettatura gratuita (richiesta Tommaso 01/11/2026): il riconoscimento vocale del browser/telefono scrive nel campo di testo.
@@ -2444,432 +2354,6 @@ async function statusDialog(app, c) {
 
 return { viewAgenda, quoteCls, noteDialog, noteVoice, dictateButton, newCustomerDialog };
 })();
-__m["js/views/board.js"] = (function () {
-const { h, dateIt, toast, modal, field, emptyState } = __m["js/ui.js"];
-const { openActions } = __m["js/views/actions.js"];
-const { mailtoUrl, openMailto } = __m["js/core/mailto.js"];
-const { noteDialog } = __m["js/views/agenda.js"];
-const { radixFollowupBlock } = __m["js/views/radix-offers.js"];
-// Bacheca: comunicazioni della Direzione (in app + email dalla casella di chi scrive) e follow-up.
-// Scrivono solo gli accessi Direzione con servizio comunicazioni (Tommaso, Marco); Christian legge soltanto.
-async function viewBoard(app) {
-  return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Bacheca'), h('p', { class: 'muted' }, 'Comunicazioni della Direzione e follow-up da svolgere.'))), await boardSection(app, () => app.go('bacheca')));
-}
-
-const agentNames = app => (app.store.assignees || []).map(a => a.name).filter(n => n !== 'Direzionale' && !/^EX_/.test(n)).sort();
-const audienceText = p => (p.audience?.length ? 'Per: ' + p.audience.join(', ') : 'Tutta la rete');
-
-async function boardSection(app, refresh) {
-  const isDir = app.session.role === 'direzione', canWrite = !!app.session.canCommunicate;
-  const [all, actions] = await Promise.all([app.store.posts(), openActions(app)]);
-  const posts = all.filter(p => p.kind !== 'follow-up');
-  const doneAssigned = all.filter(p => p.kind === 'follow-up' && p.doneAt).slice(0, 10);
-  const groups = [['scaduto', 'Scaduti'], ['oggi', 'Oggi'], ['in programma', 'In programma'], ['senza data', 'Senza data']];
-  const toggle = async a => {
-    try { if (a.assigned) await app.store.followupDone(a.id, true); else await app.store.toggleAction(a.note.id, a.id); toast('Follow-up completato'); refresh(); } catch (e) { toast(e.message, 'error'); }
-  };
-  const editor = (kind, p) => postDialog(app, kind, p).then(ok => ok && refresh());
-  const rxBlock = await radixFollowupBlock(app, refresh);
-  return h('div', { class: 'section-body' },
-    h('div', { class: 'grid2' },
-      h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'Comunicazioni'),
-          canWrite ? h('button', { class: 'btn small primary', onclick: () => editor('comunicazione') }, '+ Comunicazione') : null),
-        posts.length ? posts.map(p => h('div', { class: 'post' + (p.pinned ? ' pinned' : '') }, h('strong', {}, (p.pinned ? '📌 ' : '') + p.title), p.body ? h('p', {}, p.body) : null,
-          h('small', { class: 'muted' }, `${p.authorName} · ${dateIt(p.createdAt)}${p.due ? ' · scadenza ' + dateIt(p.due) : ''}`, isDir ? ` · ${audienceText(p)}` : ''),
-          isDir ? h('small', { class: 'mail-state' + (p.emailSentAt ? ' ok' : '') }, p.emailSentAt ? `✉ Email preparata per ${p.emailCount} ${p.emailCount === 1 ? 'agente' : 'agenti'} il ${dateIt(p.emailSentAt)}` : '✉ Email non ancora preparata') : null,
-          canWrite ? h('div', {}, h('button', { class: 'link', onclick: () => editor('comunicazione', p) }, 'Modifica'),
-            !p.emailSentAt ? [' · ', h('button', { class: 'link', onclick: () => sendMail(app, p).then(refresh) }, 'Prepara email')] : null) : null))
-          : emptyState(canWrite ? 'Pubblica una comunicazione per la rete: obiettivi, promozioni, scadenze.' : 'Nessuna comunicazione.')),
-      h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, isDir ? 'Follow-up della rete' : 'I miei follow-up'),
-          canWrite ? h('button', { class: 'btn small primary', onclick: () => editor('follow-up') }, '+ Follow-up a un agente') : null),
-        actions.length ? groups.map(([k, label]) => {
-          const rows = actions.filter(a => a.state === k); if (!rows.length) return null;
-          return h('div', { class: 'group' }, h('h3', {}, `${label} (${rows.length})`), h('ul', { class: 'checks' }, rows.map(a => h('li', {},
-            a.quoteReminder ? h('a', { href: '#/offerta/' + a.quoteReminder.quote.id, class: 'qrem ' + a.quoteReminder.kind }, a.quoteReminder.kind === 'esito' ? '⚠ ' : '☎ ', a.title)
-              : h('label', {}, h('input', { type: 'checkbox', onchange: () => toggle(a) }), h('span', {}, a.title)),
-            a.note.customerId ? h('a', { href: '#/agenda/' + a.note.customerId, class: 'muted' }, ` ${app.store.customer(a.note.customerId)?.name || ''}`) : null,
-            a.due ? h('span', { class: 'due ' + k.replace(' ', '-') }, dateIt(a.due)) : null,
-            a.assigned ? h('small', { class: 'tag-dir' }, isDir ? `assegnato a ${a.assigned.audience[0]} da ${a.assigned.authorName}` : `dalla Direzione · ${a.assigned.authorName}`)
-              : isDir ? h('small', { class: 'muted' }, ' · ' + a.note.authorName) : null,
-            a.assigned?.body ? h('div', { class: 'fine' }, a.assigned.body) : null,
-            a.assigned && canWrite ? h('button', { class: 'link', onclick: () => editor('follow-up', a.assigned) }, 'Modifica') : null))));
-        }) : rxBlock ? null : emptyState('Nessun follow-up aperto. Si creano con le note nella scheda cliente' + (canWrite ? ' o con "+ Follow-up a un agente".' : '.')),
-        rxBlock,
-        isDir && doneAssigned.length ? h('details', { class: 'done-list' }, h('summary', {}, `Follow-up assegnati completati (${doneAssigned.length})`),
-          h('ul', { class: 'checks' }, doneAssigned.map(p => h('li', { class: 'done' }, `${p.title} · ${p.audience[0]} · ${dateIt(p.doneAt)}`)))) : null)),
-    await radixCard(app, refresh));
-}
-
-// Note scritte in RADIX (ufficio, Direzione): promemoria con data non spuntati e note recenti.
-// RADIX resta la fonte: qui si leggono e, se serve, si trasformano in follow-up dell'app.
-async function radixCard(app, refresh) {
-  if (!app.store.radixNotes) return null;
-  const today = new Date().toISOString().slice(0, 10), d30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
-  const all = await app.store.radixNotes({ since: d30 }).catch(() => []);
-  // promemoria aperti da 30 giorni fa in avanti: quelli più vecchi non chiusi in RADIX sono ormai superati (Tommaso 01/11)
-  const todo = all.filter(n => n.appointment && !n.ok && n.appointment >= d30 && n.group !== 'Prezzi')   // nei Prezzi la data è la validità del prezzo, non un compito
-   .sort((a, b) => a.appointment.localeCompare(b.appointment));
-  const recent = all.filter(n => n.date >= d30 && !todo.includes(n)).sort((a, b) => b.date.localeCompare(a.date));
-  const cust = id => app.store.customer(id);
-  const toFollowup = async n => {
-    const c = cust(n.customerId); if (!c) return;
-    const ok = await noteDialog(app, c, { kind: n.group === 'Telefonata' ? 'Telefonata' : n.group === 'Visita' ? 'Visita' : 'Altro', fu: (n.subject || n.body).slice(0, 120),
-      due: n.appointment, body: `Da nota RADIX del ${dateIt(n.date)} (${n.authorName}): ${[n.subject, n.body].filter(Boolean).join(' — ')}` });
-    if (ok) refresh();
-  };
-  const item = (n, due) => { const c = cust(n.customerId); return h('li', { class: 'radix-item' },
-    h('div', {}, due ? h('span', { class: 'due ' + (n.appointment < today ? 'scaduto' : n.appointment === today ? 'oggi' : 'in-programma') }, dateIt(n.appointment)) : h('small', { class: 'muted' }, dateIt(n.date)),
-      ' ', h('a', { href: '#/agenda/' + n.customerId }, h('strong', {}, c?.name || 'Cliente')), h('small', { class: 'muted' }, ` · ${n.group} · ${n.authorName}`)),
-    h('div', { class: 'radix-text' }, [n.subject, n.body].filter(Boolean).join(' — ')),
-    !app.session.preview ? h('button', { class: 'link', onclick: () => toFollowup(n).catch(e => toast(e.message, 'error')) }, 'Crea follow-up') : null); };
-  return h('section', { class: 'card' }, h('h2', {}, 'Da RADIX: promemoria e note recenti'),
-    h('p', { class: 'muted' }, 'Le note scritte in RADIX da ufficio e Direzione, aggiornate a ogni esportazione. "Crea follow-up" le trasforma in un follow-up dell\'app; i promemoria si chiudono in RADIX (spunta OK).'),
-    todo.length ? [h('h3', {}, `Da fare (data in RADIX, non chiusi): ${todo.length}`), h('ul', { class: 'radix-list' }, todo.map(n => item(n, true)))] : null,
-    recent.length ? h('details', { class: 'radix-more', open: !todo.length }, h('summary', {}, `Note degli ultimi 30 giorni (${recent.length})`), h('ul', { class: 'radix-list' }, recent.map(n => item(n, false))))
-      : todo.length ? null : emptyState('Nessuna nota RADIX negli ultimi 30 giorni.'));
-}
-
-// Email della comunicazione dalla casella di chi scrive (Tommaso, Marco): agenti in copia nascosta, nessun servizio esterno
-async function sendMail(app, p) {
-  try {
-    const all = await app.store.agentEmails();
-    const list = p.audience?.length ? all.filter(a => p.audience.includes(a.label)) : all;
-    const missing = (p.audience?.length ? p.audience : (app.store.assignees || []).map(a => a.name).filter(n => n !== 'Direzionale' && !/^EX_/.test(n))).filter(l => !list.some(a => a.label === l));
-    if (!list.length) { toast('Email degli agenti non disponibili' + (app.store.mode === 'locale' ? ' in questa versione (ci sono nella versione online)' : ': collega prima gli accessi'), 'error'); return; }
-    const due = p.due ? `\nScadenza: ${p.due.split('-').reverse().join('/')}` : '';
-    const body = `${p.kind === 'follow-up' ? 'Follow-up assegnato a te' : 'Comunicazione della Direzione commerciale'}${due}\n\n${p.body || ''}\n\nLo trovi anche in NORDTEX HUB, Bacheca.\n\n${app.session.name}\nNORDTEX Srl`;
-    openMailto(mailtoUrl({ to: p.kind === 'follow-up' ? list.map(a => a.email) : [], bcc: p.kind === 'follow-up' ? [] : list.map(a => a.email), subject: `NORDTEX · ${p.kind === 'follow-up' ? 'Follow-up: ' : ''}${p.title}`, body }));
-    await app.store.markPostEmailed(p.id, list.length);
-    toast(`Email preparata per ${list.length} ${list.length === 1 ? 'agente' : 'agenti'} (in Ccn): inviala dal tuo programma di posta` + (missing.length ? ` · senza email: ${missing.join(', ')}` : ''));
-  } catch (e) { toast(e.message, 'error'); }
-}
-
-async function postDialog(app, kind, p = {}) {
-  const fu = kind === 'follow-up', agents = agentNames(app);
-  const title = h('input', { value: p.title || '', placeholder: fu ? 'es. Richiamare per offerta NATURHELD' : 'es. Promo fibra NATURHELD novembre' });
-  const body = h('textarea', { rows: fu ? 3 : 5 }, p.body || '');
-  const due = h('input', { type: 'date', value: p.due || '' });
-  const pinned = h('input', { type: 'checkbox', checked: !!p.pinned });
-  const email = h('input', { type: 'checkbox', checked: !p.emailSentAt });
-  // destinatari
-  const whole = h('input', { type: 'radio', name: 'aud', checked: !(p.audience?.length) });
-  const some = h('input', { type: 'radio', name: 'aud', checked: !!p.audience?.length });
-  const boxes = agents.map(a => h('label', { class: 'check' }, h('input', { type: 'checkbox', value: a, checked: p.audience?.includes(a) }), ' ' + a));
-  const list = h('div', { class: 'aud-list', hidden: !p.audience?.length }, boxes);
-  whole.onchange = some.onchange = () => { list.hidden = whole.checked; };
-  const agentSel = h('select', {}, h('option', { value: '' }, 'Scegli l\'agente…'), agents.map(a => h('option', { value: a, selected: p.audience?.[0] === a }, a)));
-  // cliente collegato al follow-up (facoltativo): clienti dell'agente scelto
-  const custIn = h('input', { list: 'fu-cust', placeholder: 'Facoltativo: scrivi il nome del cliente', value: p.customerId ? app.store.customer(p.customerId)?.name || '' : '' });
-  const dl = h('datalist', { id: 'fu-cust' });
-  let custMap = new Map();
-  const loadCust = async () => {
-    const cs = (await app.customers()).filter(c => !agentSel.value || c.assignee === agentSel.value);
-    custMap = new Map(cs.map(c => [`${c.name} · ${c.city || ''}`.trim(), c.id]));
-    dl.replaceChildren(...[...custMap.keys()].slice(0, 400).map(k => h('option', { value: k })));
-  };
-  agentSel.onchange = loadCust; if (fu) loadCust();
-  const resolveCust = () => { const v = custIn.value.trim(); if (!v) return null; const id = custMap.get(v) || [...custMap].find(([k]) => k.toLowerCase().startsWith(v.toLowerCase()))?.[1]; if (!id) throw new Error('Cliente non trovato tra quelli dell\'agente'); return id; };
-
-  const actions = [{ label: 'Annulla', value: false }];
-  if (p.id) actions.push({ label: 'Elimina', run: async () => { await app.store.deletePost(p.id); toast('Eliminato'); return true; } });
-  actions.push({ label: p.id ? 'Salva' : (fu ? 'Assegna' : 'Pubblica'), primary: true, run: async () => {
-    const audience = fu ? (agentSel.value ? [agentSel.value] : []) : (some.checked ? boxes.map(b => b.firstChild).filter(i => i.checked).map(i => i.value) : []);
-    if (fu && !audience.length) throw new Error('Scegli l\'agente');
-    if (!fu && some.checked && !audience.length) throw new Error('Scegli almeno un agente o "Tutta la rete"');
-    const rec = await app.store.savePost({ id: p.id, title: title.value, body: body.value, due: due.value || null, pinned: fu ? false : pinned.checked, kind: fu ? 'follow-up' : 'comunicazione', audience, customerId: fu ? resolveCust() : null });
-    toast(fu ? 'Follow-up assegnato' : 'Pubblicata in app');
-    if (email.checked) await sendMail(app, rec);
-    return true;
-  } });
-  const content = fu
-    ? h('div', { class: 'form' }, field('Agente', agentSel), field('Cosa deve fare', title), field('Dettagli (facoltativi)', body), field('Entro il', due), field('Cliente', h('div', {}, custIn, dl)),
-        h('label', { class: 'check' }, email, ` Prepara anche l'email per l'agente dalla tua casella`))
-    : h('div', { class: 'form' }, field('Titolo', title), field('Testo', body),
-        h('div', { class: 'field' }, h('span', {}, 'Destinatari'), h('label', { class: 'check' }, whole, ' Tutta la rete'), h('label', { class: 'check' }, some, ' Solo agenti scelti'), list),
-        field('Scadenza (facoltativa)', due), h('label', { class: 'check' }, pinned, ' In evidenza'),
-        h('label', { class: 'check' }, email, ` Prepara anche l'email agli agenti (in Ccn) dalla tua casella`));
-  return modal(p.id ? (fu ? 'Modifica follow-up' : 'Modifica comunicazione') : (fu ? 'Nuovo follow-up a un agente' : 'Nuova comunicazione'), content, actions);
-}
-
-return { viewBoard, boardSection };
-})();
-__m["js/core/margins.js"] = (function () {
-// Margine (solo Direzione) e provvigione agente sulle offerte.
-// Costo: "Prezzo acquisto RADIX" del Master (storico, attualità da verificare), usato solo se nella stessa unità di vendita.
-// Provvigione: regole impostate dalla Direzione (percentuale per fascia di sconto, generale o per agente).
-const { lineNet, lineAmount, totalDiscount, round2 } = __m["js/core/pricing.js"];
-const unit = s => ({ MQ: 'M2', MC: 'M3' }[String(s ?? '').toUpperCase().trim()] || String(s ?? '').toUpperCase().trim());
-
-function unitCost(p) {
-  if (!p || !(p.purchasePrice > 0)) return { cost: null, reason: 'Prezzo di acquisto non disponibile' };
-  if (unit(p.purchaseUnit) !== unit(p.saleUnit)) return { cost: null, reason: `Costo in ${p.purchaseUnit}, vendita in ${p.saleUnit}: serve conversione` };
-  return { cost: p.purchasePrice, reason: '' };
-}
-
-function quoteMargin(q, byId) {
-  let revenue = 0, cost = 0, covered = 0;
-  const lines = q.lines.map(l => {
-    const uc = unitCost(byId.get(l.productId));
-    const net = lineAmount(l);
-    if (uc.cost === null) return { productId: l.productId, net, cost: null, margin: null, pct: null, reason: uc.reason };
-    const c = round2(uc.cost * l.qty), m = round2(net - c);
-    revenue += net; cost += c; covered++;
-    return { productId: l.productId, net, unitCost: uc.cost, unitNet: lineNet(l), cost: c, margin: m, pct: net > 0 ? m / net * 100 : null, reason: '' };
-  });
-  const goods = round2(q.lines.reduce((s, l) => s + lineAmount(l), 0));
-  return { lines, covered, missing: q.lines.length - covered, revenue: round2(revenue), cost: round2(cost), margin: round2(revenue - cost),
-    pct: revenue > 0 ? (revenue - cost) / revenue * 100 : null, complete: covered === q.lines.length, goods };
-}
-
-// rules = { default: { bands: [{ maxDiscount, rate }] }, agents: { 'Nonini Manuel': { bands } } }; fasce ordinate per sconto massimo
-function validateBands(bands) {
-  if (!Array.isArray(bands) || !bands.length) throw new Error('Inserisci almeno una fascia');
-  let prev = -1;
-  for (const b of bands) {
-    if (!(Number.isFinite(b.maxDiscount) && b.maxDiscount >= 0 && b.maxDiscount <= 100)) throw new Error('Sconto massimo della fascia non valido (0–100%)');
-    if (!(Number.isFinite(b.rate) && b.rate >= 0 && b.rate <= 30)) throw new Error('Provvigione non valida (0–30%)');
-    if (b.maxDiscount <= prev) throw new Error('Le fasce vanno in ordine crescente di sconto');
-    prev = b.maxDiscount;
-  }
-  return bands;
-}
-
-// Regola 2026 decisa dalla Direzione (doc. "NORDTEX Condizioni Agenzie di Commercio – Listino Sconti Massimi e Provvigioni 2026"):
-// uguale per tutte le classi merceologiche; sconto fino al 30% → 8%, fino al 40% → 7%, fino a 50+5 (52,5% complessivo, massimo previsto) → 5%;
-// oltre 50+5 → 3% (precisazione Direzione 31/10/2026).
-const DEFAULT_COMMISSION_RULES = Object.freeze({
-  source: 'Condizioni Agenzie di Commercio 2026',
-  default: { bands: [{ maxDiscount: 30, rate: 8 }, { maxDiscount: 40, rate: 7 }, { maxDiscount: 52.5, rate: 5 }, { maxDiscount: 100, rate: 3 }] },
-  agents: {},
-});
-const effectiveRules = rules => (rules?.default?.bands?.length ? rules : { ...DEFAULT_COMMISSION_RULES, agents: rules?.agents || {} });
-
-function bandsFor(rules, assignee) { const r = effectiveRules(rules); return r.agents?.[assignee]?.bands || r.default.bands; }
-
-function commissionRate(bands, discountPct) {
-  if (!bands?.length) return null;
-  const b = bands.find(x => discountPct <= x.maxDiscount + 1e-9);
-  return b ? b.rate : 0;   // oltre l'ultima fascia: nessuna provvigione salvo regola diversa
-}
-
-function quoteCommission(q, rules, assignee) {
-  const bands = bandsFor(rules, assignee);
-  if (!bands) return { configured: false, amount: null, lines: [] };
-  const lines = q.lines.map(l => { const d = totalDiscount(l.discounts), rate = commissionRate(bands, d), net = lineAmount(l); return { productId: l.productId, discount: d, rate, net, amount: round2(net * rate / 100) }; });
-  const amount = round2(lines.reduce((s, x) => s + x.amount, 0)), base = round2(lines.reduce((s, x) => s + x.net, 0));
-  return { configured: true, amount, base, avgRate: base > 0 ? amount / base * 100 : 0, lines, custom: !!rules?.agents?.[assignee], isDefault: !rules?.default?.bands?.length };
-}
-
-return { unitCost, quoteMargin, validateBands, DEFAULT_COMMISSION_RULES, effectiveRules, bandsFor, commissionRate, quoteCommission };
-})();
-__m["js/views/direction.js"] = (function () {
-const { h, fill, eur, dateIt, dateTimeIt, emptyState, toast, modal } = __m["js/ui.js"];
-const { quoteCls } = __m["js/views/agenda.js"];
-const { validateBands, effectiveRules } = __m["js/core/margins.js"];
-const feedState = { assignee: '', days: 30, type: '' };
-
-async function viewNetwork(app) {
-  return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Attività della rete'), h('p', { class: 'muted' }, 'Note, visite, telefonate e offerte di tutti gli agenti.'))), await networkSection(app, () => app.go('rete')));
-}
-
-const TYPES = [['', 'Tutte le attività'], ['nota', 'Note, visite, telefonate'], ['radix', 'Note da RADIX'], ['follow', 'Follow-up'], ['offerta', 'Offerte'], ['invio', 'Offerte inviate'], ['stato', 'Cambi di stato'], ['cliente', 'Nuovi clienti']];
-
-// Tutto quello che fanno i commerciali, in ordine di tempo
-async function networkSection(app, refresh) {
-  const since = new Date(Date.now() - feedState.days * 864e5).toISOString();
-  const [notes, quotes, customers, statusChanges, sends, radix] = await Promise.all([app.store.notes(), app.store.quotes(), app.customers(),
-    app.store.statusChanges ? app.store.statusChanges() : [], app.store.quoteSends ? app.store.quoteSends() : [],
-    app.store.radixNotes ? app.store.radixNotes({ since: since.slice(0, 10) }).catch(() => []) : []]);
-  const cust = id => app.store.customer(id);
-  const qById = new Map(quotes.map(q => [q.id, q]));
-  const events = [
-    ...notes.map(n => ({ type: 'nota', at: n.createdAt, who: n.authorName, cust: cust(n.customerId), kind: n.kind, text: n.body, extra: [n.outcome, ...n.actions.map(a => `follow-up: ${a.title}${a.due ? ' entro ' + dateIt(a.due) : ''}`)].filter(Boolean).join(' · '), href: '#/agenda/' + n.customerId })),
-    ...notes.flatMap(n => n.actions.filter(a => a.done && a.doneAt).map(a => ({ type: 'follow', at: a.doneAt, who: n.authorName, cust: cust(n.customerId), kind: 'Follow-up fatto', text: a.title, href: '#/agenda/' + n.customerId }))),
-    ...quotes.map(q => ({ type: 'offerta', at: q.createdAt || q.updatedAt, who: q.ownerName, cust: cust(q.customerId), kind: 'Offerta', text: `${q.number} creata`, extra: eur(q.total), href: '#/offerta/' + q.id, status: q.status })),
-    ...quotes.filter(q => q.updatedAt && q.createdAt && q.updatedAt > q.createdAt && q.status !== 'Bozza').map(q => ({ type: 'offerta', at: q.updatedAt, who: q.ownerName, cust: cust(q.customerId), kind: 'Offerta ' + q.status.toLowerCase(), text: q.number, extra: eur(q.total), href: '#/offerta/' + q.id, status: q.status })),
-    ...sends.map(x => { const q = qById.get(x.quoteId); return { type: 'invio', at: x.at, who: x.byName, cust: q ? cust(q.customerId) : null, kind: 'Offerta inviata', text: `${q?.number || ''} a ${x.to}`, extra: eur(x.total), href: q ? '#/offerta/' + q.id : '#/preventivi', status: 'Inviata' }; }),
-    ...radix.filter(n => n.date >= since.slice(0, 10)).map(n => ({ type: 'radix', at: n.date + 'T12:00:00', who: n.authorName + ' · da RADIX', cust: cust(n.customerId), kind: 'RADIX · ' + n.group,
-      text: [n.subject, n.body].filter(Boolean).join(' — '), extra: n.appointment && !n.ok ? 'da fare entro ' + dateIt(n.appointment) : '', href: '#/agenda/' + n.customerId })),
-    ...statusChanges.map(x => ({ type: 'stato', at: x.at, who: x.byName, cust: cust(x.customerId), kind: 'Stato: ' + x.status, text: x.reason, href: '#/agenda/' + x.customerId })),
-    ...customers.filter(c => c.origin === 'HUB' && c.createdAt).map(c => ({ type: 'cliente', at: c.createdAt, who: c.createdByName || '', cust: c, kind: 'Nuovo cliente', text: [c.city, c.prov].filter(Boolean).join(' '), href: '#/agenda/' + c.id })),
-  ].filter(e => e.at >= since && (!feedState.assignee || e.cust?.assignee === feedState.assignee) && (!feedState.type || e.type === feedState.type)).sort((a, b) => b.at.localeCompare(a.at));
-  const assignees = [...new Set(customers.map(c => c.assignee))].sort();
-  return h('div', { class: 'section-body' },
-    h('div', { class: 'list-tools row' },
-      h('select', { 'aria-label': 'Assegnatario', onchange: e => { feedState.assignee = e.target.value; refresh(); } }, h('option', { value: '' }, 'Tutta la rete'), assignees.map(a => h('option', { selected: a === feedState.assignee }, a))),
-      h('select', { 'aria-label': 'Tipo', onchange: e => { feedState.type = e.target.value; refresh(); } }, TYPES.map(([v, l]) => h('option', { value: v, selected: v === feedState.type }, l))),
-      h('select', { 'aria-label': 'Periodo', onchange: e => { feedState.days = +e.target.value; refresh(); } }, [7, 30, 90, 365].map(d => h('option', { value: d, selected: d === feedState.days }, `Ultimi ${d} giorni`)))),
-    h('small', { class: 'muted' }, `${events.length} attività`),
-    events.length ? h('ol', { class: 'timeline card' }, events.slice(0, 300).map(e => h('li', {}, h('a', { href: e.href, class: 'plain' },
-      h('div', { class: 'tl-head' }, h('span', { class: 'badge ' + (e.status ? quoteCls(e.status) : e.type === 'stato' ? 'info' : 'muted') }, e.kind), h('strong', {}, e.cust?.name || ''), h('small', { class: 'muted' }, `${dateTimeIt(e.at)} · ${e.who || ''} · ${e.cust?.assignee || ''}`)),
-      h('p', {}, e.text, e.extra ? h('span', { class: 'muted' }, ' — ' + e.extra) : null)))))
-      : h('div', { class: 'card' }, emptyState('Nessuna attività nel periodo selezionato.')));
-}
-
-async function viewManager(app) {
-  return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Area manager'), h('p', { class: 'muted' }, 'Portafoglio, presidio e offerte per assegnatario.'))), await managerSection(app));
-}
-
-// Accessi all'app: ultima apertura e frequenza d'uso per persona (solo Direzione, solo versione online)
-const agoIt = iso => {
-  if (!iso) return 'mai';
-  const d = new Date(iso), days = Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(iso).setHours(0, 0, 0, 0)) / 864e5);
-  const hm = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-  return days <= 0 ? 'oggi ' + hm : days === 1 ? 'ieri ' + hm : days < 7 ? `${days} giorni fa` : dateIt(iso.slice(0, 10));
-};
-// Riquadro chiuso in fondo all'Area manager: i dati si caricano solo quando lo si apre
-function accessCard(app) {
-  const body = h('div', {});
-  const box = h('details', { class: 'card fold-box' }, h('summary', {}, 'Accessi all\'app'), body);
-  let loaded = false;
-  box.addEventListener('toggle', async () => {
-    if (!box.open || loaded) return;
-    loaded = true; fill(body, h('p', { class: 'muted' }, 'Caricamento…'));
-    const rows = app.store.accessSummary ? await app.store.accessSummary() : null;
-    if (!rows) { loaded = false; fill(body, h('p', { class: 'muted' }, app.store.mode === 'supabase'
-      ? 'Registro accessi non disponibile: serve l\'aggiornamento del database (file 06).' : 'Il registro accessi è disponibile solo nella versione online.')); return; }
-    const th = (...xs) => h('tr', {}, xs.map(x => h('th', { class: x.n ? 'num' : '' }, x.t || x)));
-    fill(body, h('p', { class: 'muted' }, 'Una apertura = l\'app aperta o ripresa dopo almeno 15 minuti. "Ultimo login" = ultima volta con email e password.'),
-      h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
-        h('thead', {}, th('Persona', 'Ultima apertura', 'Dispositivo', { t: 'Aperture 7 gg', n: 1 }, { t: 'Aperture 30 gg', n: 1 }, { t: 'Giorni d\'uso 30 gg', n: 1 }, 'Ultimo login', 'Accesso')),
-        h('tbody', {}, rows.map(r => h('tr', { class: r.active ? '' : 'muted' },
-          h('td', {}, h('strong', {}, r.name), h('br'), h('small', { class: 'muted' }, (r.role === 'direzione' ? 'Direzione' : 'Agente') + (r.active ? '' : ' · disattivato'))),
-          h('td', {}, h('span', { class: r.lastOpen ? '' : 'warn-text' }, agoIt(r.lastOpen))), h('td', {}, r.device || '—'),
-          h('td', { class: 'num' }, r.opens7), h('td', { class: 'num' }, r.opens30), h('td', { class: 'num' }, r.days30),
-          h('td', {}, r.lastSignIn ? dateTimeIt(r.lastSignIn) : 'mai'),
-          h('td', {}, r.userId === app.session.userId ? h('small', { class: 'muted' }, 'tu') : h('button', { class: 'btn small' + (r.active ? ' ghost' : ''), onclick: () => toggleUser(r) }, r.active ? 'Disattiva' : 'Riattiva'))))))));
-  });
-  // Disattiva subito l'accesso (telefono perso, agente che lascia): il database blocca ogni dato al profilo non attivo
-  async function toggleUser(r) {
-    const ok = await modal(r.active ? `Disattivare l'accesso di ${r.name}?` : `Riattivare l'accesso di ${r.name}?`,
-      h('p', {}, r.active ? 'Da subito non vede più clienti, offerte e note, su qualsiasi dispositivo. I suoi dati restano e potrai riattivarlo quando vuoi.' : 'Potrà di nuovo entrare con la sua email e password.'),
-      [{ label: 'Annulla', value: false }, { label: r.active ? 'Disattiva' : 'Riattiva', primary: true, value: true }]);
-    if (!ok) return;
-    try { await app.store.setUserActive(r.userId, !r.active); toast(r.active ? 'Accesso disattivato' : 'Accesso riattivato'); loaded = false; box.dispatchEvent(new Event('toggle')); }
-    catch (e) { toast(e.message, 'error'); }
-  }
-  return box;
-}
-
-// Copia di sicurezza: tutto ciò che si crea nell'app (offerte, note, ordini, referenti, bacheca) in un file da conservare
-function backupCard(app) {
-  const go = async () => {
-    try {
-      const data = await app.store.dataCopy();
-      if (!data) throw new Error('Copia non disponibile in anteprima');
-      const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' })), download: `NORDTEX_HUB_copia_dati_${new Date().toISOString().slice(0, 10)}.json` });
-      document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-      toast(`Copia scaricata: ${data.quotes?.length ?? 0} offerte, ${data.notes?.length ?? 0} note`);
-    } catch (e) { toast(e.message, 'error'); }
-  };
-  return h('details', { class: 'card fold-box' }, h('summary', {}, 'Copia di sicurezza dei dati'),
-    h('p', { class: 'muted' }, 'Scarica in un file tutto ciò che si crea nell\'app: offerte, note e follow-up, ordini, referenti, comunicazioni. Consiglio: una volta a settimana, da conservare sul computer.'),
-    h('button', { class: 'btn primary', onclick: go }, 'Scarica copia dei dati'));
-}
-
-// Regole provvigioni: fasce di sconto complessivo → percentuale sulla merce netta; generali o per singolo agente
-async function commissionCard(app, refresh) {
-  const stored = await app.store.getSetting('commissions').catch(() => null);
-  const rules = structuredClone(effectiveRules(stored));   // senza regole salvate: Condizioni agenti 2026
-  const agents = (app.store.assignees || []).map(a => a.name).filter(n => n !== 'Direzionale').sort();
-  let target = '';
-  const box = h('div', {});
-  const draw = () => {
-    const cur = (target ? rules.agents?.[target]?.bands : rules.default?.bands) || [];
-    const rows = (cur.length ? cur : [{ maxDiscount: '', rate: '' }]).map(b => ({ ...b }));
-    const body = h('tbody');
-    const drawRows = () => fill(body, rows.map((b, i) => h('tr', {},
-      h('td', {}, 'fino a ', h('input', { type: 'number', min: 0, max: 100, step: 0.5, value: b.maxDiscount, class: 'num-in', 'aria-label': 'Sconto massimo', onchange: e => { b.maxDiscount = e.target.value === '' ? '' : +e.target.value; } }), ' % di sconto'),
-      h('td', {}, h('input', { type: 'number', min: 0, max: 30, step: 0.25, value: b.rate, class: 'num-in', 'aria-label': 'Provvigione', onchange: e => { b.rate = e.target.value === '' ? '' : +e.target.value; } }), ' % provvigione'),
-      h('td', {}, rows.length > 1 ? h('button', { class: 'icon-btn', 'aria-label': 'Togli fascia', onclick: () => { rows.splice(i, 1); drawRows(); } }, '✕') : null))));
-    drawRows();
-    const save = async () => {
-      try {
-        const bands = validateBands(rows.filter(r => r.maxDiscount !== '' || r.rate !== '').map(r => ({ maxDiscount: +r.maxDiscount, rate: +r.rate })));
-        if (target) { rules.agents = rules.agents || {}; rules.agents[target] = { bands }; } else rules.default = { bands };
-        await app.store.setSetting('commissions', rules); toast('Regole provvigioni salvate'); draw();
-      } catch (e) { toast(e.message, 'error'); }
-    };
-    fill(box,
-      h('div', { class: 'list-tools row' }, h('select', { 'aria-label': 'Agente', onchange: e => { target = e.target.value; draw(); } },
-        h('option', { value: '' }, 'Regola generale (tutti gli agenti)'), agents.map(a => h('option', { value: a, selected: a === target }, a + (rules.agents?.[a] ? ' · personalizzata' : ''))))),
-      target && !rules.agents?.[target] ? h('p', { class: 'muted' }, 'Questo agente usa la regola generale. Inserisci le fasce per personalizzarla.') : null,
-      h('table', { class: 'table compact' }, body),
-      h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => { rows.push({ maxDiscount: '', rate: '' }); drawRows(); } }, '+ Fascia'),
-        h('button', { class: 'btn small primary', onclick: save }, 'Salva regole'),
-        target && rules.agents?.[target] ? h('button', { class: 'btn small ghost', onclick: async () => { delete rules.agents[target]; await app.store.setSetting('commissions', rules); toast('Torna alla regola generale'); draw(); } }, 'Usa regola generale') : null),
-      !stored?.default?.bands?.length && !target ? h('p', { class: 'info-text' }, 'In uso la regola delle Condizioni Agenzie di Commercio 2026 (uguale per tutte le classi merceologiche). Modificala e salva solo se cambia.') : null,
-      h('p', { class: 'fine' }, 'La provvigione si calcola riga per riga sulla merce netta, in base allo sconto complessivo della riga. Fascia 52,5% = sconto 50+5. Oltre 50+5: provvigione 3% e condizioni da autorizzare. Premio di fine anno 2% oltre € 500.000 di fatturato annuo (trasporti e servizi esclusi), riconosciuto a consuntivo sul fatturato incassato. Gli agenti vedono solo la propria provvigione.'));
-  };
-  draw();
-  return h('details', { class: 'card fold-box' }, h('summary', {}, 'Regole provvigioni'), box);
-}
-
-async function managerSection(app) {
-  const d30 = new Date(Date.now() - 30 * 864e5).toISOString(), today = new Date().toISOString().slice(0, 10);
-  // anche offerte aperte e note importate da RADIX (01/11): altrimenti il portafoglio mostra 0 finché non si usa l'app
-  const [customers, notes, quotes, rxOffers, rxNotes] = await Promise.all([app.customers(), app.store.notes(), app.store.quotes(),
-    app.store.radixOffers ? app.store.radixOffers().catch(() => []) : [], app.store.radixNotes ? app.store.radixNotes({ since: d30.slice(0, 10) }).catch(() => []) : []]);
-  const roles = new Map(app.store.assignees.map(a => [a.name, a]));
-  const rows = [...new Set(customers.map(c => c.assignee))].map(name => {
-    const cs = customers.filter(c => c.assignee === name), ids = new Set(cs.map(c => c.id));
-    const ns = notes.filter(n => ids.has(n.customerId)), qs = quotes.filter(q => ids.has(q.customerId));
-    const open = qs.filter(q => q.status === 'Bozza' || q.status === 'Inviata');
-    const rx = rxOffers.filter(o => ids.has(o.customerId)), rxOpen = rx.filter(o => o.outcome === 'Da seguire' || o.outcome === 'Sentito');
-    const rxN = rxNotes.filter(x => ids.has(x.customerId) && x.date >= d30.slice(0, 10)).length;
-    const n = st => cs.filter(c => c.status === st).length;
-    return { name, role: roles.get(name)?.role || '', provinces: roles.get(name)?.provinces || '', total: cs.length, active: n('Attivo'), recover: n('Da recuperare'), lost: n('Perso'), never: n('Mai fatturato'),
-      notes30: ns.filter(x => x.createdAt >= d30).length + rxN, notesRx: rxN, overdue: ns.flatMap(x => x.actions || []).filter(a => !a.done && a.due && a.due < today).length,
-      openQ: open.length + rxOpen.length, openRx: rxOpen.length, openValue: open.reduce((t, q) => t + (q.total || 0), 0) + rxOpen.reduce((t, o) => t + (o.total || 0), 0),
-      won: qs.filter(q => q.status === 'Accettata').reduce((t, q) => t + (q.total || 0), 0) + rx.filter(o => o.outcome === 'Accettata').reduce((t, o) => t + (o.total || 0), 0) };
-  }).sort((a, b) => b.active + b.recover - (a.active + a.recover));
-  const sum = k => rows.reduce((t, r) => t + r[k], 0);
-  const commissions = await commissionCard(app);
-  return h('div', { class: 'section-body' },
-    h('section', { class: 'card' }, h('h2', {}, 'Portafoglio per assegnatario'),
-      h('p', { class: 'muted' }, 'Clienti, stato e attività di ciascun agente e consulente (comprese note e offerte aperte importate da RADIX, contate sul cliente). Tocca un nome per vedere i numeri.'),
-      h('div', { class: 'pf-list' }, rows.map(r => h('details', {},
-        h('summary', {}, h('strong', {}, r.name), r.role && r.role !== r.name ? h('small', { class: 'muted' }, r.role) : null),
-        h('dl', { class: 'pf-grid' }, [['Zona', r.provinces || '—'], ['Clienti', r.total], ['Attivi', r.active], ['Da recuperare', r.recover], ['Persi', r.lost], ['Mai fatturato', r.never],
-          ['Note ultimi 30 gg', r.notesRx ? `${r.notes30} (${r.notesRx} RADIX)` : r.notes30], ['Follow-up scaduti', r.overdue, r.overdue ? 'bad-text' : ''],
-          ['Offerte aperte', `${r.openQ} · ${eur(r.openValue)}` + (r.openRx ? ` (${r.openRx} RADIX)` : '')], ['Offerte accettate', eur(r.won)]]
-          .map(([l, v, cls]) => h('div', {}, h('dt', {}, l), h('dd', { class: cls || '' }, typeof v === 'number' ? v.toLocaleString('it-IT') : v)))))))),
-    rows.length ? null : emptyState('Nessun dato.'), commissions, accessCard(app), backupCard(app));
-}
-
-return { viewNetwork, networkSection, viewManager, managerSection };
-})();
-__m["js/core/geo.js"] = (function () {
-// Sigla provincia -> regione (nomi come nelle tabelle trasporto del listino n.05)
-const REGIONI = {
-  'Piemonte': 'TO VC NO CN AT AL BI VB',
-  "Valle d'Aosta": 'AO',
-  'Lombardia': 'VA CO SO MI BG BS PV CR MN LC LO MB',
-  'Trentino-Alto Adige': 'BZ TN',
-  'Veneto': 'VR VI BL TV VE PD RO',
-  'Friuli-Venezia Giulia': 'UD GO TS PN',
-  'Liguria': 'IM SV GE SP',
-  'Emilia-Romagna': 'PC PR RE MO BO FE RA FC RN',
-  'Toscana': 'MS LU PT FI LI PI AR SI GR PO',
-  'Umbria': 'PG TR',
-  'Marche': 'PU AN MC AP FM',
-  'Lazio': 'VT RI RM LT FR',
-  'Abruzzo': 'AQ TE PE CH',
-  'Molise': 'CB IS',
-  'Campania': 'CE BN NA AV SA',
-  'Puglia': 'FG BA TA BR LE BT',
-  'Basilicata': 'PZ MT',
-  'Calabria': 'CS CZ RC KR VV',
-  'Sicilia': 'TP PA ME AG CL EN CT RG SR',
-  'Sardegna': 'SS NU CA OR SU',
-};
-const P2R = {};
-for (const [r, ps] of Object.entries(REGIONI)) for (const p of ps.split(' ')) P2R[p] = r;
-function regionOf(prov) { return P2R[String(prov || '').toUpperCase()] || (String(prov).toUpperCase() === 'EE' ? 'Estero' : ''); }
-const REGION_NAMES = Object.keys(REGIONI);
-
-return { regionOf, REGION_NAMES };
-})();
 __m["js/core/pdf-fonts.js"] = (function () {
 // Larghezze dei caratteri Helvetica / Helvetica-Bold (font standard PDF, nessun file da incorporare), codici WinAnsi 32-255, in millesimi di punto.
 // Estratte dalle metriche AFM standard (reportlab) con tools: non modificare a mano.
@@ -2987,6 +2471,106 @@ class PdfDoc {
 
 return { toWinAnsi, textWidth, wrapText, jpegSize, PdfDoc };
 })();
+__m["js/core/quote-doc.js"] = (function () {
+// Documento offerta nel formato NORDTEX/RADIX (modello: offerte 1051, 1313, 1324 del 2026, Crystal Reports):
+// testata con logo, Deposito di uscita · Cantiere · Spett.le (codice cliente), barra "OFFERTA NR. … - data",
+// righe Descrizione/Codice/U.M./Quantità/Prezzo/Sconto %/Imp.netto, totali, condizioni, clausole, piè di pagina aziendale.
+// Modulo puro (stringa HTML con stili in linea): stampa/PDF nell'app ed email dalla funzione server.
+const { totals, lineAmount, palletsFor } = __m["js/core/pricing.js"];
+// Depositi NORDTEX: elenco e indirizzi dal sito nordtex.it (31/10/2026); telefoni di Lecco e Polymax dalle offerte RADIX
+const DEPOTS = {
+  diretta: { label: 'Consegna diretta dal produttore', lines: ['CONSEGNA DIRETTA'] },
+  SEDE: { label: 'Sede NORDTEX – Chiusa (BZ)', lines: ['SEDE NORDTEX', "PRATO DELL'OSPIZIO", '39043 CHIUSA (BZ)'], pickup: ['Sede NORDTEX', "Prato dell'Ospizio", 'IT-39043 Chiusa (BZ)'] },
+  LECCO: { label: 'Deposito Lecco – Fornaci Giussani (Inverigo CO)', lines: ['DEPOSITO LECCO -', 'FORNACI GIUSSANI', 'VIA ARISTIDE MAGNI 98', '22044 INVERIGO (CO)', 'Tel:031607100'],
+    pickup: ['Fornace Giussani', 'Via Aristide Magni, 98', 'IT-22044 Inverigo (CO)'] },
+  CASALE: { label: 'Deposito Piemonte – Savallo Autotrasporti (Casale Monferrato AL)', lines: ['DEPOSITO PIEMONTE -', 'SAVALLO AUTOTRASPORTI', 'STRADA VALENZA 7', '15033 CASALE MONFERRATO (AL)'],
+    pickup: ['Savallo Autotrasporti', 'Strada Valenza, 7', 'IT-15033 Casale Monferrato (AL)'] },
+  CASTELFRAN: { label: 'Deposito Veneto – Polymax Italia (Castelfranco Veneto TV)', lines: ['POLYMAX', 'VIA FUSINA 12', '31033 CASTELFRANCO', 'VENETO (TV)', 'Tel:0423493544', 'Fax:0423497841'],
+    pickup: ['Polymax', 'Via Fusina 12', 'IT-31033 Castelfranco Veneto (TV)'] },
+  TORRI: { label: 'Deposito Veneto – Loewenstark (Torri di Quartesolo VI)', lines: ['DEPOSITO VENETO -', 'LOEWENSTARK SRL', 'VIA CAMISANA 15', '36040 TORRI DI QUARTESOLO (VI)'],
+    pickup: ['Loewenstark srl', 'Via Camisana, 15', 'IT-36040 Torri di Quartesolo (VI)'] },
+  MARCHE: { label: 'Deposito Marche – SPEA Tecnologie Edili (Morrovalle MC)', lines: ['DEPOSITO MARCHE -', 'SPEA TECNOLOGIE EDILI SRL', 'CONTRADA SARROCCIANO', '62010 MORROVALLE (MC)'],
+    pickup: ['SPEA Tecnologie Edili srl', 'Contrada Sarrocciano', 'IT-62010 Morrovalle (MC)'] },
+};
+const TRANSPORT_BY = ['DESTINATARIO', 'VETTORE', 'MITTENTE'];
+const CLAUSES = ['Quotazioni valide salvo variazioni imposte dal produttore/fornitore. Non si accettano resi.', 'Non ci assumiamo responsabilità per ritardi e danni nelle consegne dovute ai vettori.'];
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// formato numeri come RADIX: separatore migliaia sempre presente (2.577,25), decimali fissi
+const fmtN = (v, d) => { const [i, f] = Math.abs(Number(v)).toFixed(d).split('.'); return (Number(v) < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : ''); };
+const n = fmtN;
+const dotDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}.${String(x.getMonth() + 1).padStart(2, '0')}.${x.getFullYear()}`; };
+const UM = { M2: 'MQ', M3: 'M3', PZ: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CF', ROTOLO: 'RT', SACCO: 'SC', BIGBAG: 'BB' };
+const UL = { M2: 'm²', M3: 'm³', ML: 'ml', PZ: 'pz', KG: 'kg' };
+const discText = d => d.filter(x => x).map(x => n(x, x % 1 ? 1 : 0)).join('+');
+const customerCode = q => (q.customerId && !String(q.customerId).startsWith('H-') ? String(q.customerId) : '');
+
+// Righe aggiuntive di descrizione, come in RADIX: "(30,78m²/Pal)" e "4 bancali"
+function lineExtra(l) {
+  const out = [], pal = palletsFor(l);
+  if (l.palletQuantity > 0 && pal !== null) {
+    out.push(`(${n(l.palletQuantity, l.palletQuantity % 1 ? 3 : 0).replace(/0+$/, '').replace(/,$/, '')}${UL[l.unit] || l.unit.toLowerCase()}/Pal)`);
+    out.push(Math.abs(pal - Math.round(pal)) < 1e-6 ? `${Math.round(pal)} ${Math.round(pal) === 1 ? 'bancale' : 'bancali'}` : `circa ${n(pal, 1)} bancali`);
+  }
+  return out;
+}
+
+function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
+  const t = totals(q);
+  const created = q.createdAt ? new Date(q.createdAt) : now;
+  const until = new Date(created.getTime() + (q.validDays || 30) * 864e5);
+  const c = q.customer || {}, depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
+  const F = 'font-family:Verdana,Arial,Helvetica,sans-serif;color:#000';
+  const cell = 'padding:5px 4px;vertical-align:top;font-size:8.5pt';
+  const num = cell + ';text-align:right;white-space:nowrap';
+  const head = (x, right) => `<th style="background:#c8c8c8;font-size:7.5pt;font-weight:bold;padding:3px 4px;text-align:${right ? 'right' : 'left'}">${x}</th>`;
+  const block = (title, lines) => `<td style="width:33%;vertical-align:top;font-size:8.5pt;line-height:1.45;padding-right:10px">${title ? `<div style="font-weight:bold;margin-bottom:6px">${title}</div>` : ''}${lines.filter(Boolean).map(esc).join('<br>')}</td>`;
+  const row = (desc, code, um, qty, price, disc, amount) => `<tr><td style="${cell};width:40%">${desc}</td><td style="${cell}">${esc(code)}</td><td style="${cell}">${esc(um)}</td>`
+    + `<td style="${num}">${qty}</td><td style="${num}">${price}</td><td style="${num};text-align:center">${disc}</td><td style="${num}">${amount}</td></tr>`;
+  const site = String(q.site || '').trim();
+  const rows = q.lines.map(l => row([esc(l.description), ...lineExtra(l).map(esc)].join('<br>'), l.radixCode || l.listCode || '', UM[l.unit] || l.unit,
+    l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), n(l.listPrice, 3), discText(l.discounts), n(lineAmount(l), 2)));
+  if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), '', n(t.extras, 2)));
+  if (t.freight) rows.push(row(['Servizio di trasporto' + (q.freightNote ? ': ' + esc(q.freightNote) : '')].join(''), 'N14126', 'NR', '1,00', n(t.freight, 3), '', n(t.freight, 2)));
+  const notes = [];
+  if (depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO') notes.push(`Materiale disponibile per il ritiro presso:<br><b>${depot.pickup.map(esc).join('<br>')}</b><br><b>Prezzo franco partenza</b> dal deposito`);
+  if (t.freightPending && !(depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO')) notes.push('Trasporto: da definire.');   // ritiro al deposito: nessun trasporto
+  if (q.notes) notes.push(esc(q.notes).replace(/\n/g, '<br>'));
+  const noteRows = notes.map(x => `<tr><td colspan="7" style="${cell};padding-top:8px">${x}</td></tr>`).join('');
+  const tot = (k, v, bold) => `<tr><td style="font-size:8.5pt;padding:2px 4px">${k}</td><td style="font-size:8.5pt;padding:2px 4px;text-align:right${bold ? ';font-weight:bold' : ''}">${v}</td></tr>`;
+  const brand = header ? `<img src="${header}" alt="NORDTEX – For a better living" style="width:100%;display:block">`
+    : `<div style="font:italic 900 22pt Arial,sans-serif;letter-spacing:2px"><span style="color:#D40E41">NORD</span><span style="color:#676568">TEX</span> <span style="font:italic 400 12pt Georgia,serif;color:#333;letter-spacing:0">For a better living</span></div>`;
+  const foot = footer ? `<img src="${footer}" alt="Nordtex Srl" style="width:100%;display:block;margin-top:28px">`
+    : `<div style="margin-top:28px;font-size:7.5pt;color:#666;line-height:1.4"><b style="color:#D40E41">Nordtex Srl</b> · Società unipersonale · Via Prati all'Ospizio 6, 39043 Chiusa (BZ) · Tel. 0472 847 110 · info@nordtex.it · www.nordtex.it<br>P.I/C.F/RI BZ: 02623660988 · REA BZ-0189070 · Codice SDI: T04ZHR3</div>`;
+  return `<div class="nt-doc" style="${F};max-width:780px;margin:0 auto;background:#fff">
+${brand}
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px"><tr>
+${block('Deposito di uscita', depot.lines)}${block(site ? 'Cantiere' : '', site ? site.split('\n') : [])}
+<td style="width:34%;vertical-align:top;font-size:8.5pt;line-height:1.45"><div style="font-weight:bold;margin-bottom:6px">Spett.le<span style="float:right;font-weight:normal;font-size:7.5pt">${customerCode(q) ? '(' + esc(customerCode(q)) + ')' : ''}</span></div>${[c.name, c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' '), c.phone ? 'Tel.' + c.phone : '', c.email ? 'Email:' + c.email : '', c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean).map(esc).join('<br>')}</td>
+</tr></table>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px"><tr><td style="background:#c8c8c8;width:58%;text-align:center;font-weight:bold;font-size:10pt;padding:4px">OFFERTA NR. ${esc(q.number || 'BOZZA')} - ${dotDate(created)}</td><td></td></tr></table>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;border-collapse:collapse"><thead><tr>${head('Descrizione')}${head('Codice')}${head('U.M.')}${head('Quantità', 1)}${head('Prezzo', 1)}${head('Sconto %', 1)}${head('Imp.netto', 1)}</tr></thead>
+<tbody>${rows.join('')}${noteRows}</tbody></table>
+<table cellpadding="0" cellspacing="0" style="margin:14px 0 0 auto;width:42%;border-top:1px solid #000;border-collapse:collapse">
+${tot('Totale merce:', n(t.taxable, 2))}<tr><td colspan="2" style="height:10px"></td></tr>${tot('Totale imponibile:', n(t.taxable, 2))}${tot(`Totale iva${t.vatRate !== 22 ? ' (' + n(t.vatRate, 0) + '%)' : ''}:`, n(t.vat, 2))}${tot('Totale offerta:', n(t.total, 2), true)}</table>
+<div style="margin-top:40px;font-size:8.5pt;line-height:1.6">Prezzi al netto dell'IVA.<br>
+<table cellpadding="0" cellspacing="0" style="font-size:8.5pt"><tr><td style="padding-right:8px">Condizione di pagamento</td><td>: <b>${esc(q.payment || 'DA CONCORDARE')}</b></td></tr>
+<tr><td>Trasporto a cura</td><td>: <b>${esc(q.transportBy || 'DESTINATARIO')}</b></td></tr><tr><td>Validità</td><td>: <b>${dotDate(until)}</b></td></tr></table></div>
+<div style="margin-top:14px;font-size:8.5pt;font-weight:bold;text-decoration:underline;line-height:1.6">${CLAUSES.map(esc).join('<br>')}</div>
+<div style="margin-top:14px;font-size:8.5pt">Ringraziamo per la gradita richiesta e inviamo cordiali saluti</div>
+<div style="margin:6px 0 0 50%;font-weight:bold;font-size:10pt">NORDTEX SRL</div>
+${foot}
+</div>`;
+}
+
+function quoteFileName(q, now = new Date()) {
+  const d = q.createdAt ? new Date(q.createdAt) : now;
+  const clean = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+  return [clean(q.customer?.name), customerCode(q), (/^OFF-\d{4}-\d+$/.test(q.number || '') ? q.number : 'OFF-' + clean(q.number || 'BOZZA')), d.toISOString().slice(0, 10)].filter(Boolean).join('_');
+}
+
+return { DEPOTS, TRANSPORT_BY, CLAUSES, fmtN, dotDate, UM, discText, customerCode, lineExtra, quoteDocHtml, quoteFileName };
+})();
 __m["js/core/quote-pdf.js"] = (function () {
 // PDF dell'offerta nel formato NORDTEX/RADIX, generato nell'app (nessun servizio esterno): lo stesso contenuto di quote-doc.js.
 // Serve all'invio dalla casella personale di chi fa l'offerta (decisione Direzione 31/10/2026).
@@ -3077,6 +2661,118 @@ function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
 }
 
 return { quotePdf };
+})();
+__m["js/core/mailto.js"] = (function () {
+const { totals } = __m["js/core/pricing.js"];
+const { DEPOTS, fmtN } = __m["js/core/quote-doc.js"];
+// Email preparata nel programma di posta di chi invia (Outlook, Mail, Gmail…): mittente = la casella personale.
+// Regola Direzione 31/10/2026: offerte e comunicazioni partono dalla posta dell'agente / di Tommaso / di Marco / di Christian.
+function mailtoUrl({ to = [], cc = [], bcc = [], subject = '', body = '' }) {
+  const list = a => [].concat(a).filter(Boolean).map(s => String(s).trim()).filter(Boolean).join(',');
+  const q = [];
+  if (list(cc)) q.push('cc=' + encodeURIComponent(list(cc)));
+  if (list(bcc)) q.push('bcc=' + encodeURIComponent(list(bcc)));
+  if (subject) q.push('subject=' + encodeURIComponent(subject));
+  if (body) q.push('body=' + encodeURIComponent(String(body).replace(/\r?\n/g, '\r\n')));
+  return 'mailto:' + list(to).split(',').map(encodeURIComponent).join(',') + (q.length ? '?' + q.join('&') : '');
+}
+// testo dell'email dell'offerta (solo testo: mailto non accetta formattazione né allegati; il PDF lo allega chi invia).
+// Niente firma: la aggiunge il programma di posta di chi invia (prova del 01/11: firma doppia in Outlook).
+const itDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`; };
+function quoteMailIntro(q, now = new Date()) {
+  return `Buongiorno,\n\ncome d'accordo vi inviamo in allegato la nostra offerta n. ${q.number} del ${itDate(q.createdAt || now)}.`;
+}
+function quoteMailSummary(q, now = new Date()) {
+  const t = totals(q);
+  const depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
+  const pickup = depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO';
+  const until = new Date(new Date(q.createdAt || now).getTime() + (q.validDays || 30) * 864e5);
+  const transport = pickup ? `franco deposito (${depot.pickup[0]})` : t.freightPending ? 'da definire'
+    : t.freight > 0 ? `compreso nell'offerta (${fmtN(t.freight, 2)} €)` : 'compreso';
+  return ['RIEPILOGO', `• Totale imponibile: ${fmtN(t.taxable, 2)} € + IVA`, `• Trasporto: ${transport}`,
+    `• Pagamento: ${q.payment || 'DA CONCORDARE'}`, `• Validità: fino al ${itDate(until)}`].join('\n');
+}
+function quoteMailBody(q, intro, sheets = '', now = new Date()) {
+  return [String(intro || '').trim(), quoteMailSummary(q, now), sheets, 'Restiamo a disposizione per qualsiasi chiarimento.\nCordiali saluti']
+    .filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n');
+}
+
+// apre il programma di posta senza lasciare la pagina (link temporaneo, niente navigazione)
+function openMailto(url) {
+  const a = document.createElement('a'); a.href = url; a.rel = 'noopener'; a.style.display = 'none';
+  document.body.append(a); a.click(); a.remove();
+}
+
+return { mailtoUrl, quoteMailIntro, quoteMailSummary, quoteMailBody, openMailto };
+})();
+__m["js/core/margins.js"] = (function () {
+// Margine (solo Direzione) e provvigione agente sulle offerte.
+// Costo: "Prezzo acquisto RADIX" del Master (storico, attualità da verificare), usato solo se nella stessa unità di vendita.
+// Provvigione: regole impostate dalla Direzione (percentuale per fascia di sconto, generale o per agente).
+const { lineNet, lineAmount, totalDiscount, round2 } = __m["js/core/pricing.js"];
+const unit = s => ({ MQ: 'M2', MC: 'M3' }[String(s ?? '').toUpperCase().trim()] || String(s ?? '').toUpperCase().trim());
+
+function unitCost(p) {
+  if (!p || !(p.purchasePrice > 0)) return { cost: null, reason: 'Prezzo di acquisto non disponibile' };
+  if (unit(p.purchaseUnit) !== unit(p.saleUnit)) return { cost: null, reason: `Costo in ${p.purchaseUnit}, vendita in ${p.saleUnit}: serve conversione` };
+  return { cost: p.purchasePrice, reason: '' };
+}
+
+function quoteMargin(q, byId) {
+  let revenue = 0, cost = 0, covered = 0;
+  const lines = q.lines.map(l => {
+    const uc = unitCost(byId.get(l.productId));
+    const net = lineAmount(l);
+    if (uc.cost === null) return { productId: l.productId, net, cost: null, margin: null, pct: null, reason: uc.reason };
+    const c = round2(uc.cost * l.qty), m = round2(net - c);
+    revenue += net; cost += c; covered++;
+    return { productId: l.productId, net, unitCost: uc.cost, unitNet: lineNet(l), cost: c, margin: m, pct: net > 0 ? m / net * 100 : null, reason: '' };
+  });
+  const goods = round2(q.lines.reduce((s, l) => s + lineAmount(l), 0));
+  return { lines, covered, missing: q.lines.length - covered, revenue: round2(revenue), cost: round2(cost), margin: round2(revenue - cost),
+    pct: revenue > 0 ? (revenue - cost) / revenue * 100 : null, complete: covered === q.lines.length, goods };
+}
+
+// rules = { default: { bands: [{ maxDiscount, rate }] }, agents: { 'Nonini Manuel': { bands } } }; fasce ordinate per sconto massimo
+function validateBands(bands) {
+  if (!Array.isArray(bands) || !bands.length) throw new Error('Inserisci almeno una fascia');
+  let prev = -1;
+  for (const b of bands) {
+    if (!(Number.isFinite(b.maxDiscount) && b.maxDiscount >= 0 && b.maxDiscount <= 100)) throw new Error('Sconto massimo della fascia non valido (0–100%)');
+    if (!(Number.isFinite(b.rate) && b.rate >= 0 && b.rate <= 30)) throw new Error('Provvigione non valida (0–30%)');
+    if (b.maxDiscount <= prev) throw new Error('Le fasce vanno in ordine crescente di sconto');
+    prev = b.maxDiscount;
+  }
+  return bands;
+}
+
+// Regola 2026 decisa dalla Direzione (doc. "NORDTEX Condizioni Agenzie di Commercio – Listino Sconti Massimi e Provvigioni 2026"):
+// uguale per tutte le classi merceologiche; sconto fino al 30% → 8%, fino al 40% → 7%, fino a 50+5 (52,5% complessivo, massimo previsto) → 5%;
+// oltre 50+5 → 3% (precisazione Direzione 31/10/2026).
+const DEFAULT_COMMISSION_RULES = Object.freeze({
+  source: 'Condizioni Agenzie di Commercio 2026',
+  default: { bands: [{ maxDiscount: 30, rate: 8 }, { maxDiscount: 40, rate: 7 }, { maxDiscount: 52.5, rate: 5 }, { maxDiscount: 100, rate: 3 }] },
+  agents: {},
+});
+const effectiveRules = rules => (rules?.default?.bands?.length ? rules : { ...DEFAULT_COMMISSION_RULES, agents: rules?.agents || {} });
+
+function bandsFor(rules, assignee) { const r = effectiveRules(rules); return r.agents?.[assignee]?.bands || r.default.bands; }
+
+function commissionRate(bands, discountPct) {
+  if (!bands?.length) return null;
+  const b = bands.find(x => discountPct <= x.maxDiscount + 1e-9);
+  return b ? b.rate : 0;   // oltre l'ultima fascia: nessuna provvigione salvo regola diversa
+}
+
+function quoteCommission(q, rules, assignee) {
+  const bands = bandsFor(rules, assignee);
+  if (!bands) return { configured: false, amount: null, lines: [] };
+  const lines = q.lines.map(l => { const d = totalDiscount(l.discounts), rate = commissionRate(bands, d), net = lineAmount(l); return { productId: l.productId, discount: d, rate, net, amount: round2(net * rate / 100) }; });
+  const amount = round2(lines.reduce((s, x) => s + x.amount, 0)), base = round2(lines.reduce((s, x) => s + x.net, 0));
+  return { configured: true, amount, base, avgRate: base > 0 ? amount / base * 100 : 0, lines, custom: !!rules?.agents?.[assignee], isDefault: !rules?.default?.bands?.length };
+}
+
+return { unitCost, quoteMargin, validateBands, DEFAULT_COMMISSION_RULES, effectiveRules, bandsFor, commissionRate, quoteCommission };
 })();
 __m["js/core/logistics.js"] = (function () {
 // Logistica offerte: regole di trasporto del Listino NORDTEX n.05 (01/10/2026), riempimento del mezzo,
@@ -4337,106 +4033,33 @@ async function pickCustomer(app, { title, recentIds = [], recentLabel = 'Clienti
 
 return { viewQuotes, outcomeDialog, resolveOutcome, orderDialog, viewQuoteEditor, printQuote, startNewQuote, pickCustomer };
 })();
-__m["js/views/orders.js"] = (function () {
-// Ordini passati all'ufficio (offerte accettate): l'ufficio li segue fino all'inserimento in RADIX. Solo Direzione.
-const { h, eur, dateIt, emptyState, toast } = __m["js/ui.js"];
-const { ORDER_STATES } = __m["js/data/model.js"];
-const state = { filter: 'aperti' };
-const cls = st => ({ 'Da inserire': 'warn', 'In lavorazione': 'info', 'Inserito': 'ok', 'Annullato': 'muted' }[st] || 'muted');
-
-async function ordersSection(app, refresh) {
-  const [orders, quotes] = await Promise.all([app.store.orders ? app.store.orders().catch(() => []) : [], app.store.quotes()]);
-  const qById = new Map(quotes.map(q => [q.id, q]));
-  const open = o => o.status === 'Da inserire' || o.status === 'In lavorazione';
-  const rows = orders.filter(o => state.filter === 'tutti' || (state.filter === 'aperti' ? open(o) : o.status === state.filter));
-  const filters = [['aperti', `Da gestire (${orders.filter(open).length})`], ['Inserito', 'Inseriti'], ['Annullato', 'Annullati'], ['tutti', 'Tutti']];
-  const item = o => {
-    const q = qById.get(o.quoteId);
-    const st = h('select', { 'aria-label': 'Stato ordine' }, ORDER_STATES.map(x => h('option', { selected: x === o.status }, x)));
-    const rr = h('input', { value: o.radixRef || '', placeholder: 'N° ordine RADIX', 'aria-label': 'Numero ordine RADIX' });
-    const save = async () => {
-      try {
-        if (st.value === 'Inserito' && !rr.value.trim()) throw new Error('Indica il numero d\'ordine RADIX');
-        await app.store.updateOrder(o.id, { status: st.value, radixRef: rr.value.trim(), officeNote: o.officeNote || '' }); toast('Ordine aggiornato'); refresh();
-      } catch (e) { toast(e.message, 'error'); }
-    };
-    return h('li', { class: 'order-item' },
-      h('div', { class: 'order-head' }, h('span', { class: 'badge ' + cls(o.status) }, o.status),
-        h('a', { href: q ? '#/offerta/' + q.id : '#/preventivi' }, h('strong', {}, q?.customer?.name || 'Offerta'), ` · ${q?.number || ''} · ${eur(q?.total || 0)}`)),
-      h('small', { class: 'muted' }, [`passato da ${o.requestedByName || '—'} il ${dateIt(o.requestedAt)}`, o.deliveryDate ? 'consegna ' + dateIt(o.deliveryDate) : 'consegna da concordare',
-        o.customerRef ? 'rif. cliente ' + o.customerRef : '', o.radixRef ? 'RADIX ' + o.radixRef : ''].filter(Boolean).join(' · ')),
-      o.deliveryAddress || o.notes ? h('p', { class: 'order-notes' }, [o.deliveryAddress ? 'Consegna a: ' + o.deliveryAddress : '', o.siteContact ? 'Referente: ' + o.siteContact : '', o.notes].filter(Boolean).join(' · ')) : null,
-      h('div', { class: 'row order-edit' }, st, rr, h('button', { class: 'btn small', onclick: save }, 'Aggiorna')));
-  };
-  return h('div', { class: 'section-body' },
-    h('section', { class: 'card' }, h('h2', {}, 'Ordini passati all\'ufficio'),
-      h('p', { class: 'muted' }, 'Offerte accettate dai clienti: il commerciale le passa all\'ufficio, l\'ufficio le inserisce in RADIX e segna qui il numero d\'ordine.'),
-      h('div', { class: 'chips' }, filters.map(([v, l]) => h('button', { class: 'chip' + (state.filter === v ? ' on' : ''), onclick: () => { state.filter = v; refresh(); } }, l))),
-      rows.length ? h('ul', { class: 'order-list' }, rows.map(item)) : emptyState(orders.length ? 'Nessun ordine in questo elenco.' : 'Ancora nessun ordine passato all\'ufficio.')));
-}
-
-return { ordersSection };
-})();
 __m["js/views/home.js"] = (function () {
 const { h, fill, eur, dateIt, today, telLinks } = __m["js/ui.js"];
-const { boardSection } = __m["js/views/board.js"];
-const { networkSection, managerSection } = __m["js/views/direction.js"];
 const { openActions } = __m["js/views/actions.js"];
 const { startNewQuote, pickCustomer } = __m["js/views/quotes.js"];
 const { noteDialog } = __m["js/views/agenda.js"];
-const { ordersSection } = __m["js/views/orders.js"];
 const { radixOfferOpen, dueState } = __m["js/views/radix-offers.js"];
 const { radixOfferDue } = __m["js/data/model.js"];
 
-const TABS = [['attivita', 'Attività rete'], ['ordini', 'Ordini'], ['bacheca', 'Bacheca'], ['manager', 'Area manager']];
-const getTab = () => { try { return localStorage.getItem('ntx-home-tab') || 'attivita'; } catch { return 'attivita'; } };
-const setTab = t => { try { localStorage.setItem('ntx-home-tab', t); } catch { /* facoltativo */ } };
+const greeting = () => { const hr = new Date().getHours(); return hr < 13 ? 'Buongiorno' : hr < 18 ? 'Buon pomeriggio' : 'Buonasera'; };
 
-async function viewHome(app, tabArg) {
+async function viewHome(app) {
   const s = app.session, isDir = s.role === 'direzione';
   const [customers, quotes, posts, actions, notes, orders] = await Promise.all([app.customers(), app.store.quotes(), app.store.posts(), openActions(app), app.store.notes(), app.store.orders ? app.store.orders().catch(() => []) : []]);
   const comms = posts.filter(p => p.kind !== 'follow-up');   // i follow-up assegnati stanno tra i follow-up, non tra le comunicazioni
   // dove porta un follow-up: offerta (promemoria offerte), cliente se collegato, altrimenti la bacheca
   const actionHref = a => a.quoteReminder ? `#/offerta/${a.quoteReminder.quote.id}` : a.note.customerId ? `#/agenda/${a.note.customerId}` : '#/bacheca';
-  const count = st => customers.filter(c => c.status === st).length;
   const open = quotes.filter(q => q.status === 'Bozza' || q.status === 'Inviata');
   // offerte aperte importate da RADIX (01/11/2026): contano tra le offerte aperte
   const rxAll = app.store.radixOffers ? await app.store.radixOffers().catch(() => []) : [];
   const rxOpen = rxAll.filter(radixOfferOpen);
   const rxFollow = rxOpen.filter(o => { const d = radixOfferDue(o); return d && d <= today(); });   // offerte RADIX da sentire (scadute o di oggi)
-  const followTile = (label, href) => tile(label, actions.length + rxFollow.length,
-    [overdue ? `${overdue} scaduti` : `${todayN} oggi`, rxFollow.length ? `${rxFollow.length} offerte RADIX da sentire` : ''].filter(Boolean).join(' · '), href);
-  const openTile = () => tile('Offerte aperte', open.length + rxOpen.length, eur(open.reduce((t, q) => t + (q.total || 0), 0) + rxOpen.reduce((t, o) => t + (o.total || 0), 0)) + (rxOpen.length ? ` · ${rxOpen.length} da RADIX` : ''), rxOpen.length && !open.length ? '#/preventivi/radix' : '#/preventivi');
-  const overdue = actions.filter(a => a.state === 'scaduto').length, todayN = actions.filter(a => a.state === 'oggi').length;
-  const tile = (label, value, sub, href) => h('a', { class: 'kpi', href }, h('small', {}, label), h('strong', {}, value), sub ? h('span', {}, sub) : null);
   const asOf = customers.reduce((m, c) => (c.salesAsOf && c.salesAsOf > m ? c.salesAsOf : m), '');
-  const head = h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, `Buongiorno, ${s.name.split(' ')[0]}`), h('p', { class: 'muted' }, (isDir ? 'Direzione commerciale · tutta la rete' : `Portafoglio ${s.assignee}`) + ` · dati RADIX al ${asOf ? dateIt(asOf) : '31/10/2026'}`)),
+  const head = h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, `${greeting()}, ${s.name.split(' ')[0]}`), h('p', { class: 'muted' }, (isDir ? 'Direzione commerciale · tutta la rete' : `Portafoglio ${s.assignee}`) + ` · dati RADIX al ${asOf ? dateIt(asOf) : '31/10/2026'}`)),
     h('div', { class: 'head-actions' }, h('button', { class: 'btn', onclick: () => startNewNote(app) }, '+ Nuova nota'), h('button', { class: 'btn primary', onclick: () => startNewQuote(app) }, '+ Nuova offerta')));
   const foot = h('p', { class: 'fine' }, `Oggi ${dateIt(today())} · Dati RADIX (clienti, fatturato) al ${asOf ? dateIt(asOf) : '31/10/2026'}${app.store.stock?.depots?.[0]?.date ? ' · giacenze al ' + dateIt(app.store.stock.depots[0].date) : ''} · Archivio ${app.store.mode === 'locale' ? 'locale su questo dispositivo' : 'condiviso'}`);
 
-  if (isDir) {
-    const d30 = new Date(Date.now() - 30 * 864e5).toISOString();
-    const radix30 = (app.store.radixNotes ? await app.store.radixNotes({ since: d30.slice(0, 10) }).catch(() => []) : []).filter(n => n.date >= d30.slice(0, 10)).length;
-    let tab = TABS.some(t => t[0] === tabArg) ? tabArg : getTab();
-    const body = h('div', { class: 'tab-body' });
-    const tabsEl = h('div', { class: 'tabs', role: 'tablist' });
-    const draw = async () => {
-      setTab(tab);
-      const openOrders = (app.store.orders ? await app.store.orders().catch(() => []) : []).filter(o => o.status === 'Da inserire' || o.status === 'In lavorazione').length;
-      fill(tabsEl, TABS.map(([id, label]) => h('button', { role: 'tab', 'aria-selected': String(id === tab), class: 'tab' + (id === tab ? ' on' : ''), onclick: () => { tab = id; draw(); } }, label, id === 'ordini' && openOrders ? h('span', { class: 'tab-count' }, openOrders) : null)));
-      const refresh = () => draw();
-      fill(body, h('p', { class: 'muted' }, 'Caricamento…'));
-      fill(body, tab === 'bacheca' ? await boardSection(app, refresh) : tab === 'manager' ? await managerSection(app) : tab === 'ordini' ? await ordersSection(app, refresh) : await networkSection(app, refresh));
-    };
-    await draw();
-    return h('div', { class: 'page' }, head,
-      h('section', { class: 'kpis' },
-        tile('Clienti in rete', customers.length.toLocaleString('it-IT'), `${count('Attivo')} attivi · ${count('Da recuperare')} da recuperare`, '#/agenda'),
-        tile('Attività ultimi 30 gg', notes.filter(n => n.createdAt >= d30).length + radix30, radix30 ? `di cui ${radix30} da RADIX` : 'note, visite, telefonate', '#/home/attivita'),
-        followTile('Follow-up rete', '#/home/bacheca'),
-        openTile()),
-      tabsEl, body, foot);
-  }
+  if (isDir) return homeDirection(app, { head, foot, customers, quotes, actions, notes, orders, rxOpen, rxFollow });
 
   // Agente: la Home è "cosa fare oggi" (01/11): follow-up e promemoria offerte scaduti o di oggi, poi clienti da recuperare da sentire
   const urgent = actions.filter(a => a.state === 'scaduto' || a.state === 'oggi');
@@ -4464,11 +4087,6 @@ async function viewHome(app, tabArg) {
     c.phone ? h('span', { class: 'todo-tel' }, telLinks(c.phone.split(';')[0])) : null);
 
   return h('div', { class: 'page' }, head,
-    h('section', { class: 'kpis compact' },
-      tile('I miei clienti', customers.length.toLocaleString('it-IT'), `${count('Attivo')} attivi`, '#/agenda'),
-      tile('Da recuperare', count('Da recuperare'), 'nessun ordine 2026', '#/agenda/stato/Da recuperare'),
-      followTile('Follow-up', '#/bacheca'),
-      openTile()),
     h('section', { class: 'card' }, h('h2', {}, 'Da fare oggi'),
       toOrder.length ? h('ul', { class: 'todo-list' }, toOrder.map(q => h('li', { class: 'todo' }, h('a', { href: '#/offerta/' + q.id, class: 'todo-main' },
         h('span', { class: 'due oggi' }, 'ordine'), h('span', { class: 'todo-text' }, h('strong', {}, 'Passa l\'ordine all\'ufficio'), h('small', { class: 'muted' }, `${q.number} · ${q.customer?.name || ''} · ${eur(q.total || 0)}`)))))) : null,
@@ -4480,6 +4098,7 @@ async function viewHome(app, tabArg) {
         h('p', { class: 'fine' }, 'Hanno comprato nel 2025 ma non nel 2026 e non hanno note negli ultimi 60 giorni; prima i più importanti.'),
         h('ul', { class: 'todo-list' }, toCall.map(callItem)),
         h('a', { class: 'more', href: '#/agenda/stato/Da recuperare' }, 'Tutti i clienti da recuperare →')] : null),
+    h('h2', { class: 'section-title' }, 'Il mio andamento'), await trendSection(app, { customers, quotes, notes, rxOpen }),
     h('div', { class: 'grid2' },
       h('section', { class: 'card' }, h('h2', {}, 'Prossimi follow-up'),
         upcoming.length ? h('ul', { class: 'todo-list' }, upcoming.map(actionItem))
@@ -4498,7 +4117,392 @@ async function startNewNote(app) {
   if (c && await noteDialog(app, c)) app.go('agenda/' + c.id);
 }
 
+// Home Direzione (01/11 sera, "troppo caotica"): 1) OGGI = cosa richiede attenzione, solo le righe con qualcosa da fare;
+// 2) ANDAMENTO = 4 numeri che si muovono nella settimana; il resto (ordini, bacheca, rete, area manager) è nel menu.
+async function homeDirection(app, { head, foot, customers, quotes, actions, notes, orders, rxOpen, rxFollow }) {
+  const t = today(), day = n => new Date(Date.now() - n * 864e5).toISOString();
+  const d7 = day(7), d14 = day(14), d30 = day(30), d60 = day(60), month = t.slice(0, 7);
+  const rxNotes = app.store.radixNotes ? await app.store.radixNotes({ since: d60.slice(0, 10) }).catch(() => []) : [];
+  const sum = (xs, f) => xs.reduce((a, x) => a + (f(x) || 0), 0);
+  const cname = id => app.store.customer(id)?.name || '';
+
+  // --- OGGI
+  const openOrders = orders.filter(o => o.status === 'Da inserire' || o.status === 'In lavorazione');
+  const late = actions.filter(a => a.state === 'scaduto' || a.state === 'oggi');
+  const byAgent = {}; for (const a of late) { const k = a.assigned ? a.assigned.audience[0] : a.note?.authorName || ''; if (k) byAgent[k] = (byAgent[k] || 0) + 1; }
+  const topAgents = Object.entries(byAgent).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} ${v}`).join(' · ');
+  const noOutcome = quotes.filter(q => q.status === 'Inviata' && (q.sentAt || q.updatedAt || '') < d30);
+  const rxTodo = rxNotes.filter(n => n.appointment && !n.ok && n.group !== 'Prezzi' && n.appointment >= d30.slice(0, 10) && n.appointment <= t);
+  const bigRx = rxFollow.slice().sort((a, b) => (b.total || 0) - (a.total || 0)).slice(0, 2).map(o => `${cname(o.customerId) || o.customerLabel.split(',')[0]} ${eur(o.total || 0)}`).join(' · ');
+  const rows = [
+    [openOrders.length, 'Ordini da inserire in RADIX', openOrders.filter(o => o.status === 'In lavorazione').length ? `${openOrders.filter(o => o.status === 'In lavorazione').length} già in lavorazione` : 'Offerte accettate passate all\'ufficio', '#/ordini', 'warn'],
+    [rxFollow.length, 'Offerte RADIX da sentire', `${eur(sum(rxFollow, o => o.total))}${bigRx ? ' · le più grandi: ' + bigRx : ''}`, '#/preventivi/radix', 'bad'],
+    [late.length, 'Follow-up scaduti o di oggi', topAgents || 'della rete', '#/bacheca', 'bad'],
+    [noOutcome.length, 'Offerte inviate senza esito da oltre 30 giorni', eur(sum(noOutcome, q => q.total)), '#/preventivi', 'warn'],
+    [rxTodo.length, 'Promemoria RADIX da fare', 'scritti in RADIX con una data, non ancora chiusi', '#/bacheca', 'warn'],
+  ].filter(r => r[0] > 0);
+  const todayCard = h('section', { class: 'card today-card' }, h('h2', {}, 'Oggi'),
+    rows.length ? h('ul', { class: 'today-list' }, rows.map(([n, title, sub, href, cls]) => h('li', {}, h('a', { href, class: 'today-row' },
+      h('span', { class: 'today-n ' + cls }, n.toLocaleString('it-IT')), h('span', { class: 'today-text' }, h('strong', {}, title), h('small', { class: 'muted' }, sub)), h('span', { class: 'more-go' }, '›')))))
+      : h('p', { class: 'today-ok' }, '✓ Tutto in ordine: niente di scaduto.'));
+
+  const trendCard = await trendSection(app, { customers, quotes, notes, rxOpen, rxNotes });
+
+  return h('div', { class: 'page home-dir' }, head, todayCard, h('h2', { class: 'section-title' }, 'Andamento'), trendCard, foot);
+}
+
+// Andamento (Direzione: tutta la rete; agente: il suo portafoglio, perché i dati arrivano già filtrati)
+async function trendSection(app, { customers, quotes, notes, rxOpen, rxNotes = null }) {
+  const t = today(), day = n => new Date(Date.now() - n * 864e5).toISOString();
+  const d7 = day(7), d14 = day(14), d60 = day(60), month = t.slice(0, 7);
+  if (!rxNotes) rxNotes = app.store.radixNotes ? await app.store.radixNotes({ since: d60.slice(0, 10) }).catch(() => []) : [];
+  const sum = (xs, f) => xs.reduce((a, x) => a + (f(x) || 0), 0);
+  const openQ = quotes.filter(q => q.status === 'Bozza' || q.status === 'Inviata');
+  const wonApp = quotes.filter(q => q.status === 'Accettata' && String(q.outcome?.at || q.updatedAt || '').slice(0, 7) === month);
+  const rxAll = app.store.radixOffers ? await app.store.radixOffers().catch(() => []) : [];
+  const wonRx = rxAll.filter(o => o.outcome === 'Accettata' && String(o.outcomeAt || '').slice(0, 7) === month);
+  const acts = (from, to) => notes.filter(n => n.createdAt >= from && n.createdAt < to).length + rxNotes.filter(n => n.date >= from.slice(0, 10) && n.date < to.slice(0, 10)).length;
+  const a7 = acts(d7, '9999'), aPrev = acts(d14, d7);
+  const recover = customers.filter(c => c.status === 'Da recuperare');
+  const touched = new Set([...notes.filter(n => n.createdAt >= d60).map(n => n.customerId), ...rxNotes.filter(n => n.date >= d60.slice(0, 10)).map(n => n.customerId)]);
+  const recTouched = recover.filter(c => touched.has(c.id)).length;
+  const trend = a7 === aPrev ? 'come la settimana prima' : `${a7 > aPrev ? '▲' : '▼'} ${Math.abs(a7 - aPrev)} rispetto alla settimana prima`;
+  const tile = (label, value, sub, href) => h('a', { class: 'kpi', href }, h('small', {}, label), h('strong', {}, value), sub ? h('span', {}, sub) : null);
+  return h('section', { class: 'kpis trend' },
+    tile('Offerte aperte', eur(sum(openQ, q => q.total) + sum(rxOpen, o => o.total)), `${openQ.length + rxOpen.length} offerte`, '#/preventivi' + (openQ.length ? '' : '/radix')),
+    tile('Accettate nel mese', eur(sum(wonApp, q => q.total) + sum(wonRx, o => o.total)), `${wonApp.length + wonRx.length} offerte`, '#/preventivi'),
+    tile('Attività ultimi 7 giorni', a7.toLocaleString('it-IT'), trend, app.session.role === 'direzione' ? '#/rete' : '#/agenda'),
+    tile('Clienti da recuperare sentiti', `${recTouched} su ${recover.length}`, 'negli ultimi 60 giorni', '#/agenda/stato/Da recuperare'));
+
+}
+
 return { viewHome, openActions };
+})();
+__m["js/views/board.js"] = (function () {
+const { h, dateIt, toast, modal, field, emptyState } = __m["js/ui.js"];
+const { openActions } = __m["js/views/actions.js"];
+const { mailtoUrl, openMailto } = __m["js/core/mailto.js"];
+const { noteDialog } = __m["js/views/agenda.js"];
+const { radixFollowupBlock } = __m["js/views/radix-offers.js"];
+// Bacheca: comunicazioni della Direzione (in app + email dalla casella di chi scrive) e follow-up.
+// Scrivono solo gli accessi Direzione con servizio comunicazioni (Tommaso, Marco); Christian legge soltanto.
+async function viewBoard(app) {
+  return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Bacheca'), h('p', { class: 'muted' }, 'Comunicazioni della Direzione e follow-up da svolgere.'))), await boardSection(app, () => app.go('bacheca')));
+}
+
+const agentNames = app => (app.store.assignees || []).map(a => a.name).filter(n => n !== 'Direzionale' && !/^EX_/.test(n)).sort();
+const audienceText = p => (p.audience?.length ? 'Per: ' + p.audience.join(', ') : 'Tutta la rete');
+
+async function boardSection(app, refresh) {
+  const isDir = app.session.role === 'direzione', canWrite = !!app.session.canCommunicate;
+  const [all, actions] = await Promise.all([app.store.posts(), openActions(app)]);
+  const posts = all.filter(p => p.kind !== 'follow-up');
+  const doneAssigned = all.filter(p => p.kind === 'follow-up' && p.doneAt).slice(0, 10);
+  const groups = [['scaduto', 'Scaduti'], ['oggi', 'Oggi'], ['in programma', 'In programma'], ['senza data', 'Senza data']];
+  const toggle = async a => {
+    try { if (a.assigned) await app.store.followupDone(a.id, true); else await app.store.toggleAction(a.note.id, a.id); toast('Follow-up completato'); refresh(); } catch (e) { toast(e.message, 'error'); }
+  };
+  const editor = (kind, p) => postDialog(app, kind, p).then(ok => ok && refresh());
+  const rxBlock = await radixFollowupBlock(app, refresh);
+  return h('div', { class: 'section-body' },
+    h('div', { class: 'grid2' },
+      h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'Comunicazioni'),
+          canWrite ? h('button', { class: 'btn small primary', onclick: () => editor('comunicazione') }, '+ Comunicazione') : null),
+        posts.length ? posts.map(p => h('div', { class: 'post' + (p.pinned ? ' pinned' : '') }, h('strong', {}, (p.pinned ? '📌 ' : '') + p.title), p.body ? h('p', {}, p.body) : null,
+          h('small', { class: 'muted' }, `${p.authorName} · ${dateIt(p.createdAt)}${p.due ? ' · scadenza ' + dateIt(p.due) : ''}`, isDir ? ` · ${audienceText(p)}` : ''),
+          isDir ? h('small', { class: 'mail-state' + (p.emailSentAt ? ' ok' : '') }, p.emailSentAt ? `✉ Email preparata per ${p.emailCount} ${p.emailCount === 1 ? 'agente' : 'agenti'} il ${dateIt(p.emailSentAt)}` : '✉ Email non ancora preparata') : null,
+          canWrite ? h('div', {}, h('button', { class: 'link', onclick: () => editor('comunicazione', p) }, 'Modifica'),
+            !p.emailSentAt ? [' · ', h('button', { class: 'link', onclick: () => sendMail(app, p).then(refresh) }, 'Prepara email')] : null) : null))
+          : emptyState(canWrite ? 'Pubblica una comunicazione per la rete: obiettivi, promozioni, scadenze.' : 'Nessuna comunicazione.')),
+      h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, isDir ? 'Follow-up della rete' : 'I miei follow-up'),
+          canWrite ? h('button', { class: 'btn small primary', onclick: () => editor('follow-up') }, '+ Follow-up a un agente') : null),
+        actions.length ? groups.map(([k, label]) => {
+          const rows = actions.filter(a => a.state === k); if (!rows.length) return null;
+          return h('div', { class: 'group' }, h('h3', {}, `${label} (${rows.length})`), h('ul', { class: 'checks' }, rows.map(a => h('li', {},
+            a.quoteReminder ? h('a', { href: '#/offerta/' + a.quoteReminder.quote.id, class: 'qrem ' + a.quoteReminder.kind }, a.quoteReminder.kind === 'esito' ? '⚠ ' : '☎ ', a.title)
+              : h('label', {}, h('input', { type: 'checkbox', onchange: () => toggle(a) }), h('span', {}, a.title)),
+            a.note.customerId ? h('a', { href: '#/agenda/' + a.note.customerId, class: 'muted' }, ` ${app.store.customer(a.note.customerId)?.name || ''}`) : null,
+            a.due ? h('span', { class: 'due ' + k.replace(' ', '-') }, dateIt(a.due)) : null,
+            a.assigned ? h('small', { class: 'tag-dir' }, isDir ? `assegnato a ${a.assigned.audience[0]} da ${a.assigned.authorName}` : `dalla Direzione · ${a.assigned.authorName}`)
+              : isDir ? h('small', { class: 'muted' }, ' · ' + a.note.authorName) : null,
+            a.assigned?.body ? h('div', { class: 'fine' }, a.assigned.body) : null,
+            a.assigned && canWrite ? h('button', { class: 'link', onclick: () => editor('follow-up', a.assigned) }, 'Modifica') : null))));
+        }) : rxBlock ? null : emptyState('Nessun follow-up aperto. Si creano con le note nella scheda cliente' + (canWrite ? ' o con "+ Follow-up a un agente".' : '.')),
+        rxBlock,
+        isDir && doneAssigned.length ? h('details', { class: 'done-list' }, h('summary', {}, `Follow-up assegnati completati (${doneAssigned.length})`),
+          h('ul', { class: 'checks' }, doneAssigned.map(p => h('li', { class: 'done' }, `${p.title} · ${p.audience[0]} · ${dateIt(p.doneAt)}`)))) : null)),
+    await radixCard(app, refresh));
+}
+
+// Note scritte in RADIX (ufficio, Direzione): promemoria con data non spuntati e note recenti.
+// RADIX resta la fonte: qui si leggono e, se serve, si trasformano in follow-up dell'app.
+async function radixCard(app, refresh) {
+  if (!app.store.radixNotes) return null;
+  const today = new Date().toISOString().slice(0, 10), d30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const all = await app.store.radixNotes({ since: d30 }).catch(() => []);
+  // promemoria aperti da 30 giorni fa in avanti: quelli più vecchi non chiusi in RADIX sono ormai superati (Tommaso 01/11)
+  const todo = all.filter(n => n.appointment && !n.ok && n.appointment >= d30 && n.group !== 'Prezzi')   // nei Prezzi la data è la validità del prezzo, non un compito
+   .sort((a, b) => a.appointment.localeCompare(b.appointment));
+  const recent = all.filter(n => n.date >= d30 && !todo.includes(n)).sort((a, b) => b.date.localeCompare(a.date));
+  const cust = id => app.store.customer(id);
+  const toFollowup = async n => {
+    const c = cust(n.customerId); if (!c) return;
+    const ok = await noteDialog(app, c, { kind: n.group === 'Telefonata' ? 'Telefonata' : n.group === 'Visita' ? 'Visita' : 'Altro', fu: (n.subject || n.body).slice(0, 120),
+      due: n.appointment, body: `Da nota RADIX del ${dateIt(n.date)} (${n.authorName}): ${[n.subject, n.body].filter(Boolean).join(' — ')}` });
+    if (ok) refresh();
+  };
+  const item = (n, due) => { const c = cust(n.customerId); return h('li', { class: 'radix-item' },
+    h('div', {}, due ? h('span', { class: 'due ' + (n.appointment < today ? 'scaduto' : n.appointment === today ? 'oggi' : 'in-programma') }, dateIt(n.appointment)) : h('small', { class: 'muted' }, dateIt(n.date)),
+      ' ', h('a', { href: '#/agenda/' + n.customerId }, h('strong', {}, c?.name || 'Cliente')), h('small', { class: 'muted' }, ` · ${n.group} · ${n.authorName}`)),
+    h('div', { class: 'radix-text' }, [n.subject, n.body].filter(Boolean).join(' — ')),
+    !app.session.preview ? h('button', { class: 'link', onclick: () => toFollowup(n).catch(e => toast(e.message, 'error')) }, 'Crea follow-up') : null); };
+  return h('section', { class: 'card' }, h('h2', {}, 'Da RADIX: promemoria e note recenti'),
+    h('p', { class: 'muted' }, 'Le note scritte in RADIX da ufficio e Direzione, aggiornate a ogni esportazione. "Crea follow-up" le trasforma in un follow-up dell\'app; i promemoria si chiudono in RADIX (spunta OK).'),
+    todo.length ? [h('h3', {}, `Da fare (data in RADIX, non chiusi): ${todo.length}`), h('ul', { class: 'radix-list' }, todo.map(n => item(n, true)))] : null,
+    recent.length ? h('details', { class: 'radix-more', open: !todo.length }, h('summary', {}, `Note degli ultimi 30 giorni (${recent.length})`), h('ul', { class: 'radix-list' }, recent.map(n => item(n, false))))
+      : todo.length ? null : emptyState('Nessuna nota RADIX negli ultimi 30 giorni.'));
+}
+
+// Email della comunicazione dalla casella di chi scrive (Tommaso, Marco): agenti in copia nascosta, nessun servizio esterno
+async function sendMail(app, p) {
+  try {
+    const all = await app.store.agentEmails();
+    const list = p.audience?.length ? all.filter(a => p.audience.includes(a.label)) : all;
+    const missing = (p.audience?.length ? p.audience : (app.store.assignees || []).map(a => a.name).filter(n => n !== 'Direzionale' && !/^EX_/.test(n))).filter(l => !list.some(a => a.label === l));
+    if (!list.length) { toast('Email degli agenti non disponibili' + (app.store.mode === 'locale' ? ' in questa versione (ci sono nella versione online)' : ': collega prima gli accessi'), 'error'); return; }
+    const due = p.due ? `\nScadenza: ${p.due.split('-').reverse().join('/')}` : '';
+    const body = `${p.kind === 'follow-up' ? 'Follow-up assegnato a te' : 'Comunicazione della Direzione commerciale'}${due}\n\n${p.body || ''}\n\nLo trovi anche in NORDTEX HUB, Bacheca.\n\n${app.session.name}\nNORDTEX Srl`;
+    openMailto(mailtoUrl({ to: p.kind === 'follow-up' ? list.map(a => a.email) : [], bcc: p.kind === 'follow-up' ? [] : list.map(a => a.email), subject: `NORDTEX · ${p.kind === 'follow-up' ? 'Follow-up: ' : ''}${p.title}`, body }));
+    await app.store.markPostEmailed(p.id, list.length);
+    toast(`Email preparata per ${list.length} ${list.length === 1 ? 'agente' : 'agenti'} (in Ccn): inviala dal tuo programma di posta` + (missing.length ? ` · senza email: ${missing.join(', ')}` : ''));
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function postDialog(app, kind, p = {}) {
+  const fu = kind === 'follow-up', agents = agentNames(app);
+  const title = h('input', { value: p.title || '', placeholder: fu ? 'es. Richiamare per offerta NATURHELD' : 'es. Promo fibra NATURHELD novembre' });
+  const body = h('textarea', { rows: fu ? 3 : 5 }, p.body || '');
+  const due = h('input', { type: 'date', value: p.due || '' });
+  const pinned = h('input', { type: 'checkbox', checked: !!p.pinned });
+  const email = h('input', { type: 'checkbox', checked: !p.emailSentAt });
+  // destinatari
+  const whole = h('input', { type: 'radio', name: 'aud', checked: !(p.audience?.length) });
+  const some = h('input', { type: 'radio', name: 'aud', checked: !!p.audience?.length });
+  const boxes = agents.map(a => h('label', { class: 'check' }, h('input', { type: 'checkbox', value: a, checked: p.audience?.includes(a) }), ' ' + a));
+  const list = h('div', { class: 'aud-list', hidden: !p.audience?.length }, boxes);
+  whole.onchange = some.onchange = () => { list.hidden = whole.checked; };
+  const agentSel = h('select', {}, h('option', { value: '' }, 'Scegli l\'agente…'), agents.map(a => h('option', { value: a, selected: p.audience?.[0] === a }, a)));
+  // cliente collegato al follow-up (facoltativo): clienti dell'agente scelto
+  const custIn = h('input', { list: 'fu-cust', placeholder: 'Facoltativo: scrivi il nome del cliente', value: p.customerId ? app.store.customer(p.customerId)?.name || '' : '' });
+  const dl = h('datalist', { id: 'fu-cust' });
+  let custMap = new Map();
+  const loadCust = async () => {
+    const cs = (await app.customers()).filter(c => !agentSel.value || c.assignee === agentSel.value);
+    custMap = new Map(cs.map(c => [`${c.name} · ${c.city || ''}`.trim(), c.id]));
+    dl.replaceChildren(...[...custMap.keys()].slice(0, 400).map(k => h('option', { value: k })));
+  };
+  agentSel.onchange = loadCust; if (fu) loadCust();
+  const resolveCust = () => { const v = custIn.value.trim(); if (!v) return null; const id = custMap.get(v) || [...custMap].find(([k]) => k.toLowerCase().startsWith(v.toLowerCase()))?.[1]; if (!id) throw new Error('Cliente non trovato tra quelli dell\'agente'); return id; };
+
+  const actions = [{ label: 'Annulla', value: false }];
+  if (p.id) actions.push({ label: 'Elimina', run: async () => { await app.store.deletePost(p.id); toast('Eliminato'); return true; } });
+  actions.push({ label: p.id ? 'Salva' : (fu ? 'Assegna' : 'Pubblica'), primary: true, run: async () => {
+    const audience = fu ? (agentSel.value ? [agentSel.value] : []) : (some.checked ? boxes.map(b => b.firstChild).filter(i => i.checked).map(i => i.value) : []);
+    if (fu && !audience.length) throw new Error('Scegli l\'agente');
+    if (!fu && some.checked && !audience.length) throw new Error('Scegli almeno un agente o "Tutta la rete"');
+    const rec = await app.store.savePost({ id: p.id, title: title.value, body: body.value, due: due.value || null, pinned: fu ? false : pinned.checked, kind: fu ? 'follow-up' : 'comunicazione', audience, customerId: fu ? resolveCust() : null });
+    toast(fu ? 'Follow-up assegnato' : 'Pubblicata in app');
+    if (email.checked) await sendMail(app, rec);
+    return true;
+  } });
+  const content = fu
+    ? h('div', { class: 'form' }, field('Agente', agentSel), field('Cosa deve fare', title), field('Dettagli (facoltativi)', body), field('Entro il', due), field('Cliente', h('div', {}, custIn, dl)),
+        h('label', { class: 'check' }, email, ` Prepara anche l'email per l'agente dalla tua casella`))
+    : h('div', { class: 'form' }, field('Titolo', title), field('Testo', body),
+        h('div', { class: 'field' }, h('span', {}, 'Destinatari'), h('label', { class: 'check' }, whole, ' Tutta la rete'), h('label', { class: 'check' }, some, ' Solo agenti scelti'), list),
+        field('Scadenza (facoltativa)', due), h('label', { class: 'check' }, pinned, ' In evidenza'),
+        h('label', { class: 'check' }, email, ` Prepara anche l'email agli agenti (in Ccn) dalla tua casella`));
+  return modal(p.id ? (fu ? 'Modifica follow-up' : 'Modifica comunicazione') : (fu ? 'Nuovo follow-up a un agente' : 'Nuova comunicazione'), content, actions);
+}
+
+return { viewBoard, boardSection };
+})();
+__m["js/views/direction.js"] = (function () {
+const { h, fill, eur, dateIt, dateTimeIt, emptyState, toast, modal } = __m["js/ui.js"];
+const { quoteCls } = __m["js/views/agenda.js"];
+const { validateBands, effectiveRules } = __m["js/core/margins.js"];
+const feedState = { assignee: '', days: 30, type: '' };
+
+async function viewNetwork(app) {
+  return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Attività della rete'), h('p', { class: 'muted' }, 'Note, visite, telefonate e offerte di tutti gli agenti.'))), await networkSection(app, () => app.go('rete')));
+}
+
+const TYPES = [['', 'Tutte le attività'], ['nota', 'Note, visite, telefonate'], ['radix', 'Note da RADIX'], ['follow', 'Follow-up'], ['offerta', 'Offerte'], ['invio', 'Offerte inviate'], ['stato', 'Cambi di stato'], ['cliente', 'Nuovi clienti']];
+
+// Tutto quello che fanno i commerciali, in ordine di tempo
+async function networkSection(app, refresh) {
+  const since = new Date(Date.now() - feedState.days * 864e5).toISOString();
+  const [notes, quotes, customers, statusChanges, sends, radix] = await Promise.all([app.store.notes(), app.store.quotes(), app.customers(),
+    app.store.statusChanges ? app.store.statusChanges() : [], app.store.quoteSends ? app.store.quoteSends() : [],
+    app.store.radixNotes ? app.store.radixNotes({ since: since.slice(0, 10) }).catch(() => []) : []]);
+  const cust = id => app.store.customer(id);
+  const qById = new Map(quotes.map(q => [q.id, q]));
+  const events = [
+    ...notes.map(n => ({ type: 'nota', at: n.createdAt, who: n.authorName, cust: cust(n.customerId), kind: n.kind, text: n.body, extra: [n.outcome, ...n.actions.map(a => `follow-up: ${a.title}${a.due ? ' entro ' + dateIt(a.due) : ''}`)].filter(Boolean).join(' · '), href: '#/agenda/' + n.customerId })),
+    ...notes.flatMap(n => n.actions.filter(a => a.done && a.doneAt).map(a => ({ type: 'follow', at: a.doneAt, who: n.authorName, cust: cust(n.customerId), kind: 'Follow-up fatto', text: a.title, href: '#/agenda/' + n.customerId }))),
+    ...quotes.map(q => ({ type: 'offerta', at: q.createdAt || q.updatedAt, who: q.ownerName, cust: cust(q.customerId), kind: 'Offerta', text: `${q.number} creata`, extra: eur(q.total), href: '#/offerta/' + q.id, status: q.status })),
+    ...quotes.filter(q => q.updatedAt && q.createdAt && q.updatedAt > q.createdAt && q.status !== 'Bozza').map(q => ({ type: 'offerta', at: q.updatedAt, who: q.ownerName, cust: cust(q.customerId), kind: 'Offerta ' + q.status.toLowerCase(), text: q.number, extra: eur(q.total), href: '#/offerta/' + q.id, status: q.status })),
+    ...sends.map(x => { const q = qById.get(x.quoteId); return { type: 'invio', at: x.at, who: x.byName, cust: q ? cust(q.customerId) : null, kind: 'Offerta inviata', text: `${q?.number || ''} a ${x.to}`, extra: eur(x.total), href: q ? '#/offerta/' + q.id : '#/preventivi', status: 'Inviata' }; }),
+    ...radix.filter(n => n.date >= since.slice(0, 10)).map(n => ({ type: 'radix', at: n.date + 'T12:00:00', who: n.authorName + ' · da RADIX', cust: cust(n.customerId), kind: 'RADIX · ' + n.group,
+      text: [n.subject, n.body].filter(Boolean).join(' — '), extra: n.appointment && !n.ok ? 'da fare entro ' + dateIt(n.appointment) : '', href: '#/agenda/' + n.customerId })),
+    ...statusChanges.map(x => ({ type: 'stato', at: x.at, who: x.byName, cust: cust(x.customerId), kind: 'Stato: ' + x.status, text: x.reason, href: '#/agenda/' + x.customerId })),
+    ...customers.filter(c => c.origin === 'HUB' && c.createdAt).map(c => ({ type: 'cliente', at: c.createdAt, who: c.createdByName || '', cust: c, kind: 'Nuovo cliente', text: [c.city, c.prov].filter(Boolean).join(' '), href: '#/agenda/' + c.id })),
+  ].filter(e => e.at >= since && (!feedState.assignee || e.cust?.assignee === feedState.assignee) && (!feedState.type || e.type === feedState.type)).sort((a, b) => b.at.localeCompare(a.at));
+  const assignees = [...new Set(customers.map(c => c.assignee))].sort();
+  return h('div', { class: 'section-body' },
+    h('div', { class: 'list-tools row' },
+      h('select', { 'aria-label': 'Assegnatario', onchange: e => { feedState.assignee = e.target.value; refresh(); } }, h('option', { value: '' }, 'Tutta la rete'), assignees.map(a => h('option', { selected: a === feedState.assignee }, a))),
+      h('select', { 'aria-label': 'Tipo', onchange: e => { feedState.type = e.target.value; refresh(); } }, TYPES.map(([v, l]) => h('option', { value: v, selected: v === feedState.type }, l))),
+      h('select', { 'aria-label': 'Periodo', onchange: e => { feedState.days = +e.target.value; refresh(); } }, [7, 30, 90, 365].map(d => h('option', { value: d, selected: d === feedState.days }, `Ultimi ${d} giorni`)))),
+    h('small', { class: 'muted' }, `${events.length} attività`),
+    events.length ? h('ol', { class: 'timeline card' }, events.slice(0, 300).map(e => h('li', {}, h('a', { href: e.href, class: 'plain' },
+      h('div', { class: 'tl-head' }, h('span', { class: 'badge ' + (e.status ? quoteCls(e.status) : e.type === 'stato' ? 'info' : 'muted') }, e.kind), h('strong', {}, e.cust?.name || ''), h('small', { class: 'muted' }, `${dateTimeIt(e.at)} · ${e.who || ''} · ${e.cust?.assignee || ''}`)),
+      h('p', {}, e.text, e.extra ? h('span', { class: 'muted' }, ' — ' + e.extra) : null)))))
+      : h('div', { class: 'card' }, emptyState('Nessuna attività nel periodo selezionato.')));
+}
+
+async function viewManager(app) {
+  return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Area manager'), h('p', { class: 'muted' }, 'Portafoglio, presidio e offerte per assegnatario.'))), await managerSection(app));
+}
+
+// Accessi all'app: ultima apertura e frequenza d'uso per persona (solo Direzione, solo versione online)
+const agoIt = iso => {
+  if (!iso) return 'mai';
+  const d = new Date(iso), days = Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(iso).setHours(0, 0, 0, 0)) / 864e5);
+  const hm = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  return days <= 0 ? 'oggi ' + hm : days === 1 ? 'ieri ' + hm : days < 7 ? `${days} giorni fa` : dateIt(iso.slice(0, 10));
+};
+// Riquadro chiuso in fondo all'Area manager: i dati si caricano solo quando lo si apre
+function accessCard(app) {
+  const body = h('div', {});
+  const box = h('details', { class: 'card fold-box' }, h('summary', {}, 'Accessi all\'app'), body);
+  let loaded = false;
+  box.addEventListener('toggle', async () => {
+    if (!box.open || loaded) return;
+    loaded = true; fill(body, h('p', { class: 'muted' }, 'Caricamento…'));
+    const rows = app.store.accessSummary ? await app.store.accessSummary() : null;
+    if (!rows) { loaded = false; fill(body, h('p', { class: 'muted' }, app.store.mode === 'supabase'
+      ? 'Registro accessi non disponibile: serve l\'aggiornamento del database (file 06).' : 'Il registro accessi è disponibile solo nella versione online.')); return; }
+    const th = (...xs) => h('tr', {}, xs.map(x => h('th', { class: x.n ? 'num' : '' }, x.t || x)));
+    fill(body, h('p', { class: 'muted' }, 'Una apertura = l\'app aperta o ripresa dopo almeno 15 minuti. "Ultimo login" = ultima volta con email e password.'),
+      h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
+        h('thead', {}, th('Persona', 'Ultima apertura', 'Dispositivo', { t: 'Aperture 7 gg', n: 1 }, { t: 'Aperture 30 gg', n: 1 }, { t: 'Giorni d\'uso 30 gg', n: 1 }, 'Ultimo login', 'Accesso')),
+        h('tbody', {}, rows.map(r => h('tr', { class: r.active ? '' : 'muted' },
+          h('td', {}, h('strong', {}, r.name), h('br'), h('small', { class: 'muted' }, (r.role === 'direzione' ? 'Direzione' : 'Agente') + (r.active ? '' : ' · disattivato'))),
+          h('td', {}, h('span', { class: r.lastOpen ? '' : 'warn-text' }, agoIt(r.lastOpen))), h('td', {}, r.device || '—'),
+          h('td', { class: 'num' }, r.opens7), h('td', { class: 'num' }, r.opens30), h('td', { class: 'num' }, r.days30),
+          h('td', {}, r.lastSignIn ? dateTimeIt(r.lastSignIn) : 'mai'),
+          h('td', {}, r.userId === app.session.userId ? h('small', { class: 'muted' }, 'tu') : h('button', { class: 'btn small' + (r.active ? ' ghost' : ''), onclick: () => toggleUser(r) }, r.active ? 'Disattiva' : 'Riattiva'))))))));
+  });
+  // Disattiva subito l'accesso (telefono perso, agente che lascia): il database blocca ogni dato al profilo non attivo
+  async function toggleUser(r) {
+    const ok = await modal(r.active ? `Disattivare l'accesso di ${r.name}?` : `Riattivare l'accesso di ${r.name}?`,
+      h('p', {}, r.active ? 'Da subito non vede più clienti, offerte e note, su qualsiasi dispositivo. I suoi dati restano e potrai riattivarlo quando vuoi.' : 'Potrà di nuovo entrare con la sua email e password.'),
+      [{ label: 'Annulla', value: false }, { label: r.active ? 'Disattiva' : 'Riattiva', primary: true, value: true }]);
+    if (!ok) return;
+    try { await app.store.setUserActive(r.userId, !r.active); toast(r.active ? 'Accesso disattivato' : 'Accesso riattivato'); loaded = false; box.dispatchEvent(new Event('toggle')); }
+    catch (e) { toast(e.message, 'error'); }
+  }
+  return box;
+}
+
+// Copia di sicurezza: tutto ciò che si crea nell'app (offerte, note, ordini, referenti, bacheca) in un file da conservare
+function backupCard(app) {
+  const go = async () => {
+    try {
+      const data = await app.store.dataCopy();
+      if (!data) throw new Error('Copia non disponibile in anteprima');
+      const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' })), download: `NORDTEX_HUB_copia_dati_${new Date().toISOString().slice(0, 10)}.json` });
+      document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      toast(`Copia scaricata: ${data.quotes?.length ?? 0} offerte, ${data.notes?.length ?? 0} note`);
+    } catch (e) { toast(e.message, 'error'); }
+  };
+  return h('details', { class: 'card fold-box' }, h('summary', {}, 'Copia di sicurezza dei dati'),
+    h('p', { class: 'muted' }, 'Scarica in un file tutto ciò che si crea nell\'app: offerte, note e follow-up, ordini, referenti, comunicazioni. Consiglio: una volta a settimana, da conservare sul computer.'),
+    h('button', { class: 'btn primary', onclick: go }, 'Scarica copia dei dati'));
+}
+
+// Regole provvigioni: fasce di sconto complessivo → percentuale sulla merce netta; generali o per singolo agente
+async function commissionCard(app, refresh) {
+  const stored = await app.store.getSetting('commissions').catch(() => null);
+  const rules = structuredClone(effectiveRules(stored));   // senza regole salvate: Condizioni agenti 2026
+  const agents = (app.store.assignees || []).map(a => a.name).filter(n => n !== 'Direzionale').sort();
+  let target = '';
+  const box = h('div', {});
+  const draw = () => {
+    const cur = (target ? rules.agents?.[target]?.bands : rules.default?.bands) || [];
+    const rows = (cur.length ? cur : [{ maxDiscount: '', rate: '' }]).map(b => ({ ...b }));
+    const body = h('tbody');
+    const drawRows = () => fill(body, rows.map((b, i) => h('tr', {},
+      h('td', {}, 'fino a ', h('input', { type: 'number', min: 0, max: 100, step: 0.5, value: b.maxDiscount, class: 'num-in', 'aria-label': 'Sconto massimo', onchange: e => { b.maxDiscount = e.target.value === '' ? '' : +e.target.value; } }), ' % di sconto'),
+      h('td', {}, h('input', { type: 'number', min: 0, max: 30, step: 0.25, value: b.rate, class: 'num-in', 'aria-label': 'Provvigione', onchange: e => { b.rate = e.target.value === '' ? '' : +e.target.value; } }), ' % provvigione'),
+      h('td', {}, rows.length > 1 ? h('button', { class: 'icon-btn', 'aria-label': 'Togli fascia', onclick: () => { rows.splice(i, 1); drawRows(); } }, '✕') : null))));
+    drawRows();
+    const save = async () => {
+      try {
+        const bands = validateBands(rows.filter(r => r.maxDiscount !== '' || r.rate !== '').map(r => ({ maxDiscount: +r.maxDiscount, rate: +r.rate })));
+        if (target) { rules.agents = rules.agents || {}; rules.agents[target] = { bands }; } else rules.default = { bands };
+        await app.store.setSetting('commissions', rules); toast('Regole provvigioni salvate'); draw();
+      } catch (e) { toast(e.message, 'error'); }
+    };
+    fill(box,
+      h('div', { class: 'list-tools row' }, h('select', { 'aria-label': 'Agente', onchange: e => { target = e.target.value; draw(); } },
+        h('option', { value: '' }, 'Regola generale (tutti gli agenti)'), agents.map(a => h('option', { value: a, selected: a === target }, a + (rules.agents?.[a] ? ' · personalizzata' : ''))))),
+      target && !rules.agents?.[target] ? h('p', { class: 'muted' }, 'Questo agente usa la regola generale. Inserisci le fasce per personalizzarla.') : null,
+      h('table', { class: 'table compact' }, body),
+      h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => { rows.push({ maxDiscount: '', rate: '' }); drawRows(); } }, '+ Fascia'),
+        h('button', { class: 'btn small primary', onclick: save }, 'Salva regole'),
+        target && rules.agents?.[target] ? h('button', { class: 'btn small ghost', onclick: async () => { delete rules.agents[target]; await app.store.setSetting('commissions', rules); toast('Torna alla regola generale'); draw(); } }, 'Usa regola generale') : null),
+      !stored?.default?.bands?.length && !target ? h('p', { class: 'info-text' }, 'In uso la regola delle Condizioni Agenzie di Commercio 2026 (uguale per tutte le classi merceologiche). Modificala e salva solo se cambia.') : null,
+      h('p', { class: 'fine' }, 'La provvigione si calcola riga per riga sulla merce netta, in base allo sconto complessivo della riga. Fascia 52,5% = sconto 50+5. Oltre 50+5: provvigione 3% e condizioni da autorizzare. Premio di fine anno 2% oltre € 500.000 di fatturato annuo (trasporti e servizi esclusi), riconosciuto a consuntivo sul fatturato incassato. Gli agenti vedono solo la propria provvigione.'));
+  };
+  draw();
+  return h('details', { class: 'card fold-box' }, h('summary', {}, 'Regole provvigioni'), box);
+}
+
+async function managerSection(app) {
+  const d30 = new Date(Date.now() - 30 * 864e5).toISOString(), today = new Date().toISOString().slice(0, 10);
+  // anche offerte aperte e note importate da RADIX (01/11): altrimenti il portafoglio mostra 0 finché non si usa l'app
+  const [customers, notes, quotes, rxOffers, rxNotes] = await Promise.all([app.customers(), app.store.notes(), app.store.quotes(),
+    app.store.radixOffers ? app.store.radixOffers().catch(() => []) : [], app.store.radixNotes ? app.store.radixNotes({ since: d30.slice(0, 10) }).catch(() => []) : []]);
+  const roles = new Map(app.store.assignees.map(a => [a.name, a]));
+  const rows = [...new Set(customers.map(c => c.assignee))].map(name => {
+    const cs = customers.filter(c => c.assignee === name), ids = new Set(cs.map(c => c.id));
+    const ns = notes.filter(n => ids.has(n.customerId)), qs = quotes.filter(q => ids.has(q.customerId));
+    const open = qs.filter(q => q.status === 'Bozza' || q.status === 'Inviata');
+    const rx = rxOffers.filter(o => ids.has(o.customerId)), rxOpen = rx.filter(o => o.outcome === 'Da seguire' || o.outcome === 'Sentito');
+    const rxN = rxNotes.filter(x => ids.has(x.customerId) && x.date >= d30.slice(0, 10)).length;
+    const n = st => cs.filter(c => c.status === st).length;
+    return { name, role: roles.get(name)?.role || '', provinces: roles.get(name)?.provinces || '', total: cs.length, active: n('Attivo'), recover: n('Da recuperare'), lost: n('Perso'), never: n('Mai fatturato'),
+      notes30: ns.filter(x => x.createdAt >= d30).length + rxN, notesRx: rxN, overdue: ns.flatMap(x => x.actions || []).filter(a => !a.done && a.due && a.due < today).length,
+      openQ: open.length + rxOpen.length, openRx: rxOpen.length, openValue: open.reduce((t, q) => t + (q.total || 0), 0) + rxOpen.reduce((t, o) => t + (o.total || 0), 0),
+      won: qs.filter(q => q.status === 'Accettata').reduce((t, q) => t + (q.total || 0), 0) + rx.filter(o => o.outcome === 'Accettata').reduce((t, o) => t + (o.total || 0), 0) };
+  }).sort((a, b) => b.active + b.recover - (a.active + a.recover));
+  const sum = k => rows.reduce((t, r) => t + r[k], 0);
+  const commissions = await commissionCard(app);
+  return h('div', { class: 'section-body' },
+    h('section', { class: 'card' }, h('h2', {}, 'Portafoglio per assegnatario'),
+      h('p', { class: 'muted' }, 'Clienti, stato e attività di ciascun agente e consulente (comprese note e offerte aperte importate da RADIX, contate sul cliente). Tocca un nome per vedere i numeri.'),
+      h('div', { class: 'pf-list' }, rows.map(r => h('details', {},
+        h('summary', {}, h('strong', {}, r.name), r.role && r.role !== r.name ? h('small', { class: 'muted' }, r.role) : null),
+        h('dl', { class: 'pf-grid' }, [['Zona', r.provinces || '—'], ['Clienti', r.total], ['Attivi', r.active], ['Da recuperare', r.recover], ['Persi', r.lost], ['Mai fatturato', r.never],
+          ['Note ultimi 30 gg', r.notesRx ? `${r.notes30} (${r.notesRx} RADIX)` : r.notes30], ['Follow-up scaduti', r.overdue, r.overdue ? 'bad-text' : ''],
+          ['Offerte aperte', `${r.openQ} · ${eur(r.openValue)}` + (r.openRx ? ` (${r.openRx} RADIX)` : '')], ['Offerte accettate', eur(r.won)]]
+          .map(([l, v, cls]) => h('div', {}, h('dt', {}, l), h('dd', { class: cls || '' }, typeof v === 'number' ? v.toLocaleString('it-IT') : v)))))))),
+    rows.length ? null : emptyState('Nessun dato.'), commissions, accessCard(app), backupCard(app));
+}
+
+return { viewNetwork, networkSection, viewManager, managerSection };
 })();
 __m["js/vendor/leaflet.js"] = (function () {
 // Leaflet 1.9.3 (BSD-2-Clause, (c) Vladimir Agafonkin, CloudMade) — incluso nel sito, nessuna libreria esterna caricata dalla rete.
@@ -4767,6 +4771,71 @@ async function viewMaps(app) {
 
 return { viewMaps };
 })();
+__m["js/views/orders.js"] = (function () {
+// Ordini passati all'ufficio (offerte accettate): l'ufficio li segue fino all'inserimento in RADIX. Solo Direzione.
+const { h, eur, dateIt, emptyState, toast } = __m["js/ui.js"];
+const { ORDER_STATES } = __m["js/data/model.js"];
+const state = { filter: 'aperti' };
+const cls = st => ({ 'Da inserire': 'warn', 'In lavorazione': 'info', 'Inserito': 'ok', 'Annullato': 'muted' }[st] || 'muted');
+
+async function ordersSection(app, refresh) {
+  const [orders, quotes] = await Promise.all([app.store.orders ? app.store.orders().catch(() => []) : [], app.store.quotes()]);
+  const qById = new Map(quotes.map(q => [q.id, q]));
+  const open = o => o.status === 'Da inserire' || o.status === 'In lavorazione';
+  const rows = orders.filter(o => state.filter === 'tutti' || (state.filter === 'aperti' ? open(o) : o.status === state.filter));
+  const filters = [['aperti', `Da gestire (${orders.filter(open).length})`], ['Inserito', 'Inseriti'], ['Annullato', 'Annullati'], ['tutti', 'Tutti']];
+  const item = o => {
+    const q = qById.get(o.quoteId);
+    const st = h('select', { 'aria-label': 'Stato ordine' }, ORDER_STATES.map(x => h('option', { selected: x === o.status }, x)));
+    const rr = h('input', { value: o.radixRef || '', placeholder: 'N° ordine RADIX', 'aria-label': 'Numero ordine RADIX' });
+    const save = async () => {
+      try {
+        if (st.value === 'Inserito' && !rr.value.trim()) throw new Error('Indica il numero d\'ordine RADIX');
+        await app.store.updateOrder(o.id, { status: st.value, radixRef: rr.value.trim(), officeNote: o.officeNote || '' }); toast('Ordine aggiornato'); refresh();
+      } catch (e) { toast(e.message, 'error'); }
+    };
+    return h('li', { class: 'order-item' },
+      h('div', { class: 'order-head' }, h('span', { class: 'badge ' + cls(o.status) }, o.status),
+        h('a', { href: q ? '#/offerta/' + q.id : '#/preventivi' }, h('strong', {}, q?.customer?.name || 'Offerta'), ` · ${q?.number || ''} · ${eur(q?.total || 0)}`)),
+      h('small', { class: 'muted' }, [`passato da ${o.requestedByName || '—'} il ${dateIt(o.requestedAt)}`, o.deliveryDate ? 'consegna ' + dateIt(o.deliveryDate) : 'consegna da concordare',
+        o.customerRef ? 'rif. cliente ' + o.customerRef : '', o.radixRef ? 'RADIX ' + o.radixRef : ''].filter(Boolean).join(' · ')),
+      o.deliveryAddress || o.notes ? h('p', { class: 'order-notes' }, [o.deliveryAddress ? 'Consegna a: ' + o.deliveryAddress : '', o.siteContact ? 'Referente: ' + o.siteContact : '', o.notes].filter(Boolean).join(' · ')) : null,
+      h('div', { class: 'row order-edit' }, st, rr, h('button', { class: 'btn small', onclick: save }, 'Aggiorna')));
+  };
+  return h('div', { class: 'section-body' },
+    h('section', { class: 'card' }, h('h2', {}, 'Ordini passati all\'ufficio'),
+      h('p', { class: 'muted' }, 'Offerte accettate dai clienti: il commerciale le passa all\'ufficio, l\'ufficio le inserisce in RADIX e segna qui il numero d\'ordine.'),
+      h('div', { class: 'chips' }, filters.map(([v, l]) => h('button', { class: 'chip' + (state.filter === v ? ' on' : ''), onclick: () => { state.filter = v; refresh(); } }, l))),
+      rows.length ? h('ul', { class: 'order-list' }, rows.map(item)) : emptyState(orders.length ? 'Nessun ordine in questo elenco.' : 'Ancora nessun ordine passato all\'ufficio.')));
+}
+
+return { ordersSection };
+})();
+__m["js/views/more.js"] = (function () {
+// Pagine Direzione uscite dalla Home (01/11 sera): Ordini come pagina propria e "Altro" per il telefono.
+const { h } = __m["js/ui.js"];
+const { ordersSection } = __m["js/views/orders.js"];
+async function viewOrders(app) {
+  return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Ordini'), h('p', { class: 'muted' }, 'Offerte accettate passate all\'ufficio: da inserire in RADIX.'))),
+    await ordersSection(app, () => app.go('ordini')));
+}
+
+// Telefono Direzione: le voci che non stanno nella barra in basso
+async function viewMore(app) {
+  const n = app.navCounts?.ordini || 0;
+  const item = (href, icon, title, sub, count) => h('a', { href, class: 'more-item card' }, h('span', { class: 'more-ico', 'aria-hidden': 'true' }, icon),
+    h('span', { class: 'more-text' }, h('strong', {}, title), h('small', { class: 'muted' }, sub)), count ? h('span', { class: 'tab-count' }, count) : h('span', { class: 'more-go' }, '›'));
+  return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Altro'))),
+    h('div', { class: 'more-list' },
+      item('#/ordini', '⇪', 'Ordini', 'Da inserire in RADIX', n),
+      item('#/rete', '↻', 'Attività rete', 'Note, visite, offerte di tutti'),
+      item('#/manager', '▤', 'Area manager', 'Portafogli, provvigioni, accessi'),
+      item('#/mappe', '◎', 'Mappe', 'Clienti sulla mappa'),
+      item('#/profilo', '◔', 'Profilo', 'Password, anteprima agente, esci')));
+}
+
+return { viewOrders, viewMore };
+})();
 __m["js/main.js"] = (function () {
 // NORDTEX HUB — piattaforma commerciale unica (Agenti e Direzione)
 const { h, toast, eur, dateTimeIt } = __m["js/ui.js"];
@@ -4781,15 +4850,22 @@ const { viewQuotes, viewQuoteEditor } = __m["js/views/quotes.js"];
 const { viewBoard } = __m["js/views/board.js"];
 const { viewNetwork, viewManager } = __m["js/views/direction.js"];
 const { viewMaps } = __m["js/views/maps.js"];
+const { viewOrders, viewMore } = __m["js/views/more.js"];
 const VERSION = '1.0.0';
 
 // Navigazione (01/11): le offerte hanno una voce propria; il profilo è l'iniziale in alto a destra (telefono) o il nome in basso (computer)
+// 01/11 sera (Tommaso): Ordini, Bacheca, Attività rete e Area manager escono dalla Home e diventano voci di menu.
+// Telefono Direzione: Home · Clienti · Offerte · Bacheca · Altro (Ordini, Mappe, Attività rete, Area manager).
 const NAV = [
   { id: 'home', label: 'Home', icon: '⌂' },
   { id: 'agenda', label: 'Clienti', icon: '☰' },
   { id: 'preventivi', label: 'Offerte', icon: '€' },
-  { id: 'mappe', label: 'Mappe', icon: '◎' },
-  { id: 'bacheca', label: 'Bacheca', icon: '✓', agent: true },
+  { id: 'ordini', label: 'Ordini', icon: '⇪', dir: true, phone: false },
+  { id: 'bacheca', label: 'Bacheca', icon: '✓' },
+  { id: 'mappe', label: 'Mappe', icon: '◎', phoneDir: false },
+  { id: 'rete', label: 'Attività rete', icon: '↻', dir: true, group: 'Direzione', phone: false },
+  { id: 'manager', label: 'Area manager', icon: '▤', dir: true, phone: false },
+  { id: 'altro', label: 'Altro', icon: '⋯', dir: true, side: false },
 ];
 const initials = name => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '•';
 
@@ -4912,8 +4988,12 @@ function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch { /* 
 
 function shell(active, content) {
   const isDir = app.session.role === 'direzione', pv = app.session.preview;
-  const items = NAV.filter(n => !n.agent || !isDir);
-  const nav = items.map(n => h('a', { href: '#/' + n.id, class: 'nav-item' + (active === n.id ? ' active' : '') }, h('span', { class: 'ico', 'aria-hidden': 'true' }, n.icon), h('span', {}, n.label)));
+  const items = NAV.filter(n => !n.dir || isDir);
+  const badge = id => id === 'ordini' && app.navCounts?.ordini ? h('span', { class: 'tab-count' }, app.navCounts.ordini) : null;
+  const nav = items.filter(n => n.side !== false).flatMap(n => [n.group ? h('div', { class: 'nav-group' }, n.group) : null,
+    h('a', { href: '#/' + n.id, class: 'nav-item' + (active === n.id ? ' active' : '') }, h('span', { class: 'ico', 'aria-hidden': 'true' }, n.icon), h('span', {}, n.label), badge(n.id))]);
+  const tabs = items.filter(n => n.phone !== false && !(isDir && n.phoneDir === false));
+  const tabActive = id => active === id || (id === 'altro' && ['ordini', 'rete', 'manager', 'mappe'].includes(active) && isDir);
   const who = h('div', { class: 'who' }, h('a', { href: '#/profilo', class: 'who-name' }, h('strong', {}, pv ? pv.by : app.session.name)), h('small', {}, pv ? 'Direzione · anteprima' : isDir ? 'Direzione' : (app.session.assignee || 'Agente')),
     h('button', { class: 'link', onclick: signOut }, 'Esci'));
   const bar = pv ? h('div', { class: 'preview-bar', role: 'status' }, h('span', {}, h('strong', {}, 'Anteprima '), app.session.assignee, h('small', {}, ' · sola lettura')),
@@ -4923,7 +5003,8 @@ function shell(active, content) {
     h('main', { class: 'main', id: 'main' }, bar,
       h('div', { class: 'mobile-brand' }, h('div', { class: 'mb-left' }, h('img', { src: LOGO, alt: 'NORDTEX' }), h('span', {}, 'HUB')),
         h('a', { href: '#/profilo', class: 'avatar' + (active === 'profilo' ? ' on' : ''), title: 'Profilo', 'aria-label': 'Profilo' }, initials(pv ? pv.by : app.session.name))), content),
-    h('nav', { class: 'tabbar' }, items.map(n => h('a', { href: '#/' + n.id, class: active === n.id ? 'active' : '' }, h('span', { class: 'ico' }, n.icon), h('small', {}, n.label)))));
+    h('nav', { class: 'tabbar' }, tabs.map(n => h('a', { href: '#/' + n.id, class: tabActive(n.id) ? 'active' : '' }, h('span', { class: 'ico' }, n.icon), h('small', {}, n.label),
+      n.id === 'altro' && app.navCounts?.ordini ? h('span', { class: 'tab-dot' }) : null))));
 }
 
 function signOut() { if (app.real) app.stopPreview(); app.store.signOut(); app.session = null; app.cache = {}; app.go(''); }
@@ -4987,11 +5068,12 @@ async function render() {
   const [route, ...args] = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
   if (!app.session) { root.replaceChildren(loginView()); return; }
   const seq = ++renderSeq;
-  const views = { home: viewHome, agenda: viewAgenda, preventivi: viewQuotes, offerta: viewQuoteEditor, bacheca: viewBoard, rete: viewNetwork, manager: viewManager, mappe: viewMaps, profilo: viewAccount };
+  const views = { home: viewHome, agenda: viewAgenda, preventivi: viewQuotes, offerta: viewQuoteEditor, bacheca: viewBoard, rete: viewNetwork, manager: viewManager, mappe: viewMaps, profilo: viewAccount, ordini: viewOrders, altro: viewMore };
   const key = views[route] ? route : 'home';
-  if ((key === 'rete' || key === 'manager') && app.session.role !== 'direzione') { app.go('home'); return; }
-  // Direzione: bacheca, attività rete e area manager sono schede della Home
-  if (app.session.role === 'direzione' && ['rete', 'manager', 'bacheca'].includes(key)) { app.go('home/' + { rete: 'attivita', manager: 'manager', bacheca: 'bacheca' }[key]); return; }
+  if (['rete', 'manager', 'ordini', 'altro'].includes(key) && app.session.role !== 'direzione') { app.go('home'); return; }
+  // vecchi collegamenti alle schede della Home (prima del 01/11 sera)
+  if (key === 'home' && args[0]) { const to = { attivita: 'rete', ordini: 'ordini', bacheca: 'bacheca', manager: 'manager' }[args[0]]; if (to) { app.go(to); return; } }
+  if (app.session.role === 'direzione' && app.store.orders) { try { app.navCounts = { ordini: (await app.store.orders()).filter(o => o.status === 'Da inserire' || o.status === 'In lavorazione').length }; } catch { app.navCounts = {}; } }
   let content;
   try { content = await views[key](app, ...args); } catch (e) { console.error(e); content = h('div', { class: 'page' }, h('p', { class: 'error' }, e.message)); }
   if (seq !== renderSeq) return;
