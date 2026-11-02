@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="e90636c8a2f0">
+<meta name="ntx-build" content="e0a15e45db0d">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -688,9 +688,10 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 #print-root .ss-price{display:flex;gap:2mm;margin-top:3mm} #print-root .ss-price>div{flex:1;background:#f2f3d1;border-left:2pt solid #BCBF00;padding:2mm 3mm}
 #print-root .ss-price strong{font:700 12pt 'NT Poppins',Inter,sans-serif} #print-root .ss-price .tot{background:#D40E41;border-left-color:#b00b35;color:#fff} #print-root .ss-price .tot small{color:#ffd9e2}
 #print-root .ss-note{font-size:7.4pt;color:#4b4a4d;margin:2.5mm 0 0}
+.area-fold summary{cursor:pointer;color:var(--muted);font-size:.88rem;padding:6px 0;min-height:32px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"e90636c8a2f0"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"e0a15e45db0d"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -5474,6 +5475,8 @@ const { L, LEAFLET_CSS } = __m["js/vendor/leaflet.js"];
 const { customerPlace, spread, nearby, routeOrder, googleRouteUrl, stopAddress } = __m["js/core/places.js"];
 const { listSignals } = __m["js/views/agenda.js"];
 const { territorySection } = __m["js/views/territory.js"];
+const { PROVINCE_SHAPES } = __m["js/data/province-shapes.js"];
+const { coverageOf } = __m["js/core/territory.js"];
 const { noteDialog } = __m["js/views/agenda.js"];
 const { newPlanDialog } = __m["js/views/plans.js"];
 // Mappa dei clienti (posizione per comune, dati ISTAT) + giro visite + presidio per provincia.
@@ -5491,7 +5494,7 @@ function ensureCss() {
 // verde visitato da poco), filtri rapidi, finestrella con ultima visita e offerte, giro visite ordinato per motivo di visita.
 const DO = { rosso: ['#d40e41', 'Da sentire subito'], arancio: ['#e09a00', 'Da recuperare o non visitato da 90 gg'], verde: ['#2e9e5b', 'Visitato da poco'], grigio: ['#98a2b3', 'Persi e mai fatturati'] };
 const daysSince = d => d ? Math.floor((Date.now() - new Date(d + 'T12:00:00').getTime()) / 864e5) : null;
-const mapState = { mode: 'clienti', colors: 'fare', notVisited: false, withOffers: false };
+const mapState = { mode: 'clienti', colors: 'fare', notVisited: false, withOffers: false, areas: true };
 
 async function viewMaps(app) {
   ensureCss();
@@ -5536,10 +5539,18 @@ async function viewMaps(app) {
 
   const quick = h('div', { class: 'chips' },
     [['notVisited', 'Non visitati da 90 gg'], ['withOffers', 'Con offerte aperte']].map(([k, l]) => { const b = h('button', { type: 'button', class: 'chip' + (mapState[k] ? ' on' : ''), onclick: () => { mapState[k] = !mapState[k]; b.classList.toggle('on'); redraw(); } }, l); return b; }),
+    isDir ? (() => { const b = h('button', { type: 'button', class: 'chip' + (mapState.areas ? ' on' : ''), onclick: () => { mapState.areas = !mapState.areas; b.classList.toggle('on'); mapState.areas ? areaLayer.addTo(map) : areaLayer.remove(); drawAreaLegend(); } }, 'Areali agenti'); return b; })() : null,
     h('select', { 'aria-label': 'Colori', onchange: e => { mapState.colors = e.target.value; redraw(); drawLegend(); } }, [['fare', 'Colori: cosa fare'], ['stato', 'Colori: stato cliente']].map(([v, l]) => h('option', { value: v, selected: v === mapState.colors }, l))));
   const legend = h('div', { class: 'map-legend' });
   const drawLegend = () => fill(legend, mapState.colors === 'fare' ? Object.values(DO).map(([col, l]) => h('span', {}, h('span', { class: 'swatch', style: { background: col } }), l)) : null);
   drawLegend();
+  const areaLegend = h('div', { class: 'area-legend' });
+  function drawAreaLegend() {
+    if (!isDir || !mapState.areas) { fill(areaLegend); return; }
+    if (!cov.size) { fill(areaLegend, h('span', { class: 'warn-text' }, 'Areali non disponibili: l\'elenco agenti con le province non è arrivato dal database.')); return; }
+    const by = new Map(); for (const [p, cv] of cov) { if (!by.has(cv.who)) by.set(cv.who, { ...cv, provs: [] }); by.get(cv.who).provs.push(p); }
+    fill(areaLegend, h('details', { class: 'area-fold' }, h('summary', {}, `Areali: ${by.size} assegnatari · province colorate per agente`), h('div', { class: 'map-legend' }, [...by.values()].map(a => h('span', { title: a.provs.join(' ') }, h('span', { class: 'swatch', style: { background: a.color } }), `${a.who} (${a.provs.join(' ')})`)))));
+  }
   const visible = () => located.filter(({ c }) => state.statuses.has(c.status)
     && (!mapState.notVisited || (d => d === null || d > 90)(daysSince(visits.get(c.id))))
     && (!mapState.withOffers || g(c).open > 0)
@@ -5551,6 +5562,16 @@ async function viewMaps(app) {
   const mapEl = h('div', { class: 'map-box' });
   const map = L.map(mapEl, { preferCanvas: true, zoomControl: true }).setView([45.6, 11.2], 7);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; OpenStreetMap' }).addTo(map);
+  // areali degli agenti (Direzione, 02/11): province colorate per agente sotto i punti
+  const cov = isDir ? coverageOf(app.store.assignees || []) : new Map();
+  const areaLayer = L.layerGroup();
+  if (isDir) {
+    map.createPane('areas'); map.getPane('areas').style.zIndex = 350;
+    for (const sh of PROVINCE_SHAPES) { const cv = cov.get(sh.p); if (!cv) continue;
+      sh.g.forEach(poly => L.polygon(poly, { pane: 'areas', color: cv.color, weight: 1, fillColor: cv.color, fillOpacity: .22, interactive: false }).addTo(areaLayer)); }
+    if (mapState.areas) areaLayer.addTo(map);
+  }
+  drawAreaLegend();
   const layer = L.layerGroup().addTo(map);
   const renderer = L.canvas({ padding: 0.3 });
 
@@ -5657,7 +5678,7 @@ async function viewMaps(app) {
 
   return mapsShell(app, [h('p', { class: 'muted' }, `Clienti per comune (${located.length} su ${customers.length} posizionati). Tocca un punto per la scheda o per organizzare il giro visite.`),
     h('div', { class: 'map-filters' }, chips, quick, h('div', { class: 'map-selects' }, asgSel, famSel, search, counter)),
-    legend, mapEl, tourBox, provTable, missingBox]);
+    legend, areaLegend, mapEl, tourBox, provTable, missingBox]);
 }
 
 // Direzione: due viste, Clienti e Territorio (areali agenti, zone scoperte, dove serve un commerciale)
