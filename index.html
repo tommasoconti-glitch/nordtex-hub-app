@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="02f4a0ce107a">
+<meta name="ntx-build" content="e90636c8a2f0">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -653,9 +653,44 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 #print-root .ps-name{font:600 9.5pt 'NT Poppins',Inter,Arial,sans-serif;color:#2b2a2c}
 #print-root .ps-foot{display:flex;justify-content:space-between;border-top:1.5pt solid #BCBF00;margin-top:4mm;padding-top:1.5mm;font-size:7pt;color:#676568}
 
+/* Sistemi (pilota) */
+.sys-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.sys-card{display:flex;flex-direction:column;gap:8px;text-decoration:none;color:inherit} .sys-card-head{display:flex;gap:10px;align-items:flex-start} .sys-card-head>div{display:flex;flex-direction:column}
+.sys-code{display:inline-block;background:var(--nt-red);color:#fff;font-weight:700;border-radius:6px;padding:2px 8px;font-size:.9em;font-family:'NT Poppins',Inter,sans-serif}
+.strat-box svg{width:100%;height:auto;display:block}
+.sys-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px 14px;align-items:end}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden} .seg-b{border:0;background:transparent;padding:9px 14px;font-weight:600;min-height:40px;color:var(--ink)} .seg-b.on{background:var(--nt-grey);color:#fff}
+.sys-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:12px 0}
+.sys-kpi{background:var(--surface,#fff);border:1px solid var(--line);border-left:4px solid var(--nt-lime);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.sys-kpi strong{font-size:1.25rem;font-family:'NT Poppins',Inter,sans-serif} .sys-kpi small{color:var(--muted)} .sys-kpi.ok{border-left-color:var(--ok)} .sys-kpi.bad{border-left-color:var(--bad)}
+.sys-table{width:100%;border-collapse:collapse;font-size:.9rem;margin-top:8px} .sys-table th{text-align:left;font-size:.78rem;color:var(--muted);border-bottom:1px solid var(--line);padding:6px} .sys-table td{border-bottom:1px solid var(--line);padding:7px 6px;vertical-align:top} .sys-table .num{text-align:right;white-space:nowrap}
+.sys-table.zones .on{font-weight:700;background:var(--nt-lime-soft)} .sys-table.zones td.ok{color:var(--ok)} .sys-table.zones td.bad{color:var(--bad)}
+.sys-page .card{margin-bottom:12px} .sys-page .card h2{margin-top:0}
+.tbl-wrap{overflow-x:auto;max-width:100%} .sys-page{min-width:0;max-width:100%} .sys-page .card{min-width:0}
+@media (max-width:760px){.sys-table{font-size:.8rem}.sys-table.mat th:nth-child(2),.sys-table.mat td:nth-child(2),.sys-table.mat th:nth-child(5),.sys-table.mat td:nth-child(5){display:none}.sys-table.mat tfoot td:nth-child(3){display:none}.sys-table td,.sys-table th{padding:6px 4px}}
+#print-root .sys-sheet{display:block;font:8.6pt/1.35 Inter,Arial,sans-serif;color:#2b2a2c}
+#print-root .ss-head{width:100%;display:block;margin-bottom:2mm} #print-root .ss-foot{width:100%;display:block;margin-top:4mm;border-top:1.5pt solid #BCBF00;padding-top:2mm}
+#print-root .ss-title{display:flex;justify-content:space-between;align-items:flex-end;border-top:2.2pt solid #D40E41;padding-top:3mm;margin-bottom:2mm;gap:5mm}
+#print-root .ss-kicker{font:600 8pt 'NT Poppins',Inter,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#D40E41}
+#print-root .ss-title h1{font:700 15pt/1.15 'NT Poppins',Inter,sans-serif;color:#4b4a4d;margin:1mm 0} #print-root .ss-title p{margin:0;color:#676568}
+#print-root .ss-facts{display:flex;gap:2mm} #print-root .ss-facts>div{background:#f2f3d1;border-left:2pt solid #BCBF00;padding:1.5mm 3mm}
+#print-root .ss-facts small,#print-root .ss-price small,#print-root .ss-mini small,#print-root .ss-u small{display:block;font-size:6.5pt;text-transform:uppercase;letter-spacing:.05em;color:#575800}
+#print-root .ss-facts strong{font:600 9pt 'NT Poppins',Inter,sans-serif}
+#print-root .ss-cols{display:flex;gap:4mm;align-items:center} #print-root .ss-draw{flex:1} #print-root .ss-draw svg{width:100%;height:auto}
+#print-root .ss-perf{width:42mm;display:flex;flex-direction:column;gap:2mm}
+#print-root .ss-u{background:#4b4a4d;color:#fff;border-radius:2mm;padding:2.5mm 3mm} #print-root .ss-u small{color:#e6e7b0} #print-root .ss-u strong{font:700 20pt/1 'NT Poppins',Inter,sans-serif;display:block}
+#print-root .ss-u.ok{box-shadow:inset 0 -2.5mm 0 #BCBF00} #print-root .ss-u.bad{box-shadow:inset 0 -2.5mm 0 #D40E41}
+#print-root .ss-mini{border-left:2pt solid #BCBF00;background:#f2f3d1;padding:1.5mm 3mm} #print-root .ss-mini strong{font:600 10pt 'NT Poppins',Inter,sans-serif}
+#print-root .ss-t{width:100%;border-collapse:collapse;margin-top:2.5mm} #print-root .ss-t th{background:#676568;color:#fff;text-align:left;font:600 6.8pt 'NT Poppins',Inter,sans-serif;text-transform:uppercase;letter-spacing:.04em;padding:1.4mm}
+#print-root .ss-t td{border-bottom:.5pt solid #c9c8ca;padding:1.4mm} #print-root .ss-t tbody tr:nth-child(even) td{background:#f7f7f5}
+#print-root .ss-z th.on,#print-root .ss-z td.on{background:#BCBF00;color:#2b2a2c;font-weight:700}
+#print-root .sys-sheet h2{font:700 10pt 'NT Poppins',Inter,sans-serif;color:#4b4a4d;margin:4mm 0 0}
+#print-root .ss-price{display:flex;gap:2mm;margin-top:3mm} #print-root .ss-price>div{flex:1;background:#f2f3d1;border-left:2pt solid #BCBF00;padding:2mm 3mm}
+#print-root .ss-price strong{font:700 12pt 'NT Poppins',Inter,sans-serif} #print-root .ss-price .tot{background:#D40E41;border-left-color:#b00b35;color:#fff} #print-root .ss-price .tot small{color:#ffd9e2}
+#print-root .ss-note{font-size:7.4pt;color:#4b4a4d;margin:2.5mm 0 0}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"02f4a0ce107a"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"e90636c8a2f0"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4139,6 +4174,13 @@ async function viewQuoteEditor(app, id, customerId) {
     if (c.salesBlockedSince) throw new Error('Vendita bloccata in RADIX per questo cliente');
     if (!(await outcomeGate(app))) { history.back(); return h('div', { class: 'page' }); }
     q = newQuote(app, c);
+    const draft = app.cache.systemDraft; app.cache.systemDraft = null;   // da Sistemi › Crea offerta
+    if (draft) {
+      const all = await app.products(), byIdP = new Map(all.map(p => [p.id, p])), skipped = [];
+      for (const l of draft.lines) { const p = byIdP.get(l.productId); try { q.lines.push(makeLine(p, l.qty, [draft.discount || 0, 0, 0])); } catch (e) { skipped.push(p?.description || l.productId); } }
+      q.notes = draft.note;
+      if (skipped.length) toast('Non inseriti (prezzo da controllare): ' + skipped.join(', '), 'error');
+    }
   } else {
     q = await app.store.quote(id); if (!q) throw new Error('Offerta non trovata');
   }
@@ -5628,6 +5670,207 @@ function mapsShell(app, body) {
 
 return { viewMaps };
 })();
+__m["js/data/systems-data.js"] = (function () {
+// Sistemi NORDTEX (02/11/2026, pilota solo Direzione-Tommaso). Fonti: tavole "Proposta progettuale" dei cataloghi
+// Fibra di legno (B2 p.8, D1 p.12), Blocchi Laterizio (B1 p.8) e Listino n.05 (consumi: Pura Calce p.64-65, cicli intonaco p.101).
+// Qui NON ci sono prezzi: arrivano dal listino caricato nell'app (Supabase), cercando i prodotti per famiglia/spessore.
+// Strati dall'INTERNO all'ESTERNO. cm = spessore; lambda = W/mK (per gli isolanti il più alto tra catalogo e listino: scelta prudente).
+
+const WALL_LIMITS = {          // D.M. 26/06/2015 - pareti verticali opache verso l'esterno, valori dal 2021
+  nuovo: { label: 'Nuova costruzione (edificio di riferimento, App. A)', zones: { 'A-B': 0.43, C: 0.34, D: 0.29, E: 0.26, F: 0.24 } },
+  riqualificazione: { label: 'Riqualificazione (App. B, tab. 1)', zones: { 'A-B': 0.40, C: 0.36, D: 0.32, E: 0.28, F: 0.26 } },
+  interno: { label: 'Riqualificazione con isolamento dall\'interno (App. B, +30%)', zones: { 'A-B': 0.52, C: 0.468, D: 0.416, E: 0.364, F: 0.338 } },
+};
+const ZONES = ['A-B', 'C', 'D', 'E', 'F'];
+
+// materiali per il disegno della stratigrafia
+const MAT = {
+  muro: { color: '#c9b8a6', pattern: 'brick' }, laterizio: { color: '#d9825b', pattern: 'block' },
+  fibra: { color: '#d6ad6b', pattern: 'fibre' }, fibraRigida: { color: '#b98a4a', pattern: 'fibre' },
+  gesso: { color: '#e4e2dc', pattern: 'none' }, intonaco: { color: '#efe9dc', pattern: 'dots' }, finitura: { color: '#f7f4ec', pattern: 'none' },
+  membrana: { color: '#4d87c7', pattern: 'none' },
+};
+
+const JOIST = { fraction: 0.072, lambda: 0.13, label: 'montanti Joist (interasse 62,5 cm)' };
+
+const SYSTEMS = [
+  {
+    code: 'B2', name: 'Cappotto esterno a secco su muratura esistente', short: 'Parete esterna · ristrutturazione',
+    source: 'Catalogo Fibra di legno, tavola B2 (p. 8-9)', limits: 'riqualificazione', catalogU: 0.158,
+    description: 'Struttura in travi Joist isolate fissata alla muratura esistente, isolante flessibile in fibra di legno tra i montanti, pannello rigido portaintonaco e ciclo di finitura a calce naturale. Posa a secco, nessun collante sul muro.',
+    variants: ['STEICO', 'NATURHELD'],
+    main: 'isolante', // strato di cui si sceglie lo spessore
+    layers: [
+      { key: 'muro', name: 'Parete esistente', cm: 30, lambda: 0.80, rho: '>1000', mu: '7/11', mat: 'muro', existing: true },
+      { key: 'isolante', name: { STEICO: 'NORDTEX flex 036 (STEICO) tra montanti Joist', NATURHELD: 'Naturtex flex (NATURHELD) tra montanti Joist' }, cm: 20, lambda: 0.038, rho: 50, mu: '1/2', mat: 'fibra', frame: JOIST,
+        product: { STEICO: { sub: 'flex 036' }, NATURHELD: { sub: 'Naturtex flex' } }, perM2: 0.93, unit: 'm2', waste: 5 },
+      { key: 'portaintonaco', name: { STEICO: 'NORDTEX protect H 270 (STEICO) 60 mm', NATURHELD: 'Naturtex 180 (NATURHELD) 60 mm' }, cm: 6, lambda: { STEICO: 0.048, NATURHELD: 0.043 }, rho: { STEICO: 270, NATURHELD: 180 }, mu: 3, mat: 'fibraRigida',
+        product: { STEICO: { sub: 'protect H 270', thick: 60 }, NATURHELD: { sub: 'Naturtex 180', thick: 60 } }, perM2: 1, unit: 'm2', waste: 5,
+        check: { STEICO: 'Il catalogo usa "Duo Dry", che non è a listino: proposto protect H 270 (λ 0,048) — da confermare' } },
+      { key: 'rasatura', name: 'NORDTEX Pura Calce + rete di armatura', cm: 1, lambda: 0.82, rho: 1700, mu: 12, mat: 'intonaco' },
+      { key: 'finitura', name: 'NORDTEX Calce Fine', cm: 0.2, lambda: 0.61, rho: '>1000', mu: 10, mat: 'finitura' },
+    ],
+    extras: [
+      { label: 'NORDTEX JOIST coibentato SJ 45', product: { sub: 'NORDTEX JOIST coibentato', heightFrom: 'isolante' }, perM2: 1.6, unit: 'ml', note: 'interasse 62,5 cm — da confermare' },
+      { label: 'NORDTEX Pura Calce (rasatura 10 mm)', product: { sub: 'NORDTEX Pura Calce' }, perM2: 10, unit: 'kg', pack: 25 },
+      { label: 'Rete di armatura in vetro', product: { sub: 'Rete di armatura' }, perM2: 1.1, unit: 'm2', pack: 50 },
+      { label: 'NORDTEX Calce Fine (finitura)', product: { sub: 'NORDTEX Calce Fine' }, perM2: 3, unit: 'kg', pack: 25 },
+    ],
+    excluded: 'Fissaggi del pannello ai montanti, ancoraggi dei Joist alla muratura, zoccolatura in vetro cellulare con BL DICK, profili e accessori di finitura, posa.',
+  },
+  {
+    code: 'D1', name: 'Isolamento interno con controparete a secco', short: 'Parete interna · ristrutturazione',
+    source: 'Catalogo Fibra di legno, tavola D1 (p. 12-13)', limits: 'interno', catalogU: 0.143,
+    description: 'Controparete interna su muratura esistente: isolante flessibile tra montanti Joist, freno vapore igrovariabile, secondo strato isolante per gli impianti, lastra in gesso fibrato e finitura a calce.',
+    variants: ['STEICO', 'NATURHELD'],
+    main: 'isolante',
+    layers: [
+      { key: 'finitura', name: 'Intonaco e finitura di sola calce', cm: 0.2, lambda: 0.76, rho: 1600, mu: 10, mat: 'finitura' },
+      { key: 'gesso', name: 'Lastra NORDTEX Gessoforte 25 mm', cm: 2.5, lambda: 0.35, rho: 900, mu: 4.5, mat: 'gesso',
+        product: { all: { sub: 'NORDTEX Gessoforte', thick: 25 } }, perM2: 1, unit: 'm2', waste: 5 },
+      { key: 'impianti', name: { STEICO: 'NORDTEX flex 036 (STEICO) 50 mm, vano impianti', NATURHELD: 'Naturtex flex (NATURHELD) 50 mm, vano impianti' }, cm: 5, lambda: 0.038, rho: 50, mu: '1/2', mat: 'fibra',
+        product: { STEICO: { sub: 'flex 036', thick: 50 }, NATURHELD: { sub: 'Naturtex flex', thick: 50 } }, perM2: 0.95, unit: 'm2', waste: 5 },
+      { key: 'freno', name: 'Freno vapore Ampatex Variano 3', cm: 0.05, lambda: null, mat: 'membrana', thin: true,
+        product: { all: { sub: 'Ampatex Variano 3' } }, perM2: 1.1, unit: 'm2', pack: 75 },
+      { key: 'isolante', name: { STEICO: 'NORDTEX flex 036 (STEICO) tra montanti Joist', NATURHELD: 'Naturtex flex (NATURHELD) tra montanti Joist' }, cm: 20, lambda: 0.038, rho: 50, mu: '1/2', mat: 'fibra', frame: JOIST,
+        product: { STEICO: { sub: 'flex 036' }, NATURHELD: { sub: 'Naturtex flex' } }, perM2: 0.93, unit: 'm2', waste: 5 },
+      { key: 'muro', name: 'Parete esistente', cm: 12, lambda: 0.80, rho: '>1000', mu: '7/11', mat: 'muro', existing: true },
+    ],
+    extras: [
+      { label: 'NORDTEX JOIST coibentato SJ 45', product: { sub: 'NORDTEX JOIST coibentato', heightFrom: 'isolante' }, perM2: 1.6, unit: 'ml', note: 'interasse 62,5 cm — da confermare' },
+      { label: 'NORDTEX Calce Fine (finitura)', product: { sub: 'NORDTEX Calce Fine' }, perM2: 3, unit: 'kg', pack: 25, note: 'finitura proposta — da confermare' },
+    ],
+    excluded: 'Montanti in alluminio del vano impianti, viti, nastri sigillanti, telo Foliarex lato muro, partenza a pavimento in vetro cellulare con BL DICK, posa.',
+  },
+  {
+    code: 'B1', name: 'Parete in laterizio rettificato Thermopor con intonaci NHL', short: 'Parete esterna · nuova costruzione',
+    source: 'Catalogo Blocchi Laterizio, tavola B1 (p. 8-9) e ciclo 2 NHL (Listino p. 101)', limits: 'nuovo', catalogU: 0.157,
+    description: 'Muratura monostrato in blocchi Thermopor SL 08 Plan rettificati (collante incluso) con ciclo di intonacatura in sola calce idraulica naturale NHL su entrambe le facce: traspirante, senza cappotto.',
+    variants: ['Catalogo'],
+    main: 'blocco',
+    layers: [
+      { key: 'fin_int', name: 'Finitura traspirante (interno)', cm: 0.2, lambda: 0.61, rho: '>1000', mu: 10, mat: 'finitura' },
+      { key: 'ras_int', name: 'Rasatura Ecotex Raso (interno)', cm: 0.2, lambda: 0.76, rho: '>1000', mu: 10, mat: 'intonaco' },
+      { key: 'int_int', name: 'Intonaco Ecotex NHL5 (interno)', cm: 2, lambda: 0.61, rho: '>1000', mu: 12, mat: 'intonaco' },
+      { key: 'rinz_int', name: 'Rinzaffo Ecotex (interno)', cm: 0.5, lambda: 0.76, rho: '>1000', mu: 10, mat: 'intonaco' },
+      { key: 'blocco', name: 'Blocco Thermopor SL 08 Plan', cm: 49, lambda: 0.08, rho: 600, mu: '-', mat: 'laterizio',
+        product: { all: { sub: 'Thermopor SL 08 - Plan 0,08' } }, perM2: 16, unit: 'pz', note: 'collante incluso; vendita a bancali completi' },
+      { key: 'rinz_est', name: 'Rinzaffo Ecotex (esterno)', cm: 0.5, lambda: 0.76, rho: '>1000', mu: 10, mat: 'intonaco' },
+      { key: 'int_est', name: 'Intonaco Ecotex NHL5 (esterno)', cm: 2, lambda: 0.61, rho: '>1000', mu: 12, mat: 'intonaco' },
+      { key: 'ras_est', name: 'Rasatura armata Ecotex Raso + rete (esterno)', cm: 0.2, lambda: 0.76, rho: '>1000', mu: 10, mat: 'intonaco' },
+      { key: 'fin_est', name: 'Finitura traspirante (esterno)', cm: 0.2, lambda: 0.61, rho: '>1000', mu: 10, mat: 'finitura' },
+    ],
+    extras: [
+      { label: 'Ecotex (rinzaffo + intonaco, 2 facce)', product: { sub: 'Ecotex' }, perM2: 75, unit: 'kg', pack: 25, note: '15 kg/m² per cm: (0,5 + 2) cm × 2 facce' },
+      { label: 'Ecotex Raso (rasatura 2 mm, 2 facce)', product: { sub: 'Ecotex Raso' }, perM2: 5.6, unit: 'kg', pack: 25 },
+      { label: 'Rete in fibra di vetro 145 g (esterno)', product: { sub: 'Rete in fibra di vetro 145g' }, perM2: 1.1, unit: 'm2', pack: 50 },
+      { label: 'NORDTEX Calce Fine (finitura, 2 facce)', product: { sub: 'NORDTEX Calce Fine' }, perM2: 6, unit: 'kg', pack: 25, note: 'il listino dice "finitura da definire": proposta — da confermare' },
+    ],
+    excluded: 'Architravi, pezzi speciali, cordoli, malta di livellamento e partenza in vetro cellulare, posa.',
+  },
+];
+
+return { WALL_LIMITS, ZONES, MAT, SYSTEMS };
+})();
+__m["js/core/systems.js"] = (function () {
+// Calcoli dei Sistemi: trasmittanza U (UNI EN ISO 6946, metodo combinato per gli strati con montanti) e computo materiali/prezzi.
+const { SYSTEMS, WALL_LIMITS } = __m["js/data/systems-data.js"];
+const RSI = 0.13, RSE = 0.04;   // pareti, flusso orizzontale
+const VKEYS = ['STEICO', 'NATURHELD', 'Catalogo', 'all'];
+const pickV = (v, variant) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).some(k => VKEYS.includes(k)) ? (v[variant] ?? v.all ?? null) : v;
+
+// Strati risolti per una variante e uno spessore dello strato principale (mm)
+function resolveLayers(sys, variant, mainMm) {
+  return sys.layers.map(l => {
+    const cm = l.key === sys.main && mainMm ? mainMm / 10 : l.cm;
+    return { ...l, name: pickV(l.name, variant), lambda: pickV(l.lambda, variant), rho: pickV(l.rho, variant), product: pickV(l.product, variant), check: pickV(l.check, variant), cm };
+  });
+}
+
+// U = 1 / R_T; con strati non omogenei R_T = (R_upper + R_lower) / 2 (ISO 6946 §6.7)
+function uValue(layers) {
+  const th = layers.filter(l => l.lambda && l.cm > 0);
+  const framed = th.filter(l => l.frame);
+  const r = (l, lam) => (l.cm / 100) / lam;
+  // limite inferiore: λ equivalente nello strato con montanti
+  const lower = RSI + RSE + th.reduce((s, l) => s + (l.frame ? r(l, (1 - l.frame.fraction) * l.lambda + l.frame.fraction * l.frame.lambda) : r(l, l.lambda)), 0);
+  if (!framed.length) return { u: round3(1 / lower), r: lower, lower, upper: lower };
+  // limite superiore: percorsi paralleli (tutte le combinazioni isolante/montante)
+  let uSum = 0;
+  for (let mask = 0; mask < 1 << framed.length; mask++) {
+    let f = 1, R = RSI + RSE;
+    for (const l of th) { const i = framed.indexOf(l);
+      if (i < 0) { R += r(l, l.lambda); continue; }
+      const wood = mask & (1 << i); f *= wood ? l.frame.fraction : 1 - l.frame.fraction; R += r(l, wood ? l.frame.lambda : l.lambda); }
+    uSum += f / R;
+  }
+  const upper = 1 / uSum, R = (upper + lower) / 2;
+  return { u: round3(1 / R), r: R, lower, upper };
+}
+const round3 = x => Math.round(x * 1000) / 1000;
+const totalCm = layers => Math.round(layers.reduce((s, l) => s + (l.thin ? 0 : l.cm), 0) * 10) / 10;
+
+function verdict(sys, u, zone) {
+  const lim = WALL_LIMITS[sys.limits]; const max = lim.zones[zone];
+  return { max, ok: u <= max, label: lim.label, margin: Math.round((1 - u / max) * 100) };
+}
+
+// prodotto del listino per sottofamiglia + spessore (mm) / altezza Joist
+function findProduct(products, spec, mm) {
+  if (!spec) return null;
+  let list = products.filter(p => p.subfamily === spec.sub && p.price != null);
+  if (spec.heightFrom) { if (!mm) return null; list = list.filter(p => String(p.description).includes(`SJ 45 — H ${mm} mm`)); }
+  else { const thick = spec.thick ?? mm; if (thick) list = list.filter(p => p.thickness === thick); }
+  return list[0] || null;
+}
+// spessori disponibili per lo strato principale (per il selettore)
+function mainThicknesses(sys, variant, products) {
+  const l = sys.layers.find(x => x.key === sys.main); const spec = pickV(l.product, variant);
+  return [...new Set(products.filter(p => p.subfamily === spec.sub && p.thickness && p.price != null).map(p => p.thickness))].sort((a, b) => a - b);
+}
+
+// Computo: per m² teorico (consumo × prezzo) e per la superficie del cliente arrotondata a confezioni intere
+function systemQuote(sys, variant, products, { mainMm, m2 = 100, discount = 0 } = {}) {
+  const layers = resolveLayers(sys, variant, mainMm);
+  const mm = Math.round((layers.find(l => l.key === sys.main)?.cm || 0) * 10);
+  const rows = [], missing = [];
+  const add = (label, spec, perM2Base, unit, { waste = 0, pack = null, note = '', sizeMm = null } = {}) => {
+    const p = findProduct(products, spec, sizeMm);
+    if (!p) { missing.push(label); return; }
+    const perM2 = perM2Base * (1 + waste / 100);
+    const priceUnit = String(p.priceUnit || '').toUpperCase();
+    // prezzo per unità di consumo: SACCO = 25 kg
+    const unitPrice = priceUnit === 'SACCO' ? p.price / (pack || 25) : p.price;
+    let qty = perM2 * m2, packs = null, sell = qty, sellUnit = unit;
+    if (priceUnit === 'SACCO') { packs = Math.ceil(qty / (pack || 25) - 1e-9); sell = packs; sellUnit = 'sacchi'; }
+    else if (pack) { packs = Math.ceil(qty / pack - 1e-9); sell = packs * pack; }
+    else if (unit === 'pz') { sell = Math.ceil(qty - 1e-9); if (p.palletQuantity) { packs = Math.ceil(sell / p.palletQuantity - 1e-9); sell = packs * p.palletQuantity; } }
+    else if (unit === 'm2' && p.length && p.width) { const panel = (p.length * p.width) / 1e6; packs = Math.ceil(qty / panel - 1e-9); sell = Math.round(packs * panel * 100) / 100; }
+    else sell = Math.ceil(qty * 10 - 1e-9) / 10;
+    const total = priceUnit === 'SACCO' ? sell * p.price : sell * p.price;
+    rows.push({ label, product: p, code: p.listCode || p.radixCode || '', perM2, unit, unitPrice, perM2Price: perM2 * unitPrice, qty, sell, sellUnit, packs, pack, total, note, priceUnit,
+      packLabel: priceUnit === 'SACCO' ? `${packs} sacchi da ${pack || 25} kg` : pack ? `${packs} rotoli/confezioni` : unit === 'pz' && p.palletQuantity ? `${packs} bancali da ${p.palletQuantity} pz` : unit === 'm2' && packs ? `${packs} pannelli` : '' });
+  };
+  for (const l of layers) if (l.product) add(l.name, l.product, l.perM2, l.unit, { waste: l.waste, pack: l.pack, note: l.note || l.check || '', sizeMm: l.thin ? null : Math.round(l.cm * 10) });
+  for (const x of sys.extras) add(x.label, x.product, x.perM2, x.unit, { pack: x.pack, note: x.note || '', sizeMm: x.product.heightFrom ? Math.round((layers.find(l => l.key === x.product.heightFrom)?.cm || 0) * 10) : null });
+  const perM2List = rows.reduce((s, r) => s + r.perM2Price, 0), totalList = rows.reduce((s, r) => s + r.total, 0);
+  const k = 1 - (Number(discount) || 0) / 100;
+  const u = uValue(layers);
+  return { layers, rows, missing, mainMm: mm, m2, discount: Number(discount) || 0, u, thickness: totalCm(layers),
+    perM2List: round2(perM2List), perM2Net: round2(perM2List * k), totalList: round2(totalList), totalNet: round2(totalList * k),
+    checks: layers.filter(l => l.check).map(l => l.check).concat(rows.filter(r => /confermare/.test(r.note)).map(r => `${r.label}: ${r.note}`)) };
+}
+const round2 = x => Math.round(x * 100) / 100;
+const systemByCode = code => SYSTEMS.find(s => s.code === code) || null;
+
+// Pilota visibile solo a Tommaso (02/11/2026: "per adesso solo sulla mia versione finché non è perfetto")
+function canSeeSystems(session) {
+  if (!session || session.role !== 'direzione' || session.preview) return false;
+  return /tommaso/i.test(`${session.name || ''} ${session.email || ''}`);
+}
+
+return { RSI, resolveLayers, uValue, totalCm, verdict, findProduct, mainThicknesses, systemQuote, systemByCode, canSeeSystems };
+})();
 __m["js/views/orders.js"] = (function () {
 // Ordini passati all'ufficio (offerte accettate): l'ufficio li segue fino all'inserimento in RADIX. Solo Direzione.
 const { h, eur, dateIt, emptyState, toast } = __m["js/ui.js"];
@@ -5670,6 +5913,7 @@ return { ordersSection };
 })();
 __m["js/views/more.js"] = (function () {
 // Pagine Direzione uscite dalla Home (01/11 sera): Ordini come pagina propria e "Altro" per il telefono.
+const { canSeeSystems } = __m["js/core/systems.js"];
 const { h } = __m["js/ui.js"];
 const { ordersSection } = __m["js/views/orders.js"];
 async function viewOrders(app) {
@@ -5688,11 +5932,175 @@ async function viewMore(app) {
       item('#/rete', '↻', 'Attività rete', 'Note, visite, offerte di tutti'),
       item('#/manager', '▤', 'Area manager', 'Portafogli, provvigioni, accessi'),
       item('#/mappe', '◎', 'Mappe', 'Clienti sulla mappa'),
+      canSeeSystems(app.session) ? item('#/sistemi', '▥', 'Sistemi', 'Pacchetti, trasmittanza, scheda cliente (prova)') : null,
       item('#/giri', '🗓', 'Giri visite', 'Prepara il giro, telefonate, foglio da stampare'),
       item('#/profilo', '◔', 'Profilo', 'Password, anteprima agente, esci')));
 }
 
 return { viewOrders, viewMore };
+})();
+__m["js/views/systems.js"] = (function () {
+// SISTEMI (pilota 02/11/2026, solo Tommaso): pacchetti delle tavole di catalogo in variante STEICO / NATURHELD,
+// trasmittanza U, prezzo €/m² e per i m² del cliente, scheda per il cliente, "Crea offerta" con i materiali (trasporto nell'offerta).
+const { h, eur, num, dateIt, today, toast, emptyState } = __m["js/ui.js"];
+const { SYSTEMS, MAT, WALL_LIMITS, ZONES } = __m["js/data/systems-data.js"];
+const { systemQuote, mainThicknesses, verdict, systemByCode, canSeeSystems, resolveLayers, uValue } = __m["js/core/systems.js"];
+const { pickCustomer } = __m["js/views/quotes.js"];
+const { OFFER_HEADER, OFFER_FOOTER } = __m["js/brand-assets.js"];
+const n2 = x => num(x, 2), n3 = x => Number(x).toLocaleString('it-IT', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const state = app => (app.cache.systems ||= {});
+const stOf = (app, sys) => (state(app)[sys.code] ||= { variant: sys.variants.includes('NATURHELD') ? 'NATURHELD' : sys.variants[0], mm: null, m2: 100, discount: 0, zone: 'E' });
+
+function denied() { return h('div', { class: 'page' }, emptyState('Sezione in prova: non disponibile per questo profilo.')); }
+
+// ---- disegno della stratigrafia (sezione orizzontale, interno a sinistra) ----
+let svgSeq = 0;
+function stratSvg(layers, { width = 640, height = 250 } = {}) {
+  const id = 's' + (++svgSeq) + '-';
+  const drawn = layers, x0 = 40, W = width - 80, top = 46, H = height - 86;
+  const minW = 7, tot = drawn.reduce((s, l) => s + (l.thin ? 0 : l.cm), 0);
+  const raw = drawn.map(l => l.thin ? 3 : Math.max(minW, l.cm / tot * W));
+  const k = W / raw.reduce((s, w) => s + w, 0); let x = x0;
+  const pats = `<defs>
+    <pattern id="${id}p-brick" width="18" height="10" patternUnits="userSpaceOnUse"><rect width="18" height="10" fill="${MAT.muro.color}"/><path d="M0 0H18M0 5H18M9 0V5M0 5V10M18 5V10" stroke="#9c8a77" stroke-width=".8"/></pattern>
+    <pattern id="${id}p-block" width="14" height="12" patternUnits="userSpaceOnUse"><rect width="14" height="12" fill="${MAT.laterizio.color}"/><rect x="3" y="2" width="8" height="3" fill="#b5603d"/><rect x="3" y="7" width="8" height="3" fill="#b5603d"/></pattern>
+    <pattern id="${id}p-fibre" width="16" height="8" patternUnits="userSpaceOnUse"><rect width="16" height="8" fill="${MAT.fibra.color}"/><path d="M0 4Q4 0 8 4T16 4" fill="none" stroke="#a87c3d" stroke-width=".8"/></pattern>
+    <pattern id="${id}p-fibreR" width="16" height="8" patternUnits="userSpaceOnUse"><rect width="16" height="8" fill="${MAT.fibraRigida.color}"/><path d="M0 4Q4 1 8 4T16 4" fill="none" stroke="#7d5a2c" stroke-width=".8"/></pattern>
+    <pattern id="${id}p-dots" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="${MAT.intonaco.color}"/><circle cx="2" cy="2" r=".7" fill="#b9ad96"/></pattern></defs>`;
+  const fillOf = l => ({ muro: `url(#${id}p-brick)`, laterizio: `url(#${id}p-block)`, fibra: `url(#${id}p-fibre)`, fibraRigida: `url(#${id}p-fibreR)`, intonaco: `url(#${id}p-dots)` }[l.mat] || MAT[l.mat]?.color || '#ddd');
+  let body = '', labels = '';
+  drawn.forEach((l, i) => {
+    const w = raw[i] * k;
+    body += `<rect x="${x.toFixed(1)}" y="${top}" width="${w.toFixed(1)}" height="${H}" fill="${fillOf(l)}" stroke="#4b4a4d" stroke-width=".6"/>`;
+    if (l.frame) for (const yy of [top + H * 0.18, top + H * 0.68]) {   // montanti Joist a doppia T
+      const fw = Math.min(10, w * 0.22), fh = H * 0.14;
+      body += `<rect x="${x.toFixed(1)}" y="${yy}" width="${fw}" height="${fh}" fill="#8a6a3c"/><rect x="${(x + w - fw).toFixed(1)}" y="${yy}" width="${fw}" height="${fh}" fill="#8a6a3c"/><rect x="${x.toFixed(1)}" y="${yy + fh / 2 - 1}" width="${w.toFixed(1)}" height="2" fill="#5d4523"/>`;
+    }
+    const cx = x + w / 2, ly = i % 2 ? top - 22 : top - 8;
+    labels += `<line x1="${cx.toFixed(1)}" y1="${top}" x2="${cx.toFixed(1)}" y2="${ly + 4}" stroke="#676568" stroke-width=".6"/><circle cx="${cx.toFixed(1)}" cy="${ly - 3}" r="7.5" fill="#BCBF00"/><text x="${cx.toFixed(1)}" y="${ly}" font-size="9" font-weight="700" text-anchor="middle" fill="#2b2a2c" font-family="Inter,Arial">${i + 1}</text>`;
+    if (!l.thin && w > 30) labels += `<text x="${cx.toFixed(1)}" y="${top + H + 14}" font-size="9" text-anchor="middle" fill="#4b4a4d" font-family="Inter,Arial">${String(l.cm).replace('.', ',')} cm</text>`;
+    x += w;
+  });
+  const sides = `<text x="${x0}" y="${height - 8}" font-size="10" fill="#676568" font-family="Inter,Arial" letter-spacing="1">INTERNO</text><text x="${x0 + W}" y="${height - 8}" font-size="10" fill="#676568" text-anchor="end" font-family="Inter,Arial" letter-spacing="1">ESTERNO</text>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Stratigrafia" class="strat">${pats}${body}${labels}${sides}</svg>`;
+}
+const svgEl = (layers, opt) => { const d = h('div', { class: 'strat-box' }); d.innerHTML = stratSvg(layers, opt); return d; };
+
+// ---- elenco ----
+async function viewSystems(app) {
+  if (!canSeeSystems(app.session)) return denied();
+  return h('div', { class: 'page' },
+    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Sistemi'), h('p', { class: 'muted' }, 'Pacchetti NORDTEX dalle tavole di catalogo: stratigrafia, trasmittanza, prezzo al m² e scheda per il cliente.'))),
+    h('p', { class: 'alert warn' }, 'Versione di prova visibile solo a te. Le voci "da confermare" vanno verificate prima di consegnare una scheda.'),
+    h('div', { class: 'sys-grid' }, SYSTEMS.map(s => {
+      const lay = resolveLayers(s, s.variants.includes('NATURHELD') ? 'NATURHELD' : s.variants[0]);
+      return h('a', { class: 'card sys-card plain', href: '#/sistema/' + s.code },
+        h('div', { class: 'sys-card-head' }, h('span', { class: 'sys-code' }, s.code), h('div', {}, h('strong', {}, s.name), h('small', { class: 'muted' }, s.short))),
+        svgEl(lay, { width: 520, height: 170 }),
+        h('small', { class: 'muted' }, `U ≈ ${n3(uValue(lay).u)} W/m²K · ${s.variants.join(' / ')}`));
+    })));
+}
+
+// ---- configuratore ----
+async function viewSystem(app, code) {
+  if (!canSeeSystems(app.session)) return denied();
+  const sys = systemByCode(code); if (!sys) return h('div', { class: 'page' }, emptyState('Sistema non trovato.'));
+  const products = await app.products(), st = stOf(app, sys);
+  const thick = mainThicknesses(sys, st.variant, products);
+  if (!st.mm || !thick.includes(st.mm)) st.mm = thick.includes(sys.layers.find(l => l.key === sys.main).cm * 10) ? sys.layers.find(l => l.key === sys.main).cm * 10 : thick[thick.length - 1];
+  const q = systemQuote(sys, st.variant, products, { mainMm: st.mm, m2: st.m2, discount: st.discount });
+  const v = verdict(sys, q.u.u, st.zone);
+  const redraw = () => app.go('sistema/' + code);
+  const seg = sys.variants.length > 1 ? h('div', { class: 'seg', role: 'tablist' }, sys.variants.map(x => h('button', { type: 'button', class: 'seg-b' + (x === st.variant ? ' on' : ''), onclick: () => { st.variant = x; redraw(); } }, x))) : h('span', { class: 'badge muted' }, 'Versione di catalogo');
+  const sel = (val, opts, on, lab) => h('select', { 'aria-label': lab, onchange: e => on(e.target.value) }, opts.map(([k, t]) => h('option', { value: k, selected: String(k) === String(val) }, t)));
+  const numIn = (val, on, lab, attrs = {}) => h('input', { type: 'number', inputmode: 'decimal', value: val, 'aria-label': lab, ...attrs, onchange: e => on(Number(String(e.target.value).replace(',', '.')) || 0) });
+  const mainLabel = sys.main === 'blocco' ? 'Spessore blocco' : 'Spessore isolante principale';
+  const controls = h('div', { class: 'card sys-controls' },
+    h('div', { class: 'field' }, h('span', {}, 'Variante'), seg),
+    h('label', { class: 'field' }, h('span', {}, mainLabel), sel(st.mm, thick.map(t => [t, `${t} mm`]), x => { st.mm = Number(x); redraw(); }, mainLabel)),
+    h('label', { class: 'field' }, h('span', {}, 'Superficie del cliente (m²)'), numIn(st.m2, x => { st.m2 = Math.max(1, x); redraw(); }, 'Superficie', { min: 1, step: 1 })),
+    h('label', { class: 'field' }, h('span', {}, 'Sconto sul listino (%)'), numIn(st.discount, x => { st.discount = Math.min(70, Math.max(0, x)); redraw(); }, 'Sconto', { min: 0, max: 70, step: 0.5 })),
+    h('label', { class: 'field' }, h('span', {}, 'Zona climatica'), sel(st.zone, ZONES.map(z => [z, z]), x => { st.zone = x; redraw(); }, 'Zona climatica')));
+  const kpi = (label, value, sub, cls = '') => h('div', { class: 'sys-kpi ' + cls }, h('small', {}, label), h('strong', {}, value), sub ? h('small', {}, sub) : null);
+  const kpis = h('div', { class: 'sys-kpis' },
+    kpi('Trasmittanza U', `${n3(q.u.u)} W/m²K`, `${v.ok ? '✓ entro' : '✕ oltre'} il limite ${n3(v.max)} (zona ${st.zone})`, v.ok ? 'ok' : 'bad'),
+    kpi('Spessore totale', `${String(q.thickness).replace('.', ',')} cm`),
+    kpi('Materiali al m²', eur(q.perM2Net), st.discount ? `listino ${eur(q.perM2List)} − ${num(st.discount, 1)}%` : 'prezzo di listino'),
+    kpi(`Totale ${num(st.m2, 0)} m²`, eur(q.totalNet), 'confezioni intere · trasporto a parte'));
+  const layersTable = h('table', { class: 'sys-table' }, h('thead', {}, h('tr', {}, ['#', 'Strato', 'cm', 'λ W/mK', 'R m²K/W'].map(t => h('th', {}, t)))),
+    h('tbody', {}, q.layers.map((l, i) => h('tr', {}, h('td', {}, String(i + 1)), h('td', {}, l.name, l.frame ? h('small', { class: 'muted' }, ` · ${l.frame.label}`) : null, l.existing ? h('small', { class: 'muted' }, ' · esistente') : null),
+      h('td', { class: 'num' }, l.thin ? '—' : String(l.cm).replace('.', ',')), h('td', { class: 'num' }, l.lambda ? n3(l.lambda) : '—'), h('td', { class: 'num' }, l.lambda ? n3(l.cm / 100 / l.lambda) : '—')))));
+  const matTable = h('table', { class: 'sys-table mat' }, h('thead', {}, h('tr', {}, ['Materiale', 'Codice', 'Consumo/m²', '€/m²', `Per ${num(st.m2, 0)} m²`, 'Importo'].map(t => h('th', {}, t)))),
+    h('tbody', {}, q.rows.map(r => h('tr', {}, h('td', {}, r.label, r.note ? h('small', { class: /confermare/.test(r.note) ? 'warn-text' : 'muted' }, ' · ' + r.note) : null), h('td', {}, h('small', {}, r.code)),
+      h('td', { class: 'num' }, `${n2(r.perM2)} ${r.unit === 'm2' ? 'm²' : r.unit}`), h('td', { class: 'num' }, eur(r.perM2Price)),
+      h('td', { class: 'num' }, `${num(r.sell, 2)} ${r.sellUnit === 'm2' ? 'm²' : r.sellUnit}`, r.packLabel && r.sellUnit !== 'sacchi' ? h('small', { class: 'muted' }, ' · ' + r.packLabel) : null), h('td', { class: 'num' }, eur(r.total))))),
+    h('tfoot', {}, h('tr', {}, h('td', { colspan: 3 }, h('strong', {}, 'Totale materiali (listino)')), h('td', { class: 'num' }, h('strong', {}, eur(q.perM2List))), h('td', {}), h('td', { class: 'num' }, h('strong', {}, eur(q.totalList))))));
+  const checks = q.checks.length || q.missing.length ? h('div', { class: 'alert warn' }, h('strong', {}, 'Da confermare prima di consegnare la scheda'), h('ul', {}, [...q.checks, ...q.missing.map(m => `Prodotto non trovato a listino: ${m}`)].map(t => h('li', {}, t)))) : null;
+  const zonesTable = h('table', { class: 'sys-table zones' }, h('thead', {}, h('tr', {}, h('th', {}, 'Zona'), ZONES.map(z => h('th', { class: z === st.zone ? 'on' : '' }, z)))),
+    h('tbody', {}, h('tr', {}, h('td', {}, h('small', {}, WALL_LIMITS[sys.limits].label)), ZONES.map(z => h('td', { class: 'num' + (z === st.zone ? ' on' : '') + (q.u.u <= WALL_LIMITS[sys.limits].zones[z] ? ' ok' : ' bad') }, n3(WALL_LIMITS[sys.limits].zones[z]))))));
+  return h('div', { class: 'page sys-page' },
+    h('a', { class: 'back', href: '#/sistemi' }, '← Sistemi'),
+    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, h('span', { class: 'sys-code' }, sys.code), ' ', sys.name), h('p', { class: 'muted' }, `${sys.short} · ${sys.source}`))),
+    h('nav', { class: 'cactions' },
+      h('button', { class: 'act primary', type: 'button', onclick: () => printSheet(app, sys, q, st) }, h('span', { class: 'act-ico' }, '⎙'), h('span', {}, 'Scheda cliente')),
+      h('button', { class: 'act', type: 'button', onclick: () => toOffer(app, sys, q, st) }, h('span', { class: 'act-ico' }, '€'), h('span', {}, 'Crea offerta'))),
+    controls, kpis,
+    h('section', { class: 'card' }, h('h2', {}, 'Stratigrafia'), svgEl(q.layers), h('div', { class: 'tbl-wrap' }, layersTable),
+      h('p', { class: 'fine' }, `Calcolo UNI EN ISO 6946 (Rsi 0,13 · Rse 0,04; strati con montanti: metodo combinato, prudente). Valore della tavola di catalogo (PHPP, prodotti originali): ${n3(sys.catalogU)} W/m²K. Calcolo indicativo: non sostituisce la relazione tecnica.`)),
+    h('section', { class: 'card' }, h('h2', {}, 'Limiti di legge'), h('div', { class: 'tbl-wrap' }, zonesTable), h('p', { class: 'fine' }, 'D.M. 26/06/2015 "requisiti minimi", valori in vigore dal 2021.')),
+    checks,
+    h('section', { class: 'card' }, h('h2', {}, 'Materiali e prezzo'), h('div', { class: 'tbl-wrap' }, matTable),
+      h('p', { class: 'fine' }, `Quantità arrotondate a pannelli, sacchi, rotoli o bancali interi; sfrido 5% sui pannelli. Esclusi: ${sys.excluded} Trasporto in cantiere quotato a parte (con "Crea offerta" lo calcola l'offerta).`)),
+    h('section', { class: 'card' }, h('h2', {}, 'Descrizione'), h('p', {}, sys.description)));
+}
+
+// ---- "Crea offerta": cliente → offerta nuova con le righe del sistema ----
+async function toOffer(app, sys, q, st) {
+  const c = await pickCustomer(app, { title: `Offerta sistema ${sys.code}: per quale cliente?`, recentIds: [], recentLabel: '', blockSales: true }); if (!c) return;
+  app.cache.systemDraft = { lines: q.rows.map(r => ({ productId: r.product.id, qty: r.sell })), discount: st.discount,
+    note: `Sistema NORDTEX ${sys.code} — ${sys.name} (${st.variant}), ${num(st.m2, 0)} m², U ≈ ${n3(q.u.u)} W/m²K.` };
+  app.go('offerta/nuova/' + c.id);
+}
+
+// ---- scheda per il cliente (stampa / PDF) ----
+async function printSheet(app, sys, q, st) {
+  let customer = null;
+  if (await new Promise(r => { const ok = confirmBox(r); document.body.append(ok); })) customer = await pickCustomer(app, { title: 'Scheda per quale cliente?', recentIds: [], recentLabel: '' });
+  const v = verdict(sys, q.u.u, st.zone), lim = WALL_LIMITS[sys.limits];
+  const el = h('div', { class: 'sys-sheet' });
+  el.innerHTML = `<img class="ss-head" src="${OFFER_HEADER}" alt="NORDTEX">
+  <div class="ss-title"><div><div class="ss-kicker">Sistema NORDTEX ${esc(sys.code)}${sys.variants.length > 1 ? ' · versione ' + esc(st.variant) : ''}</div><h1>${esc(sys.name)}</h1><p>${esc(sys.short)}</p></div>
+    <div class="ss-facts">${customer ? `<div><small>Cliente</small><strong>${esc(customer.name)}</strong></div>` : ''}<div><small>Data</small><strong>${dateIt(today())}</strong></div></div></div>
+  <div class="ss-cols"><div class="ss-draw">${stratSvg(q.layers, { width: 640, height: 230 })}</div>
+    <div class="ss-perf"><div class="ss-u ${v.ok ? 'ok' : 'bad'}"><small>Trasmittanza U</small><strong>${n3(q.u.u)}</strong><small>W/m²K</small></div>
+      <div class="ss-mini"><small>Spessore</small><strong>${String(q.thickness).replace('.', ',')} cm</strong></div>
+      <div class="ss-mini"><small>Limite zona ${esc(st.zone)}</small><strong>${n3(v.max)} ${v.ok ? '✓' : '✕'}</strong></div></div></div>
+  <table class="ss-t"><thead><tr><th>#</th><th>Strato</th><th>Spessore cm</th><th>Densità kg/m³</th><th>λ W/mK</th><th>μ</th></tr></thead><tbody>
+    ${q.layers.map((l, i) => `<tr><td>${i + 1}</td><td>${esc(l.name)}${l.existing ? ' <em>(esistente)</em>' : ''}</td><td>${l.thin ? '—' : String(l.cm).replace('.', ',')}</td><td>${esc(l.rho ?? '—')}</td><td>${l.lambda ? n3(l.lambda) : '—'}</td><td>${esc(l.mu ?? '—')}</td></tr>`).join('')}</tbody></table>
+  <table class="ss-t ss-z"><thead><tr><th>${esc(lim.label)}</th>${ZONES.map(z => `<th${z === st.zone ? ' class="on"' : ''}>${z}</th>`).join('')}</tr></thead>
+    <tbody><tr><td>Trasmittanza limite U (W/m²K)</td>${ZONES.map(z => `<td${z === st.zone ? ' class="on"' : ''}>${n3(lim.zones[z])}</td>`).join('')}</tr></tbody></table>
+  <h2>Materiali per ${num(st.m2, 0)} m²</h2>
+  <table class="ss-t"><thead><tr><th>Materiale</th><th>Consumo al m²</th><th>Quantità</th></tr></thead><tbody>
+    ${q.rows.map(r => `<tr><td>${esc(r.label)}</td><td>${n2(r.perM2)} ${r.unit === 'm2' ? 'm²' : esc(r.unit)}</td><td>${num(r.sell, 2)} ${r.sellUnit === 'm2' ? 'm²' : esc(r.sellUnit)}${r.packLabel && r.sellUnit !== 'sacchi' ? ' · ' + esc(r.packLabel) : ''}</td></tr>`).join('')}</tbody></table>
+  <div class="ss-price"><div><small>Prezzo materiali al m²</small><strong>${eur(q.perM2Net)}</strong></div><div><small>Superficie</small><strong>${num(st.m2, 0)} m²</strong></div><div class="tot"><small>Totale materiali</small><strong>${eur(q.totalNet)}</strong><small>+ IVA</small></div></div>
+  <p class="ss-note"><strong>Trasporto in cantiere:</strong> quotato a parte. <strong>Esclusi:</strong> ${esc(sys.excluded)}</p>
+  <p class="ss-note">Trasmittanza calcolata secondo UNI EN ISO 6946 con i dati dichiarati dai produttori; valore indicativo che non sostituisce la relazione tecnica di progetto. Limiti: D.M. 26/06/2015. Prezzi di listino n.05${q.discount ? `, sconto ${num(q.discount, 1)}%` : ''}; quantità arrotondate a confezioni intere.</p>
+  <img class="ss-foot" src="${OFFER_FOOTER}" alt="NORDTEX Srl">`;
+  let root = document.getElementById('print-root'); if (!root) { root = h('div', { id: 'print-root' }); document.body.append(root); }
+  root.replaceChildren(el);
+  const prev = document.title; document.title = `Sistema ${sys.code} ${customer ? customer.name : ''}`.trim();
+  setTimeout(() => { window.print(); document.title = prev; }, 120);
+}
+function confirmBox(resolve) {
+  const back = h('div', { class: 'modal-back' }, h('div', { class: 'modal', role: 'dialog', 'aria-label': 'Scheda cliente' },
+    h('div', { class: 'modal-head' }, h('h3', {}, 'Scheda cliente')),
+    h('div', { class: 'modal-body' }, h('p', {}, 'Vuoi intestare la scheda a un cliente?')),
+    h('div', { class: 'modal-foot' }, h('button', { class: 'btn', onclick: () => { back.remove(); resolve(false); } }, 'Senza cliente'), h('button', { class: 'btn primary', onclick: () => { back.remove(); resolve(true); } }, 'Scegli cliente'))));
+  return back;
+}
+
+return { stratSvg, viewSystems, viewSystem };
 })();
 __m["js/main.js"] = (function () {
 // NORDTEX HUB — piattaforma commerciale unica (Agenti e Direzione)
@@ -5711,6 +6119,8 @@ const { viewMaps } = __m["js/views/maps.js"];
 const { viewOrders, viewMore } = __m["js/views/more.js"];
 const { viewRadixOffer } = __m["js/views/radix-offers.js"];
 const { viewPlans, viewPlan } = __m["js/views/plans.js"];
+const { viewSystems, viewSystem } = __m["js/views/systems.js"];
+const { canSeeSystems } = __m["js/core/systems.js"];
 const VERSION = '1.0.0';
 
 // Navigazione (01/11): le offerte hanno una voce propria; il profilo è l'iniziale in alto a destra (telefono) o il nome in basso (computer)
@@ -5723,6 +6133,7 @@ const NAV = [
   { id: 'ordini', label: 'Ordini', icon: '⇪', dir: true, phone: false },
   { id: 'bacheca', label: 'Bacheca', icon: '✓' },
   { id: 'mappe', label: 'Mappe', icon: '◎', phoneDir: false },
+  { id: 'sistemi', label: 'Sistemi', icon: '▥', only: canSeeSystems, phone: false },
   { id: 'rete', label: 'Attività rete', icon: '↻', dir: true, group: 'Direzione', phone: false },
   { id: 'manager', label: 'Area manager', icon: '▤', dir: true, phone: false },
   { id: 'altro', label: 'Altro', icon: '⋯', dir: true, side: false },
@@ -5848,13 +6259,13 @@ function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch { /* 
 
 function shell(active, content) {
   const isDir = app.session.role === 'direzione', pv = app.session.preview;
-  const items = NAV.filter(n => !n.dir || isDir);
+  const items = NAV.filter(n => (!n.dir || isDir) && (!n.only || n.only(app.session)));
   const badge = id => id === 'ordini' && app.navCounts?.ordini ? h('span', { class: 'tab-count' }, app.navCounts.ordini)
     : id === 'bacheca' && app.navCounts?.bacheca ? h('span', { class: 'tab-count nav-badge-bacheca' }, app.navCounts.bacheca) : null;
   const nav = items.filter(n => n.side !== false).flatMap(n => [n.group ? h('div', { class: 'nav-group' }, n.group) : null,
     h('a', { href: '#/' + n.id, class: 'nav-item' + (active === n.id ? ' active' : '') }, h('span', { class: 'ico', 'aria-hidden': 'true' }, n.icon), h('span', {}, n.label), badge(n.id))]);
   const tabs = items.filter(n => n.phone !== false && !(isDir && n.phoneDir === false));
-  const tabActive = id => active === id || (id === 'altro' && ['ordini', 'rete', 'manager', 'mappe'].includes(active) && isDir);
+  const tabActive = id => active === id || (id === 'altro' && ['ordini', 'rete', 'manager', 'mappe', 'sistemi'].includes(active) && isDir);
   const who = h('div', { class: 'who' }, h('a', { href: '#/profilo', class: 'who-name' }, h('strong', {}, pv ? pv.by : app.session.name)), h('small', {}, pv ? 'Direzione · anteprima' : isDir ? 'Direzione' : (app.session.assignee || 'Agente')),
     h('button', { class: 'link', onclick: signOut }, 'Esci'));
   const bar = pv ? h('div', { class: 'preview-bar', role: 'status' }, h('span', {}, h('strong', {}, 'Anteprima '), app.session.assignee, h('small', {}, ' · sola lettura')),
@@ -5929,7 +6340,7 @@ async function render() {
   const [route, ...args] = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
   if (!app.session) { root.replaceChildren(loginView()); return; }
   const seq = ++renderSeq;
-  const views = { home: viewHome, agenda: viewAgenda, preventivi: viewQuotes, offerta: viewQuoteEditor, bacheca: viewBoard, rete: viewNetwork, manager: viewManager, mappe: viewMaps, profilo: viewAccount, ordini: viewOrders, altro: viewMore, rxofferta: viewRadixOffer, giri: viewPlans, giro: viewPlan };
+  const views = { home: viewHome, agenda: viewAgenda, preventivi: viewQuotes, offerta: viewQuoteEditor, bacheca: viewBoard, rete: viewNetwork, manager: viewManager, mappe: viewMaps, profilo: viewAccount, ordini: viewOrders, altro: viewMore, rxofferta: viewRadixOffer, giri: viewPlans, giro: viewPlan, sistemi: viewSystems, sistema: viewSystem };
   const key = views[route] ? route : 'home';
   if (['rete', 'manager', 'ordini', 'altro'].includes(key) && app.session.role !== 'direzione') { app.go('home'); return; }
   // vecchi collegamenti alle schede della Home (prima del 01/11 sera)
@@ -5944,7 +6355,7 @@ async function render() {
   let content;
   try { content = await views[key](app, ...args); } catch (e) { console.error(e); content = h('div', { class: 'page' }, h('p', { class: 'error' }, e.message)); }
   if (seq !== renderSeq) return;
-  const activeNav = key === 'offerta' || key === 'rxofferta' ? 'preventivi' : key === 'giri' || key === 'giro' ? 'mappe' : key;
+  const activeNav = key === 'offerta' || key === 'rxofferta' ? 'preventivi' : key === 'giri' || key === 'giro' ? 'mappe' : key === 'sistema' ? 'sistemi' : key;
   root.replaceChildren(shell(activeNav, content));
   document.getElementById('main')?.scrollTo?.(0, 0);
 }
