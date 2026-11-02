@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="491d30c34e50">
+<meta name="ntx-build" content="9db9985e9ea8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -735,7 +735,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .du-log li small{flex-basis:100%}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"491d30c34e50"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"9db9985e9ea8"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3044,6 +3044,14 @@ const DEPOTS = {
     pickup: ['SPEA Tecnologie Edili srl', 'Contrada Sarrocciano', 'IT-62010 Morrovalle (MC)'] },
 };
 const TRANSPORT_BY = ['DESTINATARIO', 'VETTORE', 'MITTENTE'];
+// 02/11 (offerta Casale di Tommaso): ritiro al deposito senza trasporto.
+// q.pickup = true/false scelto nell'offerta; offerte vecchie (q.pickup assente): ritiro se deposito con ritiro e trasporto a cura del destinatario.
+function isPickup(q) {
+  const d = DEPOTS[q.depot || 'diretta'];
+  if (!d?.pickup) return false;
+  if (q.pickup === true || q.pickup === false) return q.pickup;
+  return (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO';
+}
 const CLAUSES = ['Quotazioni valide salvo variazioni imposte dal produttore/fornitore. Non si accettano resi.', 'Non ci assumiamo responsabilità per ritardi e danni nelle consegne dovute ai vettori.'];
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -3106,8 +3114,9 @@ function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
   if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), '', n(t.extras, 2)));
   if (t.freight) rows.push(row(esc(freightLabel(q)), 'N14126', 'NR', '1,00', n(t.freight, 3), '', n(t.freight, 2)));
   const notes = [];
-  if (depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO') notes.push(`Materiale disponibile per il ritiro presso:<br><b>${depot.pickup.map(esc).join('<br>')}</b><br><b>Prezzo franco partenza</b> dal deposito`);
-  if (t.freightPending && !(depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO')) notes.push('Trasporto: da definire.');   // ritiro al deposito: nessun trasporto
+  const pickup = isPickup(q);
+  if (pickup) notes.push(`Materiale disponibile per il ritiro presso:<br><b>${depot.pickup.map(esc).join('<br>')}</b><br><b>Prezzo franco partenza</b> dal deposito`);
+  if (t.freightPending && !pickup) notes.push('Trasporto: da definire.');   // ritiro al deposito: nessun trasporto
   if (q.notes) notes.push(esc(q.notes).replace(/\n/g, '<br>'));
   const noteRows = notes.map(x => `<tr><td colspan="7" style="${cell};padding-top:8px">${x}</td></tr>`).join('');
   const tot = (k, v, bold) => `<tr><td style="font-size:8.5pt;padding:2px 4px">${k}</td><td style="font-size:8.5pt;padding:2px 4px;text-align:right${bold ? ';font-weight:bold' : ''}">${v}</td></tr>`;
@@ -3142,14 +3151,14 @@ function quoteFileName(q, now = new Date()) {
   return [clean(q.customer?.name), customerCode(q), (/^OFF-\d{4}-\d+$/.test(q.number || '') ? q.number : 'OFF-' + clean(q.number || 'BOZZA')), d.toISOString().slice(0, 10)].filter(Boolean).join('_');
 }
 
-return { DEPOTS, TRANSPORT_BY, CLAUSES, fmtN, dotDate, UM, discText, customerCode, destinationLines, freightLabel, customerLines, lineExtra, quoteDocHtml, quoteFileName };
+return { DEPOTS, TRANSPORT_BY, isPickup, CLAUSES, fmtN, dotDate, UM, discText, customerCode, destinationLines, freightLabel, customerLines, lineExtra, quoteDocHtml, quoteFileName };
 })();
 __m["js/core/quote-pdf.js"] = (function () {
 // PDF dell'offerta nel formato NORDTEX/RADIX, generato nell'app (nessun servizio esterno): lo stesso contenuto di quote-doc.js.
 // Serve all'invio dalla casella personale di chi fa l'offerta (decisione Direzione 31/10/2026).
 const { PdfDoc, wrapText, textWidth } = __m["js/core/pdf-writer.js"];
 const { totals, lineAmount } = __m["js/core/pricing.js"];
-const { DEPOTS, CLAUSES, customerCode, lineExtra, fmtN: n, dotDate, UM, discText, quoteFileName, destinationLines, freightLabel, customerLines } = __m["js/core/quote-doc.js"];
+const { DEPOTS, CLAUSES, customerCode, lineExtra, fmtN: n, dotDate, UM, discText, quoteFileName, destinationLines, freightLabel, customerLines, isPickup } = __m["js/core/quote-doc.js"];
 const MM = 72 / 25.4;
 function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
   const t = totals(q);
@@ -3206,7 +3215,7 @@ function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
     { code: l.radixCode || l.listCode || '', um: UM[l.unit] || l.unit, qty: l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), price: n(l.listPrice, 3), disc: discText(l.discounts), amount: n(lineAmount(l), 2) });
   if (t.extras) row(wrap(q.extrasLabel || 'Altri addebiti'), { code: '', um: 'NR', qty: '1,00', price: n(t.extras, 3), disc: '', amount: n(t.extras, 2) });
   if (t.freight) row(wrap(freightLabel(q)), { code: 'N14126', um: 'NR', qty: '1,00', price: n(t.freight, 3), disc: '', amount: n(t.freight, 2) });
-  const pickup = depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO';
+  const pickup = isPickup(q);
   if (pickup) row(['Materiale disponibile per il ritiro presso:', ...depot.pickup, 'Prezzo franco partenza dal deposito']);
   if (t.freightPending && !pickup) row(['Trasporto: da definire.']);
   if (q.notes) row(String(q.notes).split('\n').flatMap(s => wrapText(s, W - 4, 8.5)));
@@ -3236,7 +3245,7 @@ return { quotePdf };
 })();
 __m["js/core/mailto.js"] = (function () {
 const { totals } = __m["js/core/pricing.js"];
-const { DEPOTS, fmtN } = __m["js/core/quote-doc.js"];
+const { DEPOTS, fmtN, isPickup } = __m["js/core/quote-doc.js"];
 // Email preparata nel programma di posta di chi invia (Outlook, Mail, Gmail…): mittente = la casella personale.
 // Regola Direzione 31/10/2026: offerte e comunicazioni partono dalla posta dell'agente / di Tommaso / di Marco / di Christian.
 // 02/11 (prova di Christian su PC con Outlook): Outlook per Windows non riconosce più indirizzi separati da virgola → su Windows ';'
@@ -3259,7 +3268,7 @@ function quoteMailIntro(q, now = new Date()) {
 function quoteMailSummary(q, now = new Date()) {
   const t = totals(q);
   const depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
-  const pickup = depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO';
+  const pickup = isPickup(q);
   const until = new Date(new Date(q.createdAt || now).getTime() + (q.validDays || 30) * 864e5);
   const transport = pickup ? `franco deposito (${depot.pickup[0]})` : t.freightPending ? 'da definire'
     : t.freight > 0 ? `compreso nell'offerta (${fmtN(t.freight, 2)} €)` : 'compreso';
@@ -3716,6 +3725,7 @@ const { h, fill, eur, num, toast } = __m["js/ui.js"];
 const { planTransport, googleMapsUrl, fillSummary, transportVerdict, corridorFor, ORIGIN_VIA } = __m["js/core/logistics.js"];
 const { kmViaBrennero, addressVariants } = __m["js/core/route.js"];
 const { lineAmount } = __m["js/core/pricing.js"];
+const { DEPOTS } = __m["js/core/quote-doc.js"];
 const eu = (n, d = 2) => { if (n === null || n === undefined) return '—'; const [i, f] = Math.abs(Number(n)).toFixed(d).split('.'); return (n < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : '') + ' €'; };   // 1.452,00 €
 const qtyFmt = (n, u) => `${num(n, u === 'PZ' || u === 'SA' ? 0 : 2)} ${({ M2: 'm²', M3: 'm³', ML: 'ml' }[u] || (u || '').toLowerCase())}`;
 
@@ -3834,6 +3844,12 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
   }
 
   function redraw() {
+    if (q.pickup === true) {   // 02/11: ritiro al deposito, nessun trasporto
+      const d = DEPOTS[q.depot || 'diretta'];
+      fill(box, h('p', { class: 'alert info' }, `Ritiro al deposito${d?.pickup ? ' ' + d.pickup[0] + ' – ' + d.pickup[2].replace(/^IT-\d+\s*/, '') : ''}: nessun trasporto in offerta. `,
+        'Per calcolare il trasporto scegli “Con trasporto” in Condizioni → Consegna.'));
+      lastPlan = null; return;
+    }
     const lines = q.lines.map(l => ({ product: { ...(byId.get(l.productId) || {}), description: l.description }, qty: l.qty, amount: lineAmount(l) })).filter(x => x.product.id);
     if (!lines.length) { fill(box, addr, h('p', { class: 'muted' }, 'Aggiungi prodotti per calcolare trasporto e carico.')); lastPlan = null; return; }
     const plan = planTransport(lines, { prov: q.delivery.prov, km: q.logistics.km, vehicleType: q.logistics.vehicleType });
@@ -4073,7 +4089,7 @@ __m["js/core/quote-email.js"] = (function () {
 // Email dell'offerta: oggetto, testo e documento HTML (tabelle in linea, leggibile da Outlook, Gmail, Apple Mail).
 // Modulo puro (nessun DOM): usato dall'app per l'anteprima e dalla funzione server che invia la mail.
 const { totals, lineNet, lineAmount } = __m["js/core/pricing.js"];
-const { quoteDocHtml } = __m["js/core/quote-doc.js"];
+const { quoteDocHtml, isPickup } = __m["js/core/quote-doc.js"];
 const COMPANY = { name: 'NORDTEX Srl', addr: "Prato dell'Ospizio, 6 · I-39043 Chiusa (BZ)", contacts: 'T. +39 0472 847 110 · info@nordtex.it · www.nordtex.it', vat: 'P.IVA 02623660988' };
 // Copia conoscenza nascosta obbligatoria per gli invii degli agenti (decisione Direzione 31/10/2026)
 const QUOTE_BCC = ['tommaso.conti@nordtex.it', 'commerciale@nordtex.it'];
@@ -4100,7 +4116,7 @@ ${senderName ? `<p style="font-size:13px;margin-top:16px">${esc(senderName)}${se
 </div></body></html>`;
   const text = `${message ? message + '\n\n' : ''}Offerta NORDTEX n. ${q.number} del ${dateIt(created)} (valida fino al ${dateIt(until)})\nSpett.le ${c.name}\n\n`
     + q.lines.map(l => `- ${l.description}: ${num(l.qty)} ${l.unit} × ${eur(lineNet(l))} = ${eur(lineAmount(l))}`).join('\n')
-    + `\n\nMerce netta ${eur(t.goods)}\nTrasporto ${t.freightPending ? 'da definire' : eur(t.freight)}\nImponibile ${eur(t.taxable)}\nIVA ${num(t.vatRate)}% ${eur(t.vat)}\nTotale ${eur(t.total)}\n\nCondizione di pagamento: ${q.payment || 'DA CONCORDARE'}\nTrasporto a cura: ${q.transportBy || 'DESTINATARIO'}\nValidità: ${dateIt(until)}\n${PRICE_NOTE}\n`;
+    + `\n\nMerce netta ${eur(t.goods)}\nTrasporto ${isPickup(q) && !t.freight ? 'nessuno (ritiro al deposito)' : t.freightPending ? 'da definire' : eur(t.freight)}\nImponibile ${eur(t.taxable)}\nIVA ${num(t.vatRate)}% ${eur(t.vat)}\nTotale ${eur(t.total)}\n\nCondizione di pagamento: ${q.payment || 'DA CONCORDARE'}\nTrasporto a cura: ${q.transportBy || 'DESTINATARIO'}\nValidità: ${dateIt(until)}\n${PRICE_NOTE}\n`;
   return { subject, html, text, total: t.total };
 }
 
@@ -4330,7 +4346,7 @@ const { conversionLines, quantityEquivalents } = __m["js/core/conversions.js"];
 const { unitPrices, fullLoadTransport, offerTransportPerUnit, unitPriceNote, fullLoadQty } = __m["js/core/unit-prices.js"];
 const { planTransport } = __m["js/core/logistics.js"];
 const { quoteEmail, QUOTE_BCC, isEmail } = __m["js/core/quote-email.js"];
-const { quoteDocHtml, quoteFileName, DEPOTS, TRANSPORT_BY } = __m["js/core/quote-doc.js"];
+const { quoteDocHtml, quoteFileName, DEPOTS, TRANSPORT_BY, isPickup } = __m["js/core/quote-doc.js"];
 const { techSheetFor, sheetLinksText, sheetEntries } = __m["js/core/tech-sheets.js"];
 const { orderMailBody, orderMailSubject, orderMailTo } = __m["js/core/order-mail.js"];
 const { ORDER_STATES } = __m["js/data/model.js"];
@@ -4621,7 +4637,7 @@ async function viewQuoteEditor(app, id, customerId) {
       t.discountAlerts ? h('p', { class: 'bad-text' }, `${t.discountAlerts} righe con sconto oltre ${DISCOUNT_ALERT_LABEL}`) : null,
       t.freightPending ? h('p', { class: 'muted' }, 'Trasporto da definire: non è compreso nel totale.') : null,
       econBox());
-    const tr = t.freightPending ? 'trasporto da definire' : t.freight ? 'trasporto ' + eur(t.freight) : 'trasporto compreso';
+    const tr = isPickup(q) && !t.freight ? 'ritiro al deposito' : t.freightPending ? 'trasporto da definire' : t.freight ? 'trasporto ' + eur(t.freight) : 'trasporto compreso';
     fill(dock, h('div', { class: 'qd-sum' }, h('strong', {}, eur(t.total)), h('small', {}, `IVA incl. · ${tr}`)),
       h('div', { class: 'qd-act' }, isOwner && !locked ? h('button', { class: 'btn small' + (dirty ? ' attn' : ''), onclick: save }, 'Salva') : null,
         q.id && isOwner && ['Bozza', 'Inviata'].includes(q.status) ? h('button', { class: 'btn small primary', onclick: () => sendDialog().catch(e => toast(e.message, 'error')) }, 'Invia') : null));
@@ -4634,6 +4650,34 @@ async function viewQuoteEditor(app, id, customerId) {
   const cond = (label, el) => field(label, el);
   const txtIn = (key, attrs = {}) => h('input', { value: q[key] ?? '', disabled: locked, ...attrs, onchange: e => { q[key] = attrs.type === 'number' ? Number(e.target.value) : e.target.value; mark(); drawTotals(); } });
   const notesIn = h('textarea', { rows: 3, disabled: locked, placeholder: 'Note per il cliente (compaiono nel documento)', onchange: e => { q.notes = e.target.value; mark(); } }, q.notes || '');
+  // 02/11 (offerta Casale): ritiro al deposito senza trasporto → niente riga trasporto, niente calcolo km
+  const byBox = h('span');
+  const pickupHint = h('p', { class: 'fine' });
+  const pickupSel = h('select', { disabled: locked, 'aria-label': 'Consegna', onchange: e => setPickup(e.target.value === 'ritiro') });
+  const depotSel = h('select', { disabled: locked, 'aria-label': 'Deposito di uscita', onchange: e => {
+    q.depot = e.target.value;
+    if (!DEPOTS[q.depot]?.pickup) { if (q.pickup) setPickup(false, true); else q.pickup = false; }
+    else if (q.pickup === undefined) q.pickup = false;
+    mark(); drawPickup(); tp?.redraw();
+  } }, Object.entries(DEPOTS).map(([k, d]) => h('option', { value: k, selected: k === (q.depot || 'diretta') }, d.label)));
+  function drawPickup() {
+    const can = !!DEPOTS[q.depot || 'diretta']?.pickup, on = can && isPickup(q);
+    fill(pickupSel, h('option', { value: 'trasporto', selected: !on }, 'Con trasporto (consegna al cliente)'),
+      h('option', { value: 'ritiro', selected: on, disabled: !can }, 'Ritiro al deposito, senza trasporto'));
+    fill(byBox, h('select', { disabled: locked || on, 'aria-label': 'Trasporto a cura', onchange: e => { q.transportBy = e.target.value; mark(); } },
+      TRANSPORT_BY.map(t => h('option', { value: t, selected: t === (q.transportBy || 'DESTINATARIO') }, t))));
+    pickupHint.textContent = on ? `Ritiro presso ${DEPOTS[q.depot].pickup.join(', ')}: prezzo franco deposito, nessun trasporto in offerta.`
+      : can ? '' : 'Per il ritiro scegli prima il deposito di uscita (Chiusa, Lecco, Casale, Castelfranco, Torri, Marche).';
+  }
+  function setPickup(on, quiet) {
+    if (on && !DEPOTS[q.depot || 'diretta']?.pickup) { toast('Scegli prima il deposito di ritiro', 'error'); drawPickup(); return; }
+    q.pickup = on;
+    if (on) { q.transportBy = 'DESTINATARIO'; q.freight = 0; q.freightAuto = false; q.freightNote = 'Ritiro al deposito: nessun trasporto'; q.transportEstimate = null; }
+    else if (q.freightNote === 'Ritiro al deposito: nessun trasporto') { q.freight = null; q.freightAuto = true; q.freightNote = ''; }
+    freightIn.value = q.freight ?? ''; freightNote.textContent = q.freightNote || '';
+    if (!quiet) { mark(); drawPickup(); tp?.redraw(); drawTotals(); }
+  }
+  drawPickup();
   const isDir = app.session.role === 'direzione';
   // Agenti: "Inviata" solo tramite invio email (non si sceglie a mano)
   const statusOpts = QUOTE_STATES.filter(st => isDir || st !== 'Inviata' || q.status === 'Inviata');
@@ -4843,10 +4887,8 @@ async function viewQuoteEditor(app, id, customerId) {
           cond('IVA %', txtIn('vatRate', { type: 'number', min: 0, max: 100 })), cond('Validità (giorni)', txtIn('validDays', { type: 'number', min: 1, max: 365 }))),
         cond('Condizione di pagamento', paymentField()),
         h('div', { class: 'form two' },
-          cond('Deposito di uscita', h('select', { disabled: locked, 'aria-label': 'Deposito di uscita', onchange: e => { q.depot = e.target.value; mark(); } },
-            Object.entries(DEPOTS).map(([k, d]) => h('option', { value: k, selected: k === (q.depot || 'diretta') }, d.label)))),
-          cond('Trasporto a cura', h('select', { disabled: locked, 'aria-label': 'Trasporto a cura', onchange: e => { q.transportBy = e.target.value; mark(); } },
-            TRANSPORT_BY.map(t => h('option', { value: t, selected: t === (q.transportBy || 'DESTINATARIO') }, t))))),
+          cond('Deposito di uscita', depotSel), cond('Consegna', pickupSel), cond('Trasporto a cura', byBox)),
+        pickupHint,
         viewerIsDir ? cond('Rif. RADIX (offerta ufficiale / ordine, a cura dell\'ufficio)', txtIn('radixRef', { placeholder: 'es. OFF 1324 del 29/10 – ORD 815' })) : null,
         cond('Cantiere (facoltativo)', h('textarea', { rows: 2, disabled: locked, placeholder: 'es. EDILIZIA VIGONOVO\nVia La Croce 16, 33074 Vigonovo (PN)', onchange: e => { q.site = e.target.value; mark(); } }, q.site || '')),
         cond('Note', notesIn)),
