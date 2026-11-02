@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="afb62a579b99">
+<meta name="ntx-build" content="5ef4851effa1">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -751,7 +751,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 @media (max-width:760px){ .of-grid{grid-template-columns:1fr 1fr} .of-sub{display:none} }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"afb62a579b99"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"5ef4851effa1"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -6313,6 +6313,7 @@ __m["js/views/office.js"] = (function () {
 // su RADIX dal PC, quindi l'app per loro è il PONTE tra HUB e RADIX.
 // In alto: contatori (come "Andamento") con il numero di richieste e l'attesa; sotto: quattro code in ordine di priorità,
 // una riga per richiesta che si apre col clic.
+//  0. Offerte di oggi (quelle fatte nell'app oggi, sopra gli ordini: richiesta di Tommaso 02/11 sera)
 //  1. Ordini (offerte accettate da inserire in RADIX) — Christian
 //  2. Domande dei commerciali (in arrivo: passo 3)
 //  3. Clienti nuovi da aprire in RADIX — Irina
@@ -6402,6 +6403,24 @@ function customerRow(app, c, refresh) {
       code, h('button', { class: 'btn small primary', type: 'button', onclick: done }, 'Aperto in RADIX'))]);
 }
 
+const localDay = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const hhmm = iso => new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+// Offerte fatte oggi nell'app (tutta la rete), le più recenti prima; escluse quelle del cliente di prova
+function todaysQuotes(quotes, now = new Date()) {
+  const day = localDay(now.toISOString());
+  return quotes.filter(q => q.createdAt && localDay(q.createdAt) === day && !String(q.number || '').startsWith('PRV-'))
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+function quoteRow(q) {
+  const cls = { Bozza: 'muted', Inviata: 'info', Accettata: 'ok', Persa: 'bad' }[q.status] || 'muted';
+  return row([h('span', { class: 'badge ' + cls }, q.status), h('strong', {}, q.customer?.name || '—'),
+    h('span', { class: 'of-sub' }, [q.number, eur(q.total || 0), q.ownerName].filter(Boolean).join(' · ')), h('span', { class: 'of-age' }, 'alle ' + hhmm(q.createdAt))],
+  [h('p', { class: 'of-line' }, [[q.customer?.city, q.customer?.prov].filter(Boolean).join(' '), `${(q.lines || []).length} ${(q.lines || []).length === 1 ? 'articolo' : 'articoli'}`,
+      q.freight === null || q.freight === undefined ? 'trasporto da definire' : q.freight ? 'trasporto ' + eur(q.freight) : 'senza trasporto', q.payment ? 'pagamento ' + q.payment : ''].filter(Boolean).join(' · ')),
+    (q.lines || []).length ? h('p', { class: 'of-line muted' }, (q.lines || []).slice(0, 4).map(l => l.description).join(' · ') + ((q.lines || []).length > 4 ? ' …' : '')) : null,
+    h('div', { class: 'row of-actions' }, q.id ? h('a', { class: 'btn small', href: '#/offerta/' + q.id }, 'Apri l\'offerta') : null)]);
+}
+
 const queue = (id, title, count, list, empty) => h('section', { class: 'card of-card', id: 'of-' + id },
   h('div', { class: 'of-title' }, h('h2', {}, title), count === null ? h('span', { class: 'badge muted' }, 'in arrivo') : h('span', { class: 'tab-count' + (count ? '' : ' zero') }, String(count))),
   list && list.length ? h('div', { class: 'of-rows' }, list) : h('p', { class: 'muted of-empty-line' }, empty));
@@ -6418,6 +6437,7 @@ async function viewOfficeHome(app) {
     const [{ orders, customers }, quotes] = await Promise.all([app.store.officeQueue(), app.store.quotes()]);
     const qById = new Map(quotes.map(q => [q.id, q]));
     const newIds = new Set(customers.map(c => c.id));
+    const offers = todaysQuotes(quotes);
     const open = orders.filter(openOrder).sort((a, b) => String(a.requestedAt).localeCompare(String(b.requestedAt)));
     const custs = customers.slice().sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
     // avvisi: cosa è arrivato dall'ultimo controllo
@@ -6435,22 +6455,24 @@ async function viewOfficeHome(app) {
       onclick: e => { e.preventDefault(); document.getElementById('of-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } },
       h('small', {}, label), h('strong', {}, n === null ? '—' : String(n)), h('span', {}, sub));
     fill(tiles,
+      tile('offerte', 'Offerte di oggi', offers.length, offers.length ? eur(offers.reduce((t, q) => t + (q.total || 0), 0)) + ' in totale' : 'nessuna per ora', false),
       tile('ordini', 'Ordini da inserire', open.length, open.length ? oldest(open) : 'nessuno in attesa', open.some(o => Date.now() - new Date(o.requestedAt) > 4 * 3600e3)),
       tile('domande', 'Domande dei commerciali', null, 'in arrivo'),
       tile('clienti', 'Clienti da aprire in RADIX', custs.length, custs.length ? oldest(custs) : 'nessuno in attesa', custs.some(c => Date.now() - new Date(c.createdAt) > 24 * 3600e3)),
       tile('note', 'Note da riportare in RADIX', null, 'in arrivo'));
     // code: si ridisegnano solo se è cambiato qualcosa e nessuno sta scrivendo in una riga aperta
-    const sig = JSON.stringify([open.map(o => o.id + o.status), custs.map(c => c.id + c.vat + c.sdi + c.pec + c.bank + c.paymentTerms)]);
+    const sig = JSON.stringify([offers.map(q => q.id + q.status + q.total), open.map(o => o.id + o.status), custs.map(c => c.id + c.vat + c.sdi + c.pec + c.bank + c.paymentTerms)]);
     const busy = box.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '');
     if (!force && (sig === lastSig || busy)) return;
     lastSig = sig;
     const cards = {
+      offerte: queue('offerte', 'Offerte di oggi', offers.length, offers.map(quoteRow), 'Ancora nessuna offerta oggi.'),
       ordini: queue('ordini', 'Ordini da inserire', open.length, open.map(o => { const q = qById.get(o.quoteId); return orderRow(app, o, q, !!q && newIds.has(q.customerId), load); }), 'Nessun ordine in attesa.'),
       domande: queue('domande', 'Domande dei commerciali', null, null, 'Qui arriveranno le domande dei commerciali (trasporto, disponibilità, consegna, prezzo), con risposta rapida e avviso.'),
       clienti: queue('clienti', 'Clienti nuovi da aprire in RADIX', custs.length, custs.map(c => customerRow(app, c, load)), 'Nessun cliente da aprire.'),
       note: queue('note', 'Note da riportare in RADIX', null, null, 'Qui arriveranno le note e le visite dei commerciali, con il pulsante Copia.'),
     };
-    const order = /irina/i.test(app.session.name || '') ? ['clienti', 'note', 'ordini', 'domande'] : ['ordini', 'domande', 'clienti', 'note'];
+    const order = /irina/i.test(app.session.name || '') ? ['clienti', 'note', 'offerte', 'ordini', 'domande'] : ['offerte', 'ordini', 'domande', 'clienti', 'note'];
     fill(box, order.map(k => cards[k]));
   }
   await load(true);
@@ -6460,7 +6482,7 @@ async function viewOfficeHome(app) {
     tiles, box);
 }
 
-return { isOffice, radixCustomerText, waitText, viewOfficeHome };
+return { isOffice, radixCustomerText, waitText, todaysQuotes, viewOfficeHome };
 })();
 __m["js/data/systems-data.js"] = (function () {
 // Sistemi NORDTEX (02/11/2026, pilota solo Direzione-Tommaso). Fonti: tavole "Proposta progettuale" dei cataloghi
