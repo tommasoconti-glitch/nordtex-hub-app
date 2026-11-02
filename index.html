@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="db223898c996">
+<meta name="ntx-build" content="ba21a1b011f9">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -735,7 +735,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .du-log li small{flex-basis:100%}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"db223898c996"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ba21a1b011f9"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3362,7 +3362,8 @@ function corridorFor(prov, destLat = null) {
 // Tappe prima del Brennero per luogo di carico (02/11, Christian: Staudacher→Vignole app 457 km, Google 498; stessa
 // differenza ~41 km su F.lli Anelli 691/733): il calcolo auto passava dal Fernpass, vietato al transito dei mezzi pesanti;
 // il bilico fa Monaco → A93 → Kufstein → Innsbruck.
-const ORIGIN_VIA = { 'St. Leonhard Strasse 25, 86483 Balzhausen, Germany': [{ name: 'Kufstein (valle dell\'Inn)', lat: 47.5830, lon: 12.1650 }] };
+// 02/11 14:20: tappa Kufstein TOLTA (Christian: 564 km, peggio di prima). Si riempie solo con il percorso tedesco confermato.
+const ORIGIN_VIA = {};
 const routeVia = (prov, destLat, origin) => [...(ORIGIN_VIA[origin] || []), BRENNERO, ...(corridorFor(prov, destLat)?.via || [])];
 
 // Luoghi di carico con tariffa a km (indirizzi dal listino)
@@ -3662,7 +3663,7 @@ async function geocode(address, fetchImpl = globalThis.fetch) {
 async function kmViaBrennero(originAddress, destAddress, fetchImpl = globalThis.fetch, { prov } = {}) {
   const [a, b] = [await geocode(originAddress, fetchImpl), await geocode(destAddress, fetchImpl)];
   const cor = corridorFor(prov, b.lat);
-  const k = 'r3:' + originAddress.toLowerCase() + '>' + destAddress.toLowerCase() + (cor ? '>' + cor.id : ''); const c = cacheGet(k); if (c) return c;
+  const k = 'r4:' + originAddress.toLowerCase() + '>' + destAddress.toLowerCase() + (cor ? '>' + cor.id : ''); const c = cacheGet(k); if (c) return c;
   const pts = [a, ...routeVia(prov, b.lat, originAddress), b].map(p => `${p.lon.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
   const r = await fetchImpl(OSRM + pts + '?overview=false&alternatives=false&steps=false');
   if (!r.ok) throw new Error('Servizio percorsi non disponibile (' + r.status + ')');
