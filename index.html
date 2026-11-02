@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="8e059bd31f8c">
+<meta name="ntx-build" content="fc4d90f57309">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -719,7 +719,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 @media (pointer:coarse),(max-width:760px){.urow{min-height:44px}.useg{min-height:40px;font-size:.76rem;padding:6px 4px;white-space:normal}}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8e059bd31f8c"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"fc4d90f57309"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1156,7 +1156,7 @@ function indexedDbKv(dbName = 'nordtex-hub') {
   return { get: k => tx('readonly', s => s.get(k)), set: (k, v) => tx('readwrite', s => s.put(v, k)) };
 }
 
-const COLLECTIONS = ['notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio', 'postReads', 'plans', 'stops'];
+const COLLECTIONS = ['notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio', 'postReads', 'plans', 'stops', 'radixLinks'];
 
 function createLocalStore({ data, kv }) {
   if (data?.schema !== 'nordtex-hub-data-v1') throw new Error('Dati HUB non compatibili');
@@ -1337,11 +1337,17 @@ function createLocalStore({ data, kv }) {
       mustSession(); const myRole = data.assignees.find(a => a.name === session.assignee)?.role || '';
       const ok = o => o.customer ? canSeeCustomer(o.customer) && (isDir() || radixOfferForAgent(o, myRole)) : isDir();
       const out = new Map((await col('radixOutcomes')).map(x => [x.id, x]));
-      return (data.radixOffers || []).filter(o => (customerId ? o.customer === customerId : true) && ok(o))
+      const links = new Map((await col('radixLinks')).map(x => [x.id, x.customer]));
+      return (data.radixOffers || []).map(o => links.has(o.id) ? { ...o, customer: links.get(o.id) } : o).filter(o => (customerId ? o.customer === customerId : true) && ok(o))
         .map(o => { const x = out.get(o.id) || {}; return { id: o.id, customerId: o.customer || null, customerLabel: o.customerLabel, date: o.date, validUntil: o.validUntil, subject: o.subject || '',
           contact: o.contact || '', total: o.total ?? null, radixAgent: o.radixAgent || '', followup: o.followup || null, open: true,
           outcome: x.outcome || 'Da seguire', outcomeNote: x.note || '', nextFollowup: x.next || null, outcomeByName: x.byName || '', outcomeAt: x.at || null }; })
         .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+    },
+    async linkRadixOffer(id, customerId) {
+      mustSession(); if (!isDir()) throw new Error('Solo la Direzione può collegare un\'offerta RADIX a un cliente');
+      const list = await col('radixLinks'); const i = list.findIndex(x => x.id === id); if (i >= 0) list.splice(i, 1);
+      list.push({ id, customer: customerId || null }); await save('radixLinks');
     },
     async setRadixOfferOutcome(id, fields) {
       const s = mustSession(); const f = checkRadixOutcome(fields);
@@ -1779,6 +1785,10 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
         subject: r.subject || '', contact: r.contact || '', total: r.total == null ? null : Number(r.total), radixAgent: r.radix_agent || '', followup: r.followup, open: r.open,
         outcome: r.outcome, outcomeNote: r.outcome_note || '', nextFollowup: r.next_followup, outcomeByName: nm.get(r.outcome_by) || '', outcomeAt: r.outcome_at }));
     },
+    // 02/11: collega l'offerta RADIX a un cliente dell'app (solo Direzione, funzione hub_link_radix_offer)
+    async linkRadixOffer(id, customerId) {
+      await api('/rest/v1/rpc/hub_link_radix_offer', { method: 'POST', body: { p_offer: id, p_customer: customerId ? custUuid(customerId) : null } });
+    },
     async setRadixOfferOutcome(id, fields) {
       const f = checkRadixOutcome(fields);
       const r = await api('/rest/v1/hub_radix_offers?id=eq.' + encodeURIComponent(id), { method: 'PATCH', prefer: 'return=representation', body: { outcome: f.outcome, outcome_note: f.note || null, next_followup: f.next } });
@@ -2168,6 +2178,13 @@ async function radixFollowupBlock(app, refresh) {
 }
 
 // Riepilogo di un'offerta RADIX (02/11, Tommaso: "tocco l'offerta e voglio sapere cos'è, quante volte ho chiamato e cosa mi ha detto il cliente")
+// 02/11: collega l'offerta RADIX al cliente giusto (ricerca precompilata con il nome RADIX)
+async function linkOffer(app, o, refresh) {
+  const name = o.customerLabel.split(',')[0].replace(/\b(S\.?R\.?L\.?|S\.?P\.?A\.?|S\.?A\.?S\.?|S\.?N\.?C\.?)\b/gi, '').trim();
+  const c = await app.ui.pickCustomer(app, { title: 'Collega l\'offerta ' + o.id + ' a…', query: name });
+  if (!c) return;
+  try { await app.store.linkRadixOffer(o.id, c.id); app.invalidate?.(); toast('Offerta collegata a ' + c.name); refresh(); } catch (e) { toast(e.message, 'error'); }
+}
 async function viewRadixOffer(app, id) {
   const all = app.store.radixOffers ? await app.store.radixOffers().catch(() => []) : [];
   const o = all.find(x => x.id === id);
@@ -2202,6 +2219,13 @@ async function viewRadixOffer(app, id) {
         !app.session.preview ? h('button', { class: 'act primary', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, h('span', { class: 'act-ico' }, '✓'), h('span', {}, 'Esito')) : null,
         c?.phone ? h('a', { class: 'act', href: 'tel:' + (String(c.phone).match(/[+\d][\d\s/.-]{5,}/) || [''])[0].replace(/[^\d+]/g, '') }, h('span', { class: 'act-ico' }, '☎'), h('span', {}, 'Chiama')) : null,
         c ? h('a', { class: 'act', href: '#/agenda/' + c.id }, h('span', { class: 'act-ico' }, '☰'), h('span', {}, 'Scheda cliente')) : null)),
+    !c && app.session.role === 'direzione' && !app.session.preview && app.store.linkRadixOffer && app.ui ? h('section', { class: 'card rx-link' },
+      h('h2', {}, 'Cliente non presente nell\'app'),
+      h('p', { class: 'muted' }, `"${o.customerLabel}" non è stato riconosciuto nell'anagrafica (spesso è un cliente aperto in RADIX dopo l'ultima esportazione). Collegalo per avere telefono, storico, note e promemoria.`),
+      h('div', { class: 'cactions' },
+        h('button', { class: 'act primary', type: 'button', onclick: () => linkOffer(app, o, refresh) }, h('span', { class: 'act-ico' }, '⇄'), h('span', {}, 'Collega a un cliente')),
+        h('button', { class: 'act', type: 'button', onclick: () => app.ui.newCustomerDialog(app, o.customerLabel.split(',')[0].trim(), { onCreated: async nc => { await app.store.linkRadixOffer(o.id, nc.id); app.invalidate?.(); toast('Offerta collegata a ' + nc.name); refresh(); } }) },
+          h('span', { class: 'act-ico' }, '+'), h('span', {}, 'Crea il cliente')))) : null,
     h('section', { class: 'card' }, h('h2', {}, 'Storia di questa offerta'),
       about.length ? h('ol', { class: 'timeline' }, about.map(noteLi)) : h('p', { class: 'muted' }, 'Quando segni un esito, il contatto finisce qui e nella storia del cliente.')),
     c ? h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'Ultimi contatti con il cliente'), h('a', { class: 'more', href: '#/agenda/' + c.id }, 'Tutti →')),
@@ -2210,6 +2234,8 @@ async function viewRadixOffer(app, id) {
     h('section', { class: 'card' }, h('h2', {}, 'Dati RADIX'),
       kv('Validità', o.validUntil ? dateIt(o.validUntil) : ''), kv('Follow-up previsto in RADIX', o.followup ? dateIt(o.followup) : ''), kv('Referente', o.contact),
       kv('Agente in RADIX', o.radixAgent ? o.radixAgent.toLowerCase() : ''), kv('Cliente seguito da', c?.assignee || ''),
+      c && app.session.role === 'direzione' && !app.session.preview && app.store.linkRadixOffer ? h('p', { class: 'fine' }, 'Cliente sbagliato? ',
+        h('button', { class: 'link', type: 'button', onclick: async () => { try { await app.store.linkRadixOffer(o.id, null); toast('Offerta scollegata'); refresh(); } catch (e) { toast(e.message, 'error'); } } }, 'Scollega e scegli di nuovo')) : null,
       h('p', { class: 'fine' }, 'Le righe con articoli e prezzi sono in RADIX: l\'esportazione delle offerte non le contiene.')));
 }
 
@@ -2773,7 +2799,7 @@ async function contactDialog(app, c, p = {}) {
 }
 
 // Nuovo cliente (potenziale): anche per clienti mai seguiti, per poter registrare contatti e fare offerte
-async function newCustomerDialog(app, preset = '', { thenQuote = false } = {}) {
+async function newCustomerDialog(app, preset = '', { thenQuote = false, onCreated = null } = {}) {
   const isDir = app.session.role === 'direzione';
   const all = await app.customers();
   if (indexCache.src !== all) indexCache = { src: all, ix: buildIndex(all) };
@@ -2802,6 +2828,7 @@ async function newCustomerDialog(app, preset = '', { thenQuote = false } = {}) {
     try {
       const c = await app.store.addCustomer({ name: name.value, vat: vat.value, street: street.value, cap: cap.value, city: city.value, prov: prov.value, phone: phone.value, email: email.value, typology: typ.value, notes: notes.value, assignee: asg?.value || '' });
       app.invalidate(); toast('Cliente creato: ' + c.name);
+      if (onCreated) { await onCreated(c); return true; }
       app.go(goQuote ? 'offerta/nuova/' + c.id : 'agenda/' + c.id); return true;
     } catch (e) {
       if (e.code === 'DUPLICATE' && e.customerId) { toast(e.message, 'error'); app.go('agenda/' + e.customerId); return true; }
@@ -4712,7 +4739,7 @@ async function startNewQuote(app) {
 }
 
 // Scelta del cliente (cerca per nome, città, P.IVA, numero): usata da "+ Nuova offerta" e "+ Nuova nota"
-async function pickCustomer(app, { title, recentIds = [], recentLabel = 'Clienti recenti', blockSales = false }) {
+async function pickCustomer(app, { title, recentIds = [], recentLabel = 'Clienti recenti', blockSales = false, query = '', footer = null }) {
   const all = await app.customers();
   if (pickIndex.src !== all) pickIndex = { src: all, ix: buildIndex(all) };
   const recent = [...new Set(recentIds)].map(id => app.store.customer(id)).filter(Boolean).slice(0, 6);
@@ -4732,8 +4759,8 @@ async function pickCustomer(app, { title, recentIds = [], recentLabel = 'Clienti
     const back = h('div', { class: 'modal-back', onclick: e => { if (e.target === back) close(); } },
       h('div', { class: 'modal pick', role: 'dialog', 'aria-label': title },
         h('div', { class: 'modal-head' }, h('h3', {}, title), h('button', { class: 'icon-btn', 'aria-label': 'Chiudi', onclick: () => close() }, '✕')),
-        h('div', { class: 'modal-body' }, input, list)));
-    draw(''); document.body.append(back); input.focus();
+        h('div', { class: 'modal-body' }, input, list, footer ? footer(close) : null)));
+    input.value = query; draw(query); document.body.append(back); input.focus();
   });
 }
 
@@ -6314,8 +6341,8 @@ const { previewStore, previewChoices } = __m["js/core/preview.js"];
 const { createLocalStore, indexedDbKv } = __m["js/data/local-store.js"];
 const { createSupabaseStore } = __m["js/data/supabase-store.js"];
 const { viewHome } = __m["js/views/home.js"];
-const { viewAgenda } = __m["js/views/agenda.js"];
-const { viewQuotes, viewQuoteEditor } = __m["js/views/quotes.js"];
+const { viewAgenda, newCustomerDialog } = __m["js/views/agenda.js"];
+const { viewQuotes, viewQuoteEditor, pickCustomer } = __m["js/views/quotes.js"];
 const { viewBoard } = __m["js/views/board.js"];
 const { viewNetwork, viewManager } = __m["js/views/direction.js"];
 const { viewMaps } = __m["js/views/maps.js"];
@@ -6349,6 +6376,7 @@ const app = {
   async products() { return this.cache.products ||= await this.store.products(); },
   go(route) { if (location.hash !== '#/' + route) location.hash = '#/' + route; else render(); },
   invalidate() { delete this.cache.customers; },
+  ui: { pickCustomer: (...a) => pickCustomer(...a), newCustomerDialog: (...a) => newCustomerDialog(...a) },   // per le viste che non possono importarle (dipendenze circolari)
   // Anteprima come agente (solo Direzione, sola lettura)
   real: null,
   async startPreview(label) {
