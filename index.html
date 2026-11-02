@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="cfba0c8dbb86">
+<meta name="ntx-build" content="232afcc591bd">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -689,19 +689,37 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 #print-root .ss-price strong{font:700 12pt 'NT Poppins',Inter,sans-serif} #print-root .ss-price .tot{background:#D40E41;border-left-color:#b00b35;color:#fff} #print-root .ss-price .tot small{color:#ffd9e2}
 #print-root .ss-note{font-size:7.4pt;color:#4b4a4d;margin:2.5mm 0 0}
 .area-fold summary{cursor:pointer;color:var(--muted);font-size:.88rem;padding:6px 0;min-height:32px}
-/* Prezzo per unità nell'offerta (02/11) */
-.uprice{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--surface,#fff)}
-.uprice>summary{cursor:pointer;font-weight:600;font-size:.88rem;min-height:30px;display:flex;align-items:center}
-.uprice .chips{margin:6px 0}
-.uprice-grid{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
-.uprice-chip{display:flex;flex-direction:column;align-items:flex-start;border:1px solid var(--line);background:var(--bg,#f6f6f5);border-radius:8px;padding:6px 10px;min-height:44px;cursor:pointer;font:inherit;color:inherit}
-.uprice-chip strong{font-variant-numeric:tabular-nums}.uprice-chip small{color:var(--muted);font-size:.78rem}
-.uprice-chip.on{background:var(--nt-lime-soft,#f2f3d1);border-color:var(--nt-lime,#BCBF00);box-shadow:inset 0 0 0 1px var(--nt-lime,#BCBF00)}
-.uprice-chip:disabled{opacity:.5;cursor:default}
-.uprice .chip:disabled{opacity:.45;cursor:default}
+/* Prezzo per unità nell'offerta (02/11, ridisegnato): listino compatto tipo cartellino prezzi */
+.uprice{margin-top:8px;border-top:1px dashed var(--line);padding-top:4px}
+.uprice>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:10px;min-height:34px;padding:4px 0}
+.uprice>summary::-webkit-details-marker{display:none}
+.uprice>summary::before{content:'›';display:inline-block;width:10px;color:var(--muted);transition:transform .15s}
+.uprice[open]>summary::before{transform:rotate(90deg)}
+.u-title{font-weight:600;font-size:.86rem}
+.u-peek{color:var(--muted);font-size:.84rem;font-variant-numeric:tabular-nums;display:flex;gap:8px;align-items:baseline}
+.u-count{background:var(--nt-lime-soft,#f2f3d1);color:var(--nt-lime-ink,#575800);border-radius:999px;padding:1px 8px;font-size:.75rem;font-weight:600}
+.useg-row{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:4px 0 8px;max-width:520px}
+.useg{flex:1;border:0;background:transparent;font:inherit;font-size:.8rem;padding:7px 8px;min-height:36px;color:var(--ink);cursor:pointer;white-space:nowrap}
+.useg+.useg{border-left:1px solid var(--line)}
+.useg.on{background:var(--nt-grey,#676568);color:#fff;font-weight:600}
+.useg:disabled{color:var(--muted);opacity:.5;cursor:default}
+.ulist{list-style:none;margin:0;padding:0;max-width:520px}
+.urow{width:100%;display:grid;grid-template-columns:20px 1fr auto;align-items:center;gap:8px;border:0;border-bottom:1px solid var(--line);background:transparent;font:inherit;color:inherit;text-align:left;padding:6px 4px;min-height:36px;cursor:pointer}
+.ulist li:last-child .urow{border-bottom:0}
+.urow:hover{background:var(--bg,#f6f6f5)}
+.ul-tick{width:18px;height:18px;border:1.5px solid var(--line);border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff}
+.urow.on .ul-tick{background:var(--nt-lime,#BCBF00);border-color:var(--nt-lime,#BCBF00);color:#1f1f1f;font-size:13px;font-weight:800}
+.ul-name{font-size:.86rem}
+.ul-price{font-variant-numeric:tabular-nums;font-size:.9rem;text-align:right}
+.urow.on .ul-price{font-weight:700}
+.urow:disabled{opacity:.45;cursor:default}
+.u-dens{font:inherit;font-size:.82rem;padding:1px 2px;min-height:0;width:auto;border-radius:5px}
+.u-foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 12px;align-items:baseline;margin:6px 0 2px;max-width:520px}
+.u-note{color:var(--muted);font-size:.78rem;line-height:1.35;flex:1 1 260px}
+@media (pointer:coarse),(max-width:760px){.urow{min-height:44px}.useg{min-height:40px;font-size:.76rem;padding:6px 4px;white-space:normal}}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"cfba0c8dbb86"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"232afcc591bd"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4371,23 +4389,36 @@ async function viewQuoteEditor(app, id, customerId) {
     const note = unitPriceNote(rows, l.unitPick.keys, l.unitPick.basis);
     if ((l.unitNote || '') !== note) { l.unitNote = note; mark(); }
     const box = h('details', { class: 'uprice', open: uOpen.has(l) || undefined, ontoggle: e => { e.target.open ? uOpen.add(l) : uOpen.delete(l); } });
-    const basisBtn = (k, label, ok, title) => h('button', { type: 'button', class: 'chip' + (l.unitPick.basis === k ? ' on' : ''), disabled: locked || !ok, title,
-      onclick: () => { l.unitPick.basis = k; mark(); onQty(); } }, label);
+    const toggle = key => { const on = l.unitPick.keys.includes(key); l.unitPick.keys = on ? l.unitPick.keys.filter(k => k !== key) : [...l.unitPick.keys, key]; mark(); onQty(); };
+    // densità di posa degli sfusi: una sola riga m³ con la scelta della densità
+    const dens = rows.filter(r => r.key.startsWith('m3d'));
+    const dSel = dens.find(r => r.key === 'm3d' + l.unitPick.density) || dens[Math.floor(dens.length / 2)];
+    const shown = rows.filter(r => !r.key.startsWith('m3d') || r === dSel);
+    const val = r => l.unitPick.basis === 'none' ? r.price : r.withTransport;
     const fullQty = fullLoadQty(p);
-    fill(box, h('summary', {}, 'Prezzo per unità', l.unitPick.keys.length ? h('small', { class: 'muted' }, ` · ${l.unitPick.keys.length} nell'offerta`) : null),
-      h('div', { class: 'chips' }, basisBtn('none', 'Senza trasporto', true),
-        basisBtn('offer', 'Con trasporto di questa offerta', offerTpu !== null, offerTpu === null ? 'Trasporto non calcolato per questa offerta' : ''),
-        basisBtn('full', full?.cost != null ? `A carico completo (trasporto ${eur(full.cost)})` : 'A carico completo', full?.perUnit != null, full?.reason || '')),
-      h('div', { class: 'uprice-grid' }, rows.map(r => {
-        const val = l.unitPick.basis === 'none' ? r.price : r.withTransport;
-        const on = l.unitPick.keys.includes(r.key);
-        return h('button', { type: 'button', class: 'uprice-chip' + (on ? ' on' : ''), disabled: locked || val === null, 'aria-pressed': String(on), title: on ? 'Nell\'offerta: tocca per togliere' : 'Tocca per metterlo nell\'offerta',
-          onclick: () => { l.unitPick.keys = on ? l.unitPick.keys.filter(k => k !== r.key) : [...l.unitPick.keys, r.key]; mark(); onQty(); } },
-          h('strong', {}, val === null ? '—' : eur(val)), h('small', {}, '/' + r.label));
+    const seg = (k, label, ok, title) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(l.unitPick.basis === k), class: 'useg' + (l.unitPick.basis === k ? ' on' : ''), disabled: locked || !ok, title,
+      onclick: () => { l.unitPick.basis = k; mark(); onQty(); } }, label);
+    const head = rows[0], picked = l.unitPick.keys.length;
+    fill(box,
+      h('summary', {}, h('span', { class: 'u-title' }, 'Prezzo per unità'),
+        h('span', { class: 'u-peek' }, `${eur(val(head) ?? head.price)}/${head.label}`, picked ? h('span', { class: 'u-count' }, `${picked} nel PDF`) : null)),
+      h('div', { class: 'useg-row', role: 'radiogroup', 'aria-label': 'Trasporto nei prezzi' },
+        seg('none', 'Franco partenza', true),
+        seg('offer', 'Con trasporto', offerTpu !== null, offerTpu === null ? 'Il trasporto di questa offerta non è calcolato (quotazione ufficio)' : 'Trasporto di questa offerta diviso sulle quantità'),
+        seg('full', full?.cost != null ? `Carico completo +${eur(full.cost)}` : 'Carico completo', full?.perUnit != null, full?.perUnit != null ? 'Prezzo se si ordina un camion pieno, trasporto da listino incluso' : (full?.reason || 'Carico completo non calcolabile per questo articolo'))),
+      h('ul', { class: 'ulist' }, shown.map(r => {
+        const on = l.unitPick.keys.includes(r.key), v = val(r), isD = r.key.startsWith('m3d');
+        const label = isD ? h('span', { class: 'ul-name' }, 'm³ posato a ',
+          h('select', { class: 'u-dens', 'aria-label': 'Densità di posa', disabled: locked, onclick: e => e.stopPropagation(), onchange: e => {
+            const nk = 'm3d' + e.target.value; l.unitPick.keys = l.unitPick.keys.map(k => k.startsWith('m3d') ? nk : k); l.unitPick.density = Number(e.target.value); mark(); onQty(); } },
+            dens.map(d => h('option', { value: d.q, selected: d === dSel }, String(d.q)))), ' kg/m³') : h('span', { class: 'ul-name' }, r.label);
+        return h('li', {}, h('button', { type: 'button', class: 'urow' + (on ? ' on' : ''), disabled: locked || v === null, 'aria-pressed': String(on),
+          title: on ? 'Nel PDF: tocca per togliere' : 'Tocca per metterlo nel PDF', onclick: e => { if (e.target.tagName !== 'SELECT') toggle(r.key); } },
+          h('span', { class: 'ul-tick', 'aria-hidden': 'true' }, on ? '✓' : ''), label, h('span', { class: 'ul-price' }, v === null ? '—' : eur(v))));
       })),
-      fullQty && !locked && Math.abs(l.qty - fullQty) > 1e-6 ? h('button', { type: 'button', class: 'btn small', onclick: () => { l.qty = fullQty; mark(); drawLines(); } }, `Porta a carico completo: ${num(fullQty, 0)} ${String(l.unit).toLowerCase()}`) : null,
-      h('small', { class: 'muted' }, note ? 'Nel documento: ' + note : 'Tocca un prezzo per metterlo nel documento dell\'offerta, sotto il prodotto.'),
-      p.subfamily && /floc|zell|flow/i.test(p.subfamily) ? h('small', { class: 'muted' }, 'Sfusi: il prezzo al m³ dipende dalla densità di posa (listino).') : null);
+      h('div', { class: 'u-foot' },
+        h('small', { class: 'u-note' }, note ? 'Nel PDF: ' + note.replace(/^Prezzo indicativo: /, '') : 'Tocca le righe da mettere nel PDF, sotto il prodotto.'),
+        fullQty && !locked && Math.abs(l.qty - fullQty) > 1e-6 ? h('button', { type: 'button', class: 'link', onclick: () => { l.qty = fullQty; mark(); drawLines(); } }, `Quantità a carico completo (${num(fullQty, 0)} ${String(l.unit).toLowerCase()})`) : null));
     return box;
   }
   // quantità che richiede 3 o più mezzi pieni: avviso ben visibile (spesso è un errore di battitura)
