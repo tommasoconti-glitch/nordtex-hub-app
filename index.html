@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="c5eb2116beeb">
+<meta name="ntx-build" content="491d30c34e50">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -735,7 +735,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .du-log li small{flex-basis:100%}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"c5eb2116beeb"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"491d30c34e50"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3673,10 +3673,27 @@ async function geocode(address, fetchImpl = globalThis.fetch) {
 }
 
 // km sola andata origine → Brennero → (corridoio obbligato) → destinazione (arrotondati per eccesso)
-async function kmViaBrennero(originAddress, destAddress, fetchImpl = globalThis.fetch, { prov } = {}) {
+// 02/11 (Villanova di Cepagatti "non trovato"): se l'indirizzo completo non si trova, si riprova con indirizzi più semplici
+// (es. senza via, solo CAP e provincia, frazione → comune). Restituisce il primo trovato e quale variante è servita.
+async function geocodeFirst(list, fetchImpl = globalThis.fetch) {
+  let last;
+  for (const a of [...new Set(list.map(x => String(x || '').trim()).filter(Boolean))]) {
+    try { return { ...(await geocode(a, fetchImpl)), used: a }; } catch (e) { if (!/non trovato/i.test(e.message)) throw e; last = e; }
+  }
+  throw last || new Error('Indirizzo non trovato');
+}
+function addressVariants({ street, cap, city, prov } = {}) {
+  const c = String(city || '').trim(), p = String(prov || '').trim().toUpperCase(), z = String(cap || '').trim();
+  const comune = c.replace(/^.*\b(di|del|della|dei|delle)\s+/i, '');   // "Villanova di Cepagatti" → "Cepagatti"
+  return [[street, [z, c].filter(Boolean).join(' '), p, 'Italia'], [[z, c].filter(Boolean).join(' '), p, 'Italia'], [c, p, 'Italia'],
+    comune !== c ? [[z, comune].filter(Boolean).join(' '), p, 'Italia'] : null, z ? [z, p, 'Italia'] : null]
+    .filter(Boolean).map(parts => parts.filter(Boolean).join(', ')).filter((x, i, a) => a.indexOf(x) === i);
+}
+
+async function kmViaBrennero(originAddress, destAddress, fetchImpl = globalThis.fetch, { prov, alternatives = [] } = {}) {
   // luogo di carico con coordinate note (es. Staudacher): niente ricerca dell'indirizzo
   const known = Object.values(ORIGINS).find(o => o.address === originAddress && o.lat);
-  const [a, b] = [known ? { lat: known.lat, lon: known.lon } : await geocode(originAddress, fetchImpl), await geocode(destAddress, fetchImpl)];
+  const [a, b] = [known ? { lat: known.lat, lon: known.lon } : await geocode(originAddress, fetchImpl), await geocodeFirst([destAddress, ...alternatives], fetchImpl)];
   const cor = corridorFor(prov, b.lat);
   const k = 'r6:' + originAddress.toLowerCase() + '>' + destAddress.toLowerCase() + (cor ? '>' + cor.id : ''); const c = cacheGet(k); if (c) return c;
   const way = [a, ...routeVia(prov, b.lat, originAddress), b];
@@ -3686,18 +3703,18 @@ async function kmViaBrennero(originAddress, destAddress, fetchImpl = globalThis.
   const r = await fetchImpl(OSRM + pts + '?overview=false&alternatives=false&steps=false' + bear);
   if (!r.ok) throw new Error('Servizio percorsi non disponibile (' + r.status + ')');
   const j = await r.json(); if (j.code !== 'Ok' || !j.routes?.length) throw new Error('Percorso non trovato');
-  const v = { km: Math.ceil(j.routes[0].distance / 1000), destination: b.label, provider: 'OpenStreetMap (OSRM)' + (cor ? ', via ' + cor.label : ''), corridor: cor?.id || null, at: new Date().toISOString() };
+  const v = { km: Math.ceil(j.routes[0].distance / 1000), destination: b.label, approx: b.used !== destAddress ? b.used : null, provider: 'OpenStreetMap (OSRM)' + (cor ? ', via ' + cor.label : ''), corridor: cor?.id || null, at: new Date().toISOString() };
   cacheSet(k, v); return v;
 }
 
-return { geocode, kmViaBrennero };
+return { geocode, geocodeFirst, addressVariants, kmViaBrennero };
 })();
 __m["js/views/transport-panel.js"] = (function () {
 // Riquadro "Trasporto e carico" dell'offerta: regole del listino, km via Brennero, riempimento del mezzo,
 // incidenza per m² / m³ / bancale, quantità consigliate per mezzo carico e carico completo.
 const { h, fill, eur, num, toast } = __m["js/ui.js"];
 const { planTransport, googleMapsUrl, fillSummary, transportVerdict, corridorFor, ORIGIN_VIA } = __m["js/core/logistics.js"];
-const { kmViaBrennero } = __m["js/core/route.js"];
+const { kmViaBrennero, addressVariants } = __m["js/core/route.js"];
 const { lineAmount } = __m["js/core/pricing.js"];
 const eu = (n, d = 2) => { if (n === null || n === undefined) return '—'; const [i, f] = Math.abs(Number(n)).toFixed(d).split('.'); return (n < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : '') + ' €'; };   // 1.452,00 €
 const qtyFmt = (n, u) => `${num(n, u === 'PZ' || u === 'SA' ? 0 : 2)} ${({ M2: 'm²', M3: 'm³', ML: 'ml' }[u] || (u || '').toLowerCase())}`;
@@ -3734,11 +3751,12 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
       let r;
       // 02/11: con un corridoio obbligato (es. Valsugana per Belluno) si usa il calcolo con le tappe, finché la funzione server non le gestisce
       if (app.store.route && !corridorFor(q.delivery.prov) && !ORIGIN_VIA[g.regime.origin.address]) { try { r = await app.store.route(g.regime.origin.address, destText()); } catch (e) { if (/non trovato/i.test(e.message)) throw e; r = null; } }
-      if (!r) r = await kmViaBrennero(g.regime.origin.address, destText(), undefined, { prov: q.delivery.prov });
+      if (!r) r = await kmViaBrennero(g.regime.origin.address, destText(), undefined, { prov: q.delivery.prov, alternatives: addressVariants(q.delivery) });
       q.logistics.corridor = r.corridor || null;
       kmErrors.delete(key);
       q.logistics.km[g.regime.origin.address] = r.km; q.logistics.kmSource = `${r.provider}, ${new Date(r.at).toLocaleDateString('it-IT')}`; mark(); redraw();
-      if (!quiet) toast(`${r.km} km sola andata (stima ${r.provider})`);
+      if (r.approx) q.logistics.kmSource += ` · indirizzo non trovato, calcolato su "${r.approx}": verifica`;
+      if (!quiet) toast(`${r.km} km sola andata (stima ${r.provider})` + (r.approx ? ` · calcolato su "${r.approx}"` : ''), r.approx ? 'error' : 'info');
     } catch (e) { kmErrors.set(key, e instanceof TypeError ? 'Servizio percorsi non raggiungibile (connessione)' : e.message); if (!quiet) toast(e.message + '. Apri Google Maps e inserisci i km a mano.', 'error'); else redraw(); }
   }
   // km calcolati da soli appena c'è l'indirizzo (una volta per luogo di carico e destinazione)
