@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="9c5f2d30fe55">
+<meta name="ntx-build" content="762b1abd9ad8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -717,9 +717,25 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .u-foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 12px;align-items:baseline;margin:6px 0 2px;max-width:520px}
 .u-note{color:var(--muted);font-size:.78rem;line-height:1.35;flex:1 1 260px}
 @media (pointer:coarse),(max-width:760px){.urow{min-height:44px}.useg{min-height:40px;font-size:.76rem;padding:6px 4px;white-space:normal}}
+/* Aggiorna dati (02/11) */
+.du-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap} .du-head h2{margin:0 0 2px}
+.du-steps{margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-size:.88rem}
+.du-row{margin-top:12px;max-width:260px}
+.du-out:not(:empty){margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.du-preview>p{margin:0 0 10px}
+.du-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:6px}
+.du-stat{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.du-stat strong{font-size:1.45rem;letter-spacing:-.02em} .du-stat small{color:var(--muted)}
+.du-stat.warn{background:var(--warn-bg);border-color:transparent} .du-stat.warn strong{color:var(--warn)}
+.du-list{margin:6px 0 0;padding-left:18px;font-size:.85rem;max-height:220px;overflow:auto}
+.du-years{margin:10px 0 4px;max-width:520px} .du-years .num{text-align:right} .du-years tbody tr{cursor:default}
+.du-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
+.du-ok{color:var(--ok);font-weight:600;margin:0} .du-err{color:var(--bad);white-space:pre-wrap;margin:0}
+.du-log{list-style:none;margin:0;padding:0} .du-log li{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)} .du-log li:last-child{border:0}
+.du-log li small{flex-basis:100%}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"9c5f2d30fe55"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"762b1abd9ad8"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1188,7 +1204,8 @@ function createLocalStore({ data, kv }) {
     async signIn(profileId) {
       const p = this.profiles().find(x => x.id === profileId);
       if (!p) throw new Error('Profilo non trovato');
-      session = { userId: p.id, name: p.name, role: p.role, assignee: p.assignee, canCommunicate: p.role === 'direzione' && !!p.commEmail, commEmail: p.commEmail || null };
+      session = { userId: p.id, name: p.name, role: p.role, assignee: p.assignee, canCommunicate: p.role === 'direzione' && !!p.commEmail, commEmail: p.commEmail || null,
+        canImport: p.role === 'direzione' && /tommaso/i.test(p.name || '') };
       for (const c of await col('prospects')) byId.set(c.id, c);
       await applyAllStatus();
       return session;
@@ -1349,6 +1366,10 @@ function createLocalStore({ data, kv }) {
       const list = await col('radixLinks'); const i = list.findIndex(x => x.id === id); if (i >= 0) list.splice(i, 1);
       list.push({ id, customer: customerId || null }); await save('radixLinks');
     },
+    // "Aggiorna dati": nella versione su questo dispositivo si vede l'anteprima, il salvataggio è solo online
+    async importRadixOffers() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
+    async importSales() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
+    async importLog() { return []; },
     async setRadixOfferOutcome(id, fields) {
       const s = mustSession(); const f = checkRadixOutcome(fields);
       if (!(await this.radixOffers()).some(x => x.id === id)) throw new Error('Offerta non trovata');
@@ -1517,6 +1538,8 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     profile = p[0]; if (!profile?.active) { token = null; storage.set(null); throw fail('LOGIN', 'Profilo non attivo: contatta la Direzione'); }
     session = { userId: profile.id, name: profile.display_name, role: profile.role, assignee: profile.assignee_label, email: j.user.email,
       canCommunicate: profile.role === 'direzione' && !!profile.comm_email, commEmail: profile.comm_email || null };
+    // 02/11: pagina "Aggiorna dati" solo per gli abilitati (migrazione 20261102140000; se non applicata: nessuno)
+    session.canImport = (await api('/rest/v1/rpc/hub_can_import', { method: 'POST', body: {} }).catch(() => false)) === true;
     storage.set({ refresh_token: j.refresh_token });
     customers = null; products = null; people = null;
     customers = (await pageAll('/rest/v1/hub_customers?select=*&order=code')).map(fromDb);
@@ -1788,6 +1811,20 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     // 02/11: collega l'offerta RADIX a un cliente dell'app (solo Direzione, funzione hub_link_radix_offer)
     async linkRadixOffer(id, customerId) {
       await api('/rest/v1/rpc/hub_link_radix_offer', { method: 'POST', body: { p_offer: id, p_customer: customerId ? custUuid(customerId) : null } });
+    },
+    // 02/11 "Aggiorna dati": caricamenti RADIX dall'app (funzioni hub_import_*, solo abilitati)
+    async importRadixOffers({ offers, from, to, file = '', sha = '' }) {
+      return api('/rest/v1/rpc/hub_import_radix_offers', { method: 'POST', body: { p_offers: offers, p_from: from, p_to: to, p_file: file, p_sha: sha } });
+    },
+    async importSales({ asOf, customers: rows, years, file = '', sha = '' }) {
+      const r = await api('/rest/v1/rpc/hub_import_sales', { method: 'POST', body: { p_asof: asOf, p_customers: rows, p_years: years, p_file: file, p_sha: sha } });
+      customers = (await pageAll('/rest/v1/hub_customers?select=*&order=code')).map(fromDb); await loadStatus();   // fatturato nuovo nelle schede
+      return r;
+    },
+    async importLog() {
+      const rows = (await api('/rest/v1/hub_imports?select=*&order=imported_at.desc&limit=20').catch(() => [])) || [];
+      const nm = await names().catch(() => new Map());
+      return rows.map(r => ({ kind: r.kind, file: r.file_name, summary: r.summary || {}, at: r.imported_at, byName: nm.get(r.imported_by) || '' }));
     },
     async setRadixOfferOutcome(id, fields) {
       const f = checkRadixOutcome(fields);
@@ -6102,6 +6139,415 @@ function canSeeSystems(session) {
 
 return { RSI, resolveLayers, uValue, totalCm, verdict, findProduct, mainThicknesses, systemQuote, systemByCode, canSeeSystems };
 })();
+__m["js/core/xlsx-read.js"] = (function () {
+// Lettura minima di un file Excel (.xlsx) nel browser, senza librerie esterne (02/11/2026, pagina "Aggiorna dati").
+// Un .xlsx è uno zip di XML: si legge l'indice dello zip, si decomprimono (DecompressionStream 'deflate-raw')
+// il primo foglio e le stringhe condivise. Restituisce le righe come array di valori (testo, numero, booleano o null).
+// Le date restano numeri seriali Excel: excelDate() le converte in AAAA-MM-GG.
+
+const u16 = (b, o) => b[o] | (b[o + 1] << 8);
+const u32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
+
+async function inflate(bytes) {
+  const s = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+
+async function unzip(buf) {
+  const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  let e = -1;
+  for (let i = b.length - 22; i >= Math.max(0, b.length - 65557); i--) if (u32(b, i) === 0x06054b50) { e = i; break; }
+  if (e < 0) throw new Error('Il file non è un Excel .xlsx valido');
+  const n = u16(b, e + 10); let p = u32(b, e + 16);
+  const files = new Map(), dec = new TextDecoder();
+  for (let k = 0; k < n; k++) {
+    if (u32(b, p) !== 0x02014b50) throw new Error('Indice del file Excel danneggiato');
+    const method = u16(b, p + 10), csize = u32(b, p + 20), nlen = u16(b, p + 28), xlen = u16(b, p + 30), clen = u16(b, p + 32), lho = u32(b, p + 42);
+    const name = dec.decode(b.subarray(p + 46, p + 46 + nlen));
+    files.set(name, { method, csize, lho });
+    p += 46 + nlen + xlen + clen;
+  }
+  return {
+    names: [...files.keys()],
+    async text(name) {
+      const f = files.get(name); if (!f) return null;
+      const start = f.lho + 30 + u16(b, f.lho + 26) + u16(b, f.lho + 28);
+      const raw = b.subarray(start, start + f.csize);
+      const out = f.method === 0 ? raw : f.method === 8 ? await inflate(raw) : null;
+      if (!out) throw new Error('Compressione del file Excel non supportata');
+      return dec.decode(out);
+    },
+  };
+}
+
+const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+const unxml = s => s.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (m, e) => e[0] === '#' ? String.fromCodePoint(e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : +e.slice(1)) : ENT[e] ?? m);
+const tText = x => [...x.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>|<t(?:\s[^>]*)?\/>/g)].map(m => unxml(m[1] || '')).join('');
+const colIndex = ref => { let n = 0; for (const ch of ref.replace(/\d+$/, '')) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
+
+// Righe del primo foglio (o del foglio indicato per nome)
+async function readXlsx(buf, { sheet } = {}) {
+  const z = await unzip(buf);
+  const shared = [];
+  const sst = await z.text('xl/sharedStrings.xml');
+  if (sst) for (const m of sst.matchAll(/<si>([\s\S]*?)<\/si>/g)) shared.push(tText(m[1]));
+  let path = 'xl/worksheets/sheet1.xml';
+  const wb = await z.text('xl/workbook.xml'), rels = await z.text('xl/_rels/workbook.xml.rels');
+  if (wb && rels) {
+    const sheets = [...wb.matchAll(/<sheet\b[^>]*?name="([^"]*)"[^>]*?r:id="([^"]*)"/g)].map(m => ({ name: unxml(m[1]), rid: m[2] }));
+    const pick = (sheet && sheets.find(s => s.name === sheet)) || sheets[0];
+    const rel = pick && [...rels.matchAll(/<Relationship\b[^>]*>/g)].map(m => m[0]).find(r => r.includes(`Id="${pick.rid}"`));
+    const target = rel && rel.match(/Target="([^"]*)"/)?.[1];
+    if (target) path = target.startsWith('/') ? target.slice(1) : 'xl/' + target.replace(/^\.\//, '');
+  }
+  const xml = await z.text(path);
+  if (!xml) throw new Error('Foglio non trovato nel file Excel');
+  const rows = [];
+  for (const rm of xml.matchAll(/<row\b([^>]*)>([\s\S]*?)<\/row>|<row\b([^>]*)\/>/g)) {
+    const rn = +((rm[1] || rm[3] || '').match(/\br="(\d+)"/)?.[1] || rows.length + 1);
+    const row = [];
+    for (const cm of (rm[2] || '').matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+      const attrs = cm[1], body = cm[2] || '';
+      const ref = attrs.match(/\br="([A-Z]+)\d+"/)?.[1];
+      const t = attrs.match(/\bt="(\w+)"/)?.[1];
+      const v = body.match(/<v>([\s\S]*?)<\/v>/)?.[1];
+      let val = null;
+      if (t === 's') val = v == null ? null : shared[+v] ?? null;
+      else if (t === 'inlineStr') val = tText(body);
+      else if (t === 'str') val = v == null ? null : unxml(v);
+      else if (t === 'b') val = v === '1';
+      else if (t === 'e') val = null;
+      else if (v != null) val = Number(v);
+      row[ref ? colIndex(ref) : row.length] = val;
+    }
+    rows[rn - 1] = Array.from(row, x => x === undefined ? null : x);
+  }
+  return Array.from(rows, r => r || []);
+}
+
+// Numero seriale Excel (sistema 1900) → 'AAAA-MM-GG'
+function excelDate(n) {
+  if (typeof n !== 'number' || !isFinite(n) || n < 1) return null;
+  const d = new Date(Math.round((n - 25569) * 86400000));
+  return d.toISOString().slice(0, 10);
+}
+
+return { unzip, readXlsx, excelDate };
+})();
+__m["js/core/radix-import.js"] = (function () {
+// Lettura nel browser delle esportazioni RADIX per la pagina "Aggiorna dati" (02/11/2026).
+// Stesse regole degli strumenti tools/import_offerte_radix.py e tools/import_fatturato.py (che restano validi):
+//  - Offerte aperte: Offerte › Selezione, stato "Aperto", esportazione Excel.
+//  - Fatturato: Statistica fatturato per movimenti, esportazione "Testo separato con TAB".
+// Nessun dato viene salvato qui: le funzioni restituiscono il risultato e il riepilogo da mostrare prima della conferma.
+const { excelDate } = __m["js/core/xlsx-read.js"];
+const { SALES_YEARS } = __m["js/core/purchases.js"];
+const OFFER_COLUMNS = ['Offerta', 'Data documento', 'Stato documento', 'Validità', 'Descrizione', 'Oggetto', 'Contatto', 'Totale imponibile', 'Agente', 'Follow-up previsto'];
+
+const normName = s => String(s ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\x00-\x7f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+
+function day(v) {
+  if (typeof v === 'number') return excelDate(v);
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  const m = String(v ?? '').trim().match(/^(\d{2})[./](\d{2})[./](\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  const iso = String(v ?? '').trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  return iso ? iso[1] : null;
+}
+const str = v => String(v ?? '').trim();
+
+// rows: righe del foglio (la prima è l'intestazione); customers: [{ id (N° cliente), name, city }]
+function parseRadixOffers(rows, customers = []) {
+  if (!rows?.length) throw new Error('Il file è vuoto');
+  const head = rows[0].map(str);
+  const miss = OFFER_COLUMNS.filter(c => !head.includes(c));
+  if (miss.length) throw new Error('Non sembra l\'esportazione delle offerte RADIX. Colonne mancanti: ' + miss.join(', '));
+  const col = Object.fromEntries(head.map((c, i) => [c, i]).filter(([c]) => c));
+  const byNC = new Map(), byN = new Map();
+  const add = (m, k, c) => { if (!m.has(k)) m.set(k, []); m.get(k).push(c); };
+  for (const c of customers) { add(byNC, normName(c.name) + '|' + normName(c.city), c); add(byN, normName(c.name), c); }
+  const offers = [], unmatched = [];
+  for (const r of rows.slice(1)) {
+    const g = k => (k in col ? r[col[k]] : null);
+    const num = str(g('Offerta')).replace(/\s+/g, '');
+    if (!num) continue;
+    if (!/^[A-Z]+-\d{4}-\d+$/.test(num)) throw new Error('Numero offerta non riconosciuto: ' + num);
+    const label = str(g('Descrizione'));
+    const cut = label.lastIndexOf(', ');
+    let name = cut >= 0 ? label.slice(0, cut) : '', city = cut >= 0 ? label.slice(cut + 2) : '';
+    if (!name) { name = label; city = ''; }
+    const m = byNC.get(normName(name) + '|' + normName(city)) || byN.get(normName(name)) || [];
+    const cust = m.length === 1 ? m[0].id : null;
+    if (!cust) unmatched.push(label);
+    const d = day(g('Data documento'));
+    if (!d) throw new Error(num + ': data documento mancante');
+    const tot = g('Totale imponibile');
+    offers.push({ id: num, customer: cust, customerLabel: label, date: d, validUntil: day(g('Validità')), subject: str(g('Oggetto')), contact: str(g('Contatto')),
+      total: typeof tot === 'number' && tot ? Math.round(tot * 100) / 100 : null, radixAgent: str(g('Agente')), followup: day(g('Follow-up previsto')),
+      typology: str(g('Tipologia cliente')), zone: str(g('Zona')), depot: str(g('Deposito')), status: str(g('Stato documento')) });
+  }
+  if (!offers.length) throw new Error('Nessuna offerta nel file');
+  if (new Set(offers.map(o => o.id)).size !== offers.length) throw new Error('Numeri offerta duplicati nel file');
+  const dates = offers.map(o => o.date).sort();
+  return { offers, from: dates[0], to: dates[dates.length - 1], unmatched: [...new Set(unmatched)].sort(),
+    total: Math.round(offers.reduce((s, o) => s + (o.total || 0), 0) * 100) / 100 };
+}
+
+// Confronto con le offerte aperte già nell'app: nuove, già presenti, da chiudere (non più aperte nel periodo del file)
+function offersPreview(parsed, current = []) {
+  const ids = new Set(parsed.offers.map(o => o.id));
+  const known = new Set(current.map(o => o.id));
+  return {
+    added: parsed.offers.filter(o => !known.has(o.id)),
+    kept: parsed.offers.filter(o => known.has(o.id)),
+    closed: current.filter(o => o.open !== false && o.date >= parsed.from && o.date <= parsed.to && !ids.has(o.id)),
+  };
+}
+
+// ---------- fatturato
+// Colonne dell'esportazione "Quantità + valore (Std)" con i raggruppamenti Cliente / Numero, Data documento Anno, riepilogo Articolo (Codice)
+const C_CUST = 47, C_YEAR = 65, C_YEAR_VAL = 67, C_ITEM = 83, C_ITEM_QTY = 84, C_ITEM_VAL = 85;
+const TOP_ITEMS = 6;
+const KEYWORDS = [
+  [/^\(nessun articolo\)$/i, 'Acconti e spese senza articolo'],
+  [/su ordinazione/i, 'Su ordinazione'],
+  [/trasporto|euro bancale|bancal/i, 'Trasporti e bancali'],
+  [/fibrogesso|gessofibra|aktivboard|radiante|tubo |pe-rt|pexa|raccordo|attuatore|collettor/i, 'Sistemi radianti'],
+  [/vetro cellulare|vitrex|policell|nordtex cell|foamglas|\bV600\b/i, 'Vetro cellulare'],
+  [/steico/i, 'Fibra di legno STEICO'],
+  [/naturtex|naturheld/i, 'Fibra di legno NATURHELD'],
+  [/canap|cannatherm|konope/i, 'Canapa'],
+  [/thermopor|unipor|poroton|laterizi/i, 'Blocchi in laterizio'],
+  [/lana di roccia|boerner|lana minerale/i, 'Lana minerale'],
+  [/ampack|ampatex|tyvek|foliarex|freno al vapore|telo|tape/i, 'Sistemi di tenuta'],
+  [/vaku/i, 'Sottovuoto Vakuum'],
+  [/\blvl/i, 'Legno microlamellare'],
+  [/argilla/i, 'Argilla'],
+  [/\bTS14\b|perlite|nordtex perl/i, 'Granulati a secco'],
+  [/sughero/i, 'Sughero'],
+];
+
+function decodeText(buf) {
+  const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(b); } catch { return new TextDecoder('windows-1252').decode(b); }
+}
+
+// Testo separato da TAB, con eventuali campi tra virgolette (come csv.reader di Python)
+function parseTsv(text) {
+  const out = []; let row = [], f = '', q = false, i = 0, start = true;
+  for (; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch;
+      continue;
+    }
+    if (ch === '"' && start) { q = true; start = false; continue; }
+    if (ch === '\t') { row.push(f); f = ''; start = true; continue; }
+    if (ch === '\r' && text[i + 1] === '\n') continue;
+    if (ch === '\n' || ch === '\r') { row.push(f); out.push(row); row = []; f = ''; start = true; continue; }
+    f += ch; start = false;
+  }
+  if (f !== '' || row.length) { row.push(f); out.push(row); }
+  return out;
+}
+
+const num = s => { s = String(s ?? '').trim(); if (!s) return 0; return s.includes(',') ? Number(s.replace(/\./g, '').replace(',', '.')) : Number(s); };
+const r2 = v => Math.round(v * 100) / 100, r3 = v => Math.round(v * 1000) / 1000;
+
+function family(code, desc, products) {
+  const p = products.get(code);
+  if (p) {
+    let f = p.family || 'Altro';
+    if (f === 'Fibra di legno' && (p.producer === 'STEICO' || p.producer === 'NATURHELD')) f += ' ' + p.producer;
+    return f;
+  }
+  for (const [rx, f] of KEYWORDS) if (rx.test(desc)) return f;
+  return 'Altro';
+}
+
+// text: contenuto del file TXT; products: prodotti dell'app (radixCode, family, producer); asOf: data dei dati
+function parseRadixSales(text, products = [], { asOf, years = SALES_YEARS } = {}) {
+  const prod = new Map(products.filter(p => p.radixCode).map(p => [p.radixCode, p]));
+  const cust = new Map(), errors = [];
+  const rows = parseTsv(text);
+  rows.forEach((r, k) => {
+    const i = k + 1;
+    if (r.length <= C_ITEM_VAL) { if (r.length > 1 || (r[0] || '').trim()) errors.push(`riga ${i}: colonne insufficienti (${r.length})`); return; }
+    const m = r[C_CUST].match(/^\s*(\d+)\s+-\s+([\s\S]*)$/);
+    const year = r[C_YEAR].trim();
+    if (!m || !years.includes(year)) { errors.push(`riga ${i}: cliente o anno non leggibile (${r[C_CUST]}, ${year})`); return; }
+    const im = r[C_ITEM].trim().match(/^(\S+)\s+-\s+([\s\S]*)$/);
+    const [code, desc] = im ? [im[1], im[2].trim()] : ['', r[C_ITEM].trim() || '(nessun articolo)'];
+    if (!cust.has(m[1])) cust.set(m[1], { name: m[2].trim(), rev: {}, yearTot: {}, fam: new Map(), items: new Map() });
+    const c = cust.get(m[1]);
+    const v = num(r[C_ITEM_VAL]);
+    c.rev[year] = (c.rev[year] || 0) + v;
+    c.yearTot[year] = num(r[C_YEAR_VAL]);
+    const f = family(code, desc, prod);
+    if (!c.fam.has(f)) c.fam.set(f, {});
+    const fy = c.fam.get(f); fy[year] = (fy[year] || 0) + v;
+    const key = code || desc;
+    if (!c.items.has(key)) c.items.set(key, { c: code, d: desc.slice(0, 90), v: 0, q: 0, y: year });
+    const it = c.items.get(key); it.v += v; it.q += num(r[C_ITEM_QTY]); if (year > it.y) it.y = year;
+  });
+  for (const [k, c] of cust) for (const [y, tot] of Object.entries(c.yearTot))
+    if (Math.abs((c.rev[y] || 0) - tot) > 0.05) errors.push(`cliente ${k} anno ${y}: somma articoli ${(c.rev[y] || 0).toFixed(2)} diversa dal totale RADIX ${tot.toFixed(2)}`);
+  if (!cust.size && !errors.length) errors.push('Nessuna riga di fatturato nel file');
+  if (errors.length) throw Object.assign(new Error('File non importabile:\n' + errors.slice(0, 20).join('\n')), { errors });
+  const out = {};
+  for (const [k, c] of cust) {
+    const fams = [...c.fam].map(([f, ys]) => ({ f, y: Object.fromEntries(Object.entries(ys).filter(([, v]) => Math.abs(v) >= 0.005).map(([y, v]) => [y, r2(v)])), t: r2(Object.values(ys).reduce((s, v) => s + v, 0)) }))
+      .sort((a, b) => b.t - a.t).filter(x => Math.abs(x.t) >= 0.005);
+    const items = [...c.items.values()].sort((a, b) => b.v - a.v).slice(0, TOP_ITEMS).filter(x => x.v > 0)
+      .map(x => ({ c: x.c, d: x.d, v: r2(x.v), q: r3(x.q), y: x.y }));
+    out[k] = { name: c.name, sales: { asOf, rev: Object.fromEntries(years.map(y => [y, r2(c.rev[y] || 0)])), families: fams, top: items } };
+  }
+  const totals = Object.fromEntries(years.map(y => [y, r2([...cust.values()].reduce((s, c) => s + (c.rev[y] || 0), 0))]));
+  return { asOf, years, totals, customers: out };
+}
+
+// Confronto con l'anagrafica dell'app: clienti collegati, clienti del file non presenti (es. privati), fatturato per anno prima/dopo
+function salesPreview(parsed, customers = []) {
+  const known = new Map(customers.filter(c => c.origin !== 'HUB').map(c => [String(c.id), c]));
+  const linked = [], missing = [];
+  for (const [k, x] of Object.entries(parsed.customers)) (known.has(k) ? linked : missing).push({ code: k, name: x.name, rev: x.sales.rev });
+  const before = Object.fromEntries(parsed.years.map(y => [y, r2(customers.reduce((s, c) => s + (Number(c['rev' + y]) || 0), 0))]));
+  const after = Object.fromEntries(parsed.years.map(y => [y, r2(linked.reduce((s, c) => s + (c.rev[y] || 0), 0))]));
+  return { linked, missing, before, after, zeroed: [...known.keys()].filter(k => !parsed.customers[k]).length };
+}
+
+return { OFFER_COLUMNS, normName, parseRadixOffers, offersPreview, decodeText, parseTsv, parseRadixSales, salesPreview };
+})();
+__m["js/views/data-update.js"] = (function () {
+// "Aggiorna dati" (richiesta Tommaso 02/11/2026): chi è abilitato carica le esportazioni RADIX direttamente dall'app.
+// Visibile solo agli abilitati (tabella private.hub_data_managers, oggi Tommaso; poi eventualmente Irina).
+// Flusso: scegli il file → l'app lo legge sul dispositivo e mostra cosa cambierà → «Conferma e aggiorna».
+const { h, fill, eur, dateIt, dateTimeIt, today, toast, field } = __m["js/ui.js"];
+const { readXlsx } = __m["js/core/xlsx-read.js"];
+const { parseRadixOffers, offersPreview, parseRadixSales, salesPreview, decodeText } = __m["js/core/radix-import.js"];
+const canUpdateData = s => !!s?.canImport && !s.preview;
+
+async function sha256(buf) {
+  try { return [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map(b => b.toString(16).padStart(2, '0')).join(''); } catch { return ''; }
+}
+const stat = (n, label, cls = '') => h('div', { class: 'du-stat ' + cls }, h('strong', {}, String(n)), h('small', {}, label));
+const steps = list => h('ol', { class: 'du-steps' }, list.map(s => h('li', {}, s)));
+
+function picker(accept, label, onFile) {
+  const inp = h('input', { type: 'file', accept, hidden: true, onchange: () => { const f = inp.files?.[0]; inp.value = ''; if (f) onFile(f); } });
+  return h('span', {}, inp, h('button', { type: 'button', class: 'btn primary', onclick: () => inp.click() }, label));
+}
+
+async function viewDataUpdate(app) {
+  if (!canUpdateData(app.session)) {
+    return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('h1', {}, 'Aggiorna dati')), h('div', { class: 'card' }, h('p', {}, 'Non sei abilitato ad aggiornare i dati.')));
+  }
+  const logBox = h('div', {});
+  const loadLog = async () => {
+    const rows = await app.store.importLog().catch(() => []);
+    fill(logBox, rows.length ? h('ul', { class: 'du-log' }, rows.map(r => h('li', {},
+      h('span', { class: 'badge ' + (r.kind === 'offerte' ? 'info' : 'ok') }, r.kind === 'offerte' ? 'Offerte' : 'Fatturato'),
+      h('span', {}, dateTimeIt(r.at) + ' · ' + (r.byName || '') + (r.file ? ' · ' + r.file : '')),
+      h('small', { class: 'muted' }, logText(r))))) : h('p', { class: 'muted' }, 'Nessun caricamento fatto dall\'app finora.'));
+  };
+  loadLog();
+  return h('div', { class: 'page du-page' },
+    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Aggiorna dati'),
+      h('p', { class: 'muted' }, 'Carichi le esportazioni di RADIX: l\'app ti mostra cosa cambia e aggiorna solo quando confermi. Nessun dato si cancella.'))),
+    offersCard(app, loadLog), salesCard(app, loadLog),
+    h('section', { class: 'card' }, h('h2', {}, 'Ultimi caricamenti'), logBox),
+    h('p', { class: 'fine muted' }, 'Giacenze dei depositi e note clienti RADIX (file PDF): per ora si aggiornano ancora con Claude. Anagrafica clienti nuovi: si creano dall\'app o con l\'aggiornamento completo.'));
+}
+
+function logText(r) {
+  const s = r.summary || {};
+  if (r.kind === 'offerte') return `${s.offers} offerte dal ${dateIt(s.from)} al ${dateIt(s.to)}: ${s.new} nuove, ${s.updated} aggiornate, ${s.closed} chiuse`;
+  return `dati al ${dateIt(s.asOf)}: ${s.customers} clienti con fatturato` + (s.totals ? ' · ' + Object.entries(s.totals).map(([y, v]) => `${y} ${eur(v)}`).join(' · ') : '');
+}
+
+function offersCard(app, done) {
+  const out = h('div', { class: 'du-out' });
+  const run = async file => {
+    fill(out, h('p', { class: 'muted' }, 'Leggo ' + file.name + '…'));
+    try {
+      const buf = await file.arrayBuffer();
+      const parsed = parseRadixOffers(await readXlsx(buf), await app.customers());
+      const pv = offersPreview(parsed, await app.store.radixOffers());
+      const sha = await sha256(buf);
+      fill(out, h('div', { class: 'du-preview' },
+        h('p', {}, h('strong', {}, file.name), ` · ${parsed.offers.length} offerte aperte dal ${dateIt(parsed.from)} al ${dateIt(parsed.to)} · totale ${eur(parsed.total)}`),
+        h('div', { class: 'du-stats' }, stat(pv.added.length, 'nuove'), stat(pv.kept.length, 'già nell\'app, si aggiornano'), stat(pv.closed.length, 'non più aperte: si chiudono', pv.closed.length ? 'warn' : ''),
+          stat(parsed.unmatched.length, 'senza cliente nell\'app', parsed.unmatched.length ? 'warn' : '')),
+        pv.added.length ? h('details', { class: 'fold-in' }, h('summary', {}, 'Offerte nuove'), h('ul', { class: 'du-list' }, pv.added.map(o => h('li', {}, `${o.id} · ${o.customerLabel} · ${o.total ? eur(o.total) : '—'}`)))) : null,
+        pv.closed.length ? h('details', { class: 'fold-in' }, h('summary', {}, 'Offerte che si chiudono (restano in archivio con il loro esito)'), h('ul', { class: 'du-list' }, pv.closed.map(o => h('li', {}, `${o.id} · ${o.customerLabel} · esito ${o.outcome}`)))) : null,
+        parsed.unmatched.length ? h('details', { class: 'fold-in' }, h('summary', {}, 'Senza cliente nell\'app (le vede solo la Direzione; le colleghi dall\'offerta)'), h('ul', { class: 'du-list' }, parsed.unmatched.map(x => h('li', {}, x)))) : null,
+        pv.closed.length > 10 && pv.closed.length > pv.kept.length / 3 ? h('p', { class: 'alert warn' }, `Attenzione: si chiuderebbero ${pv.closed.length} offerte. Controlla che nell'esportazione ci siano tutte le offerte aperte del periodo (stato «Aperto», periodo fino a oggi).`) : null,
+        h('p', { class: 'fine muted' }, 'Gli esiti già segnati (Sentito, Accettata, Persa) e i collegamenti fatti a mano restano.'),
+        h('div', { class: 'du-actions' }, h('button', { type: 'button', class: 'btn', onclick: () => fill(out) }, 'Annulla'),
+          h('button', { type: 'button', class: 'btn primary', onclick: async e => {
+            e.target.disabled = true;
+            try {
+              const r = await app.store.importRadixOffers({ offers: parsed.offers, from: parsed.from, to: parsed.to, file: file.name, sha });
+              toast(`Offerte aggiornate: ${r.new} nuove, ${r.updated} aggiornate, ${r.closed} chiuse`);
+              fill(out, h('p', { class: 'du-ok' }, '✓ ' + logText({ kind: 'offerte', summary: r }))); done();
+            } catch (err) { e.target.disabled = false; toast(err.message, 'error'); }
+          } }, 'Conferma e aggiorna'))));
+    } catch (err) { fill(out, h('p', { class: 'du-err' }, err.message)); }
+  };
+  return h('section', { class: 'card du-card' },
+    h('div', { class: 'du-head' }, h('div', {}, h('h2', {}, 'Offerte aperte RADIX'), h('small', { class: 'muted' }, 'File Excel · ogni lunedì')), picker('.xlsx', 'Scegli il file Excel', run)),
+    h('details', { class: 'fold-in' }, h('summary', {}, 'Come esportarlo da RADIX'),
+      steps(['Offerte › Selezione.', 'Stato del documento: «Aperto»; Data documento: ultimi 3 mesi (fino a oggi).', 'Cerca, poi esporta in Excel e salva il file.',
+        'Le offerte del periodo che non sono più nel file vengono segnate come chiuse: usa sempre un periodo che arrivi a oggi.'])),
+    out);
+}
+
+function salesCard(app, done) {
+  const out = h('div', { class: 'du-out' });
+  const asOf = h('input', { type: 'date', value: today(), max: today() });
+  const run = async file => {
+    fill(out, h('p', { class: 'muted' }, 'Leggo ' + file.name + '…'));
+    try {
+      const buf = await file.arrayBuffer();
+      const parsed = parseRadixSales(decodeText(buf), await app.products(), { asOf: asOf.value || today() });
+      const pv = salesPreview(parsed, await app.customers());
+      const sha = await sha256(buf);
+      const payload = Object.fromEntries(pv.linked.map(c => [c.code, parsed.customers[c.code].sales]));
+      fill(out, h('div', { class: 'du-preview' },
+        h('p', {}, h('strong', {}, file.name), ` · dati al ${dateIt(parsed.asOf)} · ${Object.keys(parsed.customers).length} clienti con fatture`),
+        h('div', { class: 'du-stats' }, stat(pv.linked.length, 'clienti dell\'app aggiornati'), stat(pv.missing.length, 'non nell\'anagrafica (es. privati)', pv.missing.length ? 'warn' : ''),
+          stat(pv.zeroed, 'clienti senza fatture nel periodo')),
+        h('div', { class: 'tbl-wrap' }, h('table', { class: 'table du-years' }, h('thead', {}, h('tr', {}, h('th', {}, 'Anno'), h('th', { class: 'num' }, 'Oggi nell\'app'), h('th', { class: 'num' }, 'Dopo l\'aggiornamento'))),
+          h('tbody', {}, parsed.years.map(y => h('tr', {}, h('td', {}, y), h('td', { class: 'num' }, eur(pv.before[y])), h('td', { class: 'num' }, h('strong', {}, eur(pv.after[y])))))))),
+        (drop => drop.length ? h('p', { class: 'alert warn' }, `Attenzione: il fatturato ${drop.join(', ')} scenderebbe di oltre il 20%. Controlla il periodo dell'esportazione (dal 01.01.2024 a oggi) prima di confermare.`) : null)(
+          parsed.years.filter(y => pv.before[y] > 1000 && pv.after[y] < pv.before[y] * 0.8)),
+        h('p', { class: 'fine muted' }, `Totale nel file (compresi i clienti non in anagrafica): ${parsed.years.map(y => `${y} ${eur(parsed.totals[y])}`).join(' · ')}. Controlla che coincida con RADIX.`),
+        pv.missing.length ? h('details', { class: 'fold-in' }, h('summary', {}, 'Clienti del file non presenti nell\'app'), h('ul', { class: 'du-list' }, pv.missing.map(c => h('li', {}, `${c.code} · ${c.name}`)))) : null,
+        h('div', { class: 'du-actions' }, h('button', { type: 'button', class: 'btn', onclick: () => fill(out) }, 'Annulla'),
+          h('button', { type: 'button', class: 'btn primary', onclick: async e => {
+            e.target.disabled = true;
+            try {
+              const r = await app.store.importSales({ asOf: parsed.asOf, customers: payload, years: parsed.years, file: file.name, sha });
+              app.invalidate();
+              toast(`Fatturato aggiornato: ${r.customers} clienti`);
+              fill(out, h('p', { class: 'du-ok' }, '✓ ' + logText({ kind: 'fatturato', summary: r }))); done();
+            } catch (err) { e.target.disabled = false; toast(err.message, 'error'); }
+          } }, 'Conferma e aggiorna'))));
+    } catch (err) { fill(out, h('p', { class: 'du-err' }, err.message)); }
+  };
+  return h('section', { class: 'card du-card' },
+    h('div', { class: 'du-head' }, h('div', {}, h('h2', {}, 'Fatturato per cliente'), h('small', { class: 'muted' }, 'File di testo (TAB) · una volta al mese o ogni lunedì')), picker('.txt,.TXT,.tsv,text/plain', 'Scegli il file TXT', run)),
+    h('details', { class: 'fold-in' }, h('summary', {}, 'Come esportarlo da RADIX'),
+      steps(['Fatturazione › Liste & statistiche › Statistica fatturato per movimenti.',
+        'Fatture ✓ (registri vuoti = tutti); Data documento dal 01.01.2024 a oggi; Anno contabile «Anno attuale»; Calcolo «Imponibile IVA»; Unità di misura principale.',
+        'Lista «Quantità + valore (Std)»; Raggrup. 1 Cliente / Numero; Raggrup. 2 Data documento Anno; Riepilogo Articolo (Codice).',
+        'Esporta › Testo separato con TAB.'])),
+    h('div', { class: 'du-row' }, field('Data dei dati', asOf, 'Di solito oggi: è la data che vedono gli agenti nella scheda cliente.')),
+    out);
+}
+
+return { canUpdateData, viewDataUpdate };
+})();
 __m["js/views/orders.js"] = (function () {
 // Ordini passati all'ufficio (offerte accettate): l'ufficio li segue fino all'inserimento in RADIX. Solo Direzione.
 const { h, eur, dateIt, emptyState, toast } = __m["js/ui.js"];
@@ -6145,6 +6591,7 @@ return { ordersSection };
 __m["js/views/more.js"] = (function () {
 // Pagine Direzione uscite dalla Home (01/11 sera): Ordini come pagina propria e "Altro" per il telefono.
 const { canSeeSystems } = __m["js/core/systems.js"];
+const { canUpdateData } = __m["js/views/data-update.js"];
 const { h } = __m["js/ui.js"];
 const { ordersSection } = __m["js/views/orders.js"];
 async function viewOrders(app) {
@@ -6164,6 +6611,7 @@ async function viewMore(app) {
       item('#/manager', '▤', 'Area manager', 'Portafogli, provvigioni, accessi'),
       item('#/mappe', '◎', 'Mappe', 'Clienti sulla mappa'),
       canSeeSystems(app.session) ? item('#/sistemi', '▥', 'Sistemi', 'Pacchetti, trasmittanza, scheda cliente (prova)') : null,
+      canUpdateData(app.session) ? item('#/dati', '⟳', 'Aggiorna dati', 'Offerte e fatturato da RADIX') : null,
       item('#/giri', '🗓', 'Giri visite', 'Prepara il giro, telefonate, foglio da stampare'),
       item('#/profilo', '◔', 'Profilo', 'Password, anteprima agente, esci')));
 }
@@ -6352,6 +6800,7 @@ const { viewRadixOffer } = __m["js/views/radix-offers.js"];
 const { viewPlans, viewPlan } = __m["js/views/plans.js"];
 const { viewSystems, viewSystem } = __m["js/views/systems.js"];
 const { canSeeSystems } = __m["js/core/systems.js"];
+const { viewDataUpdate, canUpdateData } = __m["js/views/data-update.js"];
 const VERSION = '1.0.0';
 
 // Navigazione (01/11): le offerte hanno una voce propria; il profilo è l'iniziale in alto a destra (telefono) o il nome in basso (computer)
@@ -6367,6 +6816,7 @@ const NAV = [
   { id: 'sistemi', label: 'Sistemi', icon: '▥', only: canSeeSystems, phone: false },
   { id: 'rete', label: 'Attività rete', icon: '↻', dir: true, group: 'Direzione', phone: false },
   { id: 'manager', label: 'Area manager', icon: '▤', dir: true, phone: false },
+  { id: 'dati', label: 'Aggiorna dati', icon: '⟳', only: canUpdateData, phone: false },
   { id: 'altro', label: 'Altro', icon: '⋯', dir: true, side: false },
 ];
 const initials = name => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '•';
@@ -6497,7 +6947,7 @@ function shell(active, content) {
   const nav = items.filter(n => n.side !== false).flatMap(n => [n.group ? h('div', { class: 'nav-group' }, n.group) : null,
     h('a', { href: '#/' + n.id, class: 'nav-item' + (active === n.id ? ' active' : '') }, h('span', { class: 'ico', 'aria-hidden': 'true' }, n.icon), h('span', {}, n.label), badge(n.id))]);
   const tabs = items.filter(n => n.phone !== false && !(isDir && n.phoneDir === false));
-  const tabActive = id => active === id || (id === 'altro' && ['ordini', 'rete', 'manager', 'mappe', 'sistemi'].includes(active) && isDir);
+  const tabActive = id => active === id || (id === 'altro' && ['ordini', 'rete', 'manager', 'mappe', 'sistemi', 'dati'].includes(active) && isDir);
   const who = h('div', { class: 'who' }, h('a', { href: '#/profilo', class: 'who-name' }, h('strong', {}, pv ? pv.by : app.session.name)), h('small', {}, pv ? 'Direzione · anteprima' : isDir ? 'Direzione' : (app.session.assignee || 'Agente')),
     h('button', { class: 'link', onclick: signOut }, 'Esci'));
   const bar = pv ? h('div', { class: 'preview-bar', role: 'status' }, h('span', {}, h('strong', {}, 'Anteprima '), app.session.assignee, h('small', {}, ' · sola lettura')),
@@ -6572,7 +7022,7 @@ async function render() {
   const [route, ...args] = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
   if (!app.session) { root.replaceChildren(loginView()); return; }
   const seq = ++renderSeq;
-  const views = { home: viewHome, agenda: viewAgenda, preventivi: viewQuotes, offerta: viewQuoteEditor, bacheca: viewBoard, rete: viewNetwork, manager: viewManager, mappe: viewMaps, profilo: viewAccount, ordini: viewOrders, altro: viewMore, rxofferta: viewRadixOffer, giri: viewPlans, giro: viewPlan, sistemi: viewSystems, sistema: viewSystem };
+  const views = { home: viewHome, agenda: viewAgenda, preventivi: viewQuotes, offerta: viewQuoteEditor, bacheca: viewBoard, rete: viewNetwork, manager: viewManager, mappe: viewMaps, profilo: viewAccount, ordini: viewOrders, altro: viewMore, rxofferta: viewRadixOffer, giri: viewPlans, giro: viewPlan, sistemi: viewSystems, sistema: viewSystem, dati: viewDataUpdate };
   const key = views[route] ? route : 'home';
   if (['rete', 'manager', 'ordini', 'altro'].includes(key) && app.session.role !== 'direzione') { app.go('home'); return; }
   // vecchi collegamenti alle schede della Home (prima del 01/11 sera)
