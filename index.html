@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="762b1abd9ad8">
+<meta name="ntx-build" content="846c562f10cc">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -735,7 +735,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .du-log li small{flex-basis:100%}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"762b1abd9ad8"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"846c562f10cc"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3344,6 +3344,21 @@ const { regionOf } = __m["js/core/geo.js"];
 const LISTINO = 'Listino NORDTEX n.05 del 01/10/2026';
 const BRENNERO = { name: 'Passo del Brennero', lat: 47.0026, lon: 11.5058 };
 
+// Corridoi obbligati del bilico dopo il Brennero (02/11, segnalazione Christian: per Vignole BL il calcolo passava
+// dalla Val d'Ega, il bilico va A22 fino a Trento e poi Valsugana: 441 km calcolati contro ~499 reali).
+// Ogni corridoio: province di destinazione, eventuale limite di latitudine della destinazione, tappe dopo il Brennero.
+// Elenco DA COMPLETARE con Christian (percorsi di montagna); le coordinate sono punti sulla strada principale.
+const CORRIDORS = [
+  { id: 'valsugana', label: 'Trento e Valsugana', provinces: ['BL'], maxLat: 46.35,   // Feltrino, Valbelluna, Alpago (non Cadore/Cortina)
+    via: [{ name: 'Valsugana (Borgo Valsugana)', lat: 46.0517, lon: 11.4557 }] },
+];
+function corridorFor(prov, destLat = null) {
+  const p = String(prov || '').trim().toUpperCase();
+  return CORRIDORS.find(c => c.provinces.includes(p) && (destLat === null || destLat === undefined || !c.maxLat || destLat <= c.maxLat)) || null;
+}
+// Tappe obbligate: Brennero + eventuale corridoio
+const routeVia = (prov, destLat) => [BRENNERO, ...(corridorFor(prov, destLat)?.via || [])];
+
 // Luoghi di carico con tariffa a km (indirizzi dal listino)
 const ORIGINS = {
   policell: { name: 'Policell', address: 'Gewerbestrasse 10, 3375 Krummnussbaum, Austria', page: 43 },
@@ -3606,19 +3621,22 @@ function transportVerdict(plan) {
 }
 
 // Collegamento Google Maps con passaggio dal Brennero (per verifica o lettura dei km)
-function googleMapsUrl(origin, destination) {
+function googleMapsUrl(origin, destination, { prov, corridor } = {}) {
   // 02/11 (Irina): Google Maps non trova "Passo del Brennero" come tappa → si passano le coordinate del passo
-  const q = new URLSearchParams({ api: '1', origin, destination, waypoints: `${BRENNERO.lat},${BRENNERO.lon}`, travelmode: 'driving' });
+  // 02/11 (Christian): con le stesse tappe obbligate del calcolo km (corridoio)
+  const c = corridor === undefined ? corridorFor(prov) : CORRIDORS.find(x => x.id === corridor) || null;
+  const pts = [BRENNERO, ...(c?.via || [])].map(p => `${p.lat},${p.lon}`).join('|');
+  const q = new URLSearchParams({ api: '1', origin, destination, waypoints: pts, travelmode: 'driving' });
   return 'https://www.google.com/maps/dir/?' + q.toString();
 }
 
-return { LISTINO, BRENNERO, ORIGINS, regimeFor, isBlockAccessory, volumeM3, lineLoad, m3ZoneRate, planTransport, fillSummary, transportVerdict, googleMapsUrl };
+return { LISTINO, BRENNERO, CORRIDORS, corridorFor, routeVia, ORIGINS, regimeFor, isBlockAccessory, volumeM3, lineLoad, m3ZoneRate, planTransport, fillSummary, transportVerdict, googleMapsUrl };
 })();
 __m["js/core/route.js"] = (function () {
 // Distanza stradale (sola andata) dal luogo di carico al cliente, con passaggio obbligato dal Brennero.
 // Servizi gratuiti OpenStreetMap: Nominatim (indirizzi) e OSRM (percorso auto). Stima: il percorso del camion
 // può differire; per conferma c'è sempre il collegamento a Google Maps.
-const { BRENNERO } = __m["js/core/logistics.js"];
+const { routeVia, corridorFor } = __m["js/core/logistics.js"];
 const GEO = 'https://nominatim.openstreetmap.org/search';
 const OSRM = 'https://router.project-osrm.org/route/v1/driving/';
 const memo = new Map();
@@ -3634,15 +3652,16 @@ async function geocode(address, fetchImpl = globalThis.fetch) {
   const v = { lat: +j[0].lat, lon: +j[0].lon, label: j[0].display_name }; cacheSet(k, v); return v;
 }
 
-// km sola andata origine → Brennero → destinazione (arrotondati per eccesso)
-async function kmViaBrennero(originAddress, destAddress, fetchImpl = globalThis.fetch) {
-  const k = 'r:' + originAddress.toLowerCase() + '>' + destAddress.toLowerCase(); const c = cacheGet(k); if (c) return c;
+// km sola andata origine → Brennero → (corridoio obbligato) → destinazione (arrotondati per eccesso)
+async function kmViaBrennero(originAddress, destAddress, fetchImpl = globalThis.fetch, { prov } = {}) {
   const [a, b] = [await geocode(originAddress, fetchImpl), await geocode(destAddress, fetchImpl)];
-  const pts = [a, BRENNERO, b].map(p => `${p.lon.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
+  const cor = corridorFor(prov, b.lat);
+  const k = 'r2:' + originAddress.toLowerCase() + '>' + destAddress.toLowerCase() + (cor ? '>' + cor.id : ''); const c = cacheGet(k); if (c) return c;
+  const pts = [a, ...routeVia(prov, b.lat), b].map(p => `${p.lon.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
   const r = await fetchImpl(OSRM + pts + '?overview=false&alternatives=false&steps=false');
   if (!r.ok) throw new Error('Servizio percorsi non disponibile (' + r.status + ')');
   const j = await r.json(); if (j.code !== 'Ok' || !j.routes?.length) throw new Error('Percorso non trovato');
-  const v = { km: Math.ceil(j.routes[0].distance / 1000), destination: b.label, provider: 'OpenStreetMap (OSRM)', at: new Date().toISOString() };
+  const v = { km: Math.ceil(j.routes[0].distance / 1000), destination: b.label, provider: 'OpenStreetMap (OSRM)' + (cor ? ', via ' + cor.label : ''), corridor: cor?.id || null, at: new Date().toISOString() };
   cacheSet(k, v); return v;
 }
 
@@ -3652,7 +3671,7 @@ __m["js/views/transport-panel.js"] = (function () {
 // Riquadro "Trasporto e carico" dell'offerta: regole del listino, km via Brennero, riempimento del mezzo,
 // incidenza per m² / m³ / bancale, quantità consigliate per mezzo carico e carico completo.
 const { h, fill, eur, num, toast } = __m["js/ui.js"];
-const { planTransport, googleMapsUrl, fillSummary, transportVerdict } = __m["js/core/logistics.js"];
+const { planTransport, googleMapsUrl, fillSummary, transportVerdict, corridorFor } = __m["js/core/logistics.js"];
 const { kmViaBrennero } = __m["js/core/route.js"];
 const { lineAmount } = __m["js/core/pricing.js"];
 const eu = (n, d = 2) => { if (n === null || n === undefined) return '—'; const [i, f] = Math.abs(Number(n)).toFixed(d).split('.'); return (n < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : '') + ' €'; };   // 1.452,00 €
@@ -3688,8 +3707,10 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
       if (!quiet) toast('Calcolo del percorso via Brennero…');
       // online: server (profilo camion, cache condivisa); se non disponibile, servizio pubblico OpenStreetMap
       let r;
-      if (app.store.route) { try { r = await app.store.route(g.regime.origin.address, destText()); } catch (e) { if (/non trovato/i.test(e.message)) throw e; r = null; } }
-      if (!r) r = await kmViaBrennero(g.regime.origin.address, destText());
+      // 02/11: con un corridoio obbligato (es. Valsugana per Belluno) si usa il calcolo con le tappe, finché la funzione server non le gestisce
+      if (app.store.route && !corridorFor(q.delivery.prov)) { try { r = await app.store.route(g.regime.origin.address, destText()); } catch (e) { if (/non trovato/i.test(e.message)) throw e; r = null; } }
+      if (!r) r = await kmViaBrennero(g.regime.origin.address, destText(), undefined, { prov: q.delivery.prov });
+      q.logistics.corridor = r.corridor || null;
       kmErrors.delete(key);
       q.logistics.km[g.regime.origin.address] = r.km; q.logistics.kmSource = `${r.provider}, ${new Date(r.at).toLocaleDateString('it-IT')}`; mark(); redraw();
       if (!quiet) toast(`${r.km} km sola andata (stima ${r.provider})`);
@@ -3739,10 +3760,10 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
         h('label', {}, 'Km sola andata ', h('input', { type: 'number', min: 1, step: 1, value: q.logistics.km[reg.origin.address] || '', disabled: locked, 'aria-label': 'Km sola andata',
           onchange: e => { q.logistics.km[reg.origin.address] = Number(e.target.value) || null; q.logistics.kmSource = 'inserito a mano'; mark(); redraw(); } })),
         h('button', { class: 'btn small', disabled: locked || !q.delivery.city, onclick: () => autoKm(g) }, 'Calcola km'),
-        h('a', { class: 'btn small', href: googleMapsUrl(reg.origin.address, destText()), target: '_blank', rel: 'noopener' }, 'Google Maps ↗'),
+        h('a', { class: 'btn small', href: googleMapsUrl(reg.origin.address, destText(), { prov: q.delivery.prov, corridor: q.logistics.corridor }), target: '_blank', rel: 'noopener' }, 'Google Maps ↗'),
         reg.rates.walkingfloor && reg.rates.centinato ? h('select', { disabled: locked, 'aria-label': 'Tipo di mezzo', onchange: e => { q.logistics.vehicleType = e.target.value; mark(); redraw(); } },
           h('option', { value: 'centinato', selected: q.logistics.vehicleType !== 'walkingfloor' }, 'Centinato 2,10 €/km'), h('option', { value: 'walkingfloor', selected: q.logistics.vehicleType === 'walkingfloor' }, 'Walking floor 3,10 €/km')) : null),
-      h('small', { class: 'muted' }, 'Percorso con passaggio dal Brennero. ', q.logistics.km[reg.origin.address] && q.logistics.kmSource ? `Km: ${q.logistics.kmSource}.` : '')) : null;
+      h('small', { class: 'muted' }, (c => 'Percorso con passaggio dal Brennero' + (c ? ', poi ' + c.label + ' (percorso del bilico)' : '') + '. ')(corridorFor(q.delivery.prov)), q.logistics.km[reg.origin.address] && q.logistics.kmSource ? `Km: ${q.logistics.kmSource}.` : '')) : null;
 
     return h('div', { class: 'tp-group' },
       h('div', { class: 'tp-head' }, h('strong', {}, reg.label), h('small', { class: 'muted' }, `Listino pag. ${reg.page}`)),
