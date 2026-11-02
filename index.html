@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="203af1ad660b">
+<meta name="ntx-build" content="ebef665ca670">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -736,9 +736,16 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 /* 02/11 Giacenze magazzini */
 .stock-table td small{display:block} .stock-table td.num{white-space:nowrap}
 @media (max-width:760px){ .hide-phone{display:none} .stock-table td{padding:8px 6px} }
+/* 02/11 Ufficio: Home del ponte HUB ↔ RADIX */
+.of-queues{display:grid;gap:14px}.of-title{display:flex;align-items:center;gap:10px}.of-title h2{margin:0}.tab-count.zero{background:var(--ok,#2e9e5b)}
+.of-soon{opacity:.75}.of-list{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:10px}.of-item{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.of-head{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}.of-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 14px;margin:8px 0}
+.of-kv span{display:block;font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}.of-kv strong{font-weight:500;word-break:break-word}.of-kv.miss strong{color:var(--warn)}
+.of-actions{gap:8px;flex-wrap:wrap;align-items:center}
+@media (max-width:760px){ .of-grid{grid-template-columns:1fr 1fr} }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"203af1ad660b"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ebef665ca670"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -925,9 +932,36 @@ function makeProspect(f, session, assignees) {
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('Email non valida');
   const assignee = session.role === 'direzione' ? (t(f.assignee) || assigneeFor({ prov, typology: f.typology }, assignees)) : session.assignee;
   if (!assignee) throw new Error('Profilo senza portafoglio: impossibile assegnare il cliente');
-  return { name, extra: t(f.extra), street: t(f.street), cap: t(f.cap), city: t(f.city).toUpperCase(), prov, phone: t(f.phone), email, vat, cf: t(f.cf).toUpperCase() || vat,
+  const fx = checkFiscal({ vat, sdi: f.sdi, pec: f.pec, bank: f.bank, paymentTerms: f.paymentTerms }, { partial: true });
+  return { ...fx, name, extra: t(f.extra), street: t(f.street), cap: t(f.cap), city: t(f.city).toUpperCase(), prov, phone: t(f.phone), email, vat, cf: t(f.cf).toUpperCase() || vat,
     typology: t(f.typology), assignee, attribution: assignee === 'Direzionale' ? 'Direzionale' : 'Agente', status: 'Potenziale', origin: 'HUB', annotation: t(f.notes),
     lastYear: null, lastInvoice: null, monthsSince: null, inv2024: 0, inv2025: 0, inv2026: 0, invTotal: 0 };
+}
+// 02/11 (versione Ufficio): dati fiscali del cliente nuovo. Facoltativi alla creazione, obbligatori quando l'offerta diventa ordine.
+// SDI = codice destinatario 7 caratteri (0000000 se c'è la PEC); banca = nome e/o IBAN, testo libero ma con un IBAN valido se presente.
+function checkFiscal(f, { partial = false } = {}) {
+  const t = x => String(x ?? '').trim();
+  const vat = onlyDigits(f.vat), sdi = t(f.sdi).toUpperCase(), pec = t(f.pec).toLowerCase(), bank = t(f.bank).replace(/\s+/g, ' '), paymentTerms = t(f.paymentTerms);
+  if (vat && !validVat(vat)) throw new Error('P.IVA non valida: controlla le 11 cifre');
+  if (sdi && !/^[A-Z0-9]{7}$/.test(sdi)) throw new Error('Codice SDI: 7 caratteri (lettere e cifre)');
+  if (pec && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(pec)) throw new Error('PEC non valida');
+  const iban = bank.replace(/\s/g, '').toUpperCase().match(/IT\d{2}[A-Z]\d{10}[A-Z0-9]{12}/);
+  if (/IT\d{2}/i.test(bank.replace(/\s/g, '')) && !iban) throw new Error('IBAN non valido: controlla i 27 caratteri (IT…)');
+  if (!partial) {
+    const miss = missingForOrder({ vat, sdi, pec, bank, paymentTerms, origin: 'HUB' });
+    if (miss.length) throw new Error('Per passare l\'ordine servono: ' + miss.join(', '));
+  }
+  return { vat, sdi, pec, bank, paymentTerms };
+}
+// Cosa manca a un cliente nuovo (HUB) per diventare ordine; i clienti RADIX hanno già l'anagrafica completa in RADIX
+function missingForOrder(c) {
+  if (!c || c.origin !== 'HUB') return [];
+  const out = [];
+  if (!validVat(c.vat)) out.push('P.IVA');
+  if (!String(c.sdi || '').trim() && !String(c.pec || '').trim()) out.push('codice SDI o PEC');
+  if (!String(c.paymentTerms || '').trim() || /^da concordare$/i.test(String(c.paymentTerms).trim())) out.push('pagamento');
+  if (!String(c.bank || '').trim()) out.push('banca');
+  return out;
 }
 const CONTACT_KINDS = ['Visita', 'Telefonata', 'Email', 'Videochiamata', 'Altro'];
 // Esiti già definiti nello schema AGENDA (hub_notes.outcome)
@@ -1106,7 +1140,7 @@ function checkStop({ callStatus, apptTime, note } = {}) {
 // ordine delle tappe: prima gli appuntamenti per orario, poi le altre nell'ordine scelto
 const stopOrder = (a, b) => (a.apptTime || '99') .localeCompare(b.apptTime || '99') || (a.position || 0) - (b.position || 0);
 
-return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, assigneeFor, validVat, makeProspect, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers, POST_CATEGORIES, postIcon, postEnded, CALL_STATES, checkStop, stopOrder };
+return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, assigneeFor, validVat, makeProspect, checkFiscal, missingForOrder, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers, POST_CATEGORIES, postIcon, postEnded, CALL_STATES, checkStop, stopOrder };
 })();
 __m["js/core/preview.js"] = (function () {
 // Anteprima "come agente" per la Direzione (richiesta Tommaso 01/11/2026): l'app mostra solo ciò che vede l'agente scelto.
@@ -1158,7 +1192,7 @@ __m["js/data/local-store.js"] = (function () {
 // Archivio locale: dati di riferimento (clienti, prodotti) da hub-data.json,
 // attività (note, follow-up, referenti, offerte, bacheca) salvate nel browser (IndexedDB).
 // Pensato per anteprima e uso su un singolo dispositivo; la versione condivisa usa Supabase.
-const { uid, nowIso, visibleTo, nextQuoteNumber, DIREZIONE, CONTACT_KINDS, NOTE_OUTCOMES, makeProspect, applyStatus, checkStatusChange, radixNoteView, radixVisible, checkOrderRequest, ORDER_STATES, checkRadixOutcome, radixOfferForAgent, checkStop } = __m["js/data/model.js"];
+const { uid, nowIso, visibleTo, nextQuoteNumber, DIREZIONE, CONTACT_KINDS, NOTE_OUTCOMES, makeProspect, applyStatus, checkStatusChange, radixNoteView, radixVisible, checkOrderRequest, ORDER_STATES, checkRadixOutcome, radixOfferForAgent, checkStop, checkFiscal } = __m["js/data/model.js"];
 function memoryKv(initial = {}) {
   const m = new Map(Object.entries(initial));
   return { async get(k) { return m.has(k) ? structuredClone(m.get(k)) : undefined; }, async set(k, v) { m.set(k, structuredClone(v)); } };
@@ -1201,14 +1235,14 @@ function createLocalStore({ data, kv }) {
     // Profili selezionabili in modalità locale (in Supabase arrivano dal login)
     profiles() {
       // comunicazioni alla rete: Tommaso e Marco sì (dalla propria casella), Christian no (decisione 31/10/2026)
-      return [{ id: 'dir', name: 'Tommaso Conti', role: 'direzione', assignee: null, label: DIREZIONE, commEmail: 'tommaso.conti@nordtex.it' }, { id: 'dir-marco', name: 'Marco Ferrari', role: 'direzione', assignee: null, label: DIREZIONE, commEmail: 'marco.ferrari@nordtex.it' }, { id: 'dir-cristian', name: 'Christian Fink', role: 'direzione', assignee: null, label: DIREZIONE, commEmail: null }]
+      return [{ id: 'dir', name: 'Tommaso Conti', role: 'direzione', assignee: null, label: DIREZIONE, commEmail: 'tommaso.conti@nordtex.it' }, { id: 'dir-marco', name: 'Marco Ferrari', role: 'direzione', assignee: null, label: DIREZIONE, commEmail: 'marco.ferrari@nordtex.it' }, { id: 'dir-cristian', name: 'Christian Fink', role: 'direzione', assignee: null, label: DIREZIONE, commEmail: null, office: true }, { id: 'uff-irina', name: 'Irina', role: 'direzione', assignee: null, label: DIREZIONE, commEmail: null, office: true }]
         .concat(data.assignees.filter(a => a.name !== 'Direzionale').map(a => ({ id: 'ag:' + a.name, name: a.name, role: 'agente', assignee: a.name, label: a.role })));
     },
     async signIn(profileId) {
       const p = this.profiles().find(x => x.id === profileId);
       if (!p) throw new Error('Profilo non trovato');
       session = { userId: p.id, name: p.name, role: p.role, assignee: p.assignee, canCommunicate: p.role === 'direzione' && !!p.commEmail, commEmail: p.commEmail || null,
-        canImport: p.role === 'direzione' && /tommaso/i.test(p.name || '') };
+        canImport: p.role === 'direzione' && /tommaso/i.test(p.name || ''), office: !!p.office };
       for (const c of await col('prospects')) byId.set(c.id, c);
       await applyAllStatus();
       return session;
@@ -1226,6 +1260,17 @@ function createLocalStore({ data, kv }) {
       list.push(rec); byId.set(rec.id, rec); await save('prospects'); return rec;
     },
     customer(id) { return canSeeCustomer(id) ? byId.get(id) : null; },
+    async updateCustomerFiscal(id, fields) {
+      const s = mustSession(); const f = checkFiscal(fields); const c = byId.get(id);
+      if (!c || c.origin !== 'HUB' || (!isDir() && c.createdBy !== s.userId)) throw new Error('Non puoi modificare questo cliente');
+      Object.assign(c, f, { cf: c.cf || f.vat }); await save('prospects'); return c;
+    },
+    async linkRadix(id, code) {
+      mustSession(); if (!isDir()) throw new Error('Solo l\'ufficio o la Direzione');
+      const v = String(code || '').trim(); if (!/^[0-9]{1,10}$/.test(v)) throw new Error('N° cliente RADIX non valido: solo cifre');
+      const c = byId.get(id); if (!c || c.origin !== 'HUB') throw new Error('Cliente non trovato o già in RADIX');
+      Object.assign(c, { origin: 'RADIX', number: v, radixOpenedAt: nowIso() }); await save('prospects'); return { merged: false, id, code: v };
+    },
     // Agenti: prodotti senza costo d'acquisto; Direzione: completi
     async products() { mustSession(); return isDir() ? data.products : data.products.map(({ purchasePrice, purchaseUnit, purchaseStatus, ...p }) => p); },
     async getSetting(key) { mustSession(); return (await col('settings')).find(x => x.key === key)?.value ?? null; },
@@ -1470,7 +1515,7 @@ __m["js/data/supabase-store.js"] = (function () {
 // Archivio condiviso su Supabase (stesso interfaccia dell'archivio locale).
 // Login ordinario email/password; i permessi sono applicati dal database (RLS),
 // l'app non usa mai chiavi privilegiate. Richiede la migrazione supabase/migrations/20261031120000_hub_v1.sql.
-const { nowIso, makeProspect, applyStatus, checkStatusChange, radixNoteView, checkOrderRequest, checkRadixOutcome, checkStop } = __m["js/data/model.js"];
+const { nowIso, makeProspect, applyStatus, checkStatusChange, radixNoteView, checkOrderRequest, checkRadixOutcome, checkStop, checkFiscal } = __m["js/data/model.js"];
 const AUDIO_MAX = 10 * 1024 * 1024;
 const AUDIO_EXT = { 'audio/mp4': 'mp4', 'audio/webm': 'webm', 'audio/ogg': 'ogg' };
 const audioMime = t => { const m = String(t || '').split(';')[0].trim().toLowerCase(); return AUDIO_EXT[m] ? m : m === 'audio/x-m4a' || m === 'audio/aac' ? 'audio/mp4' : null; };
@@ -1522,7 +1567,8 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     lastYear: c.last_year, lastInvoice: c.last_invoice, status: c.status, monthsSince: c.months_since, inv2024: c.inv_2024, inv2025: c.inv_2025, inv2026: c.inv_2026, invTotal: c.inv_total,
     firstInvoice: c.first_invoice, dataAsOf: c.origin === 'HUB' ? null : c.updated_at, createdAt: c.created_at, origin: c.origin || 'RADIX', createdBy: c.created_by, annotation: c.annotation, blockedSince: c.blocked_since, salesBlockedSince: c.sales_blocked_since, review: c.review,
     rev2024: c.sales?.rev?.['2024'], rev2025: c.sales?.rev?.['2025'], rev2026: c.sales?.rev?.['2026'], salesAsOf: c.sales?.asOf || null,
-    purchases: c.sales ? { families: c.sales.families || [], top: c.sales.top || [] } : null, paymentTerms: c.payment_terms || null, priceKey: c.price_key || null, isTest: !!c.is_test });
+    purchases: c.sales ? { families: c.sales.families || [], top: c.sales.top || [] } : null, paymentTerms: c.payment_terms || null, priceKey: c.price_key || null, isTest: !!c.is_test,
+    sdi: c.sdi || '', pec: c.pec || '', bank: c.bank || '', radixOpenedAt: c.radix_opened_at || null });
   const custUuid = id => { const c = customers?.find(x => x.id === id); if (!c) throw fail('CUSTOMER', 'Cliente non nel tuo portafoglio'); return c.uuid; };
   const custCode = uuid => customers?.find(x => x.uuid === uuid)?.id;
   // Nomi degli utenti (vista hub_people: solo id e nome)
@@ -1538,10 +1584,11 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
   }
   async function start(j) {
     token = j.access_token;
-    const p = await api('/rest/v1/hub_profiles?select=id,display_name,role,active,assignee_label,comm_email&id=eq.' + j.user.id);
+    const p = await api('/rest/v1/hub_profiles?select=*&id=eq.' + j.user.id);   // select=*: le colonne nuove (is_office) arrivano solo se la migrazione c'è
     profile = p[0]; if (!profile?.active) { token = null; storage.set(null); throw fail('LOGIN', 'Profilo non attivo: contatta la Direzione'); }
     session = { userId: profile.id, name: profile.display_name, role: profile.role, assignee: profile.assignee_label, email: j.user.email,
-      canCommunicate: profile.role === 'direzione' && !!profile.comm_email, commEmail: profile.comm_email || null };
+      canCommunicate: profile.role === 'direzione' && !!profile.comm_email, commEmail: profile.comm_email || null,
+      office: profile.role === 'direzione' && profile.is_office === true };   // 02/11: interfaccia Ufficio (migrazione 20261102200000)
     // 02/11: pagina "Aggiorna dati" solo per gli abilitati (migrazione 20261102140000; se non applicata: nessuno)
     session.canImport = (await api('/rest/v1/rpc/hub_can_import', { method: 'POST', body: {} }).catch(() => false)) === true;
     storage.set({ refresh_token: j.refresh_token });
@@ -1629,8 +1676,26 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       const body = { code, name: rec.name, extra: rec.extra || null, street: rec.street || null, cap: rec.cap || null, city: rec.city, prov: rec.prov || null, phone: rec.phone || null,
         email: rec.email || null, vat: rec.vat || null, cf: rec.cf || null, typology: rec.typology || null, assignee_label: rec.assignee, attribution: rec.attribution,
         status: 'Potenziale', annotation: rec.annotation || null, inv_2024: 0, inv_2025: 0, inv_2026: 0, inv_total: 0, origin: 'HUB' };
+      // dati per l'ordine (facoltativi alla creazione; colonne della migrazione 20261102200000 e 20261101130000)
+      for (const [k, col] of [['sdi', 'sdi'], ['pec', 'pec'], ['bank', 'bank'], ['paymentTerms', 'payment_terms']]) if (rec[k]) body[col] = rec[k];
       const [row] = await api('/rest/v1/hub_customers', { method: 'POST', prefer: 'return=representation', body });
       const c = fromDb(row); customers.push(c); return c;
+    },
+    // 02/11: dati fiscali del cliente nuovo (l'agente sui propri clienti HUB, la Direzione/Ufficio su tutti)
+    async updateCustomerFiscal(id, fields) {
+      const f = checkFiscal(fields);
+      const c = customers.find(x => x.id === id); if (!c) throw fail('CUSTOMER', 'Cliente non trovato');
+      const [row] = await api('/rest/v1/hub_customers?id=eq.' + c.uuid, { method: 'PATCH', prefer: 'return=representation',
+        body: { vat: f.vat || null, cf: c.cf || f.vat || null, sdi: f.sdi || null, pec: f.pec || null, bank: f.bank || null, payment_terms: f.paymentTerms || null } });
+      if (!row) throw fail('CUSTOMER', 'Non puoi modificare questo cliente');
+      Object.assign(c, fromDb(row)); return c;
+    },
+    // 02/11 Ufficio: cliente aperto in RADIX → N° cliente RADIX (stesso cliente, o unito a quello già presente)
+    async linkRadix(id, code) {
+      const c = customers.find(x => x.id === id); if (!c) throw fail('CUSTOMER', 'Cliente non trovato');
+      const r = await api('/rest/v1/rpc/hub_link_radix', { method: 'POST', body: { p_customer: c.uuid, p_code: String(code || '').trim() } });
+      customers = (await pageAll('/rest/v1/hub_customers?select=*&order=code')).map(fromDb); await loadStatus();
+      return r;
     },
     async products() {
       if (!products) {
@@ -1927,6 +1992,30 @@ async function openActions(app) {
 }
 
 return { openActions };
+})();
+__m["js/views/fiscal.js"] = (function () {
+// 02/11 (versione Ufficio): campi "dati per l'ordine" del cliente nuovo — P.IVA, SDI/PEC, pagamento, banca.
+// Facoltativi quando l'agente crea il cliente; obbligatori quando l'offerta diventa ordine (missingForOrder).
+const { h, field } = __m["js/ui.js"];
+const { paymentOptions } = __m["js/data/model.js"];
+function fiscalFields(app, c = {}, { withVat = true, payment = '' } = {}) {
+  const isDir = app.session.role === 'direzione';
+  const vat = withVat ? h('input', { placeholder: 'P.IVA (11 cifre)', inputmode: 'numeric', value: c.vat || '' }) : null;
+  const sdi = h('input', { placeholder: 'es. M5UXCR1 (0000000 se c\'è la PEC)', maxlength: 7, value: c.sdi || '', style: { textTransform: 'uppercase' } });
+  const pec = h('input', { type: 'email', placeholder: 'es. amministrazione@pec.it', value: c.pec || '' });
+  const { options } = paymentOptions({ isDir, customerTerms: c.paymentTerms });
+  const cur = c.paymentTerms || payment || '';
+  const pay = h('select', {}, h('option', { value: '' }, 'Pagamento…'),
+    [...new Set([...(cur && !options.includes(cur) ? [cur] : []), ...options])].filter(o => !/^da concordare$/i.test(o)).map(o => h('option', { value: o, selected: o === cur }, o)));
+  const bank = h('input', { placeholder: 'Banca e IBAN (es. Cassa Rurale … IT60X0542811101000000123456)', value: c.bank || '' });
+  const el = h('div', { class: 'form' },
+    withVat ? field('P.IVA', vat) : null,
+    h('div', { class: 'form two' }, field('Codice SDI', sdi), field('PEC', pec)),
+    h('div', { class: 'form two' }, field('Pagamento', pay), field('Banca / IBAN', bank)));
+  return { el, values: () => ({ ...(withVat ? { vat: vat.value } : {}), sdi: sdi.value, pec: pec.value, paymentTerms: pay.value, bank: bank.value }) };
+}
+
+return { fiscalFields };
 })();
 __m["js/core/pricing.js"] = (function () {
 // Calcolo offerte NORDTEX HUB.
@@ -2436,6 +2525,7 @@ const { radixOfferRow, radixOfferOpen, dueState: rxDueState } = __m["js/views/ra
 const { openActions } = __m["js/views/actions.js"];
 const { CONTACT_KINDS, NOTE_OUTCOMES, STATUS_ORDER, STATUS_INFO, MANUAL_STATUSES, TYPOLOGIES, dueState, assigneeFor } = __m["js/data/model.js"];
 const { buildIndex, searchCustomers, highlight } = __m["js/core/search.js"];
+const { fiscalFields } = __m["js/views/fiscal.js"];
 const { purchaseSummary, SALES_YEARS } = __m["js/core/purchases.js"];
 // 01/11 sera (Tommaso: "si può migliorare?"): all'apertura solo i clienti su cui lavorare (attivi, da recuperare, potenziali),
 // in ordine "da seguire prima"; la ricerca cerca sempre in tutti i clienti.
@@ -2885,9 +2975,10 @@ async function newCustomerDialog(app, preset = '', { thenQuote = false, onCreate
   for (const el of [name, vat, prov]) el.addEventListener('input', debounce(check, 150));
   for (const el of [typ, asg].filter(Boolean)) el.addEventListener('change', check);
   check();
+  const fx = fiscalFields(app, {}, { withVat: false });
   const save = async goQuote => {
     try {
-      const c = await app.store.addCustomer({ name: name.value, vat: vat.value, street: street.value, cap: cap.value, city: city.value, prov: prov.value, phone: phone.value, email: email.value, typology: typ.value, notes: notes.value, assignee: asg?.value || '' });
+      const c = await app.store.addCustomer({ name: name.value, vat: vat.value, street: street.value, cap: cap.value, city: city.value, prov: prov.value, phone: phone.value, email: email.value, typology: typ.value, notes: notes.value, assignee: asg?.value || '', ...fx.values() });
       app.invalidate(); toast('Cliente creato: ' + c.name);
       if (onCreated) { await onCreated(c); return true; }
       app.go(goQuote ? 'offerta/nuova/' + c.id : 'agenda/' + c.id); return true;
@@ -2900,7 +2991,8 @@ async function newCustomerDialog(app, preset = '', { thenQuote = false, onCreate
     h('div', { class: 'form two' }, field('P.IVA', vat), field('Tipologia', typ)),
     field('Indirizzo', street), h('div', { class: 'form three' }, field('CAP', cap), field('Località', city), field('Prov.', prov)),
     h('div', { class: 'form two' }, field('Telefono', phone), field('Email', email)),
-    isDir ? field('Assegnatario', asg) : null, asgHint, field('Note', notes)),
+    isDir ? field('Assegnatario', asg) : null, asgHint, field('Note', notes),
+    h('details', { class: 'fold-in' }, h('summary', {}, 'Dati per l\'ordine (SDI/PEC, pagamento, banca): facoltativi ora, obbligatori quando arriva l\'ordine'), fx.el)),
   [{ label: 'Annulla', value: false }, { label: 'Salva', run: () => save(false) }, { label: 'Salva e crea offerta', primary: true, run: () => save(true) }]);
 }
 
@@ -4360,7 +4452,8 @@ return { urgency, offersList };
 })();
 __m["js/views/quotes.js"] = (function () {
 const { h, fill, eur, num, dateIt, toast, modal, field, emptyState, debounce } = __m["js/ui.js"];
-const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions, normPayment, LOST_REASONS, QUOTE_SNOOZE_DAYS, quoteReminders } = __m["js/data/model.js"];
+const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions, normPayment, LOST_REASONS, QUOTE_SNOOZE_DAYS, quoteReminders, missingForOrder } = __m["js/data/model.js"];
+const { fiscalFields } = __m["js/views/fiscal.js"];
 const { makeLine, totals, lineNet, lineAmount, priceLevel, canQuote, searchProducts, totalDiscount, palletsFor, PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL } = __m["js/core/pricing.js"];
 const { regionOf } = __m["js/core/geo.js"];
 const { quoteCls } = __m["js/views/agenda.js"];
@@ -4430,11 +4523,17 @@ async function orderDialog(app, q) {
   const ref = h('input', { placeholder: 'es. conferma d\'ordine n. 125 del 03/11' });
   const contact = h('input', { placeholder: 'es. Mario Rossi 333 1234567' });
   const notes = h('textarea', { rows: 3, placeholder: 'es. scarico con gru, orari, bancali da rendere, accordi presi' });
+  // 02/11: cliente nuovo (nato nell'HUB) → l'ordine parte solo con P.IVA, SDI/PEC, pagamento e banca
+  const cust = (await app.customers()).find(c => c.id === q.customerId) || null;
+  const missing = missingForOrder(cust);
+  const fx = missing.length ? fiscalFields(app, cust, { payment: q.payment && !/^da concordare$/i.test(q.payment) ? q.payment : '' }) : null;
   const rec = await modal(`Passa l'ordine all'ufficio · ${q.number}`, h('div', { class: 'form' },
     h('p', { class: 'muted' }, `${q.customer?.name || ''} · ${eur(q.total || 0)}. L'ufficio riceve l'ordine nell'app e via email e lo inserisce in RADIX.`),
+    fx ? h('div', { class: 'alert warn' }, h('strong', {}, 'Cliente nuovo: completa i dati per l\'ordine'), h('div', {}, 'Mancano: ' + missing.join(', ') + '. Servono all\'ufficio per aprire il cliente in RADIX.'), fx.el) : null,
     field('Consegna richiesta', date, 'Lascia vuoto se da concordare'), field('Consegna a', addr), field('Riferimento ordine del cliente', ref),
     field('Referente per la consegna', contact), field('Note per l\'ufficio', notes)),
     [{ label: 'Più tardi', value: false }, { label: 'Passa all\'ufficio', primary: true, run: async () => {
+      if (fx) { await app.store.updateCustomerFiscal(cust.id, fx.values()); app.invalidate(); }
       const f = { deliveryDate: date.value || null, deliveryAddress: addr.value, customerRef: ref.value, siteContact: contact.value, notes: notes.value };
       await app.store.requestOrder(q, f); return f;
     } }]);
@@ -6193,6 +6292,128 @@ async function viewStock(app) {
 
 return { unitLabel, stockRows, filterStock, viewStock };
 })();
+__m["js/views/orders.js"] = (function () {
+// Ordini passati all'ufficio (offerte accettate): l'ufficio li segue fino all'inserimento in RADIX. Solo Direzione.
+const { h, eur, dateIt, emptyState, toast } = __m["js/ui.js"];
+const { ORDER_STATES } = __m["js/data/model.js"];
+const state = { filter: 'aperti' };
+const cls = st => ({ 'Da inserire': 'warn', 'In lavorazione': 'info', 'Inserito': 'ok', 'Annullato': 'muted' }[st] || 'muted');
+
+async function ordersSection(app, refresh) {
+  const [orders, quotes, customers] = await Promise.all([app.store.orders ? app.store.orders().catch(() => []) : [], app.store.quotes(), app.customers().catch(() => [])]);
+  const qById = new Map(quotes.map(q => [q.id, q]));
+  const isNew = new Set(customers.filter(c => c.origin === 'HUB').map(c => c.id));   // 02/11: cliente nato nell'HUB, ancora da aprire in RADIX
+  const open = o => o.status === 'Da inserire' || o.status === 'In lavorazione';
+  const rows = orders.filter(o => state.filter === 'tutti' || (state.filter === 'aperti' ? open(o) : o.status === state.filter));
+  const filters = [['aperti', `Da gestire (${orders.filter(open).length})`], ['Inserito', 'Inseriti'], ['Annullato', 'Annullati'], ['tutti', 'Tutti']];
+  const item = o => {
+    const q = qById.get(o.quoteId);
+    const st = h('select', { 'aria-label': 'Stato ordine' }, ORDER_STATES.map(x => h('option', { selected: x === o.status }, x)));
+    const rr = h('input', { value: o.radixRef || '', placeholder: 'N° ordine RADIX', 'aria-label': 'Numero ordine RADIX' });
+    const save = async () => {
+      try {
+        if (st.value === 'Inserito' && !rr.value.trim()) throw new Error('Indica il numero d\'ordine RADIX');
+        await app.store.updateOrder(o.id, { status: st.value, radixRef: rr.value.trim(), officeNote: o.officeNote || '' }); toast('Ordine aggiornato'); refresh();
+      } catch (e) { toast(e.message, 'error'); }
+    };
+    return h('li', { class: 'order-item' },
+      h('div', { class: 'order-head' }, h('span', { class: 'badge ' + cls(o.status) }, o.status),
+        h('a', { href: q ? '#/offerta/' + q.id : '#/preventivi' }, h('strong', {}, q?.customer?.name || 'Offerta'), ` · ${q?.number || ''} · ${eur(q?.total || 0)}`),
+        q && isNew.has(q.customerId) && open(o) ? h('span', { class: 'badge warn' }, 'Cliente nuovo: prima aprilo in RADIX') : null),
+      h('small', { class: 'muted' }, [`passato da ${o.requestedByName || '—'} il ${dateIt(o.requestedAt)}`, o.deliveryDate ? 'consegna ' + dateIt(o.deliveryDate) : 'consegna da concordare',
+        o.customerRef ? 'rif. cliente ' + o.customerRef : '', o.radixRef ? 'RADIX ' + o.radixRef : ''].filter(Boolean).join(' · ')),
+      o.deliveryAddress || o.notes ? h('p', { class: 'order-notes' }, [o.deliveryAddress ? 'Consegna a: ' + o.deliveryAddress : '', o.siteContact ? 'Referente: ' + o.siteContact : '', o.notes].filter(Boolean).join(' · ')) : null,
+      h('div', { class: 'row order-edit' }, st, rr, h('button', { class: 'btn small', onclick: save }, 'Aggiorna')));
+  };
+  return h('div', { class: 'section-body' },
+    h('section', { class: 'card' }, h('h2', {}, 'Ordini passati all\'ufficio'),
+      h('p', { class: 'muted' }, 'Offerte accettate dai clienti: il commerciale le passa all\'ufficio, l\'ufficio le inserisce in RADIX e segna qui il numero d\'ordine.'),
+      h('div', { class: 'chips' }, filters.map(([v, l]) => h('button', { class: 'chip' + (state.filter === v ? ' on' : ''), onclick: () => { state.filter = v; refresh(); } }, l))),
+      rows.length ? h('ul', { class: 'order-list' }, rows.map(item)) : emptyState(orders.length ? 'Nessun ordine in questo elenco.' : 'Ancora nessun ordine passato all\'ufficio.')));
+}
+
+return { ordersSection };
+})();
+__m["js/views/office.js"] = (function () {
+// Home dell'Ufficio (02/11/2026, decisioni di Tommaso nel documento "Versione Ufficio"): Christian e Irina lavorano tutto il giorno
+// su RADIX, quindi l'app per loro è il PONTE tra HUB e RADIX: quattro code in ordine di priorità.
+//  1. Ordini (offerte accettate da inserire in RADIX) — Christian
+//  2. Domande dei commerciali (in arrivo: passo 3)
+//  3. Clienti nuovi da aprire in RADIX — Irina
+//  4. Note da riportare in RADIX (in arrivo: passo 4)
+// Lo vedono e lo fanno tutti e due; la coda di ognuno compare per prima.
+const { h, fill, dateIt, toast, emptyState } = __m["js/ui.js"];
+const { ordersSection } = __m["js/views/orders.js"];
+const { missingForOrder } = __m["js/data/model.js"];
+const isOffice = s => !!s?.office && !s.preview;
+
+// Testo pronto da incollare/ricopiare in RADIX per aprire l'anagrafica
+function radixCustomerText(c) {
+  const line = (k, v) => (v ? `${k}: ${v}` : null);
+  return [line('Ragione sociale', c.name), line('Indirizzo', [c.street, [c.cap, c.city].filter(Boolean).join(' '), c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' ')),
+    line('P.IVA', c.vat), line('Codice fiscale', c.cf && c.cf !== c.vat ? c.cf : ''), line('Codice SDI', c.sdi), line('PEC', c.pec), line('Telefono', c.phone), line('Email', c.email),
+    line('Pagamento', c.paymentTerms), line('Banca', c.bank), line('Tipologia', c.typology), line('Commerciale', c.assignee),
+    line('Note', c.annotation)].filter(Boolean).join('\n');
+}
+
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); toast('Copiato: incollalo in RADIX'); }
+  catch { toast('Copia non riuscita: seleziona il testo a mano', 'error'); }
+}
+
+function customersCard(app, list, refresh) {
+  const item = c => {
+    const miss = missingForOrder(c);
+    const code = h('input', { inputmode: 'numeric', placeholder: 'N° cliente RADIX', 'aria-label': 'N° cliente RADIX', style: { maxWidth: '160px' } });
+    const done = async e => {
+      const btn = e.target; btn.disabled = true;
+      try {
+        const r = await app.store.linkRadix(c.id, code.value);
+        app.invalidate();
+        toast(r?.merged ? `Unito al cliente RADIX ${code.value.trim()} già presente nell'app: note e offerte spostate` : `Cliente agganciato al N° RADIX ${code.value.trim()}`);
+        refresh();
+      } catch (err) { btn.disabled = false; toast(err.message, 'error'); }
+    };
+    const row = (k, v, bad) => h('div', { class: 'of-kv' + (bad ? ' miss' : '') }, h('span', {}, k), h('strong', {}, v || '—'));
+    return h('li', { class: 'of-item' },
+      h('div', { class: 'of-head' }, h('a', { href: '#/agenda/' + encodeURIComponent(c.id) }, h('strong', {}, c.name)),
+        h('small', { class: 'muted' }, [c.city && `${c.city}${c.prov ? ' (' + c.prov + ')' : ''}`, c.assignee, c.createdAt ? 'creato il ' + dateIt(c.createdAt) : '', c.createdByName ? 'da ' + c.createdByName : ''].filter(Boolean).join(' · '))),
+      h('div', { class: 'of-grid' }, row('P.IVA', c.vat, !c.vat), row('SDI / PEC', [c.sdi, c.pec].filter(Boolean).join(' · '), !c.sdi && !c.pec), row('Pagamento', c.paymentTerms, miss.includes('pagamento')),
+        row('Banca', c.bank, !c.bank), row('Telefono', c.phone), row('Email', c.email)),
+      miss.length ? h('p', { class: 'fine' }, `Da aprire in RADIX come potenziale. Mancano ${miss.join(', ')}: l'agente li completa quando passa l'ordine.`) : h('p', { class: 'fine' }, 'Dati completi: si può aprire come cliente.'),
+      h('div', { class: 'row of-actions' }, h('button', { class: 'btn small', type: 'button', onclick: () => copy(radixCustomerText(c)) }, 'Copia dati per RADIX'),
+        code, h('button', { class: 'btn small primary', type: 'button', onclick: done }, 'Aperto in RADIX')));
+  };
+  return h('section', { class: 'card of-card' + (list.length ? '' : ' of-empty') },
+    h('div', { class: 'of-title' }, h('h2', {}, 'Clienti nuovi da aprire in RADIX'), h('span', { class: 'tab-count' + (list.length ? '' : ' zero') }, String(list.length))),
+    h('p', { class: 'muted' }, 'Creati dai commerciali nell\'app. Aprili in RADIX e scrivi qui il N° cliente: il cliente dell\'app diventa quello di RADIX, con note e offerte.'),
+    list.length ? h('ul', { class: 'of-list' }, list.map(item)) : emptyState('Nessun cliente da aprire.'));
+}
+
+const soon = (title, text) => h('section', { class: 'card of-card of-soon' }, h('div', { class: 'of-title' }, h('h2', {}, title), h('span', { class: 'badge muted' }, 'in arrivo')), h('p', { class: 'muted' }, text));
+
+async function viewOfficeHome(app) {
+  const box = h('div', { class: 'of-queues' });
+  const refresh = () => draw().catch(e => fill(box, h('p', { class: 'error' }, e.message)));
+  async function draw() {
+    const customers = await app.customers();
+    const newOnes = customers.filter(c => c.origin === 'HUB' && !c.isTest).sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+    const cards = {
+      ordini: await ordersSection(app, refresh),
+      domande: soon('Domande dei commerciali', 'Qui arriveranno le domande che i commerciali fanno dall\'app (trasporto, disponibilità, consegna, prezzo), con risposta rapida e avviso.'),
+      clienti: customersCard(app, newOnes, () => { app.invalidate(); refresh(); }),
+      note: soon('Note da riportare in RADIX', 'Qui arriveranno le note e le visite dei commerciali, con il pulsante Copia per riportarle in RADIX.'),
+    };
+    const order = /irina/i.test(app.session.name || '') ? ['clienti', 'note', 'ordini', 'domande'] : ['ordini', 'domande', 'clienti', 'note'];
+    fill(box, order.map(k => cards[k]));
+  }
+  await draw();
+  return h('div', { class: 'page office' },
+    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Ufficio'), h('p', { class: 'muted' }, 'Il ponte tra HUB e RADIX: quello che nasce nell\'app e va portato in RADIX.'))), box);
+}
+
+return { isOffice, radixCustomerText, viewOfficeHome };
+})();
 __m["js/data/systems-data.js"] = (function () {
 // Sistemi NORDTEX (02/11/2026, pilota solo Direzione-Tommaso). Fonti: tavole "Proposta progettuale" dei cataloghi
 // Fibra di legno (B2 p.8, D1 p.12), Blocchi Laterizio (B1 p.8) e Listino n.05 (consumi: Pura Calce p.64-65, cicli intonaco p.101).
@@ -7064,46 +7285,6 @@ function stockCard(app, done) {
 
 return { canUpdateData, viewDataUpdate };
 })();
-__m["js/views/orders.js"] = (function () {
-// Ordini passati all'ufficio (offerte accettate): l'ufficio li segue fino all'inserimento in RADIX. Solo Direzione.
-const { h, eur, dateIt, emptyState, toast } = __m["js/ui.js"];
-const { ORDER_STATES } = __m["js/data/model.js"];
-const state = { filter: 'aperti' };
-const cls = st => ({ 'Da inserire': 'warn', 'In lavorazione': 'info', 'Inserito': 'ok', 'Annullato': 'muted' }[st] || 'muted');
-
-async function ordersSection(app, refresh) {
-  const [orders, quotes] = await Promise.all([app.store.orders ? app.store.orders().catch(() => []) : [], app.store.quotes()]);
-  const qById = new Map(quotes.map(q => [q.id, q]));
-  const open = o => o.status === 'Da inserire' || o.status === 'In lavorazione';
-  const rows = orders.filter(o => state.filter === 'tutti' || (state.filter === 'aperti' ? open(o) : o.status === state.filter));
-  const filters = [['aperti', `Da gestire (${orders.filter(open).length})`], ['Inserito', 'Inseriti'], ['Annullato', 'Annullati'], ['tutti', 'Tutti']];
-  const item = o => {
-    const q = qById.get(o.quoteId);
-    const st = h('select', { 'aria-label': 'Stato ordine' }, ORDER_STATES.map(x => h('option', { selected: x === o.status }, x)));
-    const rr = h('input', { value: o.radixRef || '', placeholder: 'N° ordine RADIX', 'aria-label': 'Numero ordine RADIX' });
-    const save = async () => {
-      try {
-        if (st.value === 'Inserito' && !rr.value.trim()) throw new Error('Indica il numero d\'ordine RADIX');
-        await app.store.updateOrder(o.id, { status: st.value, radixRef: rr.value.trim(), officeNote: o.officeNote || '' }); toast('Ordine aggiornato'); refresh();
-      } catch (e) { toast(e.message, 'error'); }
-    };
-    return h('li', { class: 'order-item' },
-      h('div', { class: 'order-head' }, h('span', { class: 'badge ' + cls(o.status) }, o.status),
-        h('a', { href: q ? '#/offerta/' + q.id : '#/preventivi' }, h('strong', {}, q?.customer?.name || 'Offerta'), ` · ${q?.number || ''} · ${eur(q?.total || 0)}`)),
-      h('small', { class: 'muted' }, [`passato da ${o.requestedByName || '—'} il ${dateIt(o.requestedAt)}`, o.deliveryDate ? 'consegna ' + dateIt(o.deliveryDate) : 'consegna da concordare',
-        o.customerRef ? 'rif. cliente ' + o.customerRef : '', o.radixRef ? 'RADIX ' + o.radixRef : ''].filter(Boolean).join(' · ')),
-      o.deliveryAddress || o.notes ? h('p', { class: 'order-notes' }, [o.deliveryAddress ? 'Consegna a: ' + o.deliveryAddress : '', o.siteContact ? 'Referente: ' + o.siteContact : '', o.notes].filter(Boolean).join(' · ')) : null,
-      h('div', { class: 'row order-edit' }, st, rr, h('button', { class: 'btn small', onclick: save }, 'Aggiorna')));
-  };
-  return h('div', { class: 'section-body' },
-    h('section', { class: 'card' }, h('h2', {}, 'Ordini passati all\'ufficio'),
-      h('p', { class: 'muted' }, 'Offerte accettate dai clienti: il commerciale le passa all\'ufficio, l\'ufficio le inserisce in RADIX e segna qui il numero d\'ordine.'),
-      h('div', { class: 'chips' }, filters.map(([v, l]) => h('button', { class: 'chip' + (state.filter === v ? ' on' : ''), onclick: () => { state.filter = v; refresh(); } }, l))),
-      rows.length ? h('ul', { class: 'order-list' }, rows.map(item)) : emptyState(orders.length ? 'Nessun ordine in questo elenco.' : 'Ancora nessun ordine passato all\'ufficio.')));
-}
-
-return { ordersSection };
-})();
 __m["js/views/more.js"] = (function () {
 // Pagine Direzione uscite dalla Home (01/11 sera): Ordini come pagina propria e "Altro" per il telefono.
 const { canSeeSystems } = __m["js/core/systems.js"];
@@ -7313,6 +7494,7 @@ const { viewBoard } = __m["js/views/board.js"];
 const { viewNetwork, viewManager } = __m["js/views/direction.js"];
 const { viewMaps } = __m["js/views/maps.js"];
 const { viewStock } = __m["js/views/stock.js"];
+const { viewOfficeHome, isOffice } = __m["js/views/office.js"];
 const { viewOrders, viewMore } = __m["js/views/more.js"];
 const { viewRadixOffer } = __m["js/views/radix-offers.js"];
 const { viewPlans, viewPlan } = __m["js/views/plans.js"];
@@ -7460,14 +7642,18 @@ function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch { /* 
 
 function shell(active, content) {
   const isDir = app.session.role === 'direzione', pv = app.session.preview;
-  const items = NAV.filter(n => (!n.dir || isDir) && (!n.only || n.only(app.session)));
+  const office = isOffice(app.session);
+  // 02/11 Ufficio: menu corto (il resto lo consultano in RADIX)
+  const OFFICE_NAV = ['home', 'ordini', 'agenda', 'preventivi', 'giacenze', 'bacheca', 'dati'];
+  const items = NAV.filter(n => (!n.dir || isDir) && (!n.only || n.only(app.session)) && (!office || OFFICE_NAV.includes(n.id)))
+    .map(n => office && n.id === 'home' ? { ...n, label: 'Ufficio' } : office && n.id === 'ordini' ? { ...n, phone: true } : n);
   const badge = id => id === 'ordini' && app.navCounts?.ordini ? h('span', { class: 'tab-count' }, app.navCounts.ordini)
     : id === 'bacheca' && app.navCounts?.bacheca ? h('span', { class: 'tab-count nav-badge-bacheca' }, app.navCounts.bacheca) : null;
   const nav = items.filter(n => n.side !== false).flatMap(n => [n.group ? h('div', { class: 'nav-group' }, n.group) : null,
     h('a', { href: '#/' + n.id, class: 'nav-item' + (active === n.id ? ' active' : '') }, h('span', { class: 'ico', 'aria-hidden': 'true' }, n.icon), h('span', {}, n.label), badge(n.id))]);
-  const tabs = items.filter(n => n.phone !== false && !(isDir && n.phoneDir === false));
+  const tabs = items.filter(n => n.phone !== false && !(isDir && n.phoneDir === false) && !(office && n.id === 'giacenze'));
   const tabActive = id => active === id || (id === 'altro' && ['ordini', 'rete', 'manager', 'mappe', 'giacenze', 'sistemi', 'dati'].includes(active) && isDir);
-  const who = h('div', { class: 'who' }, h('a', { href: '#/profilo', class: 'who-name' }, h('strong', {}, pv ? pv.by : app.session.name)), h('small', {}, pv ? 'Direzione · anteprima' : isDir ? 'Direzione' : (app.session.assignee || 'Agente')),
+  const who = h('div', { class: 'who' }, h('a', { href: '#/profilo', class: 'who-name' }, h('strong', {}, pv ? pv.by : app.session.name)), h('small', {}, pv ? 'Direzione · anteprima' : office ? 'Ufficio' : isDir ? 'Direzione' : (app.session.assignee || 'Agente')),
     h('button', { class: 'link', onclick: signOut }, 'Esci'));
   const bar = pv ? h('div', { class: 'preview-bar', role: 'status' }, h('span', {}, h('strong', {}, 'Anteprima '), app.session.assignee, h('small', {}, ' · sola lettura')),
     h('button', { class: 'btn small', onclick: () => app.stopPreview() }, 'Esci')) : null;
@@ -7544,6 +7730,7 @@ async function render() {
   const views = { home: viewHome, agenda: viewAgenda, preventivi: viewQuotes, offerta: viewQuoteEditor, bacheca: viewBoard, rete: viewNetwork, manager: viewManager, mappe: viewMaps, giacenze: viewStock, profilo: viewAccount, ordini: viewOrders, altro: viewMore, rxofferta: viewRadixOffer, giri: viewPlans, giro: viewPlan, sistemi: viewSystems, sistema: viewSystem, dati: viewDataUpdate };
   const key = views[route] ? route : 'home';
   if (['rete', 'manager', 'ordini', 'altro'].includes(key) && app.session.role !== 'direzione') { app.go('home'); return; }
+  if (isOffice(app.session) && ['rete', 'manager', 'mappe', 'giri', 'giro', 'sistemi', 'sistema', 'altro'].includes(key)) { app.go('home'); return; }
   // vecchi collegamenti alle schede della Home (prima del 01/11 sera)
   if (key === 'home' && args[0]) { const to = { attivita: 'rete', ordini: 'ordini', bacheca: 'bacheca', manager: 'manager' }[args[0]]; if (to) { app.go(to); return; } }
   // comunicazioni non lette per l'agente (pallino su Bacheca)
@@ -7554,7 +7741,7 @@ async function render() {
   }
   if (app.session.role === 'direzione' && app.store.orders) { try { app.navCounts = { ordini: (await app.store.orders()).filter(o => o.status === 'Da inserire' || o.status === 'In lavorazione').length }; } catch { app.navCounts = {}; } }
   let content;
-  try { content = await views[key](app, ...args); } catch (e) { console.error(e); content = h('div', { class: 'page' }, h('p', { class: 'error' }, e.message)); }
+  try { content = await (key === 'home' && isOffice(app.session) ? viewOfficeHome : views[key])(app, ...args); } catch (e) { console.error(e); content = h('div', { class: 'page' }, h('p', { class: 'error' }, e.message)); }
   if (seq !== renderSeq) return;
   const activeNav = key === 'offerta' || key === 'rxofferta' ? 'preventivi' : key === 'giri' || key === 'giro' ? 'mappe' : key === 'sistema' ? 'sistemi' : key;
   root.replaceChildren(shell(activeNav, content));
