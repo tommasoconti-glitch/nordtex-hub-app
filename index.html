@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="fc4d90f57309">
+<meta name="ntx-build" content="9c5f2d30fe55">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -719,7 +719,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 @media (pointer:coarse),(max-width:760px){.urow{min-height:44px}.useg{min-height:40px;font-size:.76rem;padding:6px 4px;white-space:normal}}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"fc4d90f57309"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"9c5f2d30fe55"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3570,7 +3570,8 @@ function transportVerdict(plan) {
 
 // Collegamento Google Maps con passaggio dal Brennero (per verifica o lettura dei km)
 function googleMapsUrl(origin, destination) {
-  const q = new URLSearchParams({ api: '1', origin, destination, waypoints: 'Passo del Brennero', travelmode: 'driving' });
+  // 02/11 (Irina): Google Maps non trova "Passo del Brennero" come tappa → si passano le coordinate del passo
+  const q = new URLSearchParams({ api: '1', origin, destination, waypoints: `${BRENNERO.lat},${BRENNERO.lon}`, travelmode: 'driving' });
   return 'https://www.google.com/maps/dir/?' + q.toString();
 }
 
