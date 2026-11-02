@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="ba21a1b011f9">
+<meta name="ntx-build" content="53064d524f00">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -735,7 +735,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .du-log li small{flex-basis:100%}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ba21a1b011f9"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"53064d524f00"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1594,6 +1594,15 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     // invio dalla casella personale (migrazione 20261101100000_hub_invio_personale.sql)
     async logQuoteSend({ quoteId, to, bcc = [], subject = '', total = null }) {
       return api('/rest/v1/hub_quote_sends', { method: 'POST', body: { quote_id: quoteId, sent_by: session.userId, to_email: to, bcc, subject: subject || '-', total, channel: 'email personale' } });
+    },
+    // 02/11 invio dall'app (funzione hub-send-quote, dominio nordtexhub.it): attivo solo se la Direzione ha acceso "app_send"
+    async appSendEnabled() { return (await this.getSetting('app_send').catch(() => null)) === true; },
+    async sendQuote({ quoteId, to, subject, message, includeBcc = true, pdf = null, pdfName = '' }) {
+      const r = await rawFetch('/functions/v1/hub-send-quote', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quoteId, to, subject, message, includeBcc, pdf, pdfName }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw fail('SEND', j.error || 'Invio non riuscito (' + r.status + ')');
+      return j;
     },
     async agentEmails() {
       if (session?.role !== 'direzione') return [];
@@ -4301,6 +4310,8 @@ const IMAGES = { header: OFFER_HEADER, footer: OFFER_FOOTER };
 
 
 // Elenco offerte unico (app + RADIX), 01/11 sera: vedi offers-list.js
+const toBase64 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); };
+
 async function viewQuotes(app) {
   return offersList(app, { onNew: () => startNewQuote(app) });
 }
@@ -4685,8 +4696,28 @@ async function viewQuoteEditor(app, id, customerId) {
         .then(() => { done.pdf = done.mail = done.shared = true; draw(); toast('Indirizzo copiato: incollalo in "A" (' + copy + ')'); })
         .catch(e => { if (e?.name !== 'AbortError') toast('Condivisione non riuscita: usa i passi qui sotto', 'error'); });
     };
+    // 02/11 invio diretto dall'app (dominio nordtexhub.it): PDF allegato, risposta e copia all'autore, Ccn per gli agenti
+    const appSend = !!app.store.sendQuote && !!(await app.store.appSendEnabled?.().catch(() => false));
+    let sentFromApp = false;
+    const sendFromApp = async e => {
+      const list = to.value.split(/[;,\s]+/).filter(Boolean);
+      if (!list.length || !list.every(isEmail)) { toast('Indirizzo email del cliente non valido', 'error'); return; }
+      e.target.disabled = true; e.target.textContent = 'Invio in corso…';
+      try {
+        const r = pdf();
+        const r2 = await app.store.sendQuote({ quoteId: q.id, to: list.join(', '), subject: subject.value, message: [msg.value.trim(), sheetsBox.checked ? sheetsText : '', 'In allegato l\'offerta in PDF. Restiamo a disposizione per qualsiasi chiarimento.\nCordiali saluti'].filter(Boolean).join('\n\n'),
+          includeBcc: !isDir || bccBox.checked, pdf: toBase64(r.bytes), pdfName: r.fileName });
+        sentFromApp = true; done.pdf = done.mail = true; draw();
+        toast('Offerta inviata a ' + r2.to.join(', ') + (r2.cc?.length ? ' (copia a te)' : ''));
+      } catch (err) { e.target.disabled = false; e.target.textContent = 'Invia dall\'app'; toast(err.message, 'error'); }
+    };
     const step = (n, label, ok, btn) => h('div', { class: 'send-step' + (ok ? ' ok' : '') }, h('span', { class: 'n' }, ok ? '✓' : n), h('div', {}, label), btn);
     const draw = () => fill(st,
+      appSend ? h('div', { class: 'share-box' },
+        sentFromApp ? h('p', { class: 'du-ok' }, '✓ Offerta inviata dall\'app con il PDF allegato. Il cliente risponde a te; una copia è nella tua posta.')
+          : h('button', { class: 'btn primary', type: 'button', onclick: sendFromApp }, 'Invia dall\'app'),
+        sentFromApp ? null : h('p', { class: 'fine' }, 'Parte da "' + (app.session.name || '') + ' – NORDTEX" con il PDF allegato; il cliente risponde alla tua casella e tu ricevi una copia.'),
+        sentFromApp ? null : h('p', { class: 'fine muted' }, 'Oppure dalla tua posta:')) : null,
       canShare ? h('div', { class: 'share-box' },
         h('button', { class: 'btn primary', type: 'button', onclick: sharePdf }, 'Condividi PDF ed email'),
         h('p', { class: 'fine' }, 'Si apre "Condividi" con il PDF già allegato: scegli Mail, Outlook o Gmail (la tua casella), incolla l\'indirizzo del cliente in "A" (è già copiato) e invia. Non serve la copia nascosta: l\'invio resta registrato nell\'app e la Direzione lo vede.'),
@@ -4698,13 +4729,14 @@ async function viewQuoteEditor(app, id, customerId) {
     const res = await modal('Invia offerta ' + q.number, h('div', { class: 'form' }, field('A (cliente)', to), dl, field('Oggetto', subject), field('Messaggio (dopo il testo l\'app aggiunge riepilogo, schede tecniche e saluti; la firma la mette il tuo programma di posta)', msg), sheetsInfo, bccInfo, st,
       h('p', { class: 'fine' }, 'L\'email parte dalla tua casella: il cliente risponde a te.')),
       [{ label: 'Annulla', value: false }, { label: 'Ho inviato l\'email', primary: true, run: async () => {
+        if (sentFromApp) return true;   // stato e registro già aggiornati dal server
         if (!done.mail) throw new Error('Prima apri l\'email (passo 2) e inviala dal tuo programma di posta');
         q.status = 'Inviata'; q.sentAt = new Date().toISOString();
         Object.assign(q, await app.store.saveQuote(q));
         await app.store.logQuoteSend({ quoteId: q.id, to: to.value.trim(), bcc: done.shared || (isDir && !bccBox.checked) ? [] : QUOTE_BCC, subject: subject.value, total: q.total ?? null }).catch(() => null);
         return true;
       } }]);
-    if (res) { toast('Offerta segnata come inviata'); app.go('offerta/' + q.id); }
+    if (res || sentFromApp) { if (!sentFromApp) toast('Offerta segnata come inviata'); app.go('offerta/' + q.id); }
   }
 
   // Condizione di pagamento: elenco RADIX/comuni oppure testo libero
