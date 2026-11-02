@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="eccf9fdc6a45">
+<meta name="ntx-build" content="db223898c996">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -735,7 +735,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .du-log li small{flex-basis:100%}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"eccf9fdc6a45"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"db223898c996"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3359,7 +3359,11 @@ function corridorFor(prov, destLat = null) {
   return CORRIDORS.find(c => c.provinces.includes(p) && (destLat === null || destLat === undefined || !c.maxLat || destLat <= c.maxLat)) || null;
 }
 // Tappe obbligate: Brennero + eventuale corridoio
-const routeVia = (prov, destLat) => [BRENNERO, ...(corridorFor(prov, destLat)?.via || [])];
+// Tappe prima del Brennero per luogo di carico (02/11, Christian: Staudacher→Vignole app 457 km, Google 498; stessa
+// differenza ~41 km su F.lli Anelli 691/733): il calcolo auto passava dal Fernpass, vietato al transito dei mezzi pesanti;
+// il bilico fa Monaco → A93 → Kufstein → Innsbruck.
+const ORIGIN_VIA = { 'St. Leonhard Strasse 25, 86483 Balzhausen, Germany': [{ name: 'Kufstein (valle dell\'Inn)', lat: 47.5830, lon: 12.1650 }] };
+const routeVia = (prov, destLat, origin) => [...(ORIGIN_VIA[origin] || []), BRENNERO, ...(corridorFor(prov, destLat)?.via || [])];
 
 // Luoghi di carico con tariffa a km (indirizzi dal listino)
 const ORIGINS = {
@@ -3627,12 +3631,12 @@ function googleMapsUrl(origin, destination, { prov, corridor } = {}) {
   // 02/11 (Irina): Google Maps non trova "Passo del Brennero" come tappa → si passano le coordinate del passo
   // 02/11 (Christian): con le stesse tappe obbligate del calcolo km (corridoio)
   const c = corridor === undefined ? corridorFor(prov) : CORRIDORS.find(x => x.id === corridor) || null;
-  const pts = [BRENNERO, ...(c?.via || [])].map(p => `${p.lat},${p.lon}`).join('|');
+  const pts = [...(ORIGIN_VIA[origin] || []), BRENNERO, ...(c?.via || [])].map(p => `${p.lat},${p.lon}`).join('|');
   const q = new URLSearchParams({ api: '1', origin, destination, waypoints: pts, travelmode: 'driving' });
   return 'https://www.google.com/maps/dir/?' + q.toString();
 }
 
-return { LISTINO, BRENNERO, CORRIDORS, corridorFor, routeVia, ORIGINS, regimeFor, isBlockAccessory, volumeM3, lineLoad, m3ZoneRate, planTransport, fillSummary, transportVerdict, googleMapsUrl };
+return { LISTINO, BRENNERO, CORRIDORS, corridorFor, ORIGIN_VIA, routeVia, ORIGINS, regimeFor, isBlockAccessory, volumeM3, lineLoad, m3ZoneRate, planTransport, fillSummary, transportVerdict, googleMapsUrl };
 })();
 __m["js/core/route.js"] = (function () {
 // Distanza stradale (sola andata) dal luogo di carico al cliente, con passaggio obbligato dal Brennero.
@@ -3658,8 +3662,8 @@ async function geocode(address, fetchImpl = globalThis.fetch) {
 async function kmViaBrennero(originAddress, destAddress, fetchImpl = globalThis.fetch, { prov } = {}) {
   const [a, b] = [await geocode(originAddress, fetchImpl), await geocode(destAddress, fetchImpl)];
   const cor = corridorFor(prov, b.lat);
-  const k = 'r2:' + originAddress.toLowerCase() + '>' + destAddress.toLowerCase() + (cor ? '>' + cor.id : ''); const c = cacheGet(k); if (c) return c;
-  const pts = [a, ...routeVia(prov, b.lat), b].map(p => `${p.lon.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
+  const k = 'r3:' + originAddress.toLowerCase() + '>' + destAddress.toLowerCase() + (cor ? '>' + cor.id : ''); const c = cacheGet(k); if (c) return c;
+  const pts = [a, ...routeVia(prov, b.lat, originAddress), b].map(p => `${p.lon.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
   const r = await fetchImpl(OSRM + pts + '?overview=false&alternatives=false&steps=false');
   if (!r.ok) throw new Error('Servizio percorsi non disponibile (' + r.status + ')');
   const j = await r.json(); if (j.code !== 'Ok' || !j.routes?.length) throw new Error('Percorso non trovato');
@@ -3673,7 +3677,7 @@ __m["js/views/transport-panel.js"] = (function () {
 // Riquadro "Trasporto e carico" dell'offerta: regole del listino, km via Brennero, riempimento del mezzo,
 // incidenza per m² / m³ / bancale, quantità consigliate per mezzo carico e carico completo.
 const { h, fill, eur, num, toast } = __m["js/ui.js"];
-const { planTransport, googleMapsUrl, fillSummary, transportVerdict, corridorFor } = __m["js/core/logistics.js"];
+const { planTransport, googleMapsUrl, fillSummary, transportVerdict, corridorFor, ORIGIN_VIA } = __m["js/core/logistics.js"];
 const { kmViaBrennero } = __m["js/core/route.js"];
 const { lineAmount } = __m["js/core/pricing.js"];
 const eu = (n, d = 2) => { if (n === null || n === undefined) return '—'; const [i, f] = Math.abs(Number(n)).toFixed(d).split('.'); return (n < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : '') + ' €'; };   // 1.452,00 €
@@ -3710,7 +3714,7 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
       // online: server (profilo camion, cache condivisa); se non disponibile, servizio pubblico OpenStreetMap
       let r;
       // 02/11: con un corridoio obbligato (es. Valsugana per Belluno) si usa il calcolo con le tappe, finché la funzione server non le gestisce
-      if (app.store.route && !corridorFor(q.delivery.prov)) { try { r = await app.store.route(g.regime.origin.address, destText()); } catch (e) { if (/non trovato/i.test(e.message)) throw e; r = null; } }
+      if (app.store.route && !corridorFor(q.delivery.prov) && !ORIGIN_VIA[g.regime.origin.address]) { try { r = await app.store.route(g.regime.origin.address, destText()); } catch (e) { if (/non trovato/i.test(e.message)) throw e; r = null; } }
       if (!r) r = await kmViaBrennero(g.regime.origin.address, destText(), undefined, { prov: q.delivery.prov });
       q.logistics.corridor = r.corridor || null;
       kmErrors.delete(key);
