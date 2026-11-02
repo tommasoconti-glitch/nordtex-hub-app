@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="18948410811e">
+<meta name="ntx-build" content="203af1ad660b">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -738,7 +738,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 @media (max-width:760px){ .hide-phone{display:none} .stock-table td{padding:8px 6px} }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"18948410811e"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"203af1ad660b"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -6785,15 +6785,19 @@ async function pdfLines(buf) {
     const fonts = new Map([...fontDict.matchAll(/\/([^\s/]+)\s+(\d+)\s+\d+\s+R/g)].map(m => [m[1], +m[2]]));
     const cids = [...(pg.dict.match(/\/Contents\s*(\[[^\]]*\]|\d+\s+\d+\s+R)/)?.[1] || '').matchAll(/(\d+)\s+\d+\s+R/g)].map(m => +m[1]);
     const content = cids.map(id => objs.get(id)?.stream).filter(Boolean).map(x => latin1.decode(x)).join('\n');
-    const items = []; let cmap = null, lx = 0, ly = 0, stack = [];
-    const show = bytes => { const text = bytes.map(c => cmap?.get(c) ?? String.fromCharCode(c)).join(''); if (text.trim()) items.push({ x: lx, y: ly, text }); };
+    const items = []; let cmap = null, lx = 0, ly = 0, stack = [], last = null;
+    // testo scritto di seguito senza spostamenti (Td/Tm) = continuazione della stessa cella (es. "1.4" + "11" = "1.411")
+    const show = bytes => { const text = bytes.map(c => cmap?.get(c) ?? String.fromCharCode(c)).join('');
+      if (last) { last.text += text; return; }
+      if (text.trim()) { last = { x: lx, y: ly, text }; items.push(last); } };
     for (const tk of tokens(content)) {
       if (tk.op === undefined) { stack.push(tk); continue; }
       const nums = stack.filter(x => 'num' in x).map(x => x.num);
       switch (tk.op) {
-        case 'BT': lx = ly = 0; break;
-        case 'Tm': if (nums.length >= 6) { lx = nums.at(-2); ly = nums.at(-1); } break;
-        case 'Td': case 'TD': if (nums.length >= 2) { lx += nums.at(-2); ly += nums.at(-1); } break;
+        case 'BT': lx = ly = 0; last = null; break;
+        case 'Tm': if (nums.length >= 6) { lx = nums.at(-2); ly = nums.at(-1); } last = null; break;
+        case 'Td': case 'TD': if (nums.length >= 2) { lx += nums.at(-2); ly += nums.at(-1); } last = null; break;
+        case 'T*': case 'ET': last = null; break;
         case 'Tf': { const nm = stack.filter(x => x.name).at(-1)?.name; cmap = nm && fonts.has(nm) ? fontMap(fonts.get(nm)) : null; break; }
         case 'Tj': case "'": case '"': { const s = stack.filter(x => x.str).at(-1); if (s) show(s.str); break; }
         case ']': { // fine array TJ: si concatena; il TJ che segue lo usa
@@ -6833,7 +6837,7 @@ function parseStockLines(pages) {
   const lines = pages.flat().map(cells => cells.map(c => c.text));
   const flat = lines.map(l => l.join(''));
   const all = flat.join('\n');
-  const date = all.match(/JOBNORDTEX\s+(\d{2})\.(\d{2})\.(\d{4})/);
+  const date = all.match(/(\d{2})\.(\d{2})\.(\d{4})\s*Pagina/) || all.match(/JOBNORDTEX\s+(\d{2})\.(\d{2})\.(\d{4})/);   // invio automatico (JOBNORDTEX) o stampa a mano (utente)
   if (!date || !/Giacenza teorica/i.test(all)) throw new Error('Non sembra un report RADIX "Giacenza teorica"');
   const iso = `${date[3]}-${date[2]}-${date[1]}`;
   const isRow = l => /^N\d{5}\s*-/.test((l[0] || '').trim());
@@ -7025,6 +7029,8 @@ function stockCard(app, done) {
       try { const buf = await f.arrayBuffer(); for (const d of await parseStockPdf(buf)) depots.push({ ...d, file: f.name }); shas.push(await sha256(buf)); }
       catch (err) { errors.push(`${f.name}: ${err.message}`); }
     }
+    // stesso deposito in due file: se i dati sono identici se ne tiene uno solo, altrimenti si chiede di scegliere
+    for (let i = depots.length - 1; i > 0; i--) { const j = depots.findIndex(d => d.code === depots[i].code); if (j < i && depots[j].date === depots[i].date && JSON.stringify(depots[j].items) === JSON.stringify(depots[i].items)) depots.splice(i, 1); }
     const dup = depots.map(d => d.code).filter((c, i, a) => a.indexOf(c) !== i);
     if (!depots.length || dup.length) { fill(out, h('p', { class: 'du-err' }, dup.length ? `Lo stesso deposito (${[...new Set(dup)].join(', ')}) compare in più file: scegli un file per deposito.` : errors.join(' · '))); return; }
     const pv = stockPreview(depots, app.store.stock);
