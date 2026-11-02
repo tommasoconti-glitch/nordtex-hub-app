@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="f24c9af808b9">
+<meta name="ntx-build" content="cfba0c8dbb86">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -689,9 +689,19 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 #print-root .ss-price strong{font:700 12pt 'NT Poppins',Inter,sans-serif} #print-root .ss-price .tot{background:#D40E41;border-left-color:#b00b35;color:#fff} #print-root .ss-price .tot small{color:#ffd9e2}
 #print-root .ss-note{font-size:7.4pt;color:#4b4a4d;margin:2.5mm 0 0}
 .area-fold summary{cursor:pointer;color:var(--muted);font-size:.88rem;padding:6px 0;min-height:32px}
+/* Prezzo per unità nell'offerta (02/11) */
+.uprice{margin-top:6px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:var(--surface,#fff)}
+.uprice>summary{cursor:pointer;font-weight:600;font-size:.88rem;min-height:30px;display:flex;align-items:center}
+.uprice .chips{margin:6px 0}
+.uprice-grid{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.uprice-chip{display:flex;flex-direction:column;align-items:flex-start;border:1px solid var(--line);background:var(--bg,#f6f6f5);border-radius:8px;padding:6px 10px;min-height:44px;cursor:pointer;font:inherit;color:inherit}
+.uprice-chip strong{font-variant-numeric:tabular-nums}.uprice-chip small{color:var(--muted);font-size:.78rem}
+.uprice-chip.on{background:var(--nt-lime-soft,#f2f3d1);border-color:var(--nt-lime,#BCBF00);box-shadow:inset 0 0 0 1px var(--nt-lime,#BCBF00)}
+.uprice-chip:disabled{opacity:.5;cursor:default}
+.uprice .chip:disabled{opacity:.45;cursor:default}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f24c9af808b9"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"cfba0c8dbb86"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2980,6 +2990,7 @@ function lineExtra(l) {
     out.push(`(${n(l.palletQuantity, l.palletQuantity % 1 ? 3 : 0).replace(/0+$/, '').replace(/,$/, '')}${UL[l.unit] || l.unit.toLowerCase()}/Pal)`);
     out.push(Math.abs(pal - Math.round(pal)) < 1e-6 ? `${Math.round(pal)} ${Math.round(pal) === 1 ? 'bancale' : 'bancali'}` : `circa ${n(pal, 1)} bancali`);
   }
+  if (l.unitNote) out.push(l.unitNote);   // prezzi per unità scelti dall'agente (02/11)
   return out;
 }
 
@@ -3841,6 +3852,76 @@ function quantityEquivalents(p, qty) {
 
 return { UNIT_LABEL, notesFacts, perSaleUnit, palletInfo, conversionLines, quantityEquivalents };
 })();
+__m["js/core/unit-prices.js"] = (function () {
+// Prezzo per unità di misura (richiesta Tommaso 02/11/2026): dal prezzo netto di riga ricava €/kg, €/sacco, €/m², €/m³,
+// €/pannello, €/pezzo, €/m² di muro, €/bancale, €/carico completo; con il trasporto di questa offerta o a carico completo.
+const { perSaleUnit, palletInfo, UNIT_LABEL } = __m["js/core/conversions.js"];
+const { planTransport } = __m["js/core/logistics.js"];
+// densità di posa consigliate per gli sfusi (listino n.05 pag. 7 e 26-27): il prezzo al m³ dipende dalla densità
+const BULK_DENSITY = { floc: [35, 45], timberfloc: [32, 42], zell: [35, 45], 'Naturtex flow': [33, 45] };
+const ul = u => UNIT_LABEL[u] || String(u || '').toLowerCase();
+
+// confezione dichiarata nelle note: "Unità confezione: sacco15 kg, 21 sacchi/bancale" / "balla270 kg"
+function packOf(p) {
+  const m = String(p.notes || '').match(/Unit[àa] confezione:\s*(sacco|balla|secchio|latta|rotolo)\s*([\d.,]+)\s*(kg|l|m²|m2)/i);
+  if (!m) return null;
+  const qty = Number(m[2].replace(',', '.'));
+  return qty > 0 ? { name: m[1].toLowerCase(), qty, unit: m[3].toLowerCase() } : null;
+}
+
+// Unità disponibili per un articolo: q = quante unità di vendita ci sono in 1 unità mostrata
+function unitOptions(p) {
+  const per = perSaleUnit(p), v = per.values, su = per.unit, pal = palletInfo(p, per), out = [];
+  const add = (key, label, q, note = '') => { if (q > 0 && Number.isFinite(q) && !out.some(o => o.key === key)) out.push({ key, label, q, note }); };
+  add('base', ul(su), 1);
+  const pk = packOf(p);
+  if (pk && su === 'KG' && pk.unit === 'kg') add('pack', `${pk.name} da ${String(pk.qty).replace('.', ',')} kg`, pk.qty);
+  if (su === 'M2' && v.pz) add('panel', 'pannello', 1 / v.pz);
+  if (su !== 'M2' && v.m2) add('m2', per.block ? 'm² di muro' : 'm²', 1 / v.m2);
+  if (su !== 'M3' && v.m3 && su !== 'KG') add('m3', 'm³', 1 / v.m3);
+  if (su === 'KG' && BULK_DENSITY[p.subfamily]) {
+    const [a, b] = BULK_DENSITY[p.subfamily], mid = Math.round((a + b) / 2);
+    for (const d of [a, mid, b]) add('m3d' + d, `m³ a ${d} kg/m³`, d, 'densità di posa');
+  }
+  if (su !== 'KG' && v.kg && per.source.kg !== 'stima densità') add('kg', 'kg', 1 / v.kg);
+  if (pal.qty) add('pallet', 'bancale', pal.qty);
+  const full = fullLoadQty(p, pal);
+  if (full) add('load', `carico completo (${Math.round(full / pal.qty)} bancali)`, full);
+  return out;
+}
+function fullLoadQty(p, pal = palletInfo(p)) {
+  if (!pal.qty || !pal.perLoad) return null;
+  return Math.floor(pal.perLoad + 1e-9) * pal.qty;
+}
+
+// trasporto per unità di vendita se si ordina un carico completo (stesso indirizzo e km dell'offerta)
+function fullLoadTransport(p, ctx) {
+  const qty = fullLoadQty(p); if (!qty) return null;
+  const plan = planTransport([{ product: p, qty, amount: 0 }], ctx);
+  if (plan.office.length || !plan.groups.length || plan.groups[0].cost === null) return { qty, cost: null, reason: plan.groups[0]?.reason || plan.office[0]?.reason || 'Nessuna tariffa nel listino' };
+  return { qty, cost: plan.total, perUnit: plan.total / qty };
+}
+// trasporto per unità di vendita della riga, con il trasporto calcolato per questa offerta
+function offerTransportPerUnit(plan, index) {
+  for (const g of plan?.groups || []) for (const l of g.lines) if (l.index === index) return l.perUnit;
+  return null;
+}
+
+// prezzi per le unità: net = prezzo netto per unità di vendita; tpu = trasporto per unità di vendita (null = escluso)
+function unitPrices(p, net, tpu = null) {
+  return unitOptions(p).map(o => ({ ...o, price: net * o.q, withTransport: tpu === null ? null : (net + tpu) * o.q }));
+}
+const eu = n => n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+// riga per il documento dell'offerta
+function unitPriceNote(rows, picked, basis) {
+  const sel = rows.filter(r => picked.includes(r.key) && (basis === 'none' || r.withTransport !== null));
+  if (!sel.length) return '';
+  const tr = basis === 'full' ? ', trasporto incluso a carico completo' : basis === 'offer' ? ', trasporto incluso' : ', trasporto escluso';
+  return 'Prezzo indicativo: ' + sel.map(r => `${eu(basis === 'none' ? r.price : r.withTransport)}/${r.label.replace(/^m³ a (\d+) kg\/m³$/, 'm³ (posa $1 kg/m³)')}`).join(' · ') + tr;
+}
+
+return { BULK_DENSITY, packOf, unitOptions, fullLoadQty, fullLoadTransport, offerTransportPerUnit, unitPrices, unitPriceNote };
+})();
 __m["js/core/quote-email.js"] = (function () {
 // Email dell'offerta: oggetto, testo e documento HTML (tabelle in linea, leggibile da Outlook, Gmail, Apple Mail).
 // Modulo puro (nessun DOM): usato dall'app per l'anteprima e dalla funzione server che invia la mail.
@@ -4095,6 +4176,8 @@ const { mailtoUrl, quoteMailBody, quoteMailIntro, openMailto } = __m["js/core/ma
 const { quoteMargin, quoteCommission, unitCost } = __m["js/core/margins.js"];
 const { transportPanel, stockFor } = __m["js/views/transport-panel.js"];
 const { conversionLines, quantityEquivalents } = __m["js/core/conversions.js"];
+const { unitPrices, fullLoadTransport, offerTransportPerUnit, unitPriceNote, fullLoadQty } = __m["js/core/unit-prices.js"];
+const { planTransport } = __m["js/core/logistics.js"];
 const { quoteEmail, QUOTE_BCC, isEmail } = __m["js/core/quote-email.js"];
 const { quoteDocHtml, quoteFileName, DEPOTS, TRANSPORT_BY } = __m["js/core/quote-doc.js"];
 const { techSheetFor, sheetLinksText, sheetEntries } = __m["js/core/tech-sheets.js"];
@@ -4271,6 +4354,42 @@ async function viewQuoteEditor(app, id, customerId) {
     return h('details', { class: 'conv' }, h('summary', {}, eq.length ? `≈ ${eq.join(' · ')}` : 'Conversioni'),
       h('ul', {}, conv.map(t => h('li', {}, t))), h('small', { class: 'muted' }, 'Valori di massima da listino e Master; "stima" = calcolata da densità e dimensioni.'));
   }
+  // Prezzo per unità (02/11): €/kg, sacco, m², m³, pannello, pezzo, bancale, carico; con trasporto dell'offerta o a carico completo.
+  // Le unità toccate finiscono nel documento come riga "Prezzo indicativo" sotto il prodotto (l.unitNote).
+  const uOpen = new WeakSet();   // riquadri aperti (non si salva nell'offerta)
+  function unitBox(l, i, onQty) {
+    const p = byId.get(l.productId); if (!p) return null;
+    const ctx = { prov: q.delivery?.prov || q.customer?.prov, km: q.logistics?.km || {}, vehicleType: q.logistics?.vehicleType };
+    l.unitPick = l.unitPick || { keys: [], basis: 'none' };
+    const net = lineNet(l);
+    let offerTpu = null, full = null;
+    try { offerTpu = offerTransportPerUnit(planTransport(q.lines.map(x => ({ product: byId.get(x.productId), qty: x.qty, amount: lineAmount(x) })).filter(x => x.product), ctx), i); } catch { offerTpu = null; }
+    try { full = fullLoadTransport(p, ctx); } catch { full = null; }
+    const tpu = l.unitPick.basis === 'offer' ? offerTpu : l.unitPick.basis === 'full' ? full?.perUnit ?? null : null;
+    const rows = unitPrices(p, net, tpu);
+    if (rows.length < 2) return null;
+    const note = unitPriceNote(rows, l.unitPick.keys, l.unitPick.basis);
+    if ((l.unitNote || '') !== note) { l.unitNote = note; mark(); }
+    const box = h('details', { class: 'uprice', open: uOpen.has(l) || undefined, ontoggle: e => { e.target.open ? uOpen.add(l) : uOpen.delete(l); } });
+    const basisBtn = (k, label, ok, title) => h('button', { type: 'button', class: 'chip' + (l.unitPick.basis === k ? ' on' : ''), disabled: locked || !ok, title,
+      onclick: () => { l.unitPick.basis = k; mark(); onQty(); } }, label);
+    const fullQty = fullLoadQty(p);
+    fill(box, h('summary', {}, 'Prezzo per unità', l.unitPick.keys.length ? h('small', { class: 'muted' }, ` · ${l.unitPick.keys.length} nell'offerta`) : null),
+      h('div', { class: 'chips' }, basisBtn('none', 'Senza trasporto', true),
+        basisBtn('offer', 'Con trasporto di questa offerta', offerTpu !== null, offerTpu === null ? 'Trasporto non calcolato per questa offerta' : ''),
+        basisBtn('full', full?.cost != null ? `A carico completo (trasporto ${eur(full.cost)})` : 'A carico completo', full?.perUnit != null, full?.reason || '')),
+      h('div', { class: 'uprice-grid' }, rows.map(r => {
+        const val = l.unitPick.basis === 'none' ? r.price : r.withTransport;
+        const on = l.unitPick.keys.includes(r.key);
+        return h('button', { type: 'button', class: 'uprice-chip' + (on ? ' on' : ''), disabled: locked || val === null, 'aria-pressed': String(on), title: on ? 'Nell\'offerta: tocca per togliere' : 'Tocca per metterlo nell\'offerta',
+          onclick: () => { l.unitPick.keys = on ? l.unitPick.keys.filter(k => k !== r.key) : [...l.unitPick.keys, r.key]; mark(); onQty(); } },
+          h('strong', {}, val === null ? '—' : eur(val)), h('small', {}, '/' + r.label));
+      })),
+      fullQty && !locked && Math.abs(l.qty - fullQty) > 1e-6 ? h('button', { type: 'button', class: 'btn small', onclick: () => { l.qty = fullQty; mark(); drawLines(); } }, `Porta a carico completo: ${num(fullQty, 0)} ${String(l.unit).toLowerCase()}`) : null,
+      h('small', { class: 'muted' }, note ? 'Nel documento: ' + note : 'Tocca un prezzo per metterlo nel documento dell\'offerta, sotto il prodotto.'),
+      p.subfamily && /floc|zell|flow/i.test(p.subfamily) ? h('small', { class: 'muted' }, 'Sfusi: il prezzo al m³ dipende dalla densità di posa (listino).') : null);
+    return box;
+  }
   // quantità che richiede 3 o più mezzi pieni: avviso ben visibile (spesso è un errore di battitura)
   function bigLoad(l, pal) {
     const p = byId.get(l.productId); if (!p || pal === null) return null;
@@ -4287,7 +4406,7 @@ async function viewQuoteEditor(app, id, customerId) {
         fill(info, h('strong', {}, l.description), h('small', { class: 'muted' }, [l.listCode && 'cod. ' + l.listCode, l.radixCode && 'RADIX ' + l.radixCode, l.producer].filter(Boolean).join(' · ')),
           l.level === PRICE_LEVEL.WARN ? h('small', { class: 'warn-text', title: l.warnings.join('\n') }, '⚠ Prezzo da verificare nel Master') : null,
           convBox(byId.get(l.productId), l.qty, pal), stockLine(l.radixCode), sheetLinks(byId.get(l.productId)),
-          lineEcon(l),
+          lineEcon(l), unitBox(l, i, () => refresh()),
           byId.get(l.productId)?.family === 'Blocchi in laterizio' && pal !== null && Math.ceil(pal - 1e-6) - pal > 1e-6 ? h('small', { class: 'warn-text' }, `Laterizi: vendita solo a bancali completi → ${Math.ceil(pal - 1e-6)} bancali = ${num(Math.ceil(pal - 1e-6) * l.palletQuantity)} ${String(l.unit).toLowerCase()}`) : null,
           bigLoad(l, pal),
           disc > DISCOUNT_ALERT ? h('small', { class: 'bad-text' }, `Sconto complessivo ${num(disc)}%: oltre ${DISCOUNT_ALERT_LABEL} serve autorizzazione Direzione (provvigione 3%)`) : null);
