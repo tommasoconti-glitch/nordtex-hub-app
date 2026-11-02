@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="f485f1f3f5ed">
+<meta name="ntx-build" content="f24c9af808b9">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -691,7 +691,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .area-fold summary{cursor:pointer;color:var(--muted);font-size:.88rem;padding:6px 0;min-height:32px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f485f1f3f5ed"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f24c9af808b9"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2955,6 +2955,25 @@ const discText = d => d.filter(x => x).map(x => n(x, x % 1 ? 1 : 0)).join('+');
 const customerCode = q => (q.customerId && !String(q.customerId).startsWith('H-') ? String(q.customerId) : '');
 
 // Righe aggiuntive di descrizione, come in RADIX: "(30,78m²/Pal)" e "4 bancali"
+// 02/11 (prova con Christian): destinazione della merce sul documento = cantiere scritto nelle condizioni,
+// altrimenti l'indirizzo di consegna del riquadro trasporto se diverso dalla sede del cliente.
+function destinationLines(q) {
+  const site = String(q.site || '').trim();
+  if (site) return site.split('\n').map(s => s.trim()).filter(Boolean);
+  const d = q.delivery || {}, c = q.customer || {};
+  const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!d.city || (norm(d.street) === norm(c.street) && norm(d.city) === norm(c.city))) return [];
+  return [d.street, [d.cap, d.city, d.prov ? `(${d.prov})` : ''].filter(Boolean).join(' ')].filter(Boolean);
+}
+// riga del trasporto per il cliente: niente note interne ("inserito manualmente", dettagli di calcolo)
+function freightLabel(q) {
+  const v = Object.keys(q.logistics?.km || {}).length ? q.logistics?.vehicleType : null;   // solo trasporti a km (laterizi, vetro cellulare)
+  const mezzo = { centinato: 'con bilico centinato', walkingfloor: 'con walking floor' }[v] || '';
+  const dest = destinationLines(q); const city = dest.length ? dest[dest.length - 1].replace(/^\d{5}\s+/, '') : [q.customer?.city, q.customer?.prov ? `(${q.customer.prov})` : ''].filter(Boolean).join(' ');
+  return ['Servizio di trasporto', mezzo, city ? `- consegna a ${city}` : ''].filter(Boolean).join(' ');
+}
+const customerLines = c => [c.name, c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' '), c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean);
+
 function lineExtra(l) {
   const out = [], pal = palletsFor(l);
   if (l.palletQuantity > 0 && pal !== null) {
@@ -2980,7 +2999,7 @@ function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
   const rows = q.lines.map(l => row([esc(l.description), ...lineExtra(l).map(esc)].join('<br>'), l.radixCode || l.listCode || '', UM[l.unit] || l.unit,
     l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), n(l.listPrice, 3), discText(l.discounts), n(lineAmount(l), 2)));
   if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), '', n(t.extras, 2)));
-  if (t.freight) rows.push(row(['Servizio di trasporto' + (q.freightNote ? ': ' + esc(q.freightNote) : '')].join(''), 'N14126', 'NR', '1,00', n(t.freight, 3), '', n(t.freight, 2)));
+  if (t.freight) rows.push(row(esc(freightLabel(q)), 'N14126', 'NR', '1,00', n(t.freight, 3), '', n(t.freight, 2)));
   const notes = [];
   if (depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO') notes.push(`Materiale disponibile per il ritiro presso:<br><b>${depot.pickup.map(esc).join('<br>')}</b><br><b>Prezzo franco partenza</b> dal deposito`);
   if (t.freightPending && !(depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO')) notes.push('Trasporto: da definire.');   // ritiro al deposito: nessun trasporto
@@ -2994,8 +3013,8 @@ function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
   return `<div class="nt-doc" style="${F};max-width:780px;margin:0 auto;background:#fff">
 ${brand}
 <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px"><tr>
-${block('Deposito di uscita', depot.lines)}${block(site ? 'Cantiere' : '', site ? site.split('\n') : [])}
-<td style="width:34%;vertical-align:top;font-size:8.5pt;line-height:1.45"><div style="font-weight:bold;margin-bottom:6px">Spett.le<span style="float:right;font-weight:normal;font-size:7.5pt">${customerCode(q) ? '(' + esc(customerCode(q)) + ')' : ''}</span></div>${[c.name, c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' '), c.phone ? 'Tel.' + c.phone : '', c.email ? 'Email:' + c.email : '', c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean).map(esc).join('<br>')}</td>
+${block('Deposito di uscita', depot.lines)}${block(destinationLines(q).length ? 'Destinazione merce' : '', destinationLines(q))}
+<td style="width:34%;vertical-align:top;font-size:8.5pt;line-height:1.45"><div style="font-weight:bold;margin-bottom:6px">Spett.le<span style="float:right;font-weight:normal;font-size:7.5pt">${customerCode(q) ? '(' + esc(customerCode(q)) + ')' : ''}</span></div>${customerLines(c).map(esc).join('<br>')}</td>
 </tr></table>
 <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px"><tr><td style="background:#c8c8c8;width:58%;text-align:center;font-weight:bold;font-size:10pt;padding:4px">OFFERTA NR. ${esc(q.number || 'BOZZA')} - ${dotDate(created)}</td><td></td></tr></table>
 <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;border-collapse:collapse"><thead><tr>${head('Descrizione')}${head('Codice')}${head('U.M.')}${head('Quantità', 1)}${head('Prezzo', 1)}${head('Sconto %', 1)}${head('Imp.netto', 1)}</tr></thead>
@@ -3018,14 +3037,14 @@ function quoteFileName(q, now = new Date()) {
   return [clean(q.customer?.name), customerCode(q), (/^OFF-\d{4}-\d+$/.test(q.number || '') ? q.number : 'OFF-' + clean(q.number || 'BOZZA')), d.toISOString().slice(0, 10)].filter(Boolean).join('_');
 }
 
-return { DEPOTS, TRANSPORT_BY, CLAUSES, fmtN, dotDate, UM, discText, customerCode, lineExtra, quoteDocHtml, quoteFileName };
+return { DEPOTS, TRANSPORT_BY, CLAUSES, fmtN, dotDate, UM, discText, customerCode, destinationLines, freightLabel, customerLines, lineExtra, quoteDocHtml, quoteFileName };
 })();
 __m["js/core/quote-pdf.js"] = (function () {
 // PDF dell'offerta nel formato NORDTEX/RADIX, generato nell'app (nessun servizio esterno): lo stesso contenuto di quote-doc.js.
 // Serve all'invio dalla casella personale di chi fa l'offerta (decisione Direzione 31/10/2026).
 const { PdfDoc, wrapText, textWidth } = __m["js/core/pdf-writer.js"];
 const { totals, lineAmount } = __m["js/core/pricing.js"];
-const { DEPOTS, CLAUSES, customerCode, lineExtra, fmtN: n, dotDate, UM, discText, quoteFileName } = __m["js/core/quote-doc.js"];
+const { DEPOTS, CLAUSES, customerCode, lineExtra, fmtN: n, dotDate, UM, discText, quoteFileName, destinationLines, freightLabel, customerLines } = __m["js/core/quote-doc.js"];
 const MM = 72 / 25.4;
 function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
   const t = totals(q);
@@ -3050,9 +3069,8 @@ function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
     // tre blocchi
     const colW = W / 3, top = y;
     const block = (x, title, lines) => { let yy = top; if (title) { doc.text(x, yy, title, { size: 8.5, bold: true }); yy += 14; } for (const s of lines) for (const l of wrapText(s, colW - 8, 8.5)) { doc.text(x, yy, l, { size: 8.5 }); yy += 11; } return yy; };
-    const site = String(q.site || '').trim();
-    const custLines = [c.name, c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' '), c.phone ? 'Tel.' + c.phone : '', c.email ? 'Email:' + c.email : '', c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean);
-    const y1 = block(L, 'Deposito di uscita', depot.lines), y2 = site ? block(L + colW, 'Cantiere', site.split('\n')) : top, y3 = block(L + 2 * colW, 'Spett.le', custLines);
+    const custLines = customerLines(c), dest = destinationLines(q);
+    const y1 = block(L, 'Deposito di uscita', depot.lines), y2 = dest.length ? block(L + colW, 'Destinazione merce', dest) : top, y3 = block(L + 2 * colW, 'Spett.le', custLines);
     if (customerCode(q)) doc.text(R, top, `(${customerCode(q)})`, { size: 7.5, align: 'right' });
     y = Math.max(y1, y2, y3) + 8;
     doc.rect(L, y, W * 0.58, 16, 0.78);
@@ -3082,7 +3100,7 @@ function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
   for (const l of q.lines) row([...wrap(l.description), ...lineExtra(l).flatMap(wrap)],
     { code: l.radixCode || l.listCode || '', um: UM[l.unit] || l.unit, qty: l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), price: n(l.listPrice, 3), disc: discText(l.discounts), amount: n(lineAmount(l), 2) });
   if (t.extras) row(wrap(q.extrasLabel || 'Altri addebiti'), { code: '', um: 'NR', qty: '1,00', price: n(t.extras, 3), disc: '', amount: n(t.extras, 2) });
-  if (t.freight) row(wrap('Servizio di trasporto' + (q.freightNote ? ': ' + q.freightNote : '')), { code: 'N14126', um: 'NR', qty: '1,00', price: n(t.freight, 3), disc: '', amount: n(t.freight, 2) });
+  if (t.freight) row(wrap(freightLabel(q)), { code: 'N14126', um: 'NR', qty: '1,00', price: n(t.freight, 3), disc: '', amount: n(t.freight, 2) });
   const pickup = depot.pickup && (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO';
   if (pickup) row(['Materiale disponibile per il ritiro presso:', ...depot.pickup, 'Prezzo franco partenza dal deposito']);
   if (t.freightPending && !pickup) row(['Trasporto: da definire.']);
@@ -3116,14 +3134,16 @@ const { totals } = __m["js/core/pricing.js"];
 const { DEPOTS, fmtN } = __m["js/core/quote-doc.js"];
 // Email preparata nel programma di posta di chi invia (Outlook, Mail, Gmail…): mittente = la casella personale.
 // Regola Direzione 31/10/2026: offerte e comunicazioni partono dalla posta dell'agente / di Tommaso / di Marco / di Christian.
-function mailtoUrl({ to = [], cc = [], bcc = [], subject = '', body = '' }) {
-  const list = a => [].concat(a).filter(Boolean).map(s => String(s).trim()).filter(Boolean).join(',');
+// 02/11 (prova di Christian su PC con Outlook): Outlook per Windows non riconosce più indirizzi separati da virgola → su Windows ';'
+const mailSeparator = (ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '')) => /Windows/i.test(ua) ? ';' : ',';
+function mailtoUrl({ to = [], cc = [], bcc = [], subject = '', body = '' }, sep = mailSeparator()) {
+  const list = a => [].concat(a).filter(Boolean).map(s => String(s).trim()).filter(Boolean).join(sep);
   const q = [];
   if (list(cc)) q.push('cc=' + encodeURIComponent(list(cc)));
   if (list(bcc)) q.push('bcc=' + encodeURIComponent(list(bcc)));
   if (subject) q.push('subject=' + encodeURIComponent(subject));
   if (body) q.push('body=' + encodeURIComponent(String(body).replace(/\r?\n/g, '\r\n')));
-  return 'mailto:' + list(to).split(',').map(encodeURIComponent).join(',') + (q.length ? '?' + q.join('&') : '');
+  return 'mailto:' + list(to).split(sep).map(encodeURIComponent).join(sep) + (q.length ? '?' + q.join('&') : '');
 }
 // testo dell'email dell'offerta (solo testo: mailto non accetta formattazione né allegati; il PDF lo allega chi invia).
 // Niente firma: la aggiunge il programma di posta di chi invia (prova del 01/11: firma doppia in Outlook).
@@ -3152,7 +3172,7 @@ function openMailto(url) {
   document.body.append(a); a.click(); a.remove();
 }
 
-return { mailtoUrl, quoteMailIntro, quoteMailSummary, quoteMailBody, openMailto };
+return { mailSeparator, mailtoUrl, quoteMailIntro, quoteMailSummary, quoteMailBody, openMailto };
 })();
 __m["js/core/margins.js"] = (function () {
 // Margine (solo Direzione) e provvigione agente sulle offerte.
@@ -4387,6 +4407,7 @@ async function viewQuoteEditor(app, id, customerId) {
       } catch (e) { toast(e.message, 'error'); }
     };
     const openMail = () => {
+      if (!done.pdf) savePdf();   // 02/11: su computer il PDF si scarica insieme all'apertura dell'email, poi si trascina nell'email
       const list = to.value.split(/[;,\s]+/).filter(Boolean);
       if (!list.length || !list.every(isEmail)) { toast('Indirizzo email del cliente non valido', 'error'); return; }
       openMailto(mailtoUrl({ to: list, bcc: isDir && !bccBox.checked ? [] : QUOTE_BCC, subject: subject.value, body: quoteMailBody(q, msg.value, sheetsBox.checked ? sheetsText : '') }));
@@ -4413,8 +4434,8 @@ async function viewQuoteEditor(app, id, customerId) {
         h('p', { class: 'fine' }, 'Si apre "Condividi" con il PDF già allegato: scegli Mail, Outlook o Gmail (la tua casella), incolla l\'indirizzo del cliente in "A" (è già copiato) e invia. Non serve la copia nascosta: l\'invio resta registrato nell\'app e la Direzione lo vede.'),
         h('p', { class: 'fine muted' }, 'Oppure, senza Condividi:')) : null,
       step(1, 'Salva il PDF dell\'offerta (formato NORDTEX)', done.pdf, h('button', { class: 'btn small' + (done.pdf ? '' : ' primary'), type: 'button', onclick: savePdf }, done.pdf ? 'Di nuovo' : 'Salva PDF')),
-      step(2, 'Apri l\'email già compilata nel tuo programma di posta e allega il PDF', done.mail, h('button', { class: 'btn small' + (done.pdf && !done.mail ? ' primary' : ''), type: 'button', onclick: openMail }, 'Apri email')),
-      h('p', { class: 'fine' }, 'Su iPhone/iPad: il PDF finisce in File › Download; nell\'email tocca il testo e scegli "Allega file". Su computer trascina il PDF nell\'email.'));
+      step(2, 'Apri l\'email già compilata nel tuo programma di posta e allega il PDF', done.mail, h('button', { class: 'btn small' + (!done.mail ? ' primary' : ''), type: 'button', onclick: openMail }, done.pdf ? 'Apri email' : 'Salva PDF e apri email')),
+      h('p', { class: 'fine' }, 'Su computer: il PDF si salva in Download; trascinalo nell\'email che si apre (oppure in Outlook: Allega file › Download). Su iPhone/iPad: nell\'email tocca il testo e scegli "Allega file".'));
     draw();
     const res = await modal('Invia offerta ' + q.number, h('div', { class: 'form' }, field('A (cliente)', to), dl, field('Oggetto', subject), field('Messaggio (dopo il testo l\'app aggiunge riepilogo, schede tecniche e saluti; la firma la mette il tuo programma di posta)', msg), sheetsInfo, bccInfo, st,
       h('p', { class: 'fine' }, 'L\'email parte dalla tua casella: il cliente risponde a te.')),
@@ -5645,7 +5666,7 @@ async function viewMaps(app) {
     if (!navigator.geolocation) { toast('Posizione non disponibile su questo dispositivo', 'error'); return; }
     navigator.geolocation.getCurrentPosition(
       p => { const s = { lat: p.coords.latitude, lng: p.coords.longitude, label: 'la tua posizione' }; map.setView([s.lat, s.lng], 10); startTour(s); },
-      () => toast('Posizione non concessa: tocca un cliente sulla mappa e scegli «Giro da qui»', 'error'), { enableHighAccuracy: false, timeout: 10000 });
+      () => toast('Il browser non ha dato il permesso alla posizione (è gratuito): consentila per questo sito dall\'icona accanto all\'indirizzo, oppure tocca un cliente sulla mappa e scegli «Giro da qui»', 'error'), { enableHighAccuracy: false, timeout: 10000 });
   }
 
   // --- presidio per provincia (tabella di prima, ora richiudibile)
