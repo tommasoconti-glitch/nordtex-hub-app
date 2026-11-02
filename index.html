@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="99357c83b9dc">
+<meta name="ntx-build" content="df0676e4f67b">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -733,9 +733,12 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .du-ok{color:var(--ok);font-weight:600;margin:0} .du-err{color:var(--bad);white-space:pre-wrap;margin:0}
 .du-log{list-style:none;margin:0;padding:0} .du-log li{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)} .du-log li:last-child{border:0}
 .du-log li small{flex-basis:100%}
+/* 02/11 Giacenze magazzini */
+.stock-table td small{display:block} .stock-table td.num{white-space:nowrap}
+@media (max-width:760px){ .hide-phone{display:none} .stock-table td{padding:8px 6px} }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"99357c83b9dc"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"df0676e4f67b"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1546,7 +1549,7 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     await loadStatus();
     store.assignees = (await api('/rest/v1/hub_assignees?select=name,role,provinces&order=name').catch(() => [])) || [];
     const st = (await api('/rest/v1/hub_stock?select=*').catch(() => [])) || [];
-    const deps = new Map(); for (const r of st) { if (!deps.has(r.depot)) deps.set(r.depot, { code: r.depot, name: r.depot_name, date: r.as_of, items: {} }); deps.get(r.depot).items[r.radix_code] = { um: r.um, stock: +r.stock, incoming: +r.incoming, reserved: +r.reserved, available: +r.available }; }
+    const deps = new Map(); for (const r of st) { if (!deps.has(r.depot)) deps.set(r.depot, { code: r.depot, name: r.depot_name, date: r.as_of, items: {} }); deps.get(r.depot).items[r.radix_code] = { um: r.um, stock: +r.stock, incoming: +r.incoming, reserved: +r.reserved, available: +r.available, description: r.description || '' }; }
     store.stock = deps.size ? { depots: [...deps.values()] } : null;
     return session;
   }
@@ -6075,10 +6078,98 @@ function mapsShell(app, body) {
   const isDir = app.session.role === 'direzione';
   const tabs = isDir ? h('div', { class: 'tabs', role: 'tablist' }, [['clienti', 'Clienti'], ['territorio', 'Territorio e copertura']].map(([k, l]) =>
     h('button', { role: 'tab', class: 'tab' + (mapState.mode === k ? ' on' : ''), 'aria-selected': String(mapState.mode === k), onclick: () => { mapState.mode = k; app.go('mappe'); } }, l))) : null;
-  return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Mappe'))), tabs, body);
+  return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Mappe')), h('a', { class: 'btn small', href: '#/giacenze' }, '▦ Giacenze magazzini')), tabs, body);
 }
 
 return { viewMaps };
+})();
+__m["js/views/stock.js"] = (function () {
+// Giacenze dei depositi (richiesta Tommaso 02/11/2026): pagina sotto "Mappe", visibile ad agenti e Direzione.
+// Fonte: report RADIX "Giacenza teorica" per deposito (tools/import_giacenze.py → tabella hub_stock).
+// Disponibile = giacenza + ordini fornitori − ordini clienti (colonna "Giacenza teorica" di RADIX).
+const { h, fill, num, dateIt, eur, emptyState } = __m["js/ui.js"];
+const { DEPOTS } = __m["js/core/quote-doc.js"];
+const UNIT = { MQ: 'm²', M2: 'm²', M3: 'm³', ML: 'ml', PZ: 'pz', KG: 'kg', SA: 'sacchi', SC: 'sacchi', RO: 'rotoli', RT: 'rotoli', CF: 'conf.', BB: 'big bag', NR: 'nr' };
+const SAME = { MQ: 'M2', M2: 'M2', M3: 'M3', ML: 'ML', PZ: 'PZ', KG: 'KG' };
+const unitLabel = u => UNIT[u] || String(u || '').toLowerCase();
+const qty = (v, u) => num(v, u === 'PZ' ? 0 : 2);
+const OLD_DAYS = 7;
+
+// Righe di tutti i depositi con i dati del Master prodotti (famiglia, listino, bancale) quando il codice RADIX c'è
+function stockRows(stock, products = []) {
+  if (!stock?.depots?.length) return [];
+  const byCode = new Map();
+  for (const p of products) if (p.radixCode && !byCode.has(p.radixCode)) byCode.set(p.radixCode, p);
+  return stock.depots.flatMap(d => Object.entries(d.items || {}).map(([code, it]) => {
+    const p = byCode.get(code) || null;
+    const pal = p?.palletQuantity && SAME[it.um] && SAME[it.um] === p.palletUnit ? it.available / p.palletQuantity : null;
+    return { depot: d.code, depotName: d.name, date: d.date, code, um: it.um, stock: it.stock, incoming: it.incoming, reserved: it.reserved, available: it.available,
+      description: it.description || p?.description || code, family: p?.family || '', producer: p?.producer || '', price: p?.price ?? null, priceUnit: p?.saleUnit || '',
+      pallets: pal === null ? null : Math.round(pal * 10) / 10 };
+  }));
+}
+
+function filterStock(rows, { q = '', depot = '', family = '', onlyAvailable = true } = {}) {
+  const words = String(q).toLowerCase().split(/\s+/).filter(Boolean);
+  return rows.filter(r => (!depot || r.depot === depot) && (!family || r.family === family) && (!onlyAvailable || r.available > 0)
+    && words.every(w => `${r.description} ${r.code} ${r.family} ${r.producer}`.toLowerCase().includes(w)))
+    .sort((a, b) => (a.family ? 0 : 1) - (b.family ? 0 : 1) || a.family.localeCompare(b.family) || a.description.localeCompare(b.description));
+}
+
+const st = { q: '', depot: '', family: '', onlyAvailable: true };
+
+async function viewStock(app) {
+  const stock = app.store.stock || null;
+  const head = h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Giacenze magazzini'),
+    h('p', { class: 'muted' }, 'Materiale nei depositi NORDTEX, dai report RADIX "Giacenza teorica". Disponibile = giacenza + arrivi da fornitori − impegnato su ordini clienti.')));
+  if (!stock?.depots?.length) return h('div', { class: 'page' }, head, emptyState('Giacenze non ancora caricate. Chiedi all\'ufficio l\'esportazione RADIX "Giacenza teorica".'));
+  const rows = stockRows(stock, await app.products());
+  const families = [...new Set(rows.map(r => r.family).filter(Boolean))].sort();
+  const dates = [...new Set(stock.depots.map(d => d.date))].sort();
+  const oldest = dates[0], age = Math.floor((Date.now() - new Date(oldest + 'T12:00:00').getTime()) / 864e5);
+  const dateNote = h('p', { class: age > OLD_DAYS ? 'alert warn' : 'fine' }, `Dati al ${dates.map(dateIt).join(', ')}`
+    + (age > OLD_DAYS ? ` (${age} giorni fa): prima di confermare quantità al cliente verifica con l'ufficio.` : '. Prima di confermare grandi quantità verifica con l\'ufficio.'));
+
+  const search = h('input', { type: 'search', placeholder: 'Cerca articolo, codice RADIX, famiglia…', value: st.q, oninput: e => { st.q = e.target.value; draw(); } });
+  const famSel = h('select', { 'aria-label': 'Famiglia', onchange: e => { st.family = e.target.value; draw(); } },
+    h('option', { value: '' }, 'Tutte le famiglie'), families.map(f => h('option', { value: f, selected: f === st.family }, f)));
+  const avail = h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.onlyAvailable, onchange: e => { st.onlyAvailable = e.target.checked; draw(); } }), 'Solo disponibili');
+  const chips = h('div', { class: 'chips' }), out = h('div');
+
+  function depotCard(d, list) {
+    const info = DEPOTS[d.code];
+    const where = info?.pickup ? info.pickup.slice(1).join(' · ').replace(/IT-/, '') : '';
+    return h('section', { class: 'card' },
+      h('h2', {}, info ? info.label : d.name),
+      h('p', { class: 'fine' }, [where, `${list.length} ${list.length === 1 ? 'articolo' : 'articoli'}`, `dati al ${dateIt(d.date)}`].filter(Boolean).join(' · ')),
+      list.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'table stock-table' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'Articolo'), h('th', { class: 'num' }, 'Disponibile'), h('th', { class: 'num' }, 'Bancali'),
+          h('th', { class: 'num hide-phone' }, 'Giacenza'), h('th', { class: 'num hide-phone' }, 'In arrivo'), h('th', { class: 'num hide-phone' }, 'Impegnato'))),
+        h('tbody', {}, list.map(r => h('tr', {},
+          h('td', {}, h('div', {}, r.description), h('small', { class: 'muted' }, [r.code, r.family, r.price !== null ? `listino ${eur(r.price)}/${unitLabel(r.priceUnit)}` : null].filter(Boolean).join(' · '))),
+          h('td', { class: 'num' }, h('strong', { class: r.available > 0 ? '' : 'bad-text' }, `${qty(r.available, r.um)} ${unitLabel(r.um)}`)),
+          h('td', { class: 'num' }, r.pallets === null ? '—' : num(r.pallets, 1)),
+          h('td', { class: 'num hide-phone' }, qty(r.stock, r.um)),
+          h('td', { class: 'num hide-phone' }, r.incoming ? '+' + qty(r.incoming, r.um) : '—'),
+          h('td', { class: 'num hide-phone' }, r.reserved ? '−' + qty(r.reserved, r.um) : '—'))))))
+        : h('p', { class: 'muted' }, 'Nessun articolo con questi filtri.'));
+  }
+
+  function draw() {
+    const base = filterStock(rows, { ...st, depot: '' });
+    fill(chips, h('button', { type: 'button', class: 'chip' + (!st.depot ? ' on' : ''), onclick: () => { st.depot = ''; draw(); } }, 'Tutti i depositi', h('b', {}, base.length)),
+      stock.depots.map(d => h('button', { type: 'button', class: 'chip' + (st.depot === d.code ? ' on' : ''), onclick: () => { st.depot = d.code; draw(); } },
+        (DEPOTS[d.code]?.pickup?.[2] || d.name).replace(/^IT-\d+\s*/, ''), h('b', {}, base.filter(r => r.depot === d.code).length))));
+    const shown = filterStock(rows, st);
+    const deps = stock.depots.filter(d => !st.depot || d.code === st.depot);
+    fill(out, deps.map(d => depotCard(d, shown.filter(r => r.depot === d.code))));
+  }
+  draw();
+  return h('div', { class: 'page' }, head, dateNote,
+    h('section', { class: 'card' }, h('div', { class: 'form' }, search, h('div', { class: 'filters' }, famSel), avail), chips), out);
+}
+
+return { unitLabel, stockRows, filterStock, viewStock };
 })();
 __m["js/data/systems-data.js"] = (function () {
 // Sistemi NORDTEX (02/11/2026, pilota solo Direzione-Tommaso). Fonti: tavole "Proposta progettuale" dei cataloghi
@@ -6752,6 +6843,7 @@ async function viewMore(app) {
       item('#/rete', '↻', 'Attività rete', 'Note, visite, offerte di tutti'),
       item('#/manager', '▤', 'Area manager', 'Portafogli, provvigioni, accessi'),
       item('#/mappe', '◎', 'Mappe', 'Clienti sulla mappa'),
+      item('#/giacenze', '▦', 'Giacenze', 'Materiale disponibile nei depositi'),
       canSeeSystems(app.session) ? item('#/sistemi', '▥', 'Sistemi', 'Pacchetti, trasmittanza, scheda cliente (prova)') : null,
       canUpdateData(app.session) ? item('#/dati', '⟳', 'Aggiorna dati', 'Offerte e fatturato da RADIX') : null,
       item('#/giri', '🗓', 'Giri visite', 'Prepara il giro, telefonate, foglio da stampare'),
@@ -6937,6 +7029,7 @@ const { viewQuotes, viewQuoteEditor, pickCustomer } = __m["js/views/quotes.js"];
 const { viewBoard } = __m["js/views/board.js"];
 const { viewNetwork, viewManager } = __m["js/views/direction.js"];
 const { viewMaps } = __m["js/views/maps.js"];
+const { viewStock } = __m["js/views/stock.js"];
 const { viewOrders, viewMore } = __m["js/views/more.js"];
 const { viewRadixOffer } = __m["js/views/radix-offers.js"];
 const { viewPlans, viewPlan } = __m["js/views/plans.js"];
@@ -6955,6 +7048,7 @@ const NAV = [
   { id: 'ordini', label: 'Ordini', icon: '⇪', dir: true, phone: false },
   { id: 'bacheca', label: 'Bacheca', icon: '✓' },
   { id: 'mappe', label: 'Mappe', icon: '◎', phoneDir: false },
+  { id: 'giacenze', label: 'Giacenze', icon: '▦', phone: false },   // 02/11: agenti e Direzione; da telefono si apre da Mappe (agenti) o Altro (Direzione)
   { id: 'sistemi', label: 'Sistemi', icon: '▥', only: canSeeSystems, phone: false },
   { id: 'rete', label: 'Attività rete', icon: '↻', dir: true, group: 'Direzione', phone: false },
   { id: 'manager', label: 'Area manager', icon: '▤', dir: true, phone: false },
@@ -7089,7 +7183,7 @@ function shell(active, content) {
   const nav = items.filter(n => n.side !== false).flatMap(n => [n.group ? h('div', { class: 'nav-group' }, n.group) : null,
     h('a', { href: '#/' + n.id, class: 'nav-item' + (active === n.id ? ' active' : '') }, h('span', { class: 'ico', 'aria-hidden': 'true' }, n.icon), h('span', {}, n.label), badge(n.id))]);
   const tabs = items.filter(n => n.phone !== false && !(isDir && n.phoneDir === false));
-  const tabActive = id => active === id || (id === 'altro' && ['ordini', 'rete', 'manager', 'mappe', 'sistemi', 'dati'].includes(active) && isDir);
+  const tabActive = id => active === id || (id === 'altro' && ['ordini', 'rete', 'manager', 'mappe', 'giacenze', 'sistemi', 'dati'].includes(active) && isDir);
   const who = h('div', { class: 'who' }, h('a', { href: '#/profilo', class: 'who-name' }, h('strong', {}, pv ? pv.by : app.session.name)), h('small', {}, pv ? 'Direzione · anteprima' : isDir ? 'Direzione' : (app.session.assignee || 'Agente')),
     h('button', { class: 'link', onclick: signOut }, 'Esci'));
   const bar = pv ? h('div', { class: 'preview-bar', role: 'status' }, h('span', {}, h('strong', {}, 'Anteprima '), app.session.assignee, h('small', {}, ' · sola lettura')),
@@ -7164,7 +7258,7 @@ async function render() {
   const [route, ...args] = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
   if (!app.session) { root.replaceChildren(loginView()); return; }
   const seq = ++renderSeq;
-  const views = { home: viewHome, agenda: viewAgenda, preventivi: viewQuotes, offerta: viewQuoteEditor, bacheca: viewBoard, rete: viewNetwork, manager: viewManager, mappe: viewMaps, profilo: viewAccount, ordini: viewOrders, altro: viewMore, rxofferta: viewRadixOffer, giri: viewPlans, giro: viewPlan, sistemi: viewSystems, sistema: viewSystem, dati: viewDataUpdate };
+  const views = { home: viewHome, agenda: viewAgenda, preventivi: viewQuotes, offerta: viewQuoteEditor, bacheca: viewBoard, rete: viewNetwork, manager: viewManager, mappe: viewMaps, giacenze: viewStock, profilo: viewAccount, ordini: viewOrders, altro: viewMore, rxofferta: viewRadixOffer, giri: viewPlans, giro: viewPlan, sistemi: viewSystems, sistema: viewSystem, dati: viewDataUpdate };
   const key = views[route] ? route : 'home';
   if (['rete', 'manager', 'ordini', 'altro'].includes(key) && app.session.role !== 'direzione') { app.go('home'); return; }
   // vecchi collegamenti alle schede della Home (prima del 01/11 sera)
