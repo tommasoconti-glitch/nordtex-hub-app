@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="88421d4043b0">
+<meta name="ntx-build" content="0ab7a648095d">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -719,7 +719,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 @media (pointer:coarse),(max-width:760px){.urow{min-height:44px}.useg{min-height:40px;font-size:.76rem;padding:6px 4px;white-space:normal}}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"88421d4043b0"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"0ab7a648095d"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4531,6 +4531,16 @@ async function viewQuoteEditor(app, id, customerId) {
 
   // Invio per email: agenti sempre con copie nascoste a Direzione e ufficio commerciale
   // Invio dalla casella personale: 1) salva il PDF 2) apre l'email già compilata (destinatario, Ccn, oggetto, testo) 3) conferma inviata
+  // 02/11: anteprima del PDF così come lo riceverà il cliente (anche prima di salvare: numero "BOZZA")
+  function previewPdf() {
+    try {
+      const r = quotePdf(q, { header: OFFER_HEADER_JPG, footer: OFFER_FOOTER_JPG });
+      const url = URL.createObjectURL(new Blob([r.bytes], { type: 'application/pdf' }));
+      const w = window.open(url, '_blank');
+      if (!w) { const a = h('a', { href: url, download: r.fileName }); document.body.append(a); a.click(); a.remove(); }
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
+    } catch (e) { toast(e.message, 'error'); }
+  }
   async function sendDialog() {
     if (dirty) { await save(); if (dirty) return; }
     const c = app.store.customer(q.customerId) || {};
@@ -4650,6 +4660,7 @@ async function viewQuoteEditor(app, id, customerId) {
     h('div', { class: 'actions' }, statusSel, saveBtn,
       q.id && isOwner && ['Bozza', 'Inviata'].includes(q.status) ? h('button', { class: 'btn primary', onclick: () => sendDialog().catch(e => toast(e.message, 'error')) }, 'Invia per email') : null,
       q.id && isDir ? h('button', { class: 'btn', onclick: () => printQuote(q) }, 'Stampa') : null,
+      h('button', { class: 'btn', onclick: () => previewPdf() }, 'Anteprima PDF'),
       q.id ? h('button', { class: 'btn', onclick: () => duplicate().catch(e => toast(e.message, 'error')) }, 'Duplica') : null,
       q.id && q.status === 'Bozza' && isOwner ? h('button', { class: 'btn ghost', onclick: async () => { if (await modal('Eliminare la bozza?', h('p', {}, 'L\'operazione non si può annullare.'), [{ label: 'Annulla', value: false }, { label: 'Elimina', primary: true, value: true }])) { await app.store.deleteQuote(q.id); toast('Bozza eliminata'); app.go('preventivi'); } } }, 'Elimina') : null));
   tp = transportPanel(app, q, byId, { locked, mark, onApply: what => { if (what === 'qty') drawLines(); else { freightIn.value = q.freight ?? ''; freightNote.textContent = q.freightNote; drawTotals(); } } });
