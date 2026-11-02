@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="e651e6d19ed1">
+<meta name="ntx-build" content="c5eb2116beeb">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -735,7 +735,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .du-log li small{flex-basis:100%}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"e651e6d19ed1"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"c5eb2116beeb"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1518,7 +1518,7 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     lastYear: c.last_year, lastInvoice: c.last_invoice, status: c.status, monthsSince: c.months_since, inv2024: c.inv_2024, inv2025: c.inv_2025, inv2026: c.inv_2026, invTotal: c.inv_total,
     firstInvoice: c.first_invoice, dataAsOf: c.origin === 'HUB' ? null : c.updated_at, createdAt: c.created_at, origin: c.origin || 'RADIX', createdBy: c.created_by, annotation: c.annotation, blockedSince: c.blocked_since, salesBlockedSince: c.sales_blocked_since, review: c.review,
     rev2024: c.sales?.rev?.['2024'], rev2025: c.sales?.rev?.['2025'], rev2026: c.sales?.rev?.['2026'], salesAsOf: c.sales?.asOf || null,
-    purchases: c.sales ? { families: c.sales.families || [], top: c.sales.top || [] } : null, paymentTerms: c.payment_terms || null, priceKey: c.price_key || null });
+    purchases: c.sales ? { families: c.sales.families || [], top: c.sales.top || [] } : null, paymentTerms: c.payment_terms || null, priceKey: c.price_key || null, isTest: !!c.is_test });
   const custUuid = id => { const c = customers?.find(x => x.id === id); if (!c) throw fail('CUSTOMER', 'Cliente non nel tuo portafoglio'); return c.uuid; };
   const custCode = uuid => customers?.find(x => x.uuid === uuid)?.id;
   // Nomi degli utenti (vista hub_people: solo id e nome)
@@ -1720,6 +1720,7 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       const [r] = await api('/rest/v1/hub_quotes', { method: 'POST', prefer: 'return=representation', body: { customer_id: custUuid(q.customerId), status: q.status || 'Bozza', revision: 1, doc, total: q.total ?? null } });
       return { ...q, id: r.id, number: r.number, revision: 1, ownerId: session.userId, ownerName: session.name, createdAt: r.created_at };
     },
+    async deleteTestQuote(id) { return api('/rest/v1/rpc/hub_delete_test_quote', { method: 'POST', body: { p_quote: id } }); },
     async deleteQuote(id) { return api('/rest/v1/hub_quotes?status=eq.Bozza&id=eq.' + id, { method: 'DELETE' }); },
     // Bacheca: comunicazioni (tutta la rete o agenti scelti) e follow-up assegnati (migrazione 20261031220000_hub_comunicazioni.sql)
     async posts() {
@@ -4218,9 +4219,11 @@ async function offersList(app, { onNew }) {
   const [quotes, radix, notes, sends] = await Promise.all([app.store.quotes(), app.store.radixOffers ? app.store.radixOffers().catch(() => []) : [],
     app.store.notes().catch(() => []), app.store.quoteSends ? app.store.quoteSends().catch(() => []) : []]);
   const t = today(), month = t.slice(0, 7);
-  let all = unifiedOffers({ quotes, radix, reminders: quoteReminders(quotes, notes, sends), customer: id => app.store.customer(id), today: t });
+  // 02/11: le offerte del cliente di prova non entrano nell'elenco e nei totali (si vedono nella scheda del cliente)
+  const real = list => list.filter(q => !app.store.customer(q.customerId)?.isTest);
+  let all = unifiedOffers({ quotes: real(quotes), radix, reminders: quoteReminders(quotes, notes, sends), customer: id => app.store.customer(id), today: t });
   const reload = async () => { const r = app.store.radixOffers ? await app.store.radixOffers().catch(() => radix) : radix;
-    all = unifiedOffers({ quotes, radix: r, reminders: quoteReminders(quotes, notes, sends), customer: id => app.store.customer(id), today: t }); draw(); };
+    all = unifiedOffers({ quotes: real(quotes), radix: r, reminders: quoteReminders(quotes, notes, sends), customer: id => app.store.customer(id), today: t }); draw(); };
 
   const open = () => all.filter(o => o.state === 'aperta');
   const late = o => o.due && o.due <= t;
@@ -4800,6 +4803,10 @@ async function viewQuoteEditor(app, id, customerId) {
       q.id && isDir ? h('button', { class: 'btn', onclick: () => printQuote(q) }, 'Stampa') : null,
       h('button', { class: 'btn', onclick: () => previewPdf() }, 'Anteprima PDF'),
       q.id ? h('button', { class: 'btn', onclick: () => duplicate().catch(e => toast(e.message, 'error')) }, 'Duplica') : null,
+      // 02/11: offerte del cliente di prova: eliminabili in qualunque stato (solo Direzione), numerazione non consumata
+      q.id && isDir && q.status !== 'Bozza' && app.store.customer(q.customerId)?.isTest && app.store.deleteTestQuote ? h('button', { class: 'btn ghost', onclick: async () => {
+        if (await modal('Eliminare l\'offerta di prova?', h('p', {}, 'Offerta del cliente di prova: si elimina insieme al registro degli invii.'), [{ label: 'Annulla', value: false }, { label: 'Elimina', primary: true, value: true }])) {
+          try { await app.store.deleteTestQuote(q.id); toast('Offerta di prova eliminata'); app.go('preventivi'); } catch (e) { toast(e.message, 'error'); } } } }, 'Elimina prova') : null,
       q.id && q.status === 'Bozza' && isOwner ? h('button', { class: 'btn ghost', onclick: async () => { if (await modal('Eliminare la bozza?', h('p', {}, 'L\'operazione non si può annullare.'), [{ label: 'Annulla', value: false }, { label: 'Elimina', primary: true, value: true }])) { await app.store.deleteQuote(q.id); toast('Bozza eliminata'); app.go('preventivi'); } } }, 'Elimina') : null));
   tp = transportPanel(app, q, byId, { locked, mark, onApply: what => { if (what === 'qty') drawLines(); else { freightIn.value = q.freight ?? ''; freightNote.textContent = q.freightNote; drawTotals(); } } });
   let head = header();
