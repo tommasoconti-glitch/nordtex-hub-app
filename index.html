@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="9db9985e9ea8">
+<meta name="ntx-build" content="99357c83b9dc">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -735,7 +735,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .du-log li small{flex-basis:100%}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"9db9985e9ea8"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"99357c83b9dc"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3027,7 +3027,7 @@ __m["js/core/quote-doc.js"] = (function () {
 // testata con logo, Deposito di uscita · Cantiere · Spett.le (codice cliente), barra "OFFERTA NR. … - data",
 // righe Descrizione/Codice/U.M./Quantità/Prezzo/Sconto %/Imp.netto, totali, condizioni, clausole, piè di pagina aziendale.
 // Modulo puro (stringa HTML con stili in linea): stampa/PDF nell'app ed email dalla funzione server.
-const { totals, lineAmount, palletsFor } = __m["js/core/pricing.js"];
+const { totals, lineAmount, lineNet, palletsFor } = __m["js/core/pricing.js"];
 // Depositi NORDTEX: elenco e indirizzi dal sito nordtex.it (31/10/2026); telefoni di Lecco e Polymax dalle offerte RADIX
 const DEPOTS = {
   diretta: { label: 'Consegna diretta dal produttore', lines: ['CONSEGNA DIRETTA'] },
@@ -3062,6 +3062,9 @@ const dotDate = d => { const x = new Date(d); return `${String(x.getDate()).padS
 const UM = { M2: 'MQ', M3: 'M3', PZ: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CF', ROTOLO: 'RT', SACCO: 'SC', BIGBAG: 'BB' };
 const UL = { M2: 'm²', M3: 'm³', ML: 'ml', PZ: 'pz', KG: 'kg' };
 const discText = d => d.filter(x => x).map(x => n(x, x % 1 ? 1 : 0)).join('+');
+// 02/11 (richiesta Tommaso, come nella vecchia app offerte): sconti nascosti nel documento → colonna Prezzo = prezzo netto, colonna Sconto % assente
+const hideDiscounts = q => q.hideDiscounts === true;
+const docPrice = (q, l) => hideDiscounts(q) ? lineNet(l) : l.listPrice;
 const customerCode = q => (q.customerId && !String(q.customerId).startsWith('H-') ? String(q.customerId) : '');
 
 // Righe aggiuntive di descrizione, come in RADIX: "(30,78m²/Pal)" e "4 bancali"
@@ -3107,18 +3110,18 @@ function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
   const head = (x, right) => `<th style="background:#c8c8c8;font-size:7.5pt;font-weight:bold;padding:3px 4px;text-align:${right ? 'right' : 'left'}">${x}</th>`;
   const block = (title, lines) => `<td style="width:33%;vertical-align:top;font-size:8.5pt;line-height:1.45;padding-right:10px">${title ? `<div style="font-weight:bold;margin-bottom:6px">${title}</div>` : ''}${lines.filter(Boolean).map(esc).join('<br>')}</td>`;
   const row = (desc, code, um, qty, price, disc, amount) => `<tr><td style="${cell};width:40%">${desc}</td><td style="${cell}">${esc(code)}</td><td style="${cell}">${esc(um)}</td>`
-    + `<td style="${num}">${qty}</td><td style="${num}">${price}</td><td style="${num};text-align:center">${disc}</td><td style="${num}">${amount}</td></tr>`;
+    + `<td style="${num}">${qty}</td><td style="${num}">${price}</td>${disc === null ? '' : `<td style="${num};text-align:center">${disc}</td>`}<td style="${num}">${amount}</td></tr>`;
   const site = String(q.site || '').trim();
   const rows = q.lines.map(l => row([esc(l.description), ...lineExtra(l).map(esc)].join('<br>'), l.radixCode || l.listCode || '', UM[l.unit] || l.unit,
-    l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), n(l.listPrice, 3), discText(l.discounts), n(lineAmount(l), 2)));
-  if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), '', n(t.extras, 2)));
-  if (t.freight) rows.push(row(esc(freightLabel(q)), 'N14126', 'NR', '1,00', n(t.freight, 3), '', n(t.freight, 2)));
+    l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), n(docPrice(q, l), 3), hideDiscounts(q) ? null : discText(l.discounts), n(lineAmount(l), 2)));
+  if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), hideDiscounts(q) ? null : '', n(t.extras, 2)));
+  if (t.freight) rows.push(row(esc(freightLabel(q)), 'N14126', 'NR', '1,00', n(t.freight, 3), hideDiscounts(q) ? null : '', n(t.freight, 2)));
   const notes = [];
   const pickup = isPickup(q);
   if (pickup) notes.push(`Materiale disponibile per il ritiro presso:<br><b>${depot.pickup.map(esc).join('<br>')}</b><br><b>Prezzo franco partenza</b> dal deposito`);
   if (t.freightPending && !pickup) notes.push('Trasporto: da definire.');   // ritiro al deposito: nessun trasporto
   if (q.notes) notes.push(esc(q.notes).replace(/\n/g, '<br>'));
-  const noteRows = notes.map(x => `<tr><td colspan="7" style="${cell};padding-top:8px">${x}</td></tr>`).join('');
+  const noteRows = notes.map(x => `<tr><td colspan="${hideDiscounts(q) ? 6 : 7}" style="${cell};padding-top:8px">${x}</td></tr>`).join('');
   const tot = (k, v, bold) => `<tr><td style="font-size:8.5pt;padding:2px 4px">${k}</td><td style="font-size:8.5pt;padding:2px 4px;text-align:right${bold ? ';font-weight:bold' : ''}">${v}</td></tr>`;
   const brand = header ? `<img src="${header}" alt="NORDTEX – For a better living" style="width:100%;display:block">`
     : `<div style="font:italic 900 22pt Arial,sans-serif;letter-spacing:2px"><span style="color:#D40E41">NORD</span><span style="color:#676568">TEX</span> <span style="font:italic 400 12pt Georgia,serif;color:#333;letter-spacing:0">For a better living</span></div>`;
@@ -3131,7 +3134,7 @@ ${block('Deposito di uscita', depot.lines)}${block(destinationLines(q).length ? 
 <td style="width:34%;vertical-align:top;font-size:8.5pt;line-height:1.45"><div style="font-weight:bold;margin-bottom:6px">Spett.le<span style="float:right;font-weight:normal;font-size:7.5pt">${customerCode(q) ? '(' + esc(customerCode(q)) + ')' : ''}</span></div>${customerLines(c).map(esc).join('<br>')}</td>
 </tr></table>
 <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px"><tr><td style="background:#c8c8c8;width:58%;text-align:center;font-weight:bold;font-size:10pt;padding:4px">OFFERTA NR. ${esc(q.number || 'BOZZA')} - ${dotDate(created)}</td><td></td></tr></table>
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;border-collapse:collapse"><thead><tr>${head('Descrizione')}${head('Codice')}${head('U.M.')}${head('Quantità', 1)}${head('Prezzo', 1)}${head('Sconto %', 1)}${head('Imp.netto', 1)}</tr></thead>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;border-collapse:collapse"><thead><tr>${head('Descrizione')}${head('Codice')}${head('U.M.')}${head('Quantità', 1)}${head(hideDiscounts(q) ? 'Prezzo netto' : 'Prezzo', 1)}${hideDiscounts(q) ? '' : head('Sconto %', 1)}${head('Imp.netto', 1)}</tr></thead>
 <tbody>${rows.join('')}${noteRows}</tbody></table>
 <table cellpadding="0" cellspacing="0" style="margin:14px 0 0 auto;width:42%;border-top:1px solid #000;border-collapse:collapse">
 ${tot('Totale merce:', n(t.taxable, 2))}<tr><td colspan="2" style="height:10px"></td></tr>${tot('Totale imponibile:', n(t.taxable, 2))}${tot(`Totale iva${t.vatRate !== 22 ? ' (' + n(t.vatRate, 0) + '%)' : ''}:`, n(t.vat, 2))}${tot('Totale offerta:', n(t.total, 2), true)}</table>
@@ -3151,14 +3154,14 @@ function quoteFileName(q, now = new Date()) {
   return [clean(q.customer?.name), customerCode(q), (/^OFF-\d{4}-\d+$/.test(q.number || '') ? q.number : 'OFF-' + clean(q.number || 'BOZZA')), d.toISOString().slice(0, 10)].filter(Boolean).join('_');
 }
 
-return { DEPOTS, TRANSPORT_BY, isPickup, CLAUSES, fmtN, dotDate, UM, discText, customerCode, destinationLines, freightLabel, customerLines, lineExtra, quoteDocHtml, quoteFileName };
+return { DEPOTS, TRANSPORT_BY, isPickup, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, customerLines, lineExtra, quoteDocHtml, quoteFileName };
 })();
 __m["js/core/quote-pdf.js"] = (function () {
 // PDF dell'offerta nel formato NORDTEX/RADIX, generato nell'app (nessun servizio esterno): lo stesso contenuto di quote-doc.js.
 // Serve all'invio dalla casella personale di chi fa l'offerta (decisione Direzione 31/10/2026).
 const { PdfDoc, wrapText, textWidth } = __m["js/core/pdf-writer.js"];
 const { totals, lineAmount } = __m["js/core/pricing.js"];
-const { DEPOTS, CLAUSES, customerCode, lineExtra, fmtN: n, dotDate, UM, discText, quoteFileName, destinationLines, freightLabel, customerLines, isPickup } = __m["js/core/quote-doc.js"];
+const { DEPOTS, CLAUSES, customerCode, lineExtra, fmtN: n, dotDate, UM, discText, quoteFileName, hideDiscounts, docPrice, destinationLines, freightLabel, customerLines, isPickup } = __m["js/core/quote-doc.js"];
 const MM = 72 / 25.4;
 function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
   const t = totals(q);
@@ -3193,8 +3196,8 @@ function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
     y += 30;
     doc.rect(L, y, W, 13, 0.78);
     const hy = y + 9; doc.text(C.desc + 2, hy, 'Descrizione', { size: 7.5, bold: true }); doc.text(C.code, hy, 'Codice', { size: 7.5, bold: true }); doc.text(C.um, hy, 'U.M.', { size: 7.5, bold: true });
-    doc.text(C.qty, hy, 'Quantità', { size: 7.5, bold: true, align: 'right' }); doc.text(C.price, hy, 'Prezzo', { size: 7.5, bold: true, align: 'right' });
-    doc.text(C.disc, hy, 'Sconto %', { size: 7.5, bold: true, align: 'right' }); doc.text(C.amount - 2, hy, 'Imp.netto', { size: 7.5, bold: true, align: 'right' });
+    doc.text(C.qty, hy, 'Quantità', { size: 7.5, bold: true, align: 'right' }); doc.text(C.price, hy, hideDiscounts(q) ? '' : 'Prezzo', { size: 7.5, bold: true, align: 'right' });
+    doc.text(C.disc, hy, hideDiscounts(q) ? 'Prezzo netto' : 'Sconto %', { size: 7.5, bold: true, align: 'right' }); doc.text(C.amount - 2, hy, 'Imp.netto', { size: 7.5, bold: true, align: 'right' });
     y += 22;
   };
   const newPage = () => { doc.text(R, BOTTOM + 4, `segue a pagina ${page + 1}`, { size: 8, align: 'right' }); drawFooter(); doc.addPage(); page++; drawTop(); };
@@ -3212,9 +3215,9 @@ function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
   drawTop();
   const wrap = s => wrapText(s, descW, 8.5);
   for (const l of q.lines) row([...wrap(l.description), ...lineExtra(l).flatMap(wrap)],
-    { code: l.radixCode || l.listCode || '', um: UM[l.unit] || l.unit, qty: l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), price: n(l.listPrice, 3), disc: discText(l.discounts), amount: n(lineAmount(l), 2) });
-  if (t.extras) row(wrap(q.extrasLabel || 'Altri addebiti'), { code: '', um: 'NR', qty: '1,00', price: n(t.extras, 3), disc: '', amount: n(t.extras, 2) });
-  if (t.freight) row(wrap(freightLabel(q)), { code: 'N14126', um: 'NR', qty: '1,00', price: n(t.freight, 3), disc: '', amount: n(t.freight, 2) });
+    { code: l.radixCode || l.listCode || '', um: UM[l.unit] || l.unit, qty: l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), price: hideDiscounts(q) ? '' : n(l.listPrice, 3), disc: hideDiscounts(q) ? n(docPrice(q, l), 3) : discText(l.discounts), amount: n(lineAmount(l), 2) });
+  if (t.extras) row(wrap(q.extrasLabel || 'Altri addebiti'), { code: '', um: 'NR', qty: '1,00', price: hideDiscounts(q) ? '' : n(t.extras, 3), disc: hideDiscounts(q) ? n(t.extras, 3) : '', amount: n(t.extras, 2) });
+  if (t.freight) row(wrap(freightLabel(q)), { code: 'N14126', um: 'NR', qty: '1,00', price: hideDiscounts(q) ? '' : n(t.freight, 3), disc: hideDiscounts(q) ? n(t.freight, 3) : '', amount: n(t.freight, 2) });
   const pickup = isPickup(q);
   if (pickup) row(['Materiale disponibile per il ritiro presso:', ...depot.pickup, 'Prezzo franco partenza dal deposito']);
   if (t.freightPending && !pickup) row(['Trasporto: da definire.']);
@@ -4885,6 +4888,8 @@ async function viewQuoteEditor(app, id, customerId) {
         freightNote,
         h('div', { class: 'form two' }, cond('Altri addebiti (€)', txtIn('extras', { type: 'number', min: 0, step: 'any' })), cond('Descrizione addebiti', txtIn('extrasLabel', { placeholder: 'es. noleggio bancali' })),
           cond('IVA %', txtIn('vatRate', { type: 'number', min: 0, max: 100 })), cond('Validità (giorni)', txtIn('validDays', { type: 'number', min: 1, max: 365 }))),
+        h('div', { class: 'field' }, h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: q.hideDiscounts === true, disabled: locked,
+          onchange: e => { q.hideDiscounts = e.target.checked; mark(); } }), 'Nascondi gli sconti nel documento (il cliente vede solo il prezzo netto)')),
         cond('Condizione di pagamento', paymentField()),
         h('div', { class: 'form two' },
           cond('Deposito di uscita', depotSel), cond('Consegna', pickupSel), cond('Trasporto a cura', byBox)),
