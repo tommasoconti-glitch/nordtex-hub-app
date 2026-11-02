@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="916e5b9ea13d">
+<meta name="ntx-build" content="18948410811e">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -738,7 +738,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 @media (max-width:760px){ .hide-phone{display:none} .stock-table td{padding:8px 6px} }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"916e5b9ea13d"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"18948410811e"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3057,6 +3057,17 @@ const DEPOTS = {
   MARCHE: { label: 'Deposito Marche – SPEA Tecnologie Edili (Morrovalle MC)', lines: ['DEPOSITO MARCHE -', 'SPEA TECNOLOGIE EDILI SRL', 'CONTRADA SARROCCIANO', '62010 MORROVALLE (MC)'],
     pickup: ['SPEA Tecnologie Edili srl', 'Contrada Sarrocciano', 'IT-62010 Morrovalle (MC)'] },
 };
+// 02/11: codici dei depositi in RADIX (elenco "Codice deposito") → deposito dell'offerta; gli altri solo per le giacenze
+const RADIX_DEPOTS = { CHIUSA: 'SEDE', LECCO: 'LECCO', CASALE: 'CASALE', CASTELFRAN: 'CASTELFRAN', VICENZA: 'TORRI', MACERATA: 'MARCHE' };
+const OTHER_STOCK = { 'DEL DOSSO': ['Deposito Sondrio (Piateda SO)', 'Piateda (SO)'], EDILLOGIST: ['Made Edil Logistica (Pogliano Milanese MI)', 'Pogliano Milanese (MI)'],
+  BIOISOLARE: ['Bioisolare (Malo VI)', 'Malo (VI)'], POLYMAX: ['Polymax radianti (Castelfranco Veneto TV)', 'Polymax radianti'] };
+// deposito delle giacenze → { label, place (nome corto), pickup }
+function stockDepot(code, name = '') {
+  const d = DEPOTS[RADIX_DEPOTS[code] || code];
+  if (d?.pickup) return { label: d.label, place: d.pickup[2].replace(/^IT-\d+\s*/, ''), pickup: d.pickup };
+  const o = OTHER_STOCK[code];
+  return { label: o ? o[0] : name || code, place: o ? o[1] : code, pickup: null };
+}
 const TRANSPORT_BY = ['DESTINATARIO', 'VETTORE', 'MITTENTE'];
 // 02/11 (offerta Casale di Tommaso): ritiro al deposito senza trasporto.
 // q.pickup = true/false scelto nell'offerta; offerte vecchie (q.pickup assente): ritiro se deposito con ritiro e trasporto a cura del destinatario.
@@ -3168,7 +3179,7 @@ function quoteFileName(q, now = new Date()) {
   return [clean(q.customer?.name), customerCode(q), (/^OFF-\d{4}-\d+$/.test(q.number || '') ? q.number : 'OFF-' + clean(q.number || 'BOZZA')), d.toISOString().slice(0, 10)].filter(Boolean).join('_');
 }
 
-return { DEPOTS, TRANSPORT_BY, isPickup, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, customerLines, lineExtra, quoteDocHtml, quoteFileName };
+return { DEPOTS, RADIX_DEPOTS, stockDepot, TRANSPORT_BY, isPickup, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, customerLines, lineExtra, quoteDocHtml, quoteFileName };
 })();
 __m["js/core/quote-pdf.js"] = (function () {
 // PDF dell'offerta nel formato NORDTEX/RADIX, generato nell'app (nessun servizio esterno): lo stesso contenuto di quote-doc.js.
@@ -6099,7 +6110,7 @@ __m["js/views/stock.js"] = (function () {
 // Fonte: report RADIX "Giacenza teorica" per deposito (tools/import_giacenze.py → tabella hub_stock).
 // Disponibile = giacenza + ordini fornitori − ordini clienti (colonna "Giacenza teorica" di RADIX).
 const { h, fill, num, dateIt, eur, emptyState } = __m["js/ui.js"];
-const { DEPOTS } = __m["js/core/quote-doc.js"];
+const { stockDepot } = __m["js/core/quote-doc.js"];
 const UNIT = { MQ: 'm²', M2: 'm²', M3: 'm³', ML: 'ml', PZ: 'pz', KG: 'kg', SA: 'sacchi', SC: 'sacchi', RO: 'rotoli', RT: 'rotoli', CF: 'conf.', BB: 'big bag', NR: 'nr' };
 const SAME = { MQ: 'M2', M2: 'M2', M3: 'M3', ML: 'ML', PZ: 'PZ', KG: 'KG' };
 const unitLabel = u => UNIT[u] || String(u || '').toLowerCase();
@@ -6148,10 +6159,10 @@ async function viewStock(app) {
   const chips = h('div', { class: 'chips' }), out = h('div');
 
   function depotCard(d, list) {
-    const info = DEPOTS[d.code];
-    const where = info?.pickup ? info.pickup.slice(1).join(' · ').replace(/IT-/, '') : '';
+    const info = stockDepot(d.code, d.name);
+    const where = info.pickup ? info.pickup.slice(1).join(' · ').replace(/IT-/, '') : '';
     return h('section', { class: 'card' },
-      h('h2', {}, info ? info.label : d.name),
+      h('h2', {}, info.label),
       h('p', { class: 'fine' }, [where, `${list.length} ${list.length === 1 ? 'articolo' : 'articoli'}`, `dati al ${dateIt(d.date)}`].filter(Boolean).join(' · ')),
       list.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'table stock-table' },
         h('thead', {}, h('tr', {}, h('th', {}, 'Articolo'), h('th', { class: 'num' }, 'Disponibile'), h('th', { class: 'num' }, 'Bancali'),
@@ -6170,7 +6181,7 @@ async function viewStock(app) {
     const base = filterStock(rows, { ...st, depot: '' });
     fill(chips, h('button', { type: 'button', class: 'chip' + (!st.depot ? ' on' : ''), onclick: () => { st.depot = ''; draw(); } }, 'Tutti i depositi', h('b', {}, base.length)),
       stock.depots.map(d => h('button', { type: 'button', class: 'chip' + (st.depot === d.code ? ' on' : ''), onclick: () => { st.depot = d.code; draw(); } },
-        (DEPOTS[d.code]?.pickup?.[2] || d.name).replace(/^IT-\d+\s*/, ''), h('b', {}, base.filter(r => r.depot === d.code).length))));
+        stockDepot(d.code, d.name).place, h('b', {}, base.filter(r => r.depot === d.code).length))));
     const shown = filterStock(rows, st);
     const deps = stock.depots.filter(d => !st.depot || d.code === st.depot);
     fill(out, deps.map(d => depotCard(d, shown.filter(r => r.depot === d.code))));
@@ -6828,10 +6839,10 @@ function parseStockLines(pages) {
   const isRow = l => /^N\d{5}\s*-/.test((l[0] || '').trim());
   const groupOf = l => {   // testo (anche spezzato in più celle) + 4 totali, senza unità di misura
     const t = l.map(x => x.trim()).filter(Boolean); if (t.length < 5 || !t.slice(-4).every(x => NUM.test(x))) return null;
-    const head = l.slice(0, l.length - 4).join('').trim(), m = head.match(/^([A-Z][A-Z0-9]{1,11})-(\S.*)$/);
+    const head = l.slice(0, l.length - 4).join('').trim(), m = head.match(/^([A-Z][A-Z0-9 .]{1,11}?)-(\S.*)$/);   // codici RADIX anche con spazi/punti (DEL DOSSO, F.CO PART)
     return m && !isRow(l) ? { code: m[1], name: head } : null;
   };
-  const single = all.match(/Deposito:\s*([A-Z0-9]+)/)?.[1] || null;
+  const single = all.match(/Deposito:\s*([A-Z0-9][A-Z0-9 .]*?)\s*(?:\n|,|$)/)?.[1] || null;
   const depots = []; let cur = null;
   const start = (code, name) => { cur = depots.find(d => d.code === code); if (!cur) { cur = { code, name: name || code, date: iso, items: {} }; depots.push(cur); } };
   lines.forEach((l, i) => {
@@ -6879,7 +6890,7 @@ const { h, fill, eur, dateIt, dateTimeIt, today, toast, field } = __m["js/ui.js"
 const { readXlsx } = __m["js/core/xlsx-read.js"];
 const { parseRadixOffers, offersPreview, parseRadixSales, salesPreview, decodeText } = __m["js/core/radix-import.js"];
 const { parseStockPdf, stockPreview } = __m["js/core/stock-import.js"];
-const { DEPOTS } = __m["js/core/quote-doc.js"];
+const { stockDepot } = __m["js/core/quote-doc.js"];
 const canUpdateData = s => !!s?.canImport && !s.preview;
 
 async function sha256(buf) {
@@ -7002,7 +7013,7 @@ function salesCard(app, done) {
     out);
 }
 
-const depotLabel = code => (DEPOTS[code]?.pickup?.[2] || code).replace(/^IT-\d+\s*/, '');
+const depotLabel = code => stockDepot(code).place;
 
 // 02/11: giacenze dei depositi dai PDF RADIX "Giacenza teorica" (arrivano ogni venerdì, uno per deposito)
 function stockCard(app, done) {
