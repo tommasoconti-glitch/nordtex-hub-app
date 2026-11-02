@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="df0676e4f67b">
+<meta name="ntx-build" content="916e5b9ea13d">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -738,7 +738,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 @media (max-width:760px){ .hide-phone{display:none} .stock-table td{padding:8px 6px} }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"df0676e4f67b"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"916e5b9ea13d"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1372,6 +1372,7 @@ function createLocalStore({ data, kv }) {
     // "Aggiorna dati": nella versione su questo dispositivo si vede l'anteprima, il salvataggio è solo online
     async importRadixOffers() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
     async importSales() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
+    async importStock() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
     async importLog() { return []; },
     async setRadixOfferOutcome(id, fields) {
       const s = mustSession(); const f = checkRadixOutcome(fields);
@@ -1548,10 +1549,15 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     customers = (await pageAll('/rest/v1/hub_customers?select=*&order=code')).map(fromDb);
     await loadStatus();
     store.assignees = (await api('/rest/v1/hub_assignees?select=name,role,provinces&order=name').catch(() => [])) || [];
+    await loadStock();
+    return session;
+  }
+
+  // giacenze dei depositi (lette all'accesso e dopo un caricamento da "Aggiorna dati")
+  async function loadStock() {
     const st = (await api('/rest/v1/hub_stock?select=*').catch(() => [])) || [];
     const deps = new Map(); for (const r of st) { if (!deps.has(r.depot)) deps.set(r.depot, { code: r.depot, name: r.depot_name, date: r.as_of, items: {} }); deps.get(r.depot).items[r.radix_code] = { um: r.um, stock: +r.stock, incoming: +r.incoming, reserved: +r.reserved, available: +r.available, description: r.description || '' }; }
     store.stock = deps.size ? { depots: [...deps.values()] } : null;
-    return session;
   }
 
   const store = {
@@ -1832,6 +1838,11 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     async importSales({ asOf, customers: rows, years, file = '', sha = '' }) {
       const r = await api('/rest/v1/rpc/hub_import_sales', { method: 'POST', body: { p_asof: asOf, p_customers: rows, p_years: years, p_file: file, p_sha: sha } });
       customers = (await pageAll('/rest/v1/hub_customers?select=*&order=code')).map(fromDb); await loadStatus();   // fatturato nuovo nelle schede
+      return r;
+    },
+    async importStock({ depots, file = '', sha = '' }) {
+      const r = await api('/rest/v1/rpc/hub_import_stock', { method: 'POST', body: { p_depots: depots, p_file: file, p_sha: sha } });
+      await loadStock();
       return r;
     },
     async importLog() {
@@ -6651,6 +6662,215 @@ function salesPreview(parsed, customers = []) {
 
 return { OFFER_COLUMNS, normName, parseRadixOffers, offersPreview, decodeText, parseTsv, parseRadixSales, salesPreview };
 })();
+__m["js/core/pdf-text.js"] = (function () {
+// Estrazione minima del testo da un PDF nel browser, senza librerie esterne (02/11/2026, giacenze RADIX del venerdì).
+// Pensata per i report Crystal Reports di RADIX: contenuti compressi FlateDecode, font con mappa ToUnicode, testo con Tm/Td/Tj/TJ.
+// Restituisce le righe di ogni pagina dall'alto in basso; ogni riga = celle {x, text} da sinistra a destra.
+// Le celle vicine di una stessa parola possono arrivare spezzate (crenatura): il testo di ogni cella conserva i suoi spazi, quindi si uniscono senza separatore.
+
+const latin1 = new TextDecoder('latin1');
+
+async function inflate(bytes) {
+  const s = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+
+// oggetti "N 0 obj … endobj" con l'eventuale stream (decompresso)
+async function readObjects(buf) {
+  const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  const txt = latin1.decode(b);
+  if (!txt.startsWith('%PDF')) throw new Error('Il file non è un PDF');
+  const objs = new Map();
+  const re = /(\d+)\s+(\d+)\s+obj\b/g;
+  let m;
+  while ((m = re.exec(txt))) {
+    const start = m.index + m[0].length, end = txt.indexOf('endobj', start);
+    if (end < 0) break;
+    const body = txt.slice(start, end);
+    const si = body.search(/stream\r?\n/);
+    let dict = body, stream = null;
+    if (si >= 0) {
+      dict = body.slice(0, si);
+      const off = start + si + body.slice(si).match(/stream\r?\n/)[0].length;
+      const len = +(dict.match(/\/Length\s+(\d+)(?!\s+\d+\s+R)/)?.[1] || 0);
+      const stop = len || txt.indexOf('endstream', off) - off;
+      let raw = b.subarray(off, off + stop);
+      if (/\/FlateDecode/.test(dict)) raw = await inflate(raw);
+      else if (/\/Filter/.test(dict)) raw = null;   // altri filtri: non servono per il testo dei report
+      stream = raw;
+    }
+    objs.set(+m[1], { dict, stream });
+    re.lastIndex = end;
+  }
+  return objs;
+}
+
+const ref = (dict, key) => { const m = dict.match(new RegExp('/' + key + '\\s+(\\d+)\\s+\\d+\\s+R')); return m ? +m[1] : null; };
+
+// mappa ToUnicode: codice (1 byte) → testo
+function parseCMap(s) {
+  const map = new Map(), hex = x => parseInt(x, 16);
+  const uni = x => String.fromCodePoint(...(x.match(/.{4}/g) || []).map(hex));
+  for (const blk of s.matchAll(/beginbfchar([\s\S]*?)endbfchar/g))
+    for (const m of blk[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g)) map.set(hex(m[1]), uni(m[2]));
+  for (const blk of s.matchAll(/beginbfrange([\s\S]*?)endbfrange/g))
+    for (const m of blk[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*(<([0-9a-fA-F]+)>|\[([^\]]*)\])/g)) {
+      const a = hex(m[1]), z = hex(m[2]);
+      if (m[4]) { const base = hex(m[4]); for (let c = a; c <= z; c++) map.set(c, String.fromCodePoint(base + c - a)); }
+      else [...m[5].matchAll(/<([0-9a-fA-F]+)>/g)].forEach((x, i) => map.set(a + i, uni(x[1])));
+    }
+  return map;
+}
+
+// stringa letterale PDF "( … )" con escape → byte
+function literal(s, i) {
+  const out = []; let depth = 1; i++;
+  while (i < s.length && depth) {
+    let c = s[i];
+    if (c === '\\') {
+      const n = s[++i];
+      const esc = { n: 10, r: 13, t: 9, b: 8, f: 12 }[n];
+      if (esc !== undefined) out.push(esc);
+      else if (/[0-7]/.test(n)) { let o = n; while (o.length < 3 && /[0-7]/.test(s[i + 1])) o += s[++i]; out.push(parseInt(o, 8) & 255); }
+      else if (n === '\r' || n === '\n') { if (n === '\r' && s[i + 1] === '\n') i++; }
+      else out.push(n.charCodeAt(0));
+    } else { if (c === '(') depth++; else if (c === ')') depth--; if (depth) out.push(c.charCodeAt(0)); }
+    i++;
+  }
+  return [out, i];
+}
+
+function tokens(s) {
+  const t = []; let i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    if (/\s/.test(c)) { i++; continue; }
+    if (c === '%') { while (i < s.length && s[i] !== '\n' && s[i] !== '\r') i++; continue; }
+    if (c === '(') { const [bytes, j] = literal(s, i); t.push({ str: bytes }); i = j; continue; }
+    if (c === '<' && s[i + 1] !== '<') { const j = s.indexOf('>', i); const hx = s.slice(i + 1, j).replace(/\s/g, ''); t.push({ str: (hx.match(/.{1,2}/g) || []).map(x => parseInt(x.padEnd(2, '0'), 16)) }); i = j + 1; continue; }
+    if (c === '[' || c === ']') { t.push({ op: c }); i++; continue; }
+    if (c === '<' || c === '>') { t.push({ op: s.slice(i, i + 2) }); i += 2; continue; }
+    if (c === '/') { let j = i + 1; while (j < s.length && !/[\s/\[\]()<>]/.test(s[j])) j++; t.push({ name: s.slice(i + 1, j) }); i = j; continue; }
+    let j = i; while (j < s.length && !/[\s/\[\]()<>%]/.test(s[j])) j++;
+    const w = s.slice(i, j || i + 1); i = j > i ? j : i + 1;
+    t.push(/^[+-]?(\d+\.?\d*|\.\d+)$/.test(w) ? { num: +w } : { op: w });
+  }
+  return t;
+}
+
+async function pdfLines(buf) {
+  const objs = await readObjects(buf);
+  const pages = [...objs.entries()].filter(([, o]) => /\/Type\s*\/Page\b(?!s)/.test(o.dict)).map(([, o]) => o);
+  const cmaps = new Map();
+  const fontMap = id => {
+    if (!cmaps.has(id)) { const f = objs.get(id), tu = f && ref(f.dict, 'ToUnicode'); cmaps.set(id, tu && objs.get(tu)?.stream ? parseCMap(latin1.decode(objs.get(tu).stream)) : null); }
+    return cmaps.get(id);
+  };
+  const out = [];
+  for (const pg of pages) {
+    // font della pagina: /Resources diretto o per riferimento
+    let res = pg.dict; const rr = ref(pg.dict, 'Resources'); if (rr && objs.get(rr)) res = objs.get(rr).dict;
+    let fontDict = res.match(/\/Font\s*<<([\s\S]*?)>>/)?.[1] || ''; const fr = ref(res, 'Font'); if (!fontDict && fr && objs.get(fr)) fontDict = objs.get(fr).dict;
+    const fonts = new Map([...fontDict.matchAll(/\/([^\s/]+)\s+(\d+)\s+\d+\s+R/g)].map(m => [m[1], +m[2]]));
+    const cids = [...(pg.dict.match(/\/Contents\s*(\[[^\]]*\]|\d+\s+\d+\s+R)/)?.[1] || '').matchAll(/(\d+)\s+\d+\s+R/g)].map(m => +m[1]);
+    const content = cids.map(id => objs.get(id)?.stream).filter(Boolean).map(x => latin1.decode(x)).join('\n');
+    const items = []; let cmap = null, lx = 0, ly = 0, stack = [];
+    const show = bytes => { const text = bytes.map(c => cmap?.get(c) ?? String.fromCharCode(c)).join(''); if (text.trim()) items.push({ x: lx, y: ly, text }); };
+    for (const tk of tokens(content)) {
+      if (tk.op === undefined) { stack.push(tk); continue; }
+      const nums = stack.filter(x => 'num' in x).map(x => x.num);
+      switch (tk.op) {
+        case 'BT': lx = ly = 0; break;
+        case 'Tm': if (nums.length >= 6) { lx = nums.at(-2); ly = nums.at(-1); } break;
+        case 'Td': case 'TD': if (nums.length >= 2) { lx += nums.at(-2); ly += nums.at(-1); } break;
+        case 'Tf': { const nm = stack.filter(x => x.name).at(-1)?.name; cmap = nm && fonts.has(nm) ? fontMap(fonts.get(nm)) : null; break; }
+        case 'Tj': case "'": case '"': { const s = stack.filter(x => x.str).at(-1); if (s) show(s.str); break; }
+        case ']': { // fine array TJ: si concatena; il TJ che segue lo usa
+          const k = stack.map(x => x.op).lastIndexOf('['); const arr = stack.slice(k + 1); stack = stack.slice(0, Math.max(k, 0));
+          stack.push({ arr: arr.filter(x => x.str).flatMap(x => x.str) }); continue; }
+        case 'TJ': { const a = stack.filter(x => x.arr).at(-1); if (a) show(a.arr); break; }
+        case '[': stack.push(tk); continue;
+      }
+      stack = [];
+    }
+    // righe: stessa y (tolleranza), dall'alto in basso (y decrescente nello spazio del testo)
+    items.sort((a, b) => b.y - a.y || a.x - b.x);
+    const lines = [];
+    for (const it of items) {
+      const last = lines.at(-1);
+      if (last && Math.abs(last.y - it.y) <= 60) last.cells.push(it); else lines.push({ y: it.y, cells: [it] });
+    }
+    for (const l of lines) l.cells.sort((a, b) => a.x - b.x);
+    out.push(lines.map(l => l.cells.map(c => ({ x: c.x, text: c.text }))));
+  }
+  return out;
+}
+
+return { pdfLines };
+})();
+__m["js/core/stock-import.js"] = (function () {
+// Giacenze dei depositi dai PDF RADIX "Giacenza teorica" (uno per deposito, arrivano ogni venerdì) — 02/11/2026.
+// Stessa lettura di tools/import_giacenze.py (anche PDF con più depositi insieme): per ogni articolo UM, Giacenza, + Ordini fornitori, - Ordini clienti, Giacenza teorica.
+const { pdfLines } = __m["js/core/pdf-text.js"];
+const NUM = /^-?[\d.]+(,\d+)?$/;
+const num = s => Number(String(s).replace(/\./g, '').replace(',', '.'));
+const UM = /^[A-Z][A-Z0-9]{1,2}$/;
+
+// righe di testo (celle) → [{ code, name, date, items }]: un deposito per file oppure più depositi nello stesso PDF
+// (intestazione di gruppo "CODICE-NOME" con i totali, es. "LECCO-FORNACI GIUSSANI  11.211 1.219 720 11.710")
+function parseStockLines(pages) {
+  const lines = pages.flat().map(cells => cells.map(c => c.text));
+  const flat = lines.map(l => l.join(''));
+  const all = flat.join('\n');
+  const date = all.match(/JOBNORDTEX\s+(\d{2})\.(\d{2})\.(\d{4})/);
+  if (!date || !/Giacenza teorica/i.test(all)) throw new Error('Non sembra un report RADIX "Giacenza teorica"');
+  const iso = `${date[3]}-${date[2]}-${date[1]}`;
+  const isRow = l => /^N\d{5}\s*-/.test((l[0] || '').trim());
+  const groupOf = l => {   // testo (anche spezzato in più celle) + 4 totali, senza unità di misura
+    const t = l.map(x => x.trim()).filter(Boolean); if (t.length < 5 || !t.slice(-4).every(x => NUM.test(x))) return null;
+    const head = l.slice(0, l.length - 4).join('').trim(), m = head.match(/^([A-Z][A-Z0-9]{1,11})-(\S.*)$/);
+    return m && !isRow(l) ? { code: m[1], name: head } : null;
+  };
+  const single = all.match(/Deposito:\s*([A-Z0-9]+)/)?.[1] || null;
+  const depots = []; let cur = null;
+  const start = (code, name) => { cur = depots.find(d => d.code === code); if (!cur) { cur = { code, name: name || code, date: iso, items: {} }; depots.push(cur); } };
+  lines.forEach((l, i) => {
+    const g = groupOf(l);
+    if (g) { start(g.code, g.name); return; }
+    if (!isRow(l)) return;
+    const t = l.map(x => x.trim());
+    const nums = t.slice(-4);
+    if (t.length < 6 || !nums.every(x => NUM.test(x)) || !UM.test(t.at(-5))) return;
+    if (!cur) start(single || 'DEPOSITO', single);
+    const m = l.slice(0, -5).join('').match(/^\s*(N\d{5})\s*-\s*(.*)$/s);
+    let desc = m[2].replace(/\s+/g, ' ').trim();
+    const nxt = (flat[i + 1] || '').trim();
+    if (nxt && !isRow(lines[i + 1]) && !groupOf(lines[i + 1]) && !/^\d{2}-|^NORDTEX srl/.test(nxt) && nxt.length < 120 && !/\d+,\d{3}\s*$/.test(nxt)) desc += ' ' + nxt.replace(/\s+/g, ' ');
+    cur.items[m[1]] = { um: t.at(-5), stock: num(nums[0]), incoming: num(nums[1]), reserved: num(nums[2]), available: num(nums[3]), description: desc.trim() };
+  });
+  const out = depots.filter(d => Object.keys(d.items).length);
+  if (!out.length) throw new Error('Nessun articolo letto nel report');
+  if (out.some(d => d.code === 'DEPOSITO')) throw new Error('Deposito non riconosciuto nel report');
+  return out;
+}
+
+async function parseStockPdf(buf) { return parseStockLines(await pdfLines(buf)); }
+
+// confronto con i dati attuali dell'app (per l'anteprima prima di confermare)
+function stockPreview(depots, current) {
+  const cur = new Map((current?.depots || []).map(d => [d.code, d]));
+  return depots.map(d => {
+    const old = cur.get(d.code), codes = Object.keys(d.items);
+    const gone = old ? Object.keys(old.items).filter(k => !d.items[k]) : [];
+    const added = old ? codes.filter(k => !old.items[k]) : codes;
+    const changed = old ? codes.filter(k => old.items[k] && old.items[k].available !== d.items[k].available) : [];
+    return { code: d.code, name: d.name, date: d.date, oldDate: old?.date || null, items: codes.length, available: codes.filter(k => d.items[k].available > 0).length,
+      added: added.length, gone: gone.length, changed: changed.length, older: !!(old && old.date > d.date) };
+  });
+}
+
+return { parseStockLines, parseStockPdf, stockPreview };
+})();
 __m["js/views/data-update.js"] = (function () {
 // "Aggiorna dati" (richiesta Tommaso 02/11/2026): chi è abilitato carica le esportazioni RADIX direttamente dall'app.
 // Visibile solo agli abilitati (tabella private.hub_data_managers, oggi Tommaso; poi eventualmente Irina).
@@ -6658,6 +6878,8 @@ __m["js/views/data-update.js"] = (function () {
 const { h, fill, eur, dateIt, dateTimeIt, today, toast, field } = __m["js/ui.js"];
 const { readXlsx } = __m["js/core/xlsx-read.js"];
 const { parseRadixOffers, offersPreview, parseRadixSales, salesPreview, decodeText } = __m["js/core/radix-import.js"];
+const { parseStockPdf, stockPreview } = __m["js/core/stock-import.js"];
+const { DEPOTS } = __m["js/core/quote-doc.js"];
 const canUpdateData = s => !!s?.canImport && !s.preview;
 
 async function sha256(buf) {
@@ -6666,8 +6888,8 @@ async function sha256(buf) {
 const stat = (n, label, cls = '') => h('div', { class: 'du-stat ' + cls }, h('strong', {}, String(n)), h('small', {}, label));
 const steps = list => h('ol', { class: 'du-steps' }, list.map(s => h('li', {}, s)));
 
-function picker(accept, label, onFile) {
-  const inp = h('input', { type: 'file', accept, hidden: true, onchange: () => { const f = inp.files?.[0]; inp.value = ''; if (f) onFile(f); } });
+function picker(accept, label, onFile, multiple = false) {
+  const inp = h('input', { type: 'file', accept, multiple, hidden: true, onchange: () => { const fs = [...(inp.files || [])]; inp.value = ''; if (fs.length) onFile(multiple ? fs : fs[0]); } });
   return h('span', {}, inp, h('button', { type: 'button', class: 'btn primary', onclick: () => inp.click() }, label));
 }
 
@@ -6679,7 +6901,7 @@ async function viewDataUpdate(app) {
   const loadLog = async () => {
     const rows = await app.store.importLog().catch(() => []);
     fill(logBox, rows.length ? h('ul', { class: 'du-log' }, rows.map(r => h('li', {},
-      h('span', { class: 'badge ' + (r.kind === 'offerte' ? 'info' : 'ok') }, r.kind === 'offerte' ? 'Offerte' : 'Fatturato'),
+      h('span', { class: 'badge ' + (r.kind === 'offerte' ? 'info' : r.kind === 'giacenze' ? 'warn' : 'ok') }, { offerte: 'Offerte', giacenze: 'Giacenze' }[r.kind] || 'Fatturato'),
       h('span', {}, dateTimeIt(r.at) + ' · ' + (r.byName || '') + (r.file ? ' · ' + r.file : '')),
       h('small', { class: 'muted' }, logText(r))))) : h('p', { class: 'muted' }, 'Nessun caricamento fatto dall\'app finora.'));
   };
@@ -6687,13 +6909,14 @@ async function viewDataUpdate(app) {
   return h('div', { class: 'page du-page' },
     h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Aggiorna dati'),
       h('p', { class: 'muted' }, 'Carichi le esportazioni di RADIX: l\'app ti mostra cosa cambia e aggiorna solo quando confermi. Nessun dato si cancella.'))),
-    offersCard(app, loadLog), salesCard(app, loadLog),
+    offersCard(app, loadLog), stockCard(app, loadLog), salesCard(app, loadLog),
     h('section', { class: 'card' }, h('h2', {}, 'Ultimi caricamenti'), logBox),
-    h('p', { class: 'fine muted' }, 'Giacenze dei depositi e note clienti RADIX (file PDF): per ora si aggiornano ancora con Claude. Anagrafica clienti nuovi: si creano dall\'app o con l\'aggiornamento completo.'));
+    h('p', { class: 'fine muted' }, 'Note clienti RADIX (file PDF): per ora si aggiornano ancora con Claude. Anagrafica clienti nuovi: si creano dall\'app o con l\'aggiornamento completo.'));
 }
 
 function logText(r) {
   const s = r.summary || {};
+  if (r.kind === 'giacenze') return (s.depots || []).map(d => `${depotLabel(d.code)} al ${dateIt(d.date)}: ${d.items} articoli`).join(' · ');
   if (r.kind === 'offerte') return `${s.offers} offerte dal ${dateIt(s.from)} al ${dateIt(s.to)}: ${s.new} nuove, ${s.updated} aggiornate, ${s.closed} chiuse`;
   return `dati al ${dateIt(s.asOf)}: ${s.customers} clienti con fatturato` + (s.totals ? ' · ' + Object.entries(s.totals).map(([y, v]) => `${y} ${eur(v)}`).join(' · ') : '');
 }
@@ -6776,6 +6999,49 @@ function salesCard(app, done) {
         'Lista «Quantità + valore (Std)»; Raggrup. 1 Cliente / Numero; Raggrup. 2 Data documento Anno; Riepilogo Articolo (Codice).',
         'Esporta › Testo separato con TAB.'])),
     h('div', { class: 'du-row' }, field('Data dei dati', asOf, 'Di solito oggi: è la data che vedono gli agenti nella scheda cliente.')),
+    out);
+}
+
+const depotLabel = code => (DEPOTS[code]?.pickup?.[2] || code).replace(/^IT-\d+\s*/, '');
+
+// 02/11: giacenze dei depositi dai PDF RADIX "Giacenza teorica" (arrivano ogni venerdì, uno per deposito)
+function stockCard(app, done) {
+  const out = h('div', { class: 'du-out' });
+  const run = async files => {
+    fill(out, h('p', { class: 'muted' }, `Leggo ${files.length} ${files.length === 1 ? 'file' : 'file'}…`));
+    const depots = [], errors = [], shas = [];
+    for (const f of files) {
+      try { const buf = await f.arrayBuffer(); for (const d of await parseStockPdf(buf)) depots.push({ ...d, file: f.name }); shas.push(await sha256(buf)); }
+      catch (err) { errors.push(`${f.name}: ${err.message}`); }
+    }
+    const dup = depots.map(d => d.code).filter((c, i, a) => a.indexOf(c) !== i);
+    if (!depots.length || dup.length) { fill(out, h('p', { class: 'du-err' }, dup.length ? `Lo stesso deposito (${[...new Set(dup)].join(', ')}) compare in più file: scegli un file per deposito.` : errors.join(' · '))); return; }
+    const pv = stockPreview(depots, app.store.stock);
+    const older = pv.filter(x => x.older);
+    fill(out, h('div', { class: 'du-preview' },
+      h('div', { class: 'tbl-wrap' }, h('table', { class: 'table' }, h('thead', {}, h('tr', {}, h('th', {}, 'Deposito'), h('th', {}, 'Dati al'), h('th', { class: 'num' }, 'Articoli'),
+        h('th', { class: 'num' }, 'Disponibili'), h('th', { class: 'num' }, 'Nuovi'), h('th', { class: 'num' }, 'Tolti'), h('th', { class: 'num' }, 'Quantità cambiate'))),
+        h('tbody', {}, pv.map(x => h('tr', {}, h('td', {}, depotLabel(x.code)), h('td', {}, dateIt(x.date), x.oldDate ? h('small', { class: 'muted' }, ` (ora ${dateIt(x.oldDate)})`) : null),
+          h('td', { class: 'num' }, x.items), h('td', { class: 'num' }, x.available), h('td', { class: 'num' }, x.added), h('td', { class: 'num' }, x.gone), h('td', { class: 'num' }, x.changed)))))),
+      errors.length ? h('p', { class: 'alert warn' }, 'File non letti: ' + errors.join(' · ')) : null,
+      older.length ? h('p', { class: 'alert warn' }, `Attenzione: per ${older.map(x => depotLabel(x.code)).join(', ')} il file è più vecchio dei dati già nell'app.`) : null,
+      h('p', { class: 'fine muted' }, 'Per ogni deposito del file le giacenze vengono sostituite da quelle nuove; gli altri depositi restano come sono.'),
+      h('div', { class: 'du-actions' }, h('button', { type: 'button', class: 'btn', onclick: () => fill(out) }, 'Annulla'),
+        h('button', { type: 'button', class: 'btn primary', onclick: async e => {
+          e.target.disabled = true;
+          try {
+            const r = await app.store.importStock({ depots: depots.map(({ file, ...d }) => d), file: files.map(f => f.name).join(', '), sha: shas.join(',').slice(0, 64) });
+            toast('Giacenze aggiornate');
+            fill(out, h('p', { class: 'du-ok' }, '✓ ' + logText({ kind: 'giacenze', summary: r }))); done();
+          } catch (err) { e.target.disabled = false; toast(err.message, 'error'); }
+        } }, 'Conferma e aggiorna'))));
+  };
+  return h('section', { class: 'card du-card' },
+    h('div', { class: 'du-head' }, h('div', {}, h('h2', {}, 'Giacenze magazzini'), h('small', { class: 'muted' }, 'File PDF RADIX · ogni venerdì · uno per deposito, anche tutti insieme')),
+      picker('.pdf,.PDF,application/pdf', 'Scegli i PDF', run, true)),
+    h('details', { class: 'fold-in' }, h('summary', {}, 'Quali file'),
+      steps(['I PDF «Giacenza teorica» (NORDTEX_Disponibilita_teorica…) che arrivano il venerdì: Lecco, Castelfranco, Casale.',
+        'Puoi sceglierli tutti insieme (seleziona più file), oppure un unico PDF con tutti i depositi.', 'L\'app riconosce da sola deposito e data dal contenuto del PDF.'])),
     out);
 }
 
