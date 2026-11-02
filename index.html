@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="4741fd194aeb">
+<meta name="ntx-build" content="e148d55bf724">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -586,9 +586,16 @@ button.kpi{font:inherit;text-align:left;cursor:pointer;border:0} .kpi.on{outline
 .urg-head.subito{border-bottom-color:var(--bad,#D40E41)} .urg-head.settimana{border-bottom-color:#e09a00} .urg-head.dopo{border-bottom-color:#2e9e5b}
 /* Bacheca: comunicazioni in cima, follow-up sotto */
 .board-stack{display:flex;flex-direction:column;gap:16px}
+/* Bacheca: tipo, non lette, letture */
+.post-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.post-cat{width:28px;height:28px;border-radius:8px;background:var(--lime-soft,#f2f3d1);display:inline-flex;align-items:center;justify-content:center;font-size:.95rem;flex:none}
+.post.unread{border-left:3px solid var(--nt-red,#D40E41);padding-left:10px}
+.reads{margin:4px 0} .reads>summary{cursor:pointer;list-style:none;font-size:.8rem} .reads>summary::-webkit-details-marker{display:none}
+.reads-n{font-weight:600} .reads-n.ok{color:var(--ok)} .reads-n.warn{color:var(--warn)} .reads-n.bad{color:var(--bad)}
+.checks li.done .fine{text-decoration:none;font-style:italic}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"4741fd194aeb"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"e148d55bf724"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -941,7 +948,12 @@ function unifiedOffers({ quotes = [], radix = [], reminders = [], customer = () 
   return app.concat(rx);
 }
 
-return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, assigneeFor, validVat, makeProspect, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers };
+// Bacheca (02/11): tipo di comunicazione con icona, comunicazioni concluse, letture
+const POST_CATEGORIES = [['Obiettivo', '🎯'], ['Listino e prezzi', '€'], ['Promozione', '★'], ['Novità prodotto', '✦'], ['Avviso', 'ℹ']];
+const postIcon = cat => (POST_CATEGORIES.find(c => c[0] === cat) || POST_CATEGORIES[4])[1];
+const postEnded = (p, today = new Date().toISOString().slice(0, 10)) => !!p.endsOn && p.endsOn < today;
+
+return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, assigneeFor, validVat, makeProspect, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers, POST_CATEGORIES, postIcon, postEnded };
 })();
 __m["js/core/preview.js"] = (function () {
 // Anteprima "come agente" per la Direzione (richiesta Tommaso 01/11/2026): l'app mostra solo ciò che vede l'agente scelto.
@@ -1009,7 +1021,7 @@ function indexedDbKv(dbName = 'nordtex-hub') {
   return { get: k => tx('readonly', s => s.get(k)), set: (k, v) => tx('readwrite', s => s.put(v, k)) };
 }
 
-const COLLECTIONS = ['notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio'];
+const COLLECTIONS = ['notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio', 'postReads'];
 
 function createLocalStore({ data, kv }) {
   if (data?.schema !== 'nordtex-hub-data-v1') throw new Error('Dati HUB non compatibili');
@@ -1219,23 +1231,28 @@ function createLocalStore({ data, kv }) {
     async posts() {
       const s = mustSession();
       return (await col('posts')).filter(p => isDir() || !(p.audience?.length) || p.audience.includes(s.assignee))
-        .map(p => ({ kind: 'comunicazione', audience: [], ...p })).sort((a, b) => (b.pinned - a.pinned) || b.createdAt.localeCompare(a.createdAt));
+        .map(p => ({ kind: 'comunicazione', audience: [], category: 'Avviso', endsOn: null, doneNote: '', ...p })).sort((a, b) => (b.pinned - a.pinned) || b.createdAt.localeCompare(a.createdAt));
     },
-    async savePost({ id, title, body, pinned = false, due = null, kind = 'comunicazione', audience = [], customerId = null }) {
+    async savePost({ id, title, body, pinned = false, due = null, kind = 'comunicazione', audience = [], customerId = null, category = 'Avviso', endsOn = null }) {
       const s = mustSession(); if (!s.canCommunicate) throw new Error('Servizio comunicazioni non attivo per questo accesso');
       if (!String(title || '').trim()) throw new Error('Titolo obbligatorio');
       if (kind === 'follow-up' && audience.length !== 1) throw new Error('Il follow-up va assegnato a un agente');
       const list = await col('posts'); const i = list.findIndex(x => x.id === id);
       const prev = i >= 0 ? list[i] : {};
-      const rec = { ...prev, id: id || uid(), title: title.trim(), body: body || '', pinned: !!pinned, due, kind, audience: audience.slice(), customerId, authorName: prev.authorName || s.name, createdAt: prev.createdAt || nowIso() };
+      const rec = { ...prev, id: id || uid(), title: title.trim(), body: body || '', pinned: !!pinned, due, kind, audience: audience.slice(), customerId, category, endsOn, authorName: prev.authorName || s.name, createdAt: prev.createdAt || nowIso() };
       if (i >= 0) list[i] = rec; else list.push(rec); await save('posts'); return rec;
     },
     async deletePost(id) { if (!session?.canCommunicate) throw new Error('Servizio comunicazioni non attivo'); const list = await col('posts'); const i = list.findIndex(x => x.id === id); if (i >= 0) { list.splice(i, 1); await save('posts'); } },
-    async followupDone(id, done = true) {
+    async postReads() { const s = mustSession(); return (await col('postReads')).filter(r => isDir() || r.userId === s.userId); },
+    async markPostsRead(ids) { const s = mustSession(); const list = await col('postReads'); const vis = new Set((await this.posts()).map(p => p.id));
+      for (const id of ids || []) if (vis.has(id) && !list.some(r => r.postId === id && r.userId === s.userId)) list.push({ postId: id, userId: s.userId, name: s.name, at: nowIso() }); await save('postReads'); },
+    async postRecipients() { return isDir() ? data.assignees.filter(a => a.name !== 'Direzionale' && !/^EX_/.test(a.name)).map(a => ({ id: 'ag:' + a.name, name: a.name, label: a.name })) : []; },
+    async followupDone(id, done = true, note = '') {
       const s = mustSession(); const list = await col('posts'); const p = list.find(x => x.id === id);
       if (!p || p.kind !== 'follow-up') throw new Error('Follow-up non trovato');
       if (!isDir() && !p.audience.includes(s.assignee)) throw new Error('Follow-up non assegnato a te');
-      p.doneAt = done ? nowIso() : null; p.doneByName = done ? s.name : ''; await save('posts');
+      if (String(note || '').length > 500) throw new Error('Nota troppo lunga');
+      p.doneAt = done ? nowIso() : null; p.doneByName = done ? s.name : ''; p.doneNote = done ? String(note || '').trim() : ''; await save('posts');
     },
     async markPostEmailed(id, count) { const list = await col('posts'); const p = list.find(x => x.id === id); if (p) { p.emailSentAt = nowIso(); p.emailCount = count; await save('posts'); } },
 
@@ -1506,11 +1523,26 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       const nm = await names(), byUuid = new Map((customers || []).map(c => [c.uuid, c.id]));
       return (await api('/rest/v1/hub_board_posts?select=*&order=pinned.desc,created_at.desc')).map(p => ({ id: p.id, title: p.title, body: p.body, pinned: p.pinned, due: p.due_date,
         kind: p.kind || 'comunicazione', audience: p.audience || [], customerId: byUuid.get(p.customer_id) || null, doneAt: p.done_at, doneByName: nm.get(p.done_by) || '',
-        emailSentAt: p.email_sent_at, emailCount: p.email_count, authorName: nm.get(p.author) || '', createdAt: p.created_at }));
+        emailSentAt: p.email_sent_at, emailCount: p.email_count, authorName: nm.get(p.author) || '', createdAt: p.created_at,
+        category: p.category || 'Avviso', endsOn: p.ends_on || null, doneNote: p.done_note || '' }));
+    },
+    // Letture delle comunicazioni (migrazione 20261102090000): la Direzione vede tutte, l'agente le sue. Tabella assente = nessun dato
+    async postReads() {
+      const nm = await names();
+      return ((await api('/rest/v1/hub_post_reads?select=post_id,user_id,read_at').catch(() => [])) || []).map(r => ({ postId: r.post_id, userId: r.user_id, name: nm.get(r.user_id) || '', at: r.read_at }));
+    },
+    async markPostsRead(ids) {
+      if (!ids?.length) return;
+      await api('/rest/v1/hub_post_reads?on_conflict=post_id,user_id', { method: 'POST', prefer: 'resolution=ignore-duplicates,return=minimal', body: ids.map(id => ({ post_id: id })) }).catch(() => null);
+    },
+    // destinatari delle comunicazioni (agenti attivi con il loro portafoglio), per "letta da N su M"
+    async postRecipients() {
+      if (session?.role !== 'direzione') return [];
+      return ((await api('/rest/v1/hub_profiles?select=id,display_name,assignee_label&role=eq.agente&active=eq.true').catch(() => [])) || []).map(p => ({ id: p.id, name: p.display_name, label: p.assignee_label }));
     },
     async savePost(p) {
       const body = { title: p.title, body: p.body || '', pinned: !!p.pinned, due_date: p.due || null, kind: p.kind || 'comunicazione', audience: p.audience || [],
-        customer_id: p.customerId ? custUuid(p.customerId) : null };
+        customer_id: p.customerId ? custUuid(p.customerId) : null, category: p.category || 'Avviso', ends_on: p.endsOn || null };
       const r = p.id ? await api('/rest/v1/hub_board_posts?id=eq.' + p.id, { method: 'PATCH', body, prefer: 'return=representation' }) : await api('/rest/v1/hub_board_posts', { method: 'POST', body, prefer: 'return=representation' });
       return { ...p, id: (Array.isArray(r) ? r[0] : r)?.id || p.id };
     },
@@ -1587,7 +1619,7 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       return rows && rows.map(r => ({ userId: r.user_id, name: r.display_name, role: r.role, active: r.active, lastSignIn: r.last_sign_in, lastOpen: r.last_open,
         device: r.last_device, opens7: r.opens_7, opens30: r.opens_30, days30: r.days_30 }));
     },
-    async followupDone(id, done = true) { return api('/rest/v1/rpc/hub_followup_done', { method: 'POST', body: { p_id: id, p_done: !!done } }); },
+    async followupDone(id, done = true, note = '') { return api('/rest/v1/rpc/hub_followup_done', { method: 'POST', body: { p_id: id, p_done: !!done, p_note: String(note || '').trim().slice(0, 500) } }); },
     // km camion via Brennero calcolati sul server (funzione hub-route, cache condivisa)
     async route(origin, destination) {
       const r = await fetchImpl(url + '/functions/v1/hub-route', { method: 'POST', headers: { apikey: key, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
@@ -4432,6 +4464,7 @@ return { viewHome, openActions };
 })();
 __m["js/views/board.js"] = (function () {
 const { h, dateIt, toast, modal, field, emptyState } = __m["js/ui.js"];
+const { POST_CATEGORIES, postIcon, postEnded } = __m["js/data/model.js"];
 const { openActions } = __m["js/views/actions.js"];
 const { mailtoUrl, openMailto } = __m["js/core/mailto.js"];
 const { noteDialog } = __m["js/views/agenda.js"];
@@ -4447,12 +4480,39 @@ const audienceText = p => (p.audience?.length ? 'Per: ' + p.audience.join(', ') 
 
 async function boardSection(app, refresh) {
   const isDir = app.session.role === 'direzione', canWrite = !!app.session.canCommunicate;
-  const [all, actions] = await Promise.all([app.store.posts(), openActions(app)]);
-  const posts = all.filter(p => p.kind !== 'follow-up');
+  const [all, actions, reads, recipients] = await Promise.all([app.store.posts(), openActions(app),
+    app.store.postReads ? app.store.postReads().catch(() => []) : [], isDir && app.store.postRecipients ? app.store.postRecipients().catch(() => []) : []]);
+  const comms = all.filter(p => p.kind !== 'follow-up');
+  const posts = comms.filter(p => !postEnded(p)), ended = isDir ? comms.filter(p => postEnded(p)) : [];
+  const readBy = new Map(); for (const r of reads) { if (!readBy.has(r.postId)) readBy.set(r.postId, new Set()); readBy.get(r.postId).add(r.userId); }
+  const myUnread = new Set(isDir ? [] : posts.filter(p => !readBy.get(p.id)?.has(app.session.userId)).map(p => p.id));
+  // l'agente che apre la Bacheca ha letto le comunicazioni visibili (anteprima Direzione: niente)
+  if (myUnread.size && !app.session.preview && app.store.markPostsRead) app.store.markPostsRead([...myUnread]).then(() => { app.navCounts = { ...(app.navCounts || {}), bacheca: 0 }; document.querySelectorAll('.nav-badge-bacheca').forEach(x => x.remove()); }).catch(() => null);
+  const readLine = p => {
+    if (!isDir || !recipients.length) return null;
+    const target = recipients.filter(r => !(p.audience?.length) || p.audience.includes(r.label));
+    if (!target.length) return null;
+    const who = readBy.get(p.id) || new Set(), done = target.filter(r => who.has(r.id)), miss = target.filter(r => !who.has(r.id));
+    return h('details', { class: 'reads' }, h('summary', {}, h('span', { class: 'reads-n ' + (miss.length ? (done.length ? 'warn' : 'bad') : 'ok') }, `👁 letta da ${done.length} su ${target.length}`)),
+      miss.length ? h('small', { class: 'muted' }, 'Non ancora letta: ' + miss.map(r => r.name).join(', ')) : h('small', { class: 'muted' }, 'Letta da tutti'));
+  };
+  const commItem = p => h('div', { class: 'post' + (p.pinned ? ' pinned' : '') + (myUnread.has(p.id) ? ' unread' : '') },
+    h('div', { class: 'post-head' }, h('span', { class: 'post-cat', title: p.category }, postIcon(p.category)), h('strong', {}, (p.pinned ? '📌 ' : '') + p.title),
+      myUnread.has(p.id) ? h('span', { class: 'badge warn' }, 'nuova') : null),
+    p.body ? h('p', {}, p.body) : null,
+    h('small', { class: 'muted' }, `${p.category} · ${p.authorName} · ${dateIt(p.createdAt)}${p.endsOn ? ' · fino al ' + dateIt(p.endsOn) : p.due ? ' · scadenza ' + dateIt(p.due) : ''}`, isDir ? ` · ${audienceText(p)}` : ''),
+    readLine(p),
+    isDir ? h('small', { class: 'mail-state' + (p.emailSentAt ? ' ok' : '') }, p.emailSentAt ? `✉ Email preparata per ${p.emailCount} ${p.emailCount === 1 ? 'agente' : 'agenti'} il ${dateIt(p.emailSentAt)}` : '✉ Email non ancora preparata') : null,
+    canWrite ? h('div', {}, h('button', { class: 'link', onclick: () => editor('comunicazione', p) }, 'Modifica'),
+      !p.emailSentAt ? [' · ', h('button', { class: 'link', onclick: () => sendMail(app, p).then(refresh) }, 'Prepara email')] : null) : null);
   const doneAssigned = all.filter(p => p.kind === 'follow-up' && p.doneAt).slice(0, 10);
   const groups = [['scaduto', 'Scaduti'], ['oggi', 'Oggi'], ['in programma', 'In programma'], ['senza data', 'Senza data']];
   const toggle = async a => {
-    try { if (a.assigned) await app.store.followupDone(a.id, true); else await app.store.toggleAction(a.note.id, a.id); toast('Follow-up completato'); refresh(); } catch (e) { toast(e.message, 'error'); }
+    try {
+      if (a.assigned) { const note = await doneDialog(a); if (note === null) { refresh(); return; } await app.store.followupDone(a.id, true, note); }
+      else await app.store.toggleAction(a.note.id, a.id);
+      toast('Follow-up completato'); refresh();
+    } catch (e) { toast(e.message, 'error'); }
   };
   const editor = (kind, p) => postDialog(app, kind, p).then(ok => ok && refresh());
   const rxBlock = await radixFollowupBlock(app, refresh);
@@ -4462,12 +4522,9 @@ async function boardSection(app, refresh) {
     h('div', { class: 'board-stack' },
       h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'Comunicazioni'),
           canWrite ? h('button', { class: 'btn small primary', onclick: () => editor('comunicazione') }, '+ Comunicazione') : null),
-        posts.length ? posts.map(p => h('div', { class: 'post' + (p.pinned ? ' pinned' : '') }, h('strong', {}, (p.pinned ? '📌 ' : '') + p.title), p.body ? h('p', {}, p.body) : null,
-          h('small', { class: 'muted' }, `${p.authorName} · ${dateIt(p.createdAt)}${p.due ? ' · scadenza ' + dateIt(p.due) : ''}`, isDir ? ` · ${audienceText(p)}` : ''),
-          isDir ? h('small', { class: 'mail-state' + (p.emailSentAt ? ' ok' : '') }, p.emailSentAt ? `✉ Email preparata per ${p.emailCount} ${p.emailCount === 1 ? 'agente' : 'agenti'} il ${dateIt(p.emailSentAt)}` : '✉ Email non ancora preparata') : null,
-          canWrite ? h('div', {}, h('button', { class: 'link', onclick: () => editor('comunicazione', p) }, 'Modifica'),
-            !p.emailSentAt ? [' · ', h('button', { class: 'link', onclick: () => sendMail(app, p).then(refresh) }, 'Prepara email')] : null) : null))
-          : emptyState(canWrite ? 'Pubblica una comunicazione per la rete: obiettivi, promozioni, scadenze.' : 'Nessuna comunicazione.')),
+        posts.length ? posts.map(commItem)
+          : emptyState(canWrite ? 'Pubblica una comunicazione per la rete: obiettivi, promozioni, scadenze.' : 'Nessuna comunicazione.'),
+        ended.length ? h('details', { class: 'fold-in' }, h('summary', {}, `Comunicazioni concluse (${ended.length})`), ended.map(commItem)) : null),
       h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, isDir ? 'Follow-up della rete' : 'I miei follow-up'),
           canWrite ? h('button', { class: 'btn small primary', onclick: () => editor('follow-up') }, '+ Follow-up a un agente') : null),
         actions.length ? groups.map(([k, label]) => {
@@ -4484,7 +4541,7 @@ async function boardSection(app, refresh) {
         }) : rxBlock || rxTodo ? null : emptyState('Nessun follow-up aperto. Si creano con le note nella scheda cliente' + (canWrite ? ' o con "+ Follow-up a un agente".' : '.')),
         rxBlock, rxTodo,
         isDir && doneAssigned.length ? h('details', { class: 'done-list' }, h('summary', {}, `Follow-up assegnati completati (${doneAssigned.length})`),
-          h('ul', { class: 'checks' }, doneAssigned.map(p => h('li', { class: 'done' }, `${p.title} · ${p.audience[0]} · ${dateIt(p.doneAt)}`)))) : null)),
+          h('ul', { class: 'checks' }, doneAssigned.map(p => h('li', { class: 'done' }, `${p.title} · ${p.audience[0]} · ${dateIt(p.doneAt)}`, p.doneNote ? h('div', { class: 'fine' }, '“' + p.doneNote + '”') : null)))) : null)),
     h('p', { class: 'fine' }, 'Le note scritte in RADIX si leggono nella scheda di ogni cliente e in Attività rete.'));
 }
 
@@ -4530,6 +4587,8 @@ async function postDialog(app, kind, p = {}) {
   const title = h('input', { value: p.title || '', placeholder: fu ? 'es. Richiamare per offerta NATURHELD' : 'es. Promo fibra NATURHELD novembre' });
   const body = h('textarea', { rows: fu ? 3 : 5 }, p.body || '');
   const due = h('input', { type: 'date', value: p.due || '' });
+  const endsOn = h('input', { type: 'date', value: p.endsOn || '' });
+  const cat = h('select', {}, POST_CATEGORIES.map(([c, i]) => h('option', { value: c, selected: c === (p.category || 'Avviso') }, `${i}  ${c}`)));
   const pinned = h('input', { type: 'checkbox', checked: !!p.pinned });
   const email = h('input', { type: 'checkbox', checked: !p.emailSentAt });
   // destinatari
@@ -4557,7 +4616,8 @@ async function postDialog(app, kind, p = {}) {
     const audience = fu ? (agentSel.value ? [agentSel.value] : []) : (some.checked ? boxes.map(b => b.firstChild).filter(i => i.checked).map(i => i.value) : []);
     if (fu && !audience.length) throw new Error('Scegli l\'agente');
     if (!fu && some.checked && !audience.length) throw new Error('Scegli almeno un agente o "Tutta la rete"');
-    const rec = await app.store.savePost({ id: p.id, title: title.value, body: body.value, due: due.value || null, pinned: fu ? false : pinned.checked, kind: fu ? 'follow-up' : 'comunicazione', audience, customerId: fu ? resolveCust() : null });
+    const rec = await app.store.savePost({ id: p.id, title: title.value, body: body.value, due: fu ? (due.value || null) : (p.due || null), pinned: fu ? false : pinned.checked, kind: fu ? 'follow-up' : 'comunicazione', audience,
+      customerId: fu ? resolveCust() : null, category: fu ? 'Avviso' : cat.value, endsOn: fu ? null : (endsOn.value || null) });
     toast(fu ? 'Follow-up assegnato' : 'Pubblicata in app');
     if (email.checked) await sendMail(app, rec);
     return true;
@@ -4565,11 +4625,19 @@ async function postDialog(app, kind, p = {}) {
   const content = fu
     ? h('div', { class: 'form' }, field('Agente', agentSel), field('Cosa deve fare', title), field('Dettagli (facoltativi)', body), field('Entro il', due), field('Cliente', h('div', {}, custIn, dl)),
         h('label', { class: 'check' }, email, ` Prepara anche l'email per l'agente dalla tua casella`))
-    : h('div', { class: 'form' }, field('Titolo', title), field('Testo', body),
+    : h('div', { class: 'form' }, field('Tipo', cat), field('Titolo', title), field('Testo', body),
         h('div', { class: 'field' }, h('span', {}, 'Destinatari'), h('label', { class: 'check' }, whole, ' Tutta la rete'), h('label', { class: 'check' }, some, ' Solo agenti scelti'), list),
-        field('Scadenza (facoltativa)', due), h('label', { class: 'check' }, pinned, ' In evidenza'),
+        field('Visibile fino al (facoltativo)', endsOn, 'Dopo questa data sparisce per gli agenti; tu la ritrovi tra le concluse.'), h('label', { class: 'check' }, pinned, ' In evidenza'),
         h('label', { class: 'check' }, email, ` Prepara anche l'email agli agenti (in Ccn) dalla tua casella`));
   return modal(p.id ? (fu ? 'Modifica follow-up' : 'Modifica comunicazione') : (fu ? 'Nuovo follow-up a un agente' : 'Nuova comunicazione'), content, actions);
+}
+
+// Chiusura di un follow-up assegnato dalla Direzione: due righe di esito (facoltative) per chi lo ha assegnato
+async function doneDialog(a) {
+  const note = h('textarea', { rows: 3, placeholder: 'es. Cliente richiamato, ordina a gennaio' });
+  const r = await modal('Follow-up fatto: ' + a.title, h('div', { class: 'form' }, field('Com\'è andata? (facoltativo)', note), h('p', { class: 'fine' }, 'La Direzione vede la tua nota insieme al follow-up chiuso.')),
+    [{ label: 'Annulla', value: false }, { label: 'Fatto', primary: true, run: async () => ({ note: note.value }) }]);
+  return r && typeof r === 'object' ? r.note : null;
 }
 
 return { viewBoard, boardSection };
@@ -5240,7 +5308,8 @@ function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch { /* 
 function shell(active, content) {
   const isDir = app.session.role === 'direzione', pv = app.session.preview;
   const items = NAV.filter(n => !n.dir || isDir);
-  const badge = id => id === 'ordini' && app.navCounts?.ordini ? h('span', { class: 'tab-count' }, app.navCounts.ordini) : null;
+  const badge = id => id === 'ordini' && app.navCounts?.ordini ? h('span', { class: 'tab-count' }, app.navCounts.ordini)
+    : id === 'bacheca' && app.navCounts?.bacheca ? h('span', { class: 'tab-count nav-badge-bacheca' }, app.navCounts.bacheca) : null;
   const nav = items.filter(n => n.side !== false).flatMap(n => [n.group ? h('div', { class: 'nav-group' }, n.group) : null,
     h('a', { href: '#/' + n.id, class: 'nav-item' + (active === n.id ? ' active' : '') }, h('span', { class: 'ico', 'aria-hidden': 'true' }, n.icon), h('span', {}, n.label), badge(n.id))]);
   const tabs = items.filter(n => n.phone !== false && !(isDir && n.phoneDir === false));
@@ -5255,7 +5324,7 @@ function shell(active, content) {
       h('div', { class: 'mobile-brand' }, h('div', { class: 'mb-left' }, h('img', { src: LOGO, alt: 'NORDTEX' }), h('span', {}, 'HUB')),
         h('a', { href: '#/profilo', class: 'avatar' + (active === 'profilo' ? ' on' : ''), title: 'Profilo', 'aria-label': 'Profilo' }, initials(pv ? pv.by : app.session.name))), content),
     h('nav', { class: 'tabbar' }, tabs.map(n => h('a', { href: '#/' + n.id, class: tabActive(n.id) ? 'active' : '' }, h('span', { class: 'ico' }, n.icon), h('small', {}, n.label),
-      n.id === 'altro' && app.navCounts?.ordini ? h('span', { class: 'tab-dot' }) : null))));
+      (n.id === 'altro' && app.navCounts?.ordini) || (n.id === 'bacheca' && app.navCounts?.bacheca) ? h('span', { class: 'tab-dot' + (n.id === 'bacheca' ? ' nav-badge-bacheca' : '') }) : null))));
 }
 
 function signOut() { if (app.real) app.stopPreview(); app.store.signOut(); app.session = null; app.cache = {}; app.go(''); }
@@ -5324,6 +5393,12 @@ async function render() {
   if (['rete', 'manager', 'ordini', 'altro'].includes(key) && app.session.role !== 'direzione') { app.go('home'); return; }
   // vecchi collegamenti alle schede della Home (prima del 01/11 sera)
   if (key === 'home' && args[0]) { const to = { attivita: 'rete', ordini: 'ordini', bacheca: 'bacheca', manager: 'manager' }[args[0]]; if (to) { app.go(to); return; } }
+  // comunicazioni non lette per l'agente (pallino su Bacheca)
+  if (app.session.role !== 'direzione' && app.store.postReads && !app.session.preview && !(app.cache.boardAt > Date.now() - 60000)) {
+    app.cache.boardAt = Date.now();
+    try { const [ps, rs] = await Promise.all([app.store.posts(), app.store.postReads()]); const mine = new Set(rs.map(r => r.postId));
+      app.navCounts = { ...(app.navCounts || {}), bacheca: ps.filter(p => p.kind !== 'follow-up' && !(p.endsOn && p.endsOn < new Date().toISOString().slice(0, 10)) && !mine.has(p.id)).length }; } catch { /* facoltativo */ }
+  }
   if (app.session.role === 'direzione' && app.store.orders) { try { app.navCounts = { ordini: (await app.store.orders()).filter(o => o.status === 'Da inserire' || o.status === 'In lavorazione').length }; } catch { app.navCounts = {}; } }
   let content;
   try { content = await views[key](app, ...args); } catch (e) { console.error(e); content = h('div', { class: 'page' }, h('p', { class: 'error' }, e.message)); }
