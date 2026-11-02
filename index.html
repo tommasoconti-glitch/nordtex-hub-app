@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="7ea67b143560">
+<meta name="ntx-build" content="02f4a0ce107a">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -622,9 +622,40 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .sig.forte{background:var(--bad-bg);color:var(--bad)} .sig.medio{background:var(--warn-bg);color:var(--warn)}
 .terr-legend,.terr-regions{list-style:none;margin:8px 0 0;padding:0} .terr-legend li,.terr-regions li{padding:5px 0;border-bottom:1px solid var(--line)} .terr-legend .swatch{margin-right:8px}
 .swatch{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px}
+/* Giri visite programmati */
+.plan-list{display:flex;flex-direction:column;gap:10px} .plan-card{display:flex;flex-direction:column;gap:4px;text-decoration:none;color:inherit}
+
+.stops{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.stop{background:var(--surface,#fff);border:1px solid var(--line);border-radius:12px;padding:12px 14px} .stop.done{opacity:.6}
+.stop-head{display:flex;align-items:flex-start;gap:10px} .stop-title{flex:1;display:flex;flex-direction:column;min-width:0}
+.stop-n{min-width:46px;text-align:center;font-weight:700;padding:4px 6px;border-radius:8px;background:var(--lime-soft,#f2f3d1);color:var(--lime-ink,#575800);font-variant-numeric:tabular-nums}
+.stop-info{margin:8px 0 0 56px;display:flex;flex-direction:column;gap:3px;font-size:.88rem}
+.stop-edit{margin:8px 0 0 56px;display:flex;gap:8px;flex-wrap:wrap} .stop-edit select{max-width:170px} .stop-edit input[type=time]{max-width:140px} .stop-edit input:not([type]){flex:1;min-width:180px}
+.stop-actions{margin:8px 0 0 56px;display:flex;gap:12px;align-items:center}
+@media (max-width:760px){.stop-info,.stop-edit,.stop-actions{margin-left:0}}
+.plan-meta{max-width:220px}
+.link.danger{color:var(--bad);margin-top:16px}
+.print-sheet{display:none}
+#print-root .print-sheet{display:block;font:9pt/1.38 Inter,Arial,sans-serif;color:#2b2a2c}
+#print-root .ps-head{display:block;width:100%;height:auto;margin:0 0 3mm}
+#print-root .ps-title{display:flex;justify-content:space-between;align-items:flex-end;gap:6mm;border-top:2.2pt solid #D40E41;padding:3mm 0 3mm;margin-bottom:3mm}
+#print-root .ps-kicker{font:600 8pt 'NT Poppins',Inter,Arial,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#D40E41}
+#print-root .ps-title h1{font:700 16pt/1.15 'NT Poppins',Inter,Arial,sans-serif;color:#4b4a4d;margin:1mm 0 0}
+#print-root .ps-facts{display:flex;gap:2mm} #print-root .ps-facts>div{background:#f2f3d1;border-left:2pt solid #BCBF00;padding:1.5mm 3mm;min-width:20mm}
+#print-root .ps-facts small{display:block;font-size:6.5pt;text-transform:uppercase;letter-spacing:.06em;color:#575800} #print-root .ps-facts strong{font:600 9.5pt 'NT Poppins',Inter,Arial,sans-serif;color:#2b2a2c}
+#print-root .print-sheet table{width:100%;border-collapse:collapse}
+#print-root .print-sheet th{text-align:left;font:600 7pt 'NT Poppins',Inter,Arial,sans-serif;letter-spacing:.05em;text-transform:uppercase;background:#676568;color:#fff;padding:1.8mm 1.5mm}
+#print-root .print-sheet td{vertical-align:top;border-bottom:.5pt solid #c9c8ca;padding:2.2mm 1.5mm;break-inside:avoid}
+#print-root .print-sheet tbody tr:nth-child(even) td{background:#f7f7f5}
+#print-root .print-sheet td:first-child{width:13mm} #print-root .print-sheet td.blank{width:62mm;font-size:8pt;line-height:1.9}
+#print-root .ps-n{display:inline-block;min-width:8mm;text-align:center;font:700 9pt 'NT Poppins',Inter,Arial,sans-serif;padding:.6mm 1mm;border-radius:1.2mm;background:#e8e8e6;color:#4b4a4d}
+#print-root .ps-n.appt{background:#D40E41;color:#fff}
+#print-root .ps-name{font:600 9.5pt 'NT Poppins',Inter,Arial,sans-serif;color:#2b2a2c}
+#print-root .ps-foot{display:flex;justify-content:space-between;border-top:1.5pt solid #BCBF00;margin-top:4mm;padding-top:1.5mm;font-size:7pt;color:#676568}
+
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"7ea67b143560"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"02f4a0ce107a"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -982,14 +1013,24 @@ const POST_CATEGORIES = [['Obiettivo', '🎯'], ['Listino e prezzi', '€'], ['P
 const postIcon = cat => (POST_CATEGORIES.find(c => c[0] === cat) || POST_CATEGORIES[4])[1];
 const postEnded = (p, today = new Date().toISOString().slice(0, 10)) => !!p.endsOn && p.endsOn < today;
 
-return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, assigneeFor, validVat, makeProspect, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers, POST_CATEGORIES, postIcon, postEnded };
+// Giro visite programmato (02/11): stato della telefonata per ogni tappa
+const CALL_STATES = ['Da chiamare', 'Chiamato', 'Appuntamento', 'Non disponibile', 'Richiamare'];
+function checkStop({ callStatus, apptTime, note } = {}) {
+  if (callStatus !== undefined && !CALL_STATES.includes(callStatus)) throw new Error('Stato non valido');
+  if (apptTime && !/^\d{2}:\d{2}$/.test(apptTime)) throw new Error('Orario non valido');
+  if (note !== undefined && String(note).length > 300) throw new Error('Nota troppo lunga (massimo 300 caratteri)');
+}
+// ordine delle tappe: prima gli appuntamenti per orario, poi le altre nell'ordine scelto
+const stopOrder = (a, b) => (a.apptTime || '99') .localeCompare(b.apptTime || '99') || (a.position || 0) - (b.position || 0);
+
+return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, assigneeFor, validVat, makeProspect, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers, POST_CATEGORIES, postIcon, postEnded, CALL_STATES, checkStop, stopOrder };
 })();
 __m["js/core/preview.js"] = (function () {
 // Anteprima "come agente" per la Direzione (richiesta Tommaso 01/11/2026): l'app mostra solo ciò che vede l'agente scelto.
 // Sola lettura: ogni scrittura è bloccata, così nulla viene creato a nome della Direzione sui clienti dell'agente.
 // I permessi veri restano quelli del database: qui si filtra soltanto ciò che la Direzione vede già.
 const { radixOfferForAgent } = __m["js/data/model.js"];
-const WRITE = /^(add|save|delete|set|toggle|mark|import|changePassword|followupDone|logQuoteSend|request|update|transcribe|approve)/;
+const WRITE = /^(add|save|delete|set|toggle|mark|import|changePassword|followupDone|logQuoteSend|request|update|transcribe|approve|remove)/;
 
 class PreviewError extends Error { constructor() { super('Anteprima agente: sola lettura. Esci dall\'anteprima per modificare.'); this.code = 'PREVIEW'; } }
 
@@ -1012,6 +1053,7 @@ function previewStore(store, label) {
       if (prop === 'radixOffers') { const role = (target.assignees || []).find(x => x.name === label)?.role || '';
         return async (...a) => (await target.radixOffers(...a)).filter(o => ownCustomer(o.customerId) && radixOfferForAgent(o, role)); }
       if (prop === 'lastVisits') return async () => new Map([...(await target.lastVisits())].filter(([id]) => ownCustomer(id)));
+      if (prop === 'plans') return async () => [];
       if (prop === 'posts') return async () => (await target.posts()).filter(p => (p.audience || []).length === 0 || p.audience.includes(label));
       if (prop === 'logOpen' || prop === 'accessSummary' || prop === 'dataCopy') return async () => null;
       if (WRITE.test(String(prop))) return async () => { throw new PreviewError(); };
@@ -1033,7 +1075,7 @@ __m["js/data/local-store.js"] = (function () {
 // Archivio locale: dati di riferimento (clienti, prodotti) da hub-data.json,
 // attività (note, follow-up, referenti, offerte, bacheca) salvate nel browser (IndexedDB).
 // Pensato per anteprima e uso su un singolo dispositivo; la versione condivisa usa Supabase.
-const { uid, nowIso, visibleTo, nextQuoteNumber, DIREZIONE, CONTACT_KINDS, NOTE_OUTCOMES, makeProspect, applyStatus, checkStatusChange, radixNoteView, radixVisible, checkOrderRequest, ORDER_STATES, checkRadixOutcome, radixOfferForAgent } = __m["js/data/model.js"];
+const { uid, nowIso, visibleTo, nextQuoteNumber, DIREZIONE, CONTACT_KINDS, NOTE_OUTCOMES, makeProspect, applyStatus, checkStatusChange, radixNoteView, radixVisible, checkOrderRequest, ORDER_STATES, checkRadixOutcome, radixOfferForAgent, checkStop } = __m["js/data/model.js"];
 function memoryKv(initial = {}) {
   const m = new Map(Object.entries(initial));
   return { async get(k) { return m.has(k) ? structuredClone(m.get(k)) : undefined; }, async set(k, v) { m.set(k, structuredClone(v)); } };
@@ -1050,7 +1092,7 @@ function indexedDbKv(dbName = 'nordtex-hub') {
   return { get: k => tx('readonly', s => s.get(k)), set: (k, v) => tx('readwrite', s => s.put(v, k)) };
 }
 
-const COLLECTIONS = ['notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio', 'postReads'];
+const COLLECTIONS = ['notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio', 'postReads', 'plans', 'stops'];
 
 function createLocalStore({ data, kv }) {
   if (data?.schema !== 'nordtex-hub-data-v1') throw new Error('Dati HUB non compatibili');
@@ -1169,6 +1211,36 @@ function createLocalStore({ data, kv }) {
       (await col('quoteSends')).push(rec); await save('quoteSends'); return rec;
     },
     async agentEmails() { return []; },
+    // Giri visite programmati (versione locale: su questo dispositivo)
+    async plans() {
+      const s = mustSession(); const stops = await col('stops');
+      return (await col('plans')).filter(p => p.ownerId === s.userId || isDir()).map(p => { const st = stops.filter(x => x.planId === p.id);
+        return { ...p, stops: st.length, appts: st.filter(x => x.callStatus === 'Appuntamento').length, visited: st.filter(x => x.visited).length }; }).sort((a, b) => b.date.localeCompare(a.date));
+    },
+    async plan(id) {
+      const s = mustSession(); const p = (await col('plans')).find(x => x.id === id); if (!p || !(p.ownerId === s.userId || isDir())) return null;
+      return { ...p, mine: p.ownerId === s.userId, stops: (await col('stops')).filter(x => x.planId === id && canSeeCustomer(x.customerId)).map(x => ({ ...x })) };
+    },
+    async savePlan({ id, date, title = '' }) {
+      const s = mustSession(); if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) throw new Error('Scegli la data del giro');
+      const list = await col('plans'); const p = list.find(x => x.id === id);
+      if (p) { if (p.ownerId !== s.userId) throw new Error('Puoi modificare solo i tuoi giri'); Object.assign(p, { date, title: String(title).trim() }); }
+      else list.push({ id: id = uid(), ownerId: s.userId, ownerName: s.name, date, title: String(title).trim(), updatedAt: nowIso() });
+      await save('plans'); return { id };
+    },
+    async deletePlan(id) { const s = mustSession(); const list = await col('plans'); const i = list.findIndex(x => x.id === id && x.ownerId === s.userId); if (i >= 0) { list.splice(i, 1); await save('plans'); }
+      const st = await col('stops'); for (let j = st.length - 1; j >= 0; j--) if (st[j].planId === id) st.splice(j, 1); await save('stops'); },
+    async addStops(planId, customerIds, startPos = 0) {
+      const s = mustSession(); const p = (await col('plans')).find(x => x.id === planId); if (!p || p.ownerId !== s.userId) throw new Error('Puoi modificare solo i tuoi giri');
+      const st = await col('stops'); customerIds.forEach((cid, i) => { if (canSeeCustomer(cid) && !st.some(x => x.planId === planId && x.customerId === cid))
+        st.push({ id: uid(), planId, customerId: cid, position: startPos + i + 1, callStatus: 'Da chiamare', apptTime: '', note: '', visited: false }); }); await save('stops');
+    },
+    async updateStop(id, f) {
+      const s = mustSession(); checkStop(f); const st = await col('stops'); const x = st.find(y => y.id === id); if (!x) throw new Error('Tappa non trovata');
+      const p = (await col('plans')).find(y => y.id === x.planId); if (!p || p.ownerId !== s.userId) throw new Error('Puoi modificare solo i tuoi giri');
+      for (const k of ['callStatus', 'apptTime', 'note', 'visited', 'position']) if (f[k] !== undefined) x[k] = f[k]; await save('stops');
+    },
+    async removeStop(id) { const st = await col('stops'); const i = st.findIndex(y => y.id === id); if (i >= 0) { st.splice(i, 1); await save('stops'); } },
     async lastVisits() {
       mustSession(); const out = new Map();
       for (const n of await col('notes')) if (n.kind === 'Visita' && canSeeCustomer(n.customerId)) { const d = n.createdAt.slice(0, 10); if (!(out.get(n.customerId) >= d)) out.set(n.customerId, d); }
@@ -1303,7 +1375,7 @@ __m["js/data/supabase-store.js"] = (function () {
 // Archivio condiviso su Supabase (stesso interfaccia dell'archivio locale).
 // Login ordinario email/password; i permessi sono applicati dal database (RLS),
 // l'app non usa mai chiavi privilegiate. Richiede la migrazione supabase/migrations/20261031120000_hub_v1.sql.
-const { nowIso, makeProspect, applyStatus, checkStatusChange, radixNoteView, checkOrderRequest, checkRadixOutcome } = __m["js/data/model.js"];
+const { nowIso, makeProspect, applyStatus, checkStatusChange, radixNoteView, checkOrderRequest, checkRadixOutcome, checkStop } = __m["js/data/model.js"];
 const AUDIO_MAX = 10 * 1024 * 1024;
 const AUDIO_EXT = { 'audio/mp4': 'mp4', 'audio/webm': 'webm', 'audio/ogg': 'ogg' };
 const audioMime = t => { const m = String(t || '').split(';')[0].trim().toLowerCase(); return AUDIO_EXT[m] ? m : m === 'audio/x-m4a' || m === 'audio/aac' ? 'audio/mp4' : null; };
@@ -1598,6 +1670,41 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       for (const r of rx) { const id = custCode(r.customer_id), d = r.note_date; if (id && !(out.get(id) >= d)) out.set(id, d); }
       return out;
     },
+    // Giri visite programmati (migrazione 20261102100000): tabelle assenti = funzione non ancora attiva
+    async plans() {
+      const nm = await names();
+      const rows = await api('/rest/v1/hub_visit_plans?select=id,owner_id,plan_date,title,updated_at,hub_visit_stops(call_status,visited)&order=plan_date.desc&limit=200').catch(() => null);
+      if (!rows) return null;
+      return rows.map(r => ({ id: r.id, ownerId: r.owner_id, ownerName: nm.get(r.owner_id) || '', date: r.plan_date, title: r.title || '', updatedAt: r.updated_at,
+        stops: (r.hub_visit_stops || []).length, appts: (r.hub_visit_stops || []).filter(x => x.call_status === 'Appuntamento').length, visited: (r.hub_visit_stops || []).filter(x => x.visited).length }));
+    },
+    async plan(id) {
+      const nm = await names();
+      const [p] = await api('/rest/v1/hub_visit_plans?select=*&id=eq.' + id);
+      if (!p) return null;
+      const stops = await api('/rest/v1/hub_visit_stops?select=*&order=position.asc&plan_id=eq.' + id);
+      return { id: p.id, ownerId: p.owner_id, ownerName: nm.get(p.owner_id) || '', date: p.plan_date, title: p.title || '', mine: p.owner_id === session.userId,
+        stops: stops.map(x => ({ id: x.id, customerId: custCode(x.customer_id), position: x.position, callStatus: x.call_status, apptTime: x.appt_time ? String(x.appt_time).slice(0, 5) : '', note: x.note || '', visited: !!x.visited })).filter(x => x.customerId) };
+    },
+    async savePlan({ id, date, title = '' }) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) throw fail('INPUT', 'Scegli la data del giro');
+      const body = { plan_date: date, title: String(title).trim().slice(0, 120) };
+      const r = id ? await api('/rest/v1/hub_visit_plans?id=eq.' + id, { method: 'PATCH', body, prefer: 'return=representation' }) : await api('/rest/v1/hub_visit_plans', { method: 'POST', body, prefer: 'return=representation' });
+      return { id: (r && r[0]?.id) || id };
+    },
+    async deletePlan(id) { return api('/rest/v1/hub_visit_plans?id=eq.' + id, { method: 'DELETE' }); },
+    async addStops(planId, customerIds, startPos = 0) {
+      const rows = customerIds.map((cid, i) => ({ plan_id: planId, customer_id: custUuid(cid), position: startPos + i + 1 }));
+      if (rows.length) await api('/rest/v1/hub_visit_stops?on_conflict=plan_id,customer_id', { method: 'POST', prefer: 'resolution=ignore-duplicates,return=minimal', body: rows });
+    },
+    async updateStop(id, f) {
+      checkStop(f);
+      const body = {}; if (f.callStatus !== undefined) body.call_status = f.callStatus; if (f.apptTime !== undefined) body.appt_time = f.apptTime || null;
+      if (f.note !== undefined) body.note = String(f.note).trim(); if (f.visited !== undefined) body.visited = !!f.visited; if (f.position !== undefined) body.position = f.position;
+      const r = await api('/rest/v1/hub_visit_stops?id=eq.' + id, { method: 'PATCH', body, prefer: 'return=representation' });
+      if (!r?.length) throw fail('FORBIDDEN', 'Puoi modificare solo i tuoi giri');
+    },
+    async removeStop(id) { return api('/rest/v1/hub_visit_stops?id=eq.' + id, { method: 'DELETE' }); },
     // Offerte aperte importate da RADIX (migrazione 20261101170000): tabella assente = elenco vuoto
     async radixOffers({ customerId } = {}) {
       const rows = await api('/rest/v1/hub_radix_offers?select=*&open=eq.true&order=offer_date.desc,id.desc'
@@ -2658,7 +2765,7 @@ async function statusDialog(app, c) {
   [{ label: 'Annulla', value: false }, { label: 'Salva stato', primary: true, run: async () => { await app.store.setStatus({ customerId: c.id, status: sel.value, reason: reason.value }); app.invalidate(); toast('Stato aggiornato: ' + sel.value); return true; } }]);
 }
 
-return { listSignals, viewAgenda, quoteCls, noteDialog, noteVoice, dictateButton, newCustomerDialog };
+return { listSignals, viewAgenda, phoneList, quoteCls, noteDialog, noteVoice, dictateButton, newCustomerDialog };
 })();
 __m["js/core/pdf-fonts.js"] = (function () {
 // Larghezze dei caratteri Helvetica / Helvetica-Bold (font standard PDF, nessun file da incorporare), codici WinAnsi 32-255, in millesimi di punto.
@@ -5136,6 +5243,188 @@ async function territorySection(app) {
 
 return { territorySection };
 })();
+__m["js/core/ics.js"] = (function () {
+// Appuntamenti del giro visite in formato calendario (.ics): si aprono nel Calendario Apple / Outlook / Google.
+const pad = n => String(n).padStart(2, '0');
+const esc = s => String(s || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/([,;])/g, '\\$1');
+// ora locale italiana scritta "flottante" con fuso Europe/Rome
+function icsEvents(events, { now = new Date() } = {}) {
+  const stamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}00Z`;
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//NORDTEX HUB//Giro visite//IT', 'CALSCALE:GREGORIAN'];
+  for (const e of events) {
+    const [y, m, d] = e.date.split('-'), [hh, mm] = e.time.split(':');
+    const start = `${y}${m}${d}T${hh}${mm}00`, endMin = Number(hh) * 60 + Number(mm) + (e.minutes || 60);
+    const end = `${y}${m}${d}T${pad(Math.floor(endMin / 60) % 24)}${pad(endMin % 60)}00`;
+    lines.push('BEGIN:VEVENT', `UID:${e.uid}@nordtex-hub`, `DTSTAMP:${stamp}`, `DTSTART;TZID=Europe/Rome:${start}`, `DTEND;TZID=Europe/Rome:${end}`,
+      `SUMMARY:${esc(e.title)}`, e.location ? `LOCATION:${esc(e.location)}` : null, e.description ? `DESCRIPTION:${esc(e.description)}` : null, 'END:VEVENT');
+  }
+  lines.push('END:VCALENDAR');
+  return lines.filter(Boolean).join('\r\n') + '\r\n';
+}
+
+return { icsEvents };
+})();
+__m["js/views/plans.js"] = (function () {
+// Giro visite programmato (idea Tommaso 02/11/2026): scegli giorno e clienti, telefona e fissa gli orari,
+// stampa il foglio su cui lavorare in ufficio, poi in giro apri il percorso e registri le visite.
+const { h, fill, eur, dateIt, today, toast, modal, field, emptyState } = __m["js/ui.js"];
+const { CALL_STATES, stopOrder, radixOfferDue } = __m["js/data/model.js"];
+const { pickCustomer } = __m["js/views/quotes.js"];
+const { noteDialog, phoneList } = __m["js/views/agenda.js"];
+const { googleRouteUrl, stopAddress } = __m["js/core/places.js"];
+const { purchaseSummary } = __m["js/core/purchases.js"];
+const { icsEvents } = __m["js/core/ics.js"];
+const { OFFER_HEADER } = __m["js/brand-assets.js"];
+const box = on => on ? '☒' : '☐';
+const CALL_CLS = { 'Da chiamare': 'muted', Chiamato: 'info', Appuntamento: 'ok', 'Non disponibile': 'bad', Richiamare: 'warn' };
+const weekday = d => { const t = new Date(d + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); return t[0].toUpperCase() + t.slice(1); };
+const nextWorkday = () => { const d = new Date(); d.setDate(d.getDate() + 1); while ([0, 6].includes(d.getDay())) d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
+
+async function newPlanDialog(app, preset = []) {
+  const date = h('input', { type: 'date', value: nextWorkday(), min: today() });
+  const title = h('input', { placeholder: 'es. Valtellina, Bassa bresciana' });
+  const res = await modal('Nuovo giro programmato', h('div', { class: 'form' }, field('Giorno', date), field('Zona o nome (facoltativo)', title),
+    preset.length ? h('p', { class: 'fine' }, `${preset.length} clienti già scelti verranno aggiunti.`) : h('p', { class: 'fine' }, 'Poi aggiungi i clienti da visitare: dalla ricerca, dalla mappa o dai clienti vicini.')),
+    [{ label: 'Annulla', value: false }, { label: 'Crea giro', primary: true, run: async () => ({ ...(await app.store.savePlan({ date: date.value, title: title.value })) }) }]);
+  if (!res || !res.id) return null;
+  if (preset.length) await app.store.addStops(res.id, preset);
+  app.go('giro/' + res.id);
+  return res.id;
+}
+
+// Elenco dei giri
+async function viewPlans(app) {
+  const isDir = app.session.role === 'direzione';
+  const plans = app.store.plans ? await app.store.plans() : null;
+  const head = h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Giri visite'), h('p', { class: 'muted' }, 'Prepara il giro: scegli i clienti, telefona e fissa gli orari, stampa il foglio.')),
+    h('button', { class: 'btn primary', onclick: () => newPlanDialog(app) }, '+ Nuovo giro'));
+  if (plans === null) return h('div', { class: 'page' }, head, h('p', { class: 'alert warn' }, 'Funzione in attivazione: manca l\'aggiornamento del database.'));
+  const t = today();
+  const card = p => h('a', { class: 'card plan-card plain', href: '#/giro/' + p.id },
+    h('div', {}, h('strong', {}, weekday(p.date)), p.title ? h('span', { class: 'muted' }, ' · ' + p.title) : null, isDir && p.ownerName ? h('small', { class: 'muted' }, ' · ' + p.ownerName) : null),
+    h('small', { class: 'muted' }, `${p.stops} clienti · ${p.appts} appuntamenti` + (p.visited ? ` · ${p.visited} visitati` : '')));
+  const next = plans.filter(p => p.date >= t).sort((a, b) => a.date.localeCompare(b.date)), past = plans.filter(p => p.date < t);
+  return h('div', { class: 'page' }, head,
+    next.length ? h('div', { class: 'plan-list' }, next.map(card)) : emptyState('Nessun giro in programma. Tocca «+ Nuovo giro».'),
+    past.length ? h('details', { class: 'fold-in' }, h('summary', {}, `Giri passati (${past.length})`), h('div', { class: 'plan-list' }, past.slice(0, 30).map(card))) : null);
+}
+
+// Dati utili per ogni cliente della tappa: telefoni, ultima visita, offerte aperte, ultima nota, cosa compra
+async function stopContext(app, ids) {
+  const set = new Set(ids);
+  const d180 = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10);
+  const [visits, rx, quotes, notes, rxNotes] = await Promise.all([app.store.lastVisits ? app.store.lastVisits().catch(() => new Map()) : new Map(),
+    app.store.radixOffers ? app.store.radixOffers().catch(() => []) : [], app.store.quotes().catch(() => []), app.store.notes().catch(() => []),
+    app.store.radixNotes ? app.store.radixNotes({ since: d180 }).catch(() => []) : []]);
+  const ctx = new Map();
+  for (const id of set) {
+    const c = app.store.customer(id); if (!c) continue;
+    const contacts = app.store.contacts ? await app.store.contacts(id).catch(() => []) : [];
+    const offers = [...rx.filter(o => o.customerId === id && (o.outcome === 'Da seguire' || o.outcome === 'Sentito')).map(o => ({ n: o.id, total: o.total, subject: o.subject, due: radixOfferDue(o) })),
+      ...quotes.filter(q => q.customerId === id && (q.status === 'Bozza' || q.status === 'Inviata')).map(q => ({ n: q.number, total: q.total, subject: '' }))];
+    const lastNote = [...notes.filter(n => n.customerId === id).map(n => ({ d: n.createdAt.slice(0, 10), t: n.body, who: n.authorName, k: n.kind })),
+      ...rxNotes.filter(n => n.customerId === id).map(n => ({ d: n.date, t: [n.subject, n.body].filter(Boolean).join(' — '), who: n.authorName, k: n.group }))].sort((a, b) => b.d.localeCompare(a.d))[0] || null;
+    const p = purchaseSummary(c);
+    ctx.set(id, { c, phones: phoneList(c, contacts), contacts, visit: visits.get(id) || null, offers, lastNote, buys: p.has ? p.rows.filter(r => !r.other).slice(0, 3).map(r => r.name) : [], hint: p.hints?.[0]?.text || '' });
+  }
+  return ctx;
+}
+
+function printSheet(el, title) {
+  let root = document.getElementById('print-root');
+  if (!root) { root = h('div', { id: 'print-root' }); document.body.append(root); }
+  root.replaceChildren(el);
+  const prev = document.title; document.title = title;
+  setTimeout(() => { window.print(); document.title = prev; }, 80);
+}
+
+async function viewPlan(app, id) {
+  const plan = app.store.plan ? await app.store.plan(id).catch(() => null) : null;
+  if (!plan) return h('div', { class: 'page' }, h('a', { class: 'back', href: '#/giri' }, '← Giri'), emptyState('Giro non trovato.'));
+  const mine = plan.mine, refresh = () => app.go('giro/' + id);
+  const stops = plan.stops.slice().sort(stopOrder);
+  const ctx = await stopContext(app, stops.map(s => s.customerId));
+  const appts = stops.filter(s => s.callStatus === 'Appuntamento' && s.apptTime);
+  const save = async (s, f) => { try { await app.store.updateStop(s.id, f); Object.assign(s, f); } catch (e) { toast(e.message, 'error'); } };
+
+  const addCustomer = async () => {
+    const inPlan = new Set(plan.stops.map(s => s.customerId)), cities = new Set(stops.map(s => ctx.get(s.customerId)?.c.city).filter(Boolean));
+    const near = cities.size ? (await app.customers()).filter(c => cities.has(c.city) && !inPlan.has(c.id) && c.status !== 'Perso').sort((a, b) => (b.rev2026 || 0) + (b.rev2025 || 0) - (a.rev2026 || 0) - (a.rev2025 || 0)) : [];
+    const c = await pickCustomer(app, { title: 'Aggiungi al giro', recentIds: near.map(x => x.id), recentLabel: 'Nello stesso comune delle altre tappe' }); if (!c) return;
+    await app.store.addStops(id, [c.id], Math.max(0, ...plan.stops.map(s => s.position || 0))); refresh();
+  };
+  const openRoute = () => {
+    const list = stops.filter(s => s.callStatus !== 'Non disponibile' && !s.visited).map(s => ctx.get(s.customerId)?.c).filter(Boolean);
+    if (!list.length) { toast('Nessuna tappa da visitare', 'error'); return; }
+    window.open(googleRouteUrl('', list.map(stopAddress)), '_blank', 'noopener');
+  };
+  const toCalendar = () => {
+    if (!appts.length) { toast('Nessun appuntamento con orario', 'error'); return; }
+    const ics = icsEvents(appts.map(s => { const x = ctx.get(s.customerId); return { uid: s.id, date: plan.date, time: s.apptTime, title: 'Visita ' + (x?.c.name || ''),
+      location: x ? stopAddress(x.c) : '', description: [x?.phones.map(p => p.shown + (p.label ? ' (' + p.label + ')' : '')).join(', '), s.note].filter(Boolean).join('\n') }; }));
+    const a = h('a', { href: URL.createObjectURL(new Blob([ics], { type: 'text/calendar' })), download: `giro-${plan.date}.ics` }); document.body.append(a); a.click(); setTimeout(() => a.remove(), 1000);
+    toast('Apri il file per aggiungere gli appuntamenti al calendario');
+  };
+
+  const stopCard = (s, i) => {
+    const x = ctx.get(s.customerId); if (!x) return null;
+    const c = x.c, vd = x.visit;
+    const status = h('select', { 'aria-label': 'Telefonata', disabled: !mine, onchange: async e => { await save(s, { callStatus: e.target.value }); time.hidden = e.target.value !== 'Appuntamento'; badge.className = 'badge ' + CALL_CLS[e.target.value]; badge.textContent = e.target.value; } },
+      CALL_STATES.map(v => h('option', { selected: v === s.callStatus }, v)));
+    const time = h('input', { type: 'time', value: s.apptTime || '', disabled: !mine, hidden: s.callStatus !== 'Appuntamento', 'aria-label': 'Orario appuntamento', onchange: e => save(s, { apptTime: e.target.value }) });
+    const note = h('input', { value: s.note || '', placeholder: 'Nota per la visita (es. chiedere del geom. Rossi)', disabled: !mine, maxlength: 300, onchange: e => save(s, { note: e.target.value }) });
+    const badge = h('span', { class: 'badge ' + CALL_CLS[s.callStatus] }, s.callStatus);
+    return h('li', { class: 'stop' + (s.visited ? ' done' : '') },
+      h('div', { class: 'stop-head' }, h('span', { class: 'stop-n' }, s.apptTime && s.callStatus === 'Appuntamento' ? s.apptTime : String(i + 1)),
+        h('div', { class: 'stop-title' }, h('a', { href: '#/agenda/' + c.id }, h('strong', {}, c.name)), h('small', { class: 'muted' }, stopAddress(c).replace(', Italia', ''))), badge),
+      h('div', { class: 'stop-info' },
+        x.phones.length ? h('div', {}, '☎ ', x.phones.map((p, j) => [j ? ' · ' : '', h('a', { href: 'tel:' + p.tel }, p.shown), p.label ? h('small', { class: 'muted' }, ' ' + p.label) : null])) : h('div', { class: 'muted' }, 'Nessun telefono'),
+        h('div', { class: vd ? '' : 'warn-text' }, (vd ? `Ultima visita ${dateIt(vd)}` : 'Mai visitato') + ' · ' + c.status),
+        x.offers.length ? h('div', {}, h('small', {}, '€ ' + x.offers.map(o => `${o.n} ${o.total ? eur(o.total) : ''}${o.subject ? ' (' + o.subject + ')' : ''}`).join(' · '))) : null,
+        x.lastNote ? h('div', {}, h('small', { class: 'muted' }, `Ultima nota ${dateIt(x.lastNote.d)}: ${x.lastNote.t.slice(0, 160)}`)) : null),
+      mine ? h('div', { class: 'stop-edit' }, status, time, note) : h('div', { class: 'stop-edit' }, s.note ? h('small', {}, s.note) : null),
+      mine ? h('div', { class: 'stop-actions' },
+        h('button', { class: 'btn small' + (s.visited ? '' : ' primary'), type: 'button', onclick: async () => { if (await noteDialog(app, c, { kind: 'Visita' })) { await save(s, { visited: true }); refresh(); } } }, s.visited ? '✓ Visitato' : 'Registra visita'),
+        h('button', { class: 'link', type: 'button', onclick: async () => { await app.store.removeStop(s.id); refresh(); } }, 'Togli dal giro')) : null);
+  };
+
+  // foglio da stampare (si vede solo in stampa)
+  const sheet = () => h('div', { class: 'print-sheet' },
+    h('img', { class: 'ps-head', src: OFFER_HEADER, alt: 'NORDTEX' }),
+    h('div', { class: 'ps-title' }, h('div', {}, h('div', { class: 'ps-kicker' }, 'Giro visite'), h('h1', {}, weekday(plan.date))),
+      h('div', { class: 'ps-facts' }, [['Commerciale', plan.ownerName || app.session.name || ''], ['Zona', plan.title || '—'], ['Clienti', String(stops.length)], ['Appuntamenti', String(appts.length)]]
+        .map(([k, v]) => h('div', {}, h('small', {}, k), h('strong', {}, v))))),
+    h('table', {}, h('thead', {}, h('tr', {}, ['#', 'Cliente e indirizzo', 'Telefoni', 'Situazione', 'Chiamato / ora / esito'].map(t => h('th', {}, t)))),
+      h('tbody', {}, stops.map((s, i) => { const x = ctx.get(s.customerId); if (!x) return null; const c = x.c;
+        return h('tr', {}, h('td', {}, h('span', { class: 'ps-n' + (s.callStatus === 'Appuntamento' && s.apptTime ? ' appt' : '') }, s.callStatus === 'Appuntamento' && s.apptTime ? s.apptTime : String(i + 1))),
+          h('td', {}, h('strong', { class: 'ps-name' }, c.name), h('br'), stopAddress(c).replace(', Italia', ''), s.note ? [h('br'), h('em', {}, s.note)] : null),
+          h('td', {}, x.phones.map(p => [p.shown, p.label ? ' (' + p.label + ')' : '', h('br')])),
+          h('td', {}, `${c.status} · ${x.visit ? 'visita ' + dateIt(x.visit) : 'mai visitato'}`, h('br'),
+            x.offers.length ? ['Offerte: ' + x.offers.map(o => `${o.n} ${o.total ? eur(o.total) : ''}`).join(', '), h('br')] : null,
+            x.buys.length ? ['Compra: ' + x.buys.join(', '), h('br')] : null, x.hint ? [h('em', {}, x.hint), h('br')] : null,
+            x.lastNote ? h('small', {}, `Ultima nota ${dateIt(x.lastNote.d)}: ${x.lastNote.t.slice(0, 200)}`) : null),
+          h('td', { class: 'blank' }, `${box(s.callStatus !== 'Da chiamare')} chiamato   ore ${s.callStatus === 'Appuntamento' && s.apptTime ? s.apptTime : '____ : ____'}`, h('br'),
+            `${box(s.callStatus === 'Appuntamento')} appuntamento   ${box(s.callStatus === 'Non disponibile')} non disp.   ${box(s.callStatus === 'Richiamare')} richiamare`, h('br'), h('br'), 'Esito: ____________________________'));
+      }))),
+    h('div', { class: 'ps-foot' }, h('span', {}, 'NORDTEX HUB · documento interno, non consegnare al cliente'), h('span', {}, `Stampato il ${dateIt(today())}`)));
+
+  const dateIn = h('input', { type: 'date', value: plan.date, disabled: !mine, onchange: async e => { await app.store.savePlan({ id, date: e.target.value, title: plan.title }); refresh(); } });
+  return h('div', { class: 'page plan-page' },
+    h('a', { class: 'back', href: '#/giri' }, '← Giri'),
+    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, weekday(plan.date)), h('p', { class: 'muted' }, [plan.title, !mine ? 'giro di ' + plan.ownerName : '', `${stops.length} clienti · ${appts.length} appuntamenti · ${stops.filter(s => s.visited).length} visitati`].filter(Boolean).join(' · ')))),
+    h('nav', { class: 'cactions' },
+      mine ? h('button', { class: 'act primary', type: 'button', onclick: addCustomer }, h('span', { class: 'act-ico' }, '+'), h('span', {}, 'Cliente')) : null,
+      h('button', { class: 'act', type: 'button', onclick: () => printSheet(sheet(), `Giro ${plan.date}`) }, h('span', { class: 'act-ico' }, '⎙'), h('span', {}, 'Stampa')),
+      h('button', { class: 'act', type: 'button', onclick: openRoute }, h('span', { class: 'act-ico' }, '➤'), h('span', {}, 'Percorso')),
+      h('button', { class: 'act', type: 'button', onclick: toCalendar }, h('span', { class: 'act-ico' }, '📅'), h('span', {}, 'Calendario'))),
+    mine ? h('div', { class: 'plan-meta' }, field('Giorno', dateIn)) : null,
+    stops.length ? h('ol', { class: 'stops' }, stops.map(stopCard)) : emptyState('Nessun cliente nel giro. Tocca «+ Cliente», oppure aggiungili dalla mappa (Giro visite › «Aggiungi al giro»).'),
+    mine ? h('p', { class: 'fine' }, 'L\'ordine segue gli orari degli appuntamenti. «Percorso» apre Google Maps con le tappe ancora da visitare; «Calendario» scarica gli appuntamenti per il Calendario.') : null,
+    mine ? h('button', { class: 'link danger', type: 'button', onclick: async () => { if (await modal('Eliminare il giro?', h('p', {}, 'Le note e le visite registrate restano nelle schede dei clienti.'), [{ label: 'Annulla', value: false }, { label: 'Elimina', primary: true, value: true }])) { await app.store.deletePlan(id); app.go('giri'); } } }, 'Elimina il giro') : null);
+}
+
+return { newPlanDialog, viewPlans, viewPlan };
+})();
 __m["js/views/maps.js"] = (function () {
 const { h, fill, eur, statusBadge, toast } = __m["js/ui.js"];
 const { regionOf } = __m["js/core/geo.js"];
@@ -5144,6 +5433,7 @@ const { customerPlace, spread, nearby, routeOrder, googleRouteUrl, stopAddress }
 const { listSignals } = __m["js/views/agenda.js"];
 const { territorySection } = __m["js/views/territory.js"];
 const { noteDialog } = __m["js/views/agenda.js"];
+const { newPlanDialog } = __m["js/views/plans.js"];
 // Mappa dei clienti (posizione per comune, dati ISTAT) + giro visite + presidio per provincia.
 const COLORS = { 'Attivo': '#1f8a4c', 'Da recuperare': '#f0a500', 'Perso': '#98a2b3', 'Mai fatturato': '#5b8def', 'Potenziale': '#7a5af8' };
 const colorOf = s => COLORS[s] || '#98a2b3';
@@ -5260,14 +5550,17 @@ async function viewMaps(app) {
     if (!tour) {
       fill(tourBox, h('h2', {}, 'Giro visite'),
         h('p', { class: 'muted' }, 'Tocca un cliente sulla mappa e scegli «Giro da qui», oppure parti dalla tua posizione. L\'app propone i clienti vicini in ordine di motivo di visita (offerte da sentire, mai o non visitati da tempo, fatturato) e apre il percorso in Google Maps.'),
-        h('button', { class: 'btn', type: 'button', onclick: fromHere }, '📍 Parti dalla mia posizione'));
+        h('div', { class: 'tour-bar' }, h('button', { class: 'btn', type: 'button', onclick: fromHere }, '📍 Parti dalla mia posizione'),
+          h('a', { class: 'btn', href: '#/giri' }, '🗓 Giri programmati')),
+        h('p', { class: 'fine' }, 'Per preparare il giro in anticipo (telefonate, orari, foglio da stampare) scegli i clienti e tocca «Salva come giro programmato».'));
       return;
     }
     const list = nearby(tour.start, visible().map(x => ({ ...x, id: x.c.id })).filter(x => x.id !== tour.start.id), Number(radiusSel.value))
       .map(x => ({ ...x, why: reason(x.c) })).sort((a, b) => a.why[0] - b.why[0] || (b.c.rev2026 || 0) + (b.c.rev2025 || 0) - (a.c.rev2026 || 0) - (a.c.rev2025 || 0) || a.km - b.km).slice(0, 60);
     const go = h('button', { class: 'btn primary', type: 'button', onclick: openRoute }, 'Apri percorso in Google Maps');
+    const save = h('button', { class: 'btn', type: 'button', onclick: () => newPlanDialog(app, routeOrder(tour.start, list.filter(x => tour.picked.has(x.id))).map(x => x.id)) }, '🗓 Salva come giro programmato');
     const info = h('small', { class: 'muted' });
-    const upd = () => { info.textContent = `${tour.picked.size} tappe scelte (massimo ${MAX_STOPS})`; go.disabled = !tour.picked.size; };
+    const upd = () => { info.textContent = `${tour.picked.size} tappe scelte (massimo ${MAX_STOPS})`; go.disabled = save.disabled = !tour.picked.size; };
     fill(tourBox, h('h2', {}, 'Giro visite da ', h('span', {}, tour.start.label)),
       h('div', { class: 'tour-bar' }, radiusSel, h('span', { class: 'muted' }, `${list.length} clienti visibili nel raggio`), h('button', { class: 'btn small', type: 'button', onclick: () => { tour = null; drawTour(); } }, 'Annulla')),
       list.length ? h('ul', { class: 'tour-list' }, list.map(x => {
@@ -5279,7 +5572,7 @@ async function viewMaps(app) {
           h('span', { class: 'tour-name' }, h('strong', {}, x.c.name), x.why[1] ? h('span', { class: 'tour-why w' + x.why[0] }, x.why[1]) : null, h('small', { class: 'muted' }, `${x.c.city || ''} · ${x.c.status} · ${x.km.toFixed(0)} km`))),
           h('button', { class: 'icon-btn', type: 'button', title: 'Apri scheda', onclick: () => app.go('agenda/' + encodeURIComponent(x.c.id)) }, '›'));
       })) : h('p', { class: 'muted' }, 'Nessun cliente con i filtri attuali in questo raggio: allarga il raggio o cambia i filtri.'),
-      h('div', { class: 'tour-bar' }, go, info),
+      h('div', { class: 'tour-bar' }, go, save, info),
       h('p', { class: 'fine' }, 'L\'ordine delle tappe parte dalla più vicina. Le posizioni sulla mappa sono per comune; nel percorso Google Maps usa l\'indirizzo completo del cliente.'));
     upd();
     function openRoute() {
@@ -5395,6 +5688,7 @@ async function viewMore(app) {
       item('#/rete', '↻', 'Attività rete', 'Note, visite, offerte di tutti'),
       item('#/manager', '▤', 'Area manager', 'Portafogli, provvigioni, accessi'),
       item('#/mappe', '◎', 'Mappe', 'Clienti sulla mappa'),
+      item('#/giri', '🗓', 'Giri visite', 'Prepara il giro, telefonate, foglio da stampare'),
       item('#/profilo', '◔', 'Profilo', 'Password, anteprima agente, esci')));
 }
 
@@ -5416,6 +5710,7 @@ const { viewNetwork, viewManager } = __m["js/views/direction.js"];
 const { viewMaps } = __m["js/views/maps.js"];
 const { viewOrders, viewMore } = __m["js/views/more.js"];
 const { viewRadixOffer } = __m["js/views/radix-offers.js"];
+const { viewPlans, viewPlan } = __m["js/views/plans.js"];
 const VERSION = '1.0.0';
 
 // Navigazione (01/11): le offerte hanno una voce propria; il profilo è l'iniziale in alto a destra (telefono) o il nome in basso (computer)
@@ -5634,7 +5929,7 @@ async function render() {
   const [route, ...args] = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
   if (!app.session) { root.replaceChildren(loginView()); return; }
   const seq = ++renderSeq;
-  const views = { home: viewHome, agenda: viewAgenda, preventivi: viewQuotes, offerta: viewQuoteEditor, bacheca: viewBoard, rete: viewNetwork, manager: viewManager, mappe: viewMaps, profilo: viewAccount, ordini: viewOrders, altro: viewMore, rxofferta: viewRadixOffer };
+  const views = { home: viewHome, agenda: viewAgenda, preventivi: viewQuotes, offerta: viewQuoteEditor, bacheca: viewBoard, rete: viewNetwork, manager: viewManager, mappe: viewMaps, profilo: viewAccount, ordini: viewOrders, altro: viewMore, rxofferta: viewRadixOffer, giri: viewPlans, giro: viewPlan };
   const key = views[route] ? route : 'home';
   if (['rete', 'manager', 'ordini', 'altro'].includes(key) && app.session.role !== 'direzione') { app.go('home'); return; }
   // vecchi collegamenti alle schede della Home (prima del 01/11 sera)
@@ -5649,7 +5944,7 @@ async function render() {
   let content;
   try { content = await views[key](app, ...args); } catch (e) { console.error(e); content = h('div', { class: 'page' }, h('p', { class: 'error' }, e.message)); }
   if (seq !== renderSeq) return;
-  const activeNav = key === 'offerta' || key === 'rxofferta' ? 'preventivi' : key;
+  const activeNav = key === 'offerta' || key === 'rxofferta' ? 'preventivi' : key === 'giri' || key === 'giro' ? 'mappe' : key;
   root.replaceChildren(shell(activeNav, content));
   document.getElementById('main')?.scrollTo?.(0, 0);
 }
