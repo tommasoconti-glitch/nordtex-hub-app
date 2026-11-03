@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="42f12dd110af">
+<meta name="ntx-build" content="8f490973fb99">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -753,7 +753,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .rx-item{list-style:none;padding:8px 0;border-bottom:1px solid var(--line)}.rx-item:last-child{border-bottom:0}.rx-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px}.rx-item small{display:block;margin-top:2px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"42f12dd110af"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8f490973fb99"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1120,7 +1120,7 @@ function unifiedOffers({ quotes = [], radix = [], reminders = [], customer = () 
     const vu = q.createdAt ? addDays(String(q.createdAt).slice(0, 10), q.validDays || 30) : null;
     return { key: 'q:' + q.id, origin: 'app', id: q.id, number: q.number, customerId: q.customerId, customerName: q.customer?.name || customer(q.customerId)?.name || '',
       subject: (q.lines || []).slice(0, 2).map(l => l.description || l.radixCode).filter(Boolean).join(', '), total: q.total ?? null, who: q.ownerName || '',
-      state: open ? 'aperta' : q.status === 'Accettata' ? 'accettata' : 'persa', label: q.status, due: open ? (due.get(q.id) || null) : null,
+      state: open ? 'aperta' : q.status === 'Accettata' ? 'accettata' : q.status === 'Annullata' ? 'annullata' : 'persa', label: q.status, due: open ? (due.get(q.id) || null) : null,
       validity: open ? validityInfo(vu, today) : null, date: String(q.createdAt || q.updatedAt || '').slice(0, 10), raw: q };
   });
   const rx = radix.map(o => {
@@ -4422,6 +4422,54 @@ const orderMailTo = () => [ORDER_OFFICE_EMAIL];
 
 return { orderMailSubject, orderMailBody, orderMailTo };
 })();
+__m["js/views/quote-cancel.js"] = (function () {
+// 03/11/2026 (Tommaso, dopo l'offerta Sacchi con lo spessore sbagliato): eliminare o annullare un'offerta.
+// Bozza → si elimina (come prima). Inviata o Persa → non si cancella (il numero è già stato comunicato al cliente e la numerazione resta
+// continua): si ANNULLA con un motivo, resta in archivio ed esce da offerte aperte, promemoria, conteggi e statistiche.
+const { h, toast, modal, field } = __m["js/ui.js"];
+// 03/11: annullare un'offerta inviata (sostituita da un'altra, errata, ritirata). Resta in archivio con il motivo.
+const CANCEL_REASONS = ['Sostituita da un\'altra offerta', 'Errore nell\'offerta', 'Ritirata', 'Altro'];
+async function cancelDialog(app, q) {
+  const reason = h('select', {}, CANCEL_REASONS.map(r => h('option', {}, r)));
+  const note = h('textarea', { rows: 2, placeholder: 'es. sostituita dall\'offerta con lo spessore corretto' });
+  const ok = await modal(`Annullare l'offerta ${q.number}?`, h('div', { class: 'form' },
+    h('p', { class: 'muted' }, 'L\'offerta resta in archivio con il suo numero, ma esce da offerte aperte, promemoria, conteggi e statistiche. Non si può riaprire.'),
+    field('Motivo', reason), field('Nota', note)),
+    [{ label: 'Indietro', value: false }, { label: 'Annulla l\'offerta', primary: true, run: async () => {
+      q.status = 'Annullata';
+      q.outcome = { status: 'Annullata', reason: reason.value, note: note.value.trim(), at: new Date().toISOString(), by: app.session.name };
+      Object.assign(q, await app.store.saveQuote(q)); return true; } }]);
+  if (ok) toast('Offerta annullata');
+  return !!ok;
+}
+
+
+// Cestino nell'elenco offerte: cosa si può fare con questa offerta (null = niente)
+function trashAction(session, q, { isTest = false } = {}) {
+  if (!q?.id || session.preview) return null;
+  const isDir = session.role === 'direzione', owner = q.ownerId === session.userId;
+  if (isTest && isDir) return 'prova';
+  if (q.status === 'Bozza' && (owner || isDir)) return 'elimina';
+  if ((q.status === 'Inviata' || q.status === 'Persa') && (owner || isDir)) return 'annulla';
+  return null;
+}
+async function trashQuote(app, q) {
+  const what = trashAction(app.session, q, { isTest: !!app.store.customer(q.customerId)?.isTest });
+  if (what === 'annulla') return cancelDialog(app, q);
+  if (what === 'elimina' || what === 'prova') {
+    const ok = await modal(what === 'prova' ? `Eliminare l'offerta di prova ${q.number}?` : `Eliminare la bozza ${q.number}?`,
+      h('p', {}, what === 'prova' ? 'Offerta del cliente di prova: si elimina insieme al registro degli invii.' : 'La bozza non è mai stata inviata: si elimina definitivamente.'),
+      [{ label: 'Indietro', value: false }, { label: 'Elimina', primary: true, value: true }]);
+    if (!ok) return false;
+    if (what === 'prova') await app.store.deleteTestQuote(q.id); else await app.store.deleteQuote(q.id);
+    toast(what === 'prova' ? 'Offerta di prova eliminata' : 'Bozza eliminata');
+    return true;
+  }
+  return false;
+}
+
+return { CANCEL_REASONS, cancelDialog, trashAction, trashQuote };
+})();
 __m["js/views/offers-list.js"] = (function () {
 // Offerte (01/11 sera, Tommaso): un solo elenco con le offerte dell'app e quelle RADIX.
 // All'apertura "Da seguire" (aperte) in ordine di prossimo contatto; in evidenza quelle in scadenza di validità.
@@ -4429,6 +4477,7 @@ const { h, fill, eur, dateIt, today, toast, emptyState, debounce } = __m["js/ui.
 const { unifiedOffers, quoteReminders, isExpiring } = __m["js/data/model.js"];
 const { radixOfferDialog } = __m["js/views/radix-offers.js"];
 const { quoteCls } = __m["js/views/agenda.js"];
+const { trashAction, trashQuote } = __m["js/views/quote-cancel.js"];
 const st = { filter: 'aperte', q: '', who: '', origin: '' };
 // Urgenza a colpo d'occhio (01/11 sera, Tommaso: "far capire l'urgenza di intervento, non per forza scritta"):
 // rosso = subito (contatto scaduto o validità entro 2 giorni), arancio = questa settimana, verde = più avanti
@@ -4453,12 +4502,19 @@ async function offersList(app, { onNew }) {
   const reload = async () => { const r = app.store.radixOffers ? await app.store.radixOffers().catch(() => radix) : radix;
     all = unifiedOffers({ quotes: real(quotes), radix: r, reminders: quoteReminders(quotes, notes, sends), customer: id => app.store.customer(id), today: t }); draw(); };
 
+  // 03/11: cestino accanto ad "Apri": bozza → elimina; inviata/persa → annulla con motivo; cliente di prova → elimina (Direzione)
+  const trashBtn = q => {
+    const what = trashAction(app.session, q, { isTest: !!app.store.customer(q.customerId)?.isTest });
+    if (!what) return null;
+    return h('button', { class: 'btn small ghost', type: 'button', title: what === 'annulla' ? 'Annulla l\'offerta' : 'Elimina', 'aria-label': what === 'annulla' ? 'Annulla l\'offerta' : 'Elimina',
+      onclick: async () => { try { if (await trashQuote(app, q)) { if (what !== 'annulla') quotes.splice(quotes.indexOf(q), 1); await reload(); } } catch (e) { toast(e.message, 'error'); } } }, '🗑');
+  };
   const open = () => all.filter(o => o.state === 'aperta');
   const late = o => o.due && o.due <= t;
   // 02/11 (Tommaso): offerte fatte negli ultimi 7 giorni, di qualunque stato, dalla più recente
   const since7 = new Date(new Date(t + 'T12:00:00').getTime() - 7 * 864e5).toISOString().slice(0, 10);
   const FILTERS = [['aperte', 'Da seguire', x => x.state === 'aperta'], ['recenti', 'Ultimi 7 giorni', x => !!x.date && x.date >= since7], ['sentire', 'Da sentire', x => x.state === 'aperta' && late(x)], ['scadenza', 'In scadenza', x => x.state === 'aperta' && isExpiring(x.validity)],
-    ['accettate', 'Accettate', x => x.state === 'accettata'], ['perse', 'Perse', x => x.state === 'persa'], ['tutte', 'Tutte', () => true]];
+    ['accettate', 'Accettate', x => x.state === 'accettata'], ['perse', 'Perse', x => x.state === 'persa'], ['annullate', 'Annullate', x => x.state === 'annullata'], ['tutte', 'Tutte', x => x.state !== 'annullata']];
   const sorters = { sentire: (a, b) => (a.due || '').localeCompare(b.due || '') || (b.total || 0) - (a.total || 0), aperte: (a, b) => (a.due || '9999').localeCompare(b.due || '9999') || (b.total || 0) - (a.total || 0),
     scadenza: (a, b) => a.validity.days - b.validity.days || (b.total || 0) - (a.total || 0) };
 
@@ -4483,7 +4539,7 @@ async function offersList(app, { onNew }) {
       o.origin === 'radix' && o.raw.outcomeNote ? h('small', { class: 'rx-note' }, `“${o.raw.outcomeNote}” — ${o.raw.outcomeByName || ''}`) : null);
     const side = h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, o.total ? eur(o.total) : '—'),
       o.origin === 'radix' && !app.session.preview ? h('button', { class: 'btn small', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o.raw).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, 'Esito')
-        : o.origin === 'app' ? h('a', { class: 'btn small', href: '#/offerta/' + o.id }, 'Apri') : null);
+        : o.origin === 'app' ? h('div', { class: 'row', style: { gap: '6px', justifyContent: 'flex-end' } }, h('a', { class: 'btn small', href: '#/offerta/' + o.id }, 'Apri'), trashBtn(o.raw)) : null);
     const u = urgency(o, t);
     return h('li', { class: 'rx-offer' + (u ? ' urg-' + u : '') }, u ? h('span', { class: 'urg-dot ' + u, title: URG.find(x => x[0] === u)[1], 'aria-label': URG.find(x => x[0] === u)[1] }) : null, main, side);
   };
@@ -4546,6 +4602,7 @@ const { techSheetFor, sheetLinksText, sheetEntries } = __m["js/core/tech-sheets.
 const { orderMailBody, orderMailSubject, orderMailTo } = __m["js/core/order-mail.js"];
 const { ORDER_STATES } = __m["js/data/model.js"];
 const { offersList } = __m["js/views/offers-list.js"];
+const { cancelDialog } = __m["js/views/quote-cancel.js"];
 const IMAGES = { header: OFFER_HEADER, footer: OFFER_FOOTER };
 
 
@@ -4662,7 +4719,7 @@ async function viewQuoteEditor(app, id, customerId) {
   const pct = n => n === null || n === undefined ? '—' : num(n, 1) + '%';
   const byId = new Map(products.map(p => [p.id, p]));
   const isOwner = !q.ownerId || q.ownerId === app.session.userId || app.session.role === 'direzione' || !!app.session.preview;
-  const locked = !isOwner || q.status === 'Accettata' || q.status === 'Persa';
+  const locked = !isOwner || q.status === 'Accettata' || q.status === 'Persa' || q.status === 'Annullata';
   let dirty = false, tp = null;
   let order = q.id ? ((await (app.store.orders?.() ?? Promise.resolve([])).catch(() => [])) || []).find(o => o.quoteId === q.id) || null : null;
   const refreshOrder = async () => { order = ((await app.store.orders?.().catch(() => [])) || []).find(o => o.quoteId === q.id) || null; const n = header(); head.replaceWith(n); head = n; };
@@ -4881,7 +4938,7 @@ async function viewQuoteEditor(app, id, customerId) {
   drawPickup();
   const isDir = app.session.role === 'direzione';
   // Agenti: "Inviata" solo tramite invio email (non si sceglie a mano)
-  const statusOpts = QUOTE_STATES.filter(st => isDir || st !== 'Inviata' || q.status === 'Inviata');
+  const statusOpts = QUOTE_STATES.filter(st => isDir || st !== 'Inviata' || q.status === 'Inviata').concat(q.status === 'Annullata' ? ['Annullata'] : []);
   const statusSel = h('select', { disabled: !isOwner, 'aria-label': 'Stato offerta', onchange: async e => {
     const v = e.target.value;
     if ((v === 'Persa' || v === 'Accettata') && q.id) {
@@ -5070,6 +5127,8 @@ async function viewQuoteEditor(app, id, customerId) {
       q.id && isDir && q.status !== 'Bozza' && app.store.customer(q.customerId)?.isTest && app.store.deleteTestQuote ? h('button', { class: 'btn ghost', onclick: async () => {
         if (await modal('Eliminare l\'offerta di prova?', h('p', {}, 'Offerta del cliente di prova: si elimina insieme al registro degli invii.'), [{ label: 'Annulla', value: false }, { label: 'Elimina', primary: true, value: true }])) {
           try { await app.store.deleteTestQuote(q.id); toast('Offerta di prova eliminata'); app.go('preventivi'); } catch (e) { toast(e.message, 'error'); } } } }, 'Elimina prova') : null,
+      // 03/11: un'offerta inviata non si cancella (numero già comunicato al cliente): si annulla e sparisce da aperte, promemoria e statistiche
+      q.id && (isOwner || isDir) && ['Inviata', 'Persa'].includes(q.status) ? h('button', { class: 'btn ghost', onclick: () => cancelDialog(app, q).then(ok => { if (ok) app.go('offerta/' + q.id); }).catch(e => toast(e.message, 'error')) }, 'Annulla offerta') : null,
       q.id && q.status === 'Bozza' && isOwner ? h('button', { class: 'btn ghost', onclick: async () => { if (await modal('Eliminare la bozza?', h('p', {}, 'L\'operazione non si può annullare.'), [{ label: 'Annulla', value: false }, { label: 'Elimina', primary: true, value: true }])) { await app.store.deleteQuote(q.id); toast('Bozza eliminata'); app.go('preventivi'); } } }, 'Elimina') : null));
   tp = transportPanel(app, q, byId, { locked, mark, onApply: what => { if (what === 'qty') drawLines(); else { freightIn.value = q.freight ?? ''; freightNote.textContent = q.freightNote; drawTotals(); } } });
   let head = header();
@@ -6469,11 +6528,11 @@ const hhmm = iso => new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit',
 // Offerte fatte oggi nell'app (tutta la rete), le più recenti prima; escluse quelle del cliente di prova
 function todaysQuotes(quotes, now = new Date()) {
   const day = localDay(now.toISOString());
-  return quotes.filter(q => q.createdAt && localDay(q.createdAt) === day && !String(q.number || '').startsWith('PRV-'))
+  return quotes.filter(q => q.createdAt && localDay(q.createdAt) === day && !String(q.number || '').startsWith('PRV-') && q.status !== 'Annullata')
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 }
 function quoteRow(q) {
-  const cls = { Bozza: 'muted', Inviata: 'info', Accettata: 'ok', Persa: 'bad' }[q.status] || 'muted';
+  const cls = { Bozza: 'muted', Inviata: 'info', Accettata: 'ok', Persa: 'bad', Annullata: 'muted' }[q.status] || 'muted';
   return row([h('span', { class: 'badge ' + cls }, q.status), h('strong', {}, q.customer?.name || '—'),
     h('span', { class: 'of-sub' }, [q.number, eur(q.total || 0), q.ownerName].filter(Boolean).join(' · ')), h('span', { class: 'of-age' }, 'alle ' + hhmm(q.createdAt))],
   [h('p', { class: 'of-line' }, [[q.customer?.city, q.customer?.prov].filter(Boolean).join(' '), `${(q.lines || []).length} ${(q.lines || []).length === 1 ? 'articolo' : 'articoli'}`,
