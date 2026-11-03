@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="39ac8751fe2f">
+<meta name="ntx-build" content="182877903075">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -758,9 +758,10 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .help-others{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 @media (max-width:760px){ .help-fixed{display:none} }
 @media (min-width:761px){ .main .page-head{padding-right:52px} }
+.help-ver{margin-top:14px;font-size:12px;color:var(--muted,#888)}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"39ac8751fe2f"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"182877903075"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -6617,7 +6618,25 @@ __m["js/core/help.js"] = (function () {
 // Ogni pagina: title, intro (a cosa serve), steps (cosa fare), notes (attenzione). Testi diversi per ruolo dove serve:
 // 'agente', 'direzione', 'ufficio' (chiave con suffisso, es. home@ufficio), altrimenti il testo comune.
 
+// Versione mostrata nelle istruzioni. REGOLA DI RILASCIO (Tommaso, 03/11/2026):
+// Beta = prova di una settimana dal 03/11 con 4 persone (si allunga se ci sono criticità); in Beta le correzioni si fanno subito
+// e a fine giornata parte una mail a tutti con le modifiche del giorno. Prima della consegna ufficiale si rivedono queste istruzioni.
+// Dopo la consegna (1.0): modifiche raccolte e rilasciate ogni 15 giorni come 1.1, 1.2 … con la mail delle novità.
+const APP_VERSION = { label: 'Beta', since: '03/11/2026' };
+
 const HELP = {
+  versioni: {
+    title: 'Versioni e aggiornamenti',
+    intro: `Questa è la versione Beta dell'HUB, in prova dal ${APP_VERSION.since}.`,
+    steps: [
+      'Beta: una settimana di prova con un gruppo ristretto; se emergono criticità la prova si allunga.',
+      'Durante la Beta le correzioni si fanno subito: a fine giornata arriva una mail a tutti con le modifiche del giorno. Se qualcosa cambia, ricarica la pagina.',
+      'Segnala a Tommaso ogni errore o cosa poco chiara, con la pagina e, se puoi, uno screenshot.',
+      'Dopo la consegna ufficiale (versione 1.0) le richieste si raccolgono e si rilasciano ogni 15 giorni (1.1, 1.2 …), sempre con la mail delle novità.',
+    ],
+    notes: ['Queste istruzioni vengono riviste prima della consegna ufficiale e aggiornate a ogni versione.'],
+  },
+
   home: {
     title: 'Home',
     intro: 'La tua giornata: cosa fare oggi e come sta andando il tuo lavoro.',
@@ -6755,7 +6774,7 @@ function helpFor(route, session) {
   return e;
 }
 
-return { HELP, helpFor };
+return { APP_VERSION, HELP, helpFor };
 })();
 __m["js/data/systems-data.js"] = (function () {
 // Sistemi NORDTEX (02/11/2026, pilota solo Direzione-Tommaso). Fonti: tavole "Proposta progettuale" dei cataloghi
@@ -7966,7 +7985,7 @@ const { viewNetwork, viewManager } = __m["js/views/direction.js"];
 const { viewMaps } = __m["js/views/maps.js"];
 const { viewStock } = __m["js/views/stock.js"];
 const { viewOfficeHome, isOffice, canSeeOfficeDesk } = __m["js/views/office.js"];
-const { HELP, helpFor } = __m["js/core/help.js"];
+const { HELP, helpFor, APP_VERSION } = __m["js/core/help.js"];
 const { viewOrders, viewMore } = __m["js/views/more.js"];
 const { viewRadixOffer } = __m["js/views/radix-offers.js"];
 const { viewPlans, viewPlan } = __m["js/views/plans.js"];
@@ -8120,7 +8139,7 @@ function helpDialog(key) {
   const others = h('details', { class: 'fold-in' }, h('summary', {}, 'Istruzioni delle altre pagine'),
     h('div', { class: 'help-others' }, [...new Set(Object.keys(HELP).map(k => k.split('@')[0]))].filter(k => !HELP[k]?.ref && k !== key && HELP[k] && !(isOffice(app.session) ? ['mappe', 'rete', 'manager', 'sistemi'] : app.session.role === 'direzione' ? [] : ['rete', 'manager', 'dati', 'ordini', 'sistemi']).includes(k))
       .map(k => h('button', { class: 'chip', type: 'button', onclick: () => { document.querySelector('.modal-back')?.remove(); helpDialog(k); } }, helpFor(k, app.session).title))));
-  return modal('Come si usa: ' + e.title, h('div', { class: 'help' }, h('p', { class: 'help-intro' }, e.intro), list('Cosa fare', e.steps), list('Attenzione', e.notes, 'ul'), others), [{ label: 'Chiudi', primary: true, value: true }]);
+  return modal('Come si usa: ' + e.title, h('div', { class: 'help' }, h('p', { class: 'help-intro' }, e.intro), list('Cosa fare', e.steps), list('Attenzione', e.notes, 'ul'), others, h('p', { class: 'help-ver' }, `NORDTEX HUB · versione ${APP_VERSION.label}`)), [{ label: 'Chiudi', primary: true, value: true }]);
 }
 
 function shell(active, content, key = active) {
