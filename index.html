@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="726d4aeff72b">
+<meta name="ntx-build" content="02d95e695d19">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -781,9 +781,10 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 :root[data-scheme="dark"] .msg{background:#2a2d33}:root[data-scheme="dark"] .msg.mine{background:#3a4020}
 .msg-panels>*{min-width:0}.msg-row>summary{min-width:0}.msg-row .of-sub{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .of-rows{grid-template-columns:minmax(0,1fr)}
+.hide-disc{display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 12px;border:1px dashed var(--line);border-radius:9px;flex-wrap:wrap}.hide-disc input{width:18px;height:18px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"726d4aeff72b"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"02d95e695d19"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -5400,7 +5401,10 @@ async function viewQuoteEditor(app, id, customerId) {
     locked ? h('p', { class: 'alert warn' }, isOwner ? `Offerta ${q.status.toLowerCase()}: per modificarla riportala a “Bozza” o “Inviata”, oppure duplicala.` : 'Offerta di un altro utente: sola consultazione.') : '',
     h('section', { class: 'card' }, h('h2', {}, 'Prodotti'), search, results,
       h('div', { class: 'table-wrap' }, h('table', { class: 'table lines' }, h('thead', {}, h('tr', {}, h('th', {}, 'Articolo'), h('th', { class: 'num' }, 'Quantità'), h('th', { class: 'num' }, 'Listino'),
-        h('th', { class: 'num' }, 'Sc.1 %'), h('th', { class: 'num' }, 'Sc.2 %'), h('th', { class: 'num' }, 'Sc.3 %'), h('th', { class: 'num' }, 'Netto unit.'), h('th', { class: 'num' }, 'Importo'), h('th', {}))), linesBody))),
+        h('th', { class: 'num' }, 'Sc.1 %'), h('th', { class: 'num' }, 'Sc.2 %'), h('th', { class: 'num' }, 'Sc.3 %'), h('th', { class: 'num' }, 'Netto unit.'), h('th', { class: 'num' }, 'Importo'), h('th', {}))), linesBody)),
+      // 03/11 (Tommaso): sotto gli sconti, dove si decide il prezzo; prima stava in Condizioni
+      h('label', { class: 'check hide-disc' }, h('input', { type: 'checkbox', checked: q.hideDiscounts === true, disabled: locked,
+        onchange: e => { q.hideDiscounts = e.target.checked; mark(); } }), h('strong', {}, 'Prezzo netto – nascondi sconto'), h('span', { class: 'muted' }, ' · nel PDF e nell\'email il cliente vede solo il prezzo netto, senza la colonna sconto'))),
     h('section', { class: 'card' }, h('h2', {}, 'Trasporto e carico'), tp.el),
     // 03/11: domande all'ufficio (trasporti, prezzi, sconti, disponibilità) dentro l'offerta; solo versione agente
     canUseAssist(app.session) ? askOfficeCard(app, q) : null,
@@ -5410,8 +5414,6 @@ async function viewQuoteEditor(app, id, customerId) {
         freightNote,
         h('div', { class: 'form two' }, cond('Altri addebiti (€)', txtIn('extras', { type: 'number', min: 0, step: 'any' })), cond('Descrizione addebiti', txtIn('extrasLabel', { placeholder: 'es. noleggio bancali' })),
           cond('IVA %', txtIn('vatRate', { type: 'number', min: 0, max: 100 })), cond('Validità (giorni)', txtIn('validDays', { type: 'number', min: 1, max: 365 }))),
-        h('div', { class: 'field' }, h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: q.hideDiscounts === true, disabled: locked,
-          onchange: e => { q.hideDiscounts = e.target.checked; mark(); } }), 'Nascondi gli sconti nel documento (il cliente vede solo il prezzo netto)')),
         cond('Condizione di pagamento', paymentField()),
         h('div', { class: 'form two' },
           cond('Deposito di uscita', depotSel), cond('Consegna', pickupSel), cond('Trasporto a cura', byBox)),
@@ -6996,7 +6998,7 @@ const HELP = {
       'Prodotti: cerca per nome, codice listino/RADIX o famiglia; nella riga compaiono spessore e formato. Scrivi quantità e sconti (Sc.1, Sc.2, Sc.3).',
       'Trasporto e carico: controlla l\'indirizzo di consegna; i km si calcolano da soli (via Brennero) e il trasporto entra nell\'offerta. Verde = calcolo sicuro, giallo = stima da confermare, rosso = chiedi all\'ufficio.',
       'Condizioni: pagamento, deposito di uscita, Consegna ("Con trasporto" o "Ritiro al deposito, senza trasporto"), cantiere, note per il cliente.',
-      '"Nascondi gli sconti nel documento": il cliente vede solo il prezzo netto.',
+      '"Prezzo netto – nascondi sconto" (sotto la tabella dei prodotti): nel PDF e nell\'email il cliente vede solo il prezzo netto, senza la colonna sconto.',
       'Bloccato su trasporto, prezzi, sconti o disponibilità? Sotto "Trasporto e carico" premi "✉ Chiedi all\'ufficio": Christian e Irina rispondono lì, nell\'offerta, e ti arriva un\'email. L\'offerta va prima salvata.',
       'Salva, controlla con "Anteprima PDF", poi "Invia per email".',
       'Quando il cliente accetta: stato "Accettata" e "Passa l\'ordine all\'ufficio". Per un cliente nuovo servono P.IVA, SDI o PEC, pagamento e banca.',
