@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="182877903075">
+<meta name="ntx-build" content="726d4aeff72b">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -759,9 +759,31 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 @media (max-width:760px){ .help-fixed{display:none} }
 @media (min-width:761px){ .main .page-head{padding-right:52px} }
 .help-ver{margin-top:14px;font-size:12px;color:var(--muted,#888)}
+/* 03/11 Messaggi: Assistenza (pulsante fisso), Chiedi all'ufficio (offerta), riquadri per chi risponde */
+.assist-fab{position:fixed;right:20px;bottom:20px;z-index:18;display:inline-flex;align-items:center;gap:8px;border:none;border-radius:999px;padding:11px 18px;background:#2f3136;color:#fff;font:inherit;font-weight:600;cursor:pointer;box-shadow:0 6px 18px rgba(16,24,40,.22)}
+.assist-fab:hover{background:#17191c}.assist-count{background:#b5c934;color:#17212b;border-radius:999px;min-width:20px;height:20px;padding:0 6px;font-size:.75rem;display:inline-flex;align-items:center;justify-content:center}
+.assist-count[hidden]{display:none}
+@media (max-width:760px){ .assist-fab{right:14px;bottom:calc(74px + env(safe-area-inset-bottom));padding:12px 14px} .assist-label{display:none} }
+.main{padding-bottom:84px}
+.assist .msg-new{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}.assist .msg-new .btn{align-self:flex-start}
+.msg-new textarea,.msg-reply textarea{width:100%;font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:9px;resize:vertical;box-sizing:border-box}
+.msg-topics{display:flex;flex-wrap:wrap;gap:6px}.msg-topics .chip.on{background:#eef3c9;border-color:#b5c934;font-weight:600}
+.msg-thread{display:flex;flex-direction:column;gap:10px}.msg-list{display:flex;flex-direction:column;gap:8px}
+.msg{max-width:85%;align-self:flex-start;background:#f2f4f7;border-radius:12px 12px 12px 4px;padding:8px 12px}
+.msg.mine{align-self:flex-end;background:#eef3c9;border-radius:12px 12px 4px 12px}
+.msg-meta{display:block;color:var(--muted);font-size:.75rem;margin-bottom:2px}.msg-body{white-space:pre-wrap;word-break:break-word}
+.msg-reply{display:flex;flex-direction:column;gap:6px}.msg-reply .row{display:flex;gap:8px}
+.msg-dot{width:9px;height:9px;border-radius:50%;background:#c8102e;display:inline-block;flex:none}
+.msg-row.unread summary strong{font-weight:800}
+.msg-panels{align-items:start}.msg-panel .of-rows{max-height:none}.msg-closed{margin-top:10px}
+.ask-office .ask-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}.ask-office .ask-head h2{margin-bottom:4px}
+.ask-office .of-rows{margin-top:10px}
+:root[data-scheme="dark"] .msg{background:#2a2d33}:root[data-scheme="dark"] .msg.mine{background:#3a4020}
+.msg-panels>*{min-width:0}.msg-row>summary{min-width:0}.msg-row .of-sub{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.of-rows{grid-template-columns:minmax(0,1fr)}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"182877903075"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"726d4aeff72b"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1204,10 +1226,51 @@ function previewChoices(customers, assignees = []) {
 
 return { PreviewError, previewStore, previewChoices };
 })();
+__m["js/core/messages.js"] = (function () {
+// Messaggi (03/11/2026, richiesta Tommaso per la Beta): logica senza interfaccia, condivisa da archivio locale, online e test.
+//  - canale 'direzione' = pulsante "Assistenza" (scrive a Tommaso), su ogni pagina tranne la costruzione dell'offerta;
+//  - canale 'ufficio'   = "Chiedi all'ufficio" dentro l'offerta (trasporti, prezzi, sconti, disponibilità): Christian e Irina rispondono, Tommaso vede tutto.
+const TOPICS = ['Trasporto', 'Prezzo', 'Sconto', 'Disponibilità', 'Consegna', 'Altro'];
+const THREAD_STATES = { 'in attesa': 'Da rispondere', risposta: 'Risposto', chiusa: 'Risolta' };
+
+// Chi riceve l'assistenza (Tommaso: Direzione abilitata ad "Aggiorna dati", non ufficio)
+const isAssistDesk = s => !!s && s.role === 'direzione' && !s.office && !!s.canImport && !s.preview;
+// 03/11 Tommaso: "i tasti di aiuto solo sulla versione agente": Assistenza e Chiedi all'ufficio solo per gli agenti (non Direzione, non Ufficio)
+const canUseAssist = s => !!s && !s.preview && s.role === 'agente';
+// Chi risponde nei due canali
+const isStaffOf = (s, channel) => !!s && s.role === 'direzione' && (channel === 'ufficio' || !s.office);
+// Chi vede una conversazione (stessa regola della RLS hub_threads)
+const seesThread = (s, t) => !!s && (t.authorId === s.userId || isStaffOf(s, t.channel));
+
+// Non letta: l'ultimo messaggio non è mio ed è arrivato dopo la mia ultima lettura
+const isUnread = (t, me) => !!t && t.lastBy !== me && (!t.readAt || t.readAt < t.lastAt);
+// Da rispondere (per chi risponde): in attesa e non chiusa
+const isWaiting = t => t.status === 'in attesa';
+
+// Ordine: prima quelle da rispondere (le più vecchie prima: aspettano da più tempo), poi le altre (le più recenti prima)
+function sortForStaff(threads) {
+  const w = threads.filter(isWaiting).sort((a, b) => String(a.lastAt).localeCompare(String(b.lastAt)));
+  const o = threads.filter(t => !isWaiting(t)).sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt)));
+  return [...w, ...o];
+}
+
+function checkMessage(body) {
+  const b = String(body || '').trim();
+  if (!b) throw new Error('Scrivi il messaggio');
+  if (b.length > 4000) throw new Error('Messaggio troppo lungo (massimo 4000 caratteri)');
+  return b;
+}
+
+// Stato della conversazione dopo un messaggio: se scrive l'autore aspetta una risposta, altrimenti è "risposta"
+const statusAfter = (t, senderId) => (senderId === t.authorId ? 'in attesa' : 'risposta');
+
+return { TOPICS, THREAD_STATES, isAssistDesk, canUseAssist, isStaffOf, seesThread, isUnread, isWaiting, sortForStaff, checkMessage, statusAfter };
+})();
 __m["js/data/local-store.js"] = (function () {
 // Archivio locale: dati di riferimento (clienti, prodotti) da hub-data.json,
 // attività (note, follow-up, referenti, offerte, bacheca) salvate nel browser (IndexedDB).
 // Pensato per anteprima e uso su un singolo dispositivo; la versione condivisa usa Supabase.
+const { seesThread, isStaffOf, checkMessage, statusAfter } = __m["js/core/messages.js"];
 const { uid, nowIso, visibleTo, nextQuoteNumber, DIREZIONE, CONTACT_KINDS, NOTE_OUTCOMES, makeProspect, applyStatus, checkStatusChange, radixNoteView, radixVisible, checkOrderRequest, ORDER_STATES, checkRadixOutcome, radixOfferForAgent, checkStop, checkFiscal } = __m["js/data/model.js"];
 function memoryKv(initial = {}) {
   const m = new Map(Object.entries(initial));
@@ -1225,7 +1288,7 @@ function indexedDbKv(dbName = 'nordtex-hub') {
   return { get: k => tx('readonly', s => s.get(k)), set: (k, v) => tx('readwrite', s => s.put(v, k)) };
 }
 
-const COLLECTIONS = ['notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio', 'postReads', 'plans', 'stops', 'radixLinks'];
+const COLLECTIONS = ['notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio', 'postReads', 'plans', 'stops', 'radixLinks', 'threads'];
 
 function createLocalStore({ data, kv }) {
   if (data?.schema !== 'nordtex-hub-data-v1') throw new Error('Dati HUB non compatibili');
@@ -1284,6 +1347,33 @@ function createLocalStore({ data, kv }) {
     async officeQueue() {
       mustSession(); const orders = this.orders ? await this.orders() : [];
       return { orders, customers: (await col('prospects')).filter(c => c.origin === 'HUB' && !c.isTest) };
+    },
+    // 03/11 Messaggi (stesse regole della versione online)
+    async threads() {
+      const s = mustSession(); const qs = new Map((await col('quotes')).map(q => [q.id, q]));
+      return (await col('threads')).filter(t => seesThread(s, t)).map(t => ({ ...structuredClone(t), readAt: t.reads?.[s.userId] || null,
+        quote: t.quoteId && qs.get(t.quoteId) ? { number: qs.get(t.quoteId).number, customer: byId.get(qs.get(t.quoteId).customerId)?.name || '' } : null }))
+        .sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt)));
+    },
+    async sendMessage({ threadId = null, body, channel = null, topic = '', quoteId = null, page = '' }) {
+      const s = mustSession(); const b = checkMessage(body); const list = await col('threads'); const at = nowIso();
+      let t;
+      if (!threadId) {
+        if (!['direzione', 'ufficio'].includes(channel)) throw new Error('Destinatario non valido');
+        t = { id: uid(), channel, authorId: s.userId, authorName: s.name, topic: String(topic || '').slice(0, 40), quoteId: quoteId || null, page, status: 'in attesa', createdAt: at, lastAt: at, lastBy: s.userId, reads: {}, messages: [] };
+        list.push(t);
+      } else {
+        t = list.find(x => x.id === threadId); if (!t || !seesThread(s, t)) throw new Error('Conversazione non trovata');
+        Object.assign(t, { lastAt: at, lastBy: s.userId, status: statusAfter(t, s.userId) });
+      }
+      const m = { id: uid(), authorId: s.userId, authorName: s.name, body: b, at }; t.messages.push(m); t.reads = { ...(t.reads || {}), [s.userId]: at };
+      await save('threads'); return { threadId: t.id, messageId: m.id };
+    },
+    async readThread(id) { const s = mustSession(); const t = (await col('threads')).find(x => x.id === id); if (t && seesThread(s, t)) { t.reads = { ...(t.reads || {}), [s.userId]: nowIso() }; await save('threads'); } },
+    async closeThread(id, close = true) {
+      const s = mustSession(); const t = (await col('threads')).find(x => x.id === id);
+      if (!t || !(t.authorId === s.userId || isStaffOf(s, t.channel))) throw new Error('Conversazione non trovata');
+      t.status = close ? 'chiusa' : statusAfter(t, t.lastBy); await save('threads');
     },
     async linkRadix(id, code) {
       mustSession(); if (!isDir()) throw new Error('Solo l\'ufficio o la Direzione');
@@ -1725,6 +1815,28 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       customers = (await pageAll('/rest/v1/hub_customers?select=*&order=code')).map(fromDb); await loadStatus();
       return r;
     },
+    // 03/11 Messaggi: conversazioni visibili (RLS) con i messaggi, le mie letture e i nomi
+    async threads() {
+      const [rows, reads, nm] = await Promise.all([
+        api('/rest/v1/hub_threads?select=*,hub_messages(id,author_id,body,created_at)&order=last_at.desc&limit=200'),
+        api('/rest/v1/hub_thread_reads?select=thread_id,read_at&user_id=eq.' + session.userId).catch(() => []),
+        names().catch(() => new Map())]);
+      const rd = new Map((reads || []).map(r => [r.thread_id, r.read_at]));
+      const qs = new Map(((await this.quotes().catch(() => [])) || []).map(q => [q.id, q]));
+      return (rows || []).map(t => ({ id: t.id, channel: t.channel, authorId: t.author_id, authorName: nm.get(t.author_id) || '', topic: t.topic, quoteId: t.quote_id,
+        quote: t.quote_id ? (qs.get(t.quote_id) ? { number: qs.get(t.quote_id).number, customer: qs.get(t.quote_id).customer?.name || '' } : null) : null,
+        page: t.page, status: t.status, createdAt: t.created_at, lastAt: t.last_at, lastBy: t.last_by, readAt: rd.get(t.id) || null,
+        messages: (t.hub_messages || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at))
+          .map(m => ({ id: m.id, authorId: m.author_id, authorName: nm.get(m.author_id) || '', body: m.body, at: m.created_at })) }));
+    },
+    async sendMessage({ threadId = null, body, channel = null, topic = '', quoteId = null, page = '' }) {
+      const r = await api('/rest/v1/rpc/hub_message_send', { method: 'POST', body: { p_thread: threadId, p_body: body, p_channel: channel, p_topic: topic, p_quote: quoteId, p_page: page } });
+      // avviso email (funzione hub-notify): se non è ancora pubblicata o non riesce, il messaggio resta comunque nell'app
+      rawFetch('/functions/v1/hub-notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId: r.message }) }).catch(() => {});
+      return { threadId: r.thread, messageId: r.message };
+    },
+    async readThread(id) { await api('/rest/v1/rpc/hub_thread_read', { method: 'POST', body: { p_thread: id } }).catch(() => {}); },
+    async closeThread(id, close = true) { await api('/rest/v1/rpc/hub_thread_close', { method: 'POST', body: { p_thread: id, p_close: close } }); },
     async products() {
       if (!products) {
         products = (await pageAll('/rest/v1/hub_products?select=data&order=id')).map(r => r.data);
@@ -4588,6 +4700,147 @@ async function offersList(app, { onNew }) {
 
 return { urgency, offersList };
 })();
+__m["js/views/messages.js"] = (function () {
+// Messaggi (03/11/2026, richiesta Tommaso per la Beta).
+//  - "Assistenza": pulsante fisso in basso a destra su ogni pagina (tranne la costruzione dell'offerta) → scrive a Tommaso;
+//    dentro si vedono anche le risposte dell'ufficio alle proprie domande.
+//  - "Chiedi all'ufficio": riquadro nella pagina dell'offerta (trasporti, prezzi, sconti, disponibilità) → Christian e Irina.
+//  - Riquadri per chi risponde: Home di Tommaso (Assistenza + Domande all'ufficio) e scrivania Ufficio (Domande dei commerciali).
+const { h, fill, toast, modal, dateTimeIt } = __m["js/ui.js"];
+const { TOPICS, THREAD_STATES, isUnread, isWaiting, isStaffOf, sortForStaff } = __m["js/core/messages.js"];
+const ago = iso => {
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  return m < 1 ? 'adesso' : m < 60 ? `${m} min fa` : m < 1440 ? `${Math.round(m / 60)} h fa` : dateTimeIt(iso);
+};
+const stateBadge = t => h('span', { class: 'badge ' + ({ 'in attesa': 'warn', risposta: 'info', chiusa: 'ok' }[t.status] || 'muted') }, THREAD_STATES[t.status] || t.status);
+const firstLine = t => (t.messages?.[0]?.body || '').split('\n')[0].slice(0, 90);
+const lastMsg = t => t.messages?.[t.messages.length - 1];
+
+// Conversazione: messaggi (i miei a destra) + risposta + Risolta/Riapri
+function threadView(app, t, refresh) {
+  const me = app.session.userId;
+  const box = h('textarea', { rows: 2, placeholder: 'Scrivi una risposta…', 'aria-label': 'Risposta', maxlength: 4000 });
+  const send = async e => {
+    e.target.disabled = true;
+    try { await app.store.sendMessage({ threadId: t.id, body: box.value }); box.value = ''; toast('Inviato'); await refresh(); }
+    catch (err) { toast(err.message, 'error'); } finally { e.target.disabled = false; }
+  };
+  const canClose = t.authorId === me || isStaffOf(app.session, t.channel);
+  const toggle = async () => { try { await app.store.closeThread(t.id, t.status !== 'chiusa'); await refresh(); } catch (err) { toast(err.message, 'error'); } };
+  if (isUnread(t, me)) app.store.readThread(t.id).catch(() => {});
+  return h('div', { class: 'msg-thread' },
+    t.quoteId ? h('p', { class: 'fine' }, h('a', { href: '#/offerta/' + t.quoteId }, 'Offerta ' + (t.quote ? `${t.quote.number}${t.quote.customer ? ' · ' + t.quote.customer : ''}` : '') + ' →')) : null,
+    h('div', { class: 'msg-list' }, (t.messages || []).map(m => h('div', { class: 'msg' + (m.authorId === me ? ' mine' : '') },
+      h('small', { class: 'msg-meta' }, `${m.authorId === me ? 'Tu' : m.authorName || '—'} · ${ago(m.at)}`), h('div', { class: 'msg-body' }, m.body)))),
+    h('div', { class: 'msg-reply' }, box, h('div', { class: 'row' },
+      h('button', { class: 'btn small primary', type: 'button', onclick: send }, 'Invia'),
+      canClose ? h('button', { class: 'btn small', type: 'button', onclick: toggle }, t.status === 'chiusa' ? 'Riapri' : '✓ Risolta') : null)));
+}
+
+// Riga che si apre al clic (stile scrivania Ufficio)
+function threadRow(app, t, refresh, { showAuthor = true } = {}) {
+  const me = app.session.userId, last = lastMsg(t), unread = isUnread(t, me);
+  return h('details', { class: 'of-row msg-row' + (isWaiting(t) && isStaffOf(app.session, t.channel) && t.authorId !== me ? ' urgent' : '') + (unread ? ' unread' : '') },
+    h('summary', {}, stateBadge(t), unread ? h('span', { class: 'msg-dot', title: 'Non letto' }) : null,
+      h('strong', {}, showAuthor ? t.authorName || '—' : (t.channel === 'ufficio' ? 'Ufficio' : 'Assistenza')),
+      h('span', { class: 'of-sub' }, [t.topic, t.quote?.number, firstLine(t)].filter(Boolean).join(' · ')),
+      h('span', { class: 'of-age' }, last ? ago(last.at) : '')),
+    h('div', { class: 'of-body' }, threadView(app, t, refresh)));
+}
+
+// Nuovo messaggio: argomento (facoltativo) + testo
+function composer(app, { channel, quoteId = null, page = '', topics = false, placeholder, onSent }) {
+  let topic = '';
+  const chips = topics ? h('div', { class: 'chips msg-topics' }, TOPICS.map(x => h('button', { class: 'chip', type: 'button', onclick: e => {
+    topic = topic === x ? '' : x; e.target.parentNode.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.textContent === topic)); } }, x))) : null;
+  const box = h('textarea', { rows: 4, placeholder, 'aria-label': 'Messaggio', maxlength: 4000 });
+  const send = async e => {
+    e.target.disabled = true;
+    try { const r = await app.store.sendMessage({ body: box.value, channel, topic, quoteId, page }); box.value = ''; toast('Messaggio inviato: la risposta arriva qui e per email'); await onSent?.(r); }
+    catch (err) { toast(err.message, 'error'); } finally { e.target.disabled = false; }
+  };
+  return h('div', { class: 'msg-new' }, chips, box, h('button', { class: 'btn primary', type: 'button', onclick: send }, 'Invia'));
+}
+
+// ---- Pulsante "Assistenza" (agenti, ufficio, Marco): finestra con le proprie conversazioni e il messaggio nuovo a Tommaso
+async function assistDialog(app, page) {
+  const list = h('div', { class: 'of-rows' });
+  const load = async () => {
+    const mine = (await app.store.threads()).filter(t => t.authorId === app.session.userId);
+    fill(list, mine.length ? mine.map(t => threadRow(app, t, load, { showAuthor: false })) : h('p', { class: 'muted' }, 'Nessun messaggio ancora.'));
+    app.navCounts = { ...(app.navCounts || {}), assist: mine.filter(t => isUnread(t, app.session.userId)).length };
+    document.querySelectorAll('.assist-count').forEach(b => { b.textContent = app.navCounts.assist || ''; b.hidden = !app.navCounts.assist; });
+  };
+  await load();
+  return modal('Assistenza', h('div', { class: 'assist' },
+    h('p', { class: 'muted' }, 'Hai un dubbio sull\'app o ti sei bloccato? Scrivi a Tommaso: ti risponde qui e ti arriva un\'email. Per trasporti, prezzi e sconti di un\'offerta usa "Chiedi all\'ufficio" dentro l\'offerta.'),
+    composer(app, { channel: 'direzione', page, placeholder: 'Scrivi qui il tuo messaggio (cosa stavi facendo, cosa non va)…', onSent: load }),
+    h('h4', { class: 'help-h' }, 'I tuoi messaggi'), list), [{ label: 'Chiudi', value: true }]);
+}
+
+// Conteggio delle risposte non lette (pallino sul pulsante), al massimo una volta al minuto
+async function assistUnread(app) {
+  if (!app.store.threads || app.cache.assistAt > Date.now() - 60000) return app.navCounts?.assist || 0;
+  app.cache.assistAt = Date.now();
+  try { const n = (await app.store.threads()).filter(t => t.authorId === app.session.userId && isUnread(t, app.session.userId)).length; app.navCounts = { ...(app.navCounts || {}), assist: n }; return n; }
+  catch { return 0; }
+}
+
+// ---- Nell'offerta: "Chiedi all'ufficio"
+function askOfficeCard(app, q) {
+  const list = h('div', { class: 'of-rows' });
+  const card = h('section', { class: 'card ask-office' });
+  const load = async () => {
+    const ts = q?.id ? (await app.store.threads().catch(() => [])).filter(t => t.channel === 'ufficio' && t.quoteId === q.id) : [];
+    fill(list, ts.map(t => threadRow(app, t, load, { showAuthor: t.authorId !== app.session.userId })));
+  };
+  const open = async () => {
+    if (!q?.id) { toast('Prima salva l\'offerta (basta un prodotto), poi chiedi all\'ufficio', 'error'); return; }
+    await modal('Chiedi all\'ufficio', h('div', { class: 'assist' },
+      h('p', { class: 'muted' }, `Offerta ${q.number || ''}${q.customer?.name ? ' · ' + q.customer.name : ''}. Christian e Irina vedono l'offerta e ti rispondono qui; ti arriva anche un'email.`),
+      composer(app, { channel: 'ufficio', quoteId: q.id, page: 'offerta', topics: true, placeholder: 'Cosa ti serve? (es. trasporto per 12 bancali a Bolzano, sconto extra su quantità, disponibilità a Lecco…)',
+        onSent: async () => { document.querySelector('.modal-back')?.remove(); await load(); } })), [{ label: 'Chiudi', value: true }]);
+  };
+  fill(card, h('div', { class: 'ask-head' }, h('div', {}, h('h2', {}, 'Ti sei bloccato?'),
+    h('p', { class: 'muted' }, 'Dubbi su trasporto, prezzi, sconti o disponibilità di questa offerta: chiedi all\'ufficio, la risposta arriva qui.' + (q?.id ? '' : ' Prima salva l\'offerta.'))),
+    h('button', { class: 'btn', type: 'button', onclick: open }, '✉ Chiedi all\'ufficio')), list);
+  load().catch(() => {});
+  return card;
+}
+
+// ---- Riquadro per chi risponde (Home di Tommaso, scrivania Ufficio): conversazioni del canale, prima quelle da rispondere
+function staffPanel(app, channel, title, { id = '', empty } = {}) {
+  const rows = h('div', { class: 'of-rows' }), count = h('span', { class: 'tab-count zero' }, '0');
+  const card = h('section', { class: 'card of-card msg-panel', id: id || null }, h('div', { class: 'of-title' }, h('h2', {}, title), count), rows);
+  let sig = '';
+  const load = async (force = false) => {
+    const all = (await app.store.threads()).filter(t => t.channel === channel && t.authorId !== app.session.userId);
+    const open = sortForStaff(all.filter(t => t.status !== 'chiusa')), closed = all.filter(t => t.status === 'chiusa').slice(0, 5);
+    const waiting = open.filter(isWaiting).length;
+    count.textContent = String(waiting); count.className = 'tab-count' + (waiting ? '' : ' zero');
+    const s = JSON.stringify(all.map(t => t.id + t.lastAt + t.status));
+    const busy = card.contains(document.activeElement) && /TEXTAREA|INPUT/.test(document.activeElement?.tagName || '');
+    if (!force && (s === sig || busy)) return { all, waiting };
+    sig = s;
+    fill(rows, open.length ? open.map(t => threadRow(app, t, () => load(true))) : h('p', { class: 'muted of-empty-line' }, empty || 'Nessun messaggio da rispondere.'),
+      closed.length ? h('details', { class: 'fold-in msg-closed' }, h('summary', {}, `Risolte di recente (${closed.length})`), h('div', { class: 'of-rows' }, closed.map(t => threadRow(app, t, () => load(true))))) : null);
+    return { all, waiting };
+  };
+  return { card, load };
+}
+
+// Home di Tommaso: due riquadri affiancati (schizzo del 03/11), aggiornati ogni minuto
+async function directionMessages(app) {
+  const a = staffPanel(app, 'direzione', 'Messaggi alla Direzione', { id: 'msg-direzione', empty: 'Nessun messaggio da rispondere. Arrivano dal pulsante "Assistenza".' });
+  const u = staffPanel(app, 'ufficio', 'Domande all\'ufficio', { id: 'msg-ufficio', empty: 'Nessuna domanda aperta. Arrivano da "Chiedi all\'ufficio" nelle offerte: rispondono Christian e Irina, tu vedi tutto.' });
+  await Promise.all([a.load(true), u.load(true)]).catch(() => {});
+  const wrap = h('div', { class: 'grid2 msg-panels' }, a.card, u.card);
+  const timer = setInterval(() => { if (!wrap.isConnected) { clearInterval(timer); return; } a.load().catch(() => {}); u.load().catch(() => {}); }, 60000);
+  return wrap;
+}
+
+return { threadView, threadRow, assistDialog, assistUnread, askOfficeCard, staffPanel, directionMessages };
+})();
 __m["js/views/quotes.js"] = (function () {
 const { h, fill, eur, num, dateIt, toast, modal, field, emptyState, debounce } = __m["js/ui.js"];
 const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions, normPayment, LOST_REASONS, QUOTE_SNOOZE_DAYS, quoteReminders, missingForOrder } = __m["js/data/model.js"];
@@ -4611,6 +4864,8 @@ const { orderMailBody, orderMailSubject, orderMailTo } = __m["js/core/order-mail
 const { ORDER_STATES } = __m["js/data/model.js"];
 const { offersList } = __m["js/views/offers-list.js"];
 const { cancelDialog } = __m["js/views/quote-cancel.js"];
+const { askOfficeCard } = __m["js/views/messages.js"];
+const { canUseAssist } = __m["js/core/messages.js"];
 const IMAGES = { header: OFFER_HEADER, footer: OFFER_FOOTER };
 
 
@@ -5147,6 +5402,8 @@ async function viewQuoteEditor(app, id, customerId) {
       h('div', { class: 'table-wrap' }, h('table', { class: 'table lines' }, h('thead', {}, h('tr', {}, h('th', {}, 'Articolo'), h('th', { class: 'num' }, 'Quantità'), h('th', { class: 'num' }, 'Listino'),
         h('th', { class: 'num' }, 'Sc.1 %'), h('th', { class: 'num' }, 'Sc.2 %'), h('th', { class: 'num' }, 'Sc.3 %'), h('th', { class: 'num' }, 'Netto unit.'), h('th', { class: 'num' }, 'Importo'), h('th', {}))), linesBody))),
     h('section', { class: 'card' }, h('h2', {}, 'Trasporto e carico'), tp.el),
+    // 03/11: domande all'ufficio (trasporti, prezzi, sconti, disponibilità) dentro l'offerta; solo versione agente
+    canUseAssist(app.session) ? askOfficeCard(app, q) : null,
     h('div', { class: 'grid2' },
       h('section', { class: 'card' }, h('h2', {}, 'Condizioni'),
         field('Trasporto in offerta (€)', freightIn, 'Si compila da solo dal riquadro “Trasporto e carico”. Se scrivi un importo a mano, resta il tuo.'),
@@ -5218,6 +5475,8 @@ const { startNewQuote, pickCustomer } = __m["js/views/quotes.js"];
 const { noteDialog } = __m["js/views/agenda.js"];
 const { radixOfferOpen, dueState } = __m["js/views/radix-offers.js"];
 const { radixOfferDue, validityInfo, isExpiring } = __m["js/data/model.js"];
+const { isAssistDesk } = __m["js/core/messages.js"];
+const { directionMessages } = __m["js/views/messages.js"];
 
 const greeting = () => { const hr = new Date().getHours(); return hr < 13 ? 'Buongiorno' : hr < 18 ? 'Buon pomeriggio' : 'Buonasera'; };
 
@@ -5327,7 +5586,9 @@ async function homeDirection(app, { head, foot, customers, quotes, actions, note
 
   const trendCard = await trendSection(app, { customers, quotes, notes, rxOpen, rxNotes });
 
-  return h('div', { class: 'page home-dir' }, head, todayCard, h('h2', { class: 'section-title' }, 'Andamento'), trendCard, foot);
+  // 03/11: messaggi (Assistenza dei commerciali e domande all'ufficio) sotto l'Andamento, solo per chi risponde all'assistenza (Tommaso)
+  const msgs = isAssistDesk(app.session) && app.store.threads ? [h('h2', { class: 'section-title' }, 'Messaggi'), await directionMessages(app)] : null;
+  return h('div', { class: 'page home-dir' }, head, todayCard, h('h2', { class: 'section-title' }, 'Andamento'), trendCard, msgs, foot);
 }
 
 // Andamento (Direzione: tutta la rete; agente: il suo portafoglio, perché i dati arrivano già filtrati)
@@ -6440,12 +6701,14 @@ __m["js/views/office.js"] = (function () {
 // una riga per richiesta che si apre col clic.
 //  0. Offerte di oggi (quelle fatte nell'app oggi, sopra gli ordini: richiesta di Tommaso 02/11 sera)
 //  1. Ordini (offerte accettate da inserire in RADIX) — Christian
-//  2. Domande dei commerciali (in arrivo: passo 3)
+//  2. Domande dei commerciali (03/11: "Chiedi all'ufficio" dalle offerte; risposta nella riga, avviso email al commerciale)
 //  3. Clienti nuovi da aprire in RADIX — Irina
 //  4. Note da riportare in RADIX (in arrivo: passo 4)
 // Avvisi: la pagina si ricontrolla ogni minuto; titolo della scheda "(3) Ufficio" e notifica del PC quando arriva qualcosa di nuovo.
 const { h, fill, eur, dateIt, toast } = __m["js/ui.js"];
 const { ORDER_STATES, missingForOrder } = __m["js/data/model.js"];
+const { staffPanel } = __m["js/views/messages.js"];
+const { isWaiting } = __m["js/core/messages.js"];
 const isOffice = s => !!s?.office && !s.preview;
 // 02/11: la stessa scrivania nel menu di Tommaso (sotto Home) per controllare e aiutare l'ufficio; Marco no ("per lui più semplice è meglio").
 // Criterio: Direzione abilitata ad "Aggiorna dati" (oggi solo Tommaso), non l'ufficio stesso, non in anteprima.
@@ -6481,6 +6744,19 @@ async function copy(text) {
 const notifyOk = () => typeof Notification !== 'undefined' && Notification.permission === 'granted';
 function notify(title, body) {
   try { if (notifyOk()) new Notification(title, { body, tag: 'nordtex-ufficio-' + title }); } catch { /* facoltativo */ }
+}
+// 03/11 (Tommaso): niente email all'ufficio, basta l'avviso sonoro. Il browser suona solo dopo un primo clic sulla pagina:
+// il suono si "sblocca" al primo clic (e con il pulsante delle notifiche).
+let actx = null;
+function unlockSound() { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch { /* facoltativo */ } }
+function chime() {
+  try {
+    if (!actx || actx.state !== 'running') return;
+    const t0 = actx.currentTime;
+    [[880, 0], [660, 0.18]].forEach(([f, d]) => { const o = actx.createOscillator(), g = actx.createGain(); o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t0 + d); g.gain.exponentialRampToValueAtTime(0.25, t0 + d + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.16);
+      o.connect(g).connect(actx.destination); o.start(t0 + d); o.stop(t0 + d + 0.17); });
+  } catch { /* facoltativo */ }
 }
 function setTitle(n) { document.title = (n ? `(${n}) ` : '') + 'Ufficio · NORDTEX HUB'; }
 
@@ -6559,25 +6835,31 @@ async function viewOfficeHome(app) {
   let seen = null; try { seen = new Set(JSON.parse(sessionStorage.getItem(seenKey) || 'null') || []); } catch { seen = null; }
   let lastSig = '';
   const bell = typeof Notification !== 'undefined' && Notification.permission === 'default'
-    ? h('button', { class: 'btn small', type: 'button', onclick: async e => { try { await Notification.requestPermission(); } catch { /* */ } e.target.remove(); if (notifyOk()) toast('Notifiche attive su questo PC'); } }, '🔔 Attiva le notifiche sul PC') : null;
+    ? h('button', { class: 'btn small', type: 'button', onclick: async e => { unlockSound(); try { await Notification.requestPermission(); } catch { /* */ } e.target.remove(); chime(); if (notifyOk()) toast('Notifiche e suono attivi su questo PC'); } }, '🔔 Attiva le notifiche sul PC') : null;
+  document.addEventListener('pointerdown', unlockSound, { once: true });
 
+  const ask = app.store.threads ? staffPanel(app, 'ufficio', 'Domande dei commerciali', { id: 'of-domande', empty: 'Nessuna domanda aperta. Arrivano da "Chiedi all\'ufficio" nelle offerte (trasporti, prezzi, sconti, disponibilità).' }) : null;
   async function load(force = false) {
-    const [{ orders, customers }, quotes] = await Promise.all([app.store.officeQueue(), app.store.quotes()]);
+    const [{ orders, customers }, quotes, asked] = await Promise.all([app.store.officeQueue(), app.store.quotes(), ask ? ask.load(force).catch(() => null) : null]);
+    const questions = (asked?.all || []).filter(t => isWaiting(t));
     const qById = new Map(quotes.map(q => [q.id, q]));
     const newIds = new Set(customers.map(c => c.id));
     const offers = todaysQuotes(quotes);
     const open = orders.filter(openOrder).sort((a, b) => String(a.requestedAt).localeCompare(String(b.requestedAt)));
     const custs = customers.slice().sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
     // avvisi: cosa è arrivato dall'ultimo controllo
-    const ids = [...open.map(o => 'o:' + o.id), ...custs.map(c => 'c:' + c.id)];
+    const ids = [...open.map(o => 'o:' + o.id), ...custs.map(c => 'c:' + c.id), ...questions.map(t => 'q:' + t.id + t.lastAt)];
+    if (seen && ids.some(k => !seen.has(k))) chime();   // un solo suono per controllo, se è arrivato qualcosa di nuovo
     if (seen) {
+      for (const t of questions) if (!seen.has('q:' + t.id + t.lastAt)) notify('Domanda di ' + (t.authorName || 'un commerciale'), [t.topic, t.quote?.number, t.messages?.[t.messages.length - 1]?.body?.slice(0, 80)].filter(Boolean).join(' · '));
       for (const o of open) if (!seen.has('o:' + o.id)) notify('Nuovo ordine da inserire', `${qById.get(o.quoteId)?.customer?.name || ''} · da ${o.requestedByName || ''}`);
       for (const c of custs) if (!seen.has('c:' + c.id)) notify('Nuovo cliente da aprire in RADIX', `${c.name} · ${c.assignee || ''}`);
     }
     seen = new Set(ids); try { sessionStorage.setItem(seenKey, JSON.stringify(ids)); } catch { /* */ }
-    setTitle(open.length + custs.length);
+    setTitle(open.length + custs.length + questions.length);
     if (app.navCounts) app.navCounts.ordini = open.length;
     // contatori
+    const oldestQ = list => { const w = waitText(list.slice().sort((a, b) => String(a.lastAt).localeCompare(String(b.lastAt)))[0].lastAt); return w === 'adesso' ? 'appena arrivata' : 'la più vecchia ' + w; };
     const oldest = list => { const w = list.length ? waitText(list[0].requestedAt || list[0].createdAt) : ''; return w === 'adesso' ? 'appena arrivato' : 'il più vecchio ' + w; };
     const tile = (id, label, n, sub, alert) => h('a', { class: 'kpi' + (alert ? ' of-alert' : '') + (n === null ? ' of-off' : ''), href: '#/home',
       onclick: e => { e.preventDefault(); document.getElementById('of-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } },
@@ -6585,7 +6867,7 @@ async function viewOfficeHome(app) {
     fill(tiles,
       tile('offerte', 'Offerte di oggi', offers.length, offers.length ? eur(offers.reduce((t, q) => t + (q.total || 0), 0)) + ' in totale' : 'nessuna per ora', false),
       tile('ordini', 'Ordini da inserire', open.length, open.length ? oldest(open) : 'nessuno in attesa', open.some(o => Date.now() - new Date(o.requestedAt) > 4 * 3600e3)),
-      tile('domande', 'Domande dei commerciali', null, 'in arrivo'),
+      ask ? tile('domande', 'Domande dei commerciali', questions.length, questions.length ? oldestQ(questions) : 'nessuna da rispondere', questions.some(t => Date.now() - new Date(t.lastAt) > 3600e3)) : tile('domande', 'Domande dei commerciali', null, 'in arrivo'),
       tile('clienti', 'Clienti da aprire in RADIX', custs.length, custs.length ? oldest(custs) : 'nessuno in attesa', custs.some(c => Date.now() - new Date(c.createdAt) > 24 * 3600e3)),
       tile('note', 'Note da riportare in RADIX', null, 'in arrivo'));
     // code: si ridisegnano solo se è cambiato qualcosa e nessuno sta scrivendo in una riga aperta
@@ -6596,7 +6878,7 @@ async function viewOfficeHome(app) {
     const cards = {
       offerte: queue('offerte', 'Offerte di oggi', offers.length, offers.map(quoteRow), 'Ancora nessuna offerta oggi.'),
       ordini: queue('ordini', 'Ordini da inserire', open.length, open.map(o => { const q = qById.get(o.quoteId); return orderRow(app, o, q, !!q && newIds.has(q.customerId), load); }), 'Nessun ordine in attesa.'),
-      domande: queue('domande', 'Domande dei commerciali', null, null, 'Qui arriveranno le domande dei commerciali (trasporto, disponibilità, consegna, prezzo), con risposta rapida e avviso.'),
+      domande: ask ? ask.card : queue('domande', 'Domande dei commerciali', null, null, 'Qui arriveranno le domande dei commerciali.'),
       clienti: queue('clienti', 'Clienti nuovi da aprire in RADIX', custs.length, custs.map(c => customerRow(app, c, load)), 'Nessun cliente da aprire.'),
       note: queue('note', 'Note da riportare in RADIX', null, null, 'Qui arriveranno le note e le visite dei commerciali, con il pulsante Copia.'),
     };
@@ -6606,11 +6888,11 @@ async function viewOfficeHome(app) {
   await load(true);
   const timer = setInterval(() => { if (!box.isConnected) { clearInterval(timer); setTitle(0); return; } load().catch(() => {}); }, POLL_MS);
   return h('div', { class: 'page office' },
-    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Ufficio'), h('p', { class: 'muted' }, 'Il ponte tra HUB e RADIX: quello che nasce nell\'app e va portato in RADIX. Si aggiorna da solo ogni minuto.')), bell),
+    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Ufficio'), h('p', { class: 'muted' }, 'Il ponte tra HUB e RADIX: quello che nasce nell\'app e va portato in RADIX. Si aggiorna da solo ogni minuto e suona quando arriva qualcosa.')), bell),
     tiles, box);
 }
 
-return { isOffice, canSeeOfficeDesk, radixCustomerText, waitText, todaysQuotes, viewOfficeHome };
+return { isOffice, canSeeOfficeDesk, radixCustomerText, waitText, chime, todaysQuotes, viewOfficeHome };
 })();
 __m["js/core/help.js"] = (function () {
 // Istruzioni dentro l'app (03/11/2026, idea di Tommaso): pulsante "?" in alto a destra, spiega la pagina in cui ci si trova.
@@ -6625,6 +6907,18 @@ __m["js/core/help.js"] = (function () {
 const APP_VERSION = { label: 'Beta', since: '03/11/2026' };
 
 const HELP = {
+  assistenza: {
+    title: 'Assistenza e domande',
+    intro: 'Due modi per chiedere aiuto senza telefonare.',
+    steps: [
+      '"💬 Assistenza" (in basso a destra, su ogni pagina tranne la costruzione dell\'offerta): dubbi sull\'app o su come fare una cosa. Scrive a Tommaso.',
+      '"✉ Chiedi all\'ufficio" (dentro l\'offerta): trasporti, prezzi, sconti, disponibilità di quell\'offerta. Rispondono Christian e Irina; Tommaso vede tutto.',
+      'Scrivi cosa stavi facendo e cosa non va: una domanda chiara riceve una risposta più veloce.',
+      'La risposta arriva nello stesso posto (il pallino sul pulsante Assistenza dice che c\'è qualcosa da leggere) e per email.',
+      'Quando hai risolto premi "✓ Risolta"; se serve ancora, rispondi nella stessa conversazione.',
+    ],
+    notes: ['Per le urgenze vere (cliente al telefono, camion fermo) resta il telefono.'],
+  },
   versioni: {
     title: 'Versioni e aggiornamenti',
     intro: `Questa è la versione Beta dell'HUB, in prova dal ${APP_VERSION.since}.`,
@@ -6645,7 +6939,18 @@ const HELP = {
       'Un\'offerta inviata va risentita dopo 7 giorni; dopo 30 giorni l\'app chiede l\'esito (Accettata o Persa) prima di farne una nuova.',
       'I riquadri di "Andamento" si cliccano e portano all\'elenco corrispondente.',
     ],
-    notes: ['La riga in fondo dice a che data sono aggiornati i dati RADIX (clienti, fatturato, giacenze).'],
+    notes: ['La riga in fondo dice a che data sono aggiornati i dati RADIX (clienti, fatturato, giacenze).',
+      'Bloccato o hai un dubbio sull\'app? Pulsante "💬 Assistenza" in basso a destra: scrivi a Tommaso, la risposta arriva lì e per email.'],
+  },
+  'home@direzione': {
+    title: 'Home',
+    intro: 'Cosa richiede attenzione oggi, l\'andamento della rete e i messaggi dei commerciali.',
+    steps: [
+      '"Oggi": solo le righe con qualcosa da fare (ordini, offerte RADIX da sentire, follow-up scaduti…); clicca per aprire l\'elenco.',
+      '"Andamento": i quattro numeri della settimana; i riquadri si cliccano.',
+      '"Messaggi" (solo per chi risponde all\'assistenza): a sinistra quelli arrivati dal pulsante Assistenza (rispondi tu), a destra le domande all\'ufficio sulle offerte (rispondono Christian e Irina, tu vedi tutto e puoi intervenire). Prima quelle da rispondere; "✓ Risolta" le archivia.',
+    ],
+    notes: ['I messaggi si aggiornano da soli ogni minuto; a ogni messaggio nuovo ti arriva anche un\'email, sia per l\'Assistenza sia per le domande all\'ufficio (al massimo una ogni 10 minuti per conversazione). Christian e Irina non ricevono email: l\'HUB suona.'],
   },
   'home@ufficio': {
     title: 'Ufficio',
@@ -6655,7 +6960,8 @@ const HELP = {
       'Ogni riga si apre col clic: dentro trovi i dati e i pulsanti.',
       'Ordini: inseriscili in RADIX, poi scegli "Inserito" e scrivi il N° d\'ordine RADIX.',
       'Clienti nuovi: "Copia dati per RADIX", apri l\'anagrafica in RADIX, poi scrivi il N° cliente e premi "Aperto in RADIX": il cliente dell\'app diventa quello di RADIX con note e offerte.',
-      'Premi "Attiva le notifiche sul PC" una volta: arriva un avviso di Windows per ogni ordine o cliente nuovo.',
+      'Domande dei commerciali: arrivano da "Chiedi all\'ufficio" dentro le offerte. Apri la riga, rispondi e premi Invia: il commerciale la vede nell\'offerta e riceve un\'email. "✓ Risolta" la archivia.',
+      'Premi "Attiva le notifiche sul PC" una volta: per ogni ordine, cliente o domanda nuova la pagina suona e arriva un avviso di Windows. Niente email: tieni l\'HUB aperto.',
     ],
     notes: ['Tieni sempre aperta una scheda del browser con l\'HUB: la pagina si aggiorna da sola ogni minuto e il titolo della scheda mostra il numero di richieste, es. "(3) Ufficio".'],
   },
@@ -6691,6 +6997,7 @@ const HELP = {
       'Trasporto e carico: controlla l\'indirizzo di consegna; i km si calcolano da soli (via Brennero) e il trasporto entra nell\'offerta. Verde = calcolo sicuro, giallo = stima da confermare, rosso = chiedi all\'ufficio.',
       'Condizioni: pagamento, deposito di uscita, Consegna ("Con trasporto" o "Ritiro al deposito, senza trasporto"), cantiere, note per il cliente.',
       '"Nascondi gli sconti nel documento": il cliente vede solo il prezzo netto.',
+      'Bloccato su trasporto, prezzi, sconti o disponibilità? Sotto "Trasporto e carico" premi "✉ Chiedi all\'ufficio": Christian e Irina rispondono lì, nell\'offerta, e ti arriva un\'email. L\'offerta va prima salvata.',
       'Salva, controlla con "Anteprima PDF", poi "Invia per email".',
       'Quando il cliente accetta: stato "Accettata" e "Passa l\'ordine all\'ufficio". Per un cliente nuovo servono P.IVA, SDI o PEC, pagamento e banca.',
     ],
@@ -7986,6 +8293,8 @@ const { viewMaps } = __m["js/views/maps.js"];
 const { viewStock } = __m["js/views/stock.js"];
 const { viewOfficeHome, isOffice, canSeeOfficeDesk } = __m["js/views/office.js"];
 const { HELP, helpFor, APP_VERSION } = __m["js/core/help.js"];
+const { canUseAssist } = __m["js/core/messages.js"];
+const { assistDialog, assistUnread } = __m["js/views/messages.js"];
 const { viewOrders, viewMore } = __m["js/views/more.js"];
 const { viewRadixOffer } = __m["js/views/radix-offers.js"];
 const { viewPlans, viewPlan } = __m["js/views/plans.js"];
@@ -8165,7 +8474,10 @@ function shell(active, content, key = active) {
       h('div', { class: 'mobile-brand' }, h('div', { class: 'mb-left' }, h('img', { src: LOGO, alt: 'NORDTEX' }), h('span', {}, 'HUB')),
         h('div', { class: 'mb-right' }, h('button', { class: 'help-btn', type: 'button', title: 'Come si usa questa pagina', 'aria-label': 'Istruzioni', onclick: () => helpDialog(key) }, '?'),
           h('a', { href: '#/profilo', class: 'avatar' + (active === 'profilo' ? ' on' : ''), title: 'Profilo', 'aria-label': 'Profilo' }, initials(pv ? pv.by : app.session.name)))),
-      h('button', { class: 'help-btn help-fixed', type: 'button', title: 'Come si usa questa pagina', 'aria-label': 'Istruzioni', onclick: () => helpDialog(key) }, '?'), content),
+      h('button', { class: 'help-btn help-fixed', type: 'button', title: 'Come si usa questa pagina', 'aria-label': 'Istruzioni', onclick: () => helpDialog(key) }, '?'), content,
+      // 03/11: Assistenza (scrive a Tommaso) fissa su ogni pagina, tranne la costruzione dell'offerta (lì c'è "Chiedi all'ufficio")
+      canUseAssist(app.session) && key !== 'offerta' ? h('button', { class: 'assist-fab', type: 'button', title: 'Scrivi a Tommaso', onclick: () => assistDialog(app, key).catch(e => toast(e.message, 'error')) },
+        h('span', { 'aria-hidden': 'true' }, '💬'), h('span', { class: 'assist-label' }, 'Assistenza'), h('span', { class: 'assist-count', hidden: !app.navCounts?.assist }, app.navCounts?.assist || '')) : null),
     h('nav', { class: 'tabbar' }, tabs.map(n => h('a', { href: '#/' + n.id, class: tabActive(n.id) ? 'active' : '' }, h('span', { class: 'ico' }, n.icon), h('small', {}, n.label),
       (n.id === 'altro' && app.navCounts?.ordini) || (n.id === 'bacheca' && app.navCounts?.bacheca) ? h('span', { class: 'tab-dot' + (n.id === 'bacheca' ? ' nav-badge-bacheca' : '') }) : null))));
 }
@@ -8244,7 +8556,8 @@ async function render() {
     try { const [ps, rs] = await Promise.all([app.store.posts(), app.store.postReads()]); const mine = new Set(rs.map(r => r.postId));
       app.navCounts = { ...(app.navCounts || {}), bacheca: ps.filter(p => p.kind !== 'follow-up' && !(p.endsOn && p.endsOn < new Date().toISOString().slice(0, 10)) && !mine.has(p.id)).length }; } catch { /* facoltativo */ }
   }
-  if (app.session.role === 'direzione' && app.store.orders) { try { app.navCounts = { ordini: (await app.store.orders()).filter(o => o.status === 'Da inserire' || o.status === 'In lavorazione').length }; } catch { app.navCounts = {}; } }
+  if (app.session.role === 'direzione' && app.store.orders) { try { app.navCounts = { ...(app.navCounts || {}), ordini: (await app.store.orders()).filter(o => o.status === 'Da inserire' || o.status === 'In lavorazione').length }; } catch { app.navCounts = {}; } }
+  if (canUseAssist(app.session)) await assistUnread(app);   // pallino delle risposte non lette sul pulsante Assistenza
   let content;
   document.title = 'NORDTEX HUB';   // la scrivania Ufficio mette "(n) Ufficio": uscendo dalla pagina torna il titolo normale
   try { content = await (key === 'home' && isOffice(app.session) ? viewOfficeHome : views[key])(app, ...args); } catch (e) { console.error(e); content = h('div', { class: 'page' }, h('p', { class: 'error' }, e.message)); }
