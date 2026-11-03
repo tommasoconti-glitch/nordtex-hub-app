@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="00036a530f13">
+<meta name="ntx-build" content="42f12dd110af">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -753,7 +753,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .rx-item{list-style:none;padding:8px 0;border-bottom:1px solid var(--line)}.rx-item:last-child{border-bottom:0}.rx-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px}.rx-item small{display:block;margin-top:2px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"00036a530f13"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"42f12dd110af"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2091,7 +2091,7 @@ function validDiscounts(d) {
 function totalDiscount(d) { return round2((1 - d.reduce((v, x) => v * (1 - x / 100), 1)) * 100); }
 
 // Riga di offerta: fotografa il prodotto al momento dell'inserimento.
-// 03/11 (segnalazione Christian, offerta OFF-2026-0007 Sacchi): nel Master le varianti di un prodotto hanno spesso la stessa descrizione
+// 03/11 (segnalazione Christian su un'offerta del 02/11): nel Master le varianti di un prodotto hanno spesso la stessa descrizione
 // (es. "NORDTEX - Naturtex 110 ROOF" da 40 a 160 mm): la riga d'offerta porta sempre spessore e formato, come productLabel di model.js.
 function lineDescription(p) {
   const s = p.description || p.id;
