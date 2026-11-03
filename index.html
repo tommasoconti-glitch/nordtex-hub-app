@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="9328bbbbd465">
+<meta name="ntx-build" content="ba2fad232925">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -497,6 +497,8 @@ details.card>summary{cursor:pointer;padding:4px 0} ul.plain{list-style:none;padd
 .rx-top{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .rx-top .due{margin-left:0}
 .rx-note{color:var(--ink);font-style:italic}
+.rx-items{color:var(--ink)}
+.rx-subject{margin:4px 0 0}
 .rx-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none}
 .rx-tot{font-weight:700;white-space:nowrap}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
@@ -789,7 +791,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"9328bbbbd465"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ba2fad232925"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1298,7 +1300,7 @@ function indexedDbKv(dbName = 'nordtex-hub') {
   return { get: k => tx('readonly', s => s.get(k)), set: (k, v) => tx('readwrite', s => s.put(v, k)) };
 }
 
-const COLLECTIONS = ['notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio', 'postReads', 'plans', 'stops', 'radixLinks', 'threads'];
+const COLLECTIONS = ['notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio', 'postReads', 'plans', 'stops', 'radixLinks', 'threads', 'radixLines'];
 
 function createLocalStore({ data, kv }) {
   if (data?.schema !== 'nordtex-hub-data-v1') throw new Error('Dati HUB non compatibili');
@@ -1531,10 +1533,12 @@ function createLocalStore({ data, kv }) {
       const ok = o => o.customer ? canSeeCustomer(o.customer) && (isDir() || radixOfferForAgent(o, myRole)) : isDir();
       const out = new Map((await col('radixOutcomes')).map(x => [x.id, x]));
       const links = new Map((await col('radixLinks')).map(x => [x.id, x.customer]));
+      const lines = new Map((await col('radixLines')).map(x => [x.id, x.lines]));
       return (data.radixOffers || []).map(o => links.has(o.id) ? { ...o, customer: links.get(o.id) } : o).filter(o => (customerId ? o.customer === customerId : true) && ok(o))
         .map(o => { const x = out.get(o.id) || {}; return { id: o.id, customerId: o.customer || null, customerLabel: o.customerLabel, date: o.date, validUntil: o.validUntil, subject: o.subject || '',
           contact: o.contact || '', total: o.total ?? null, radixAgent: o.radixAgent || '', followup: o.followup || null, open: true,
-          outcome: x.outcome || 'Da seguire', outcomeNote: x.note || '', nextFollowup: x.next || null, outcomeByName: x.byName || '', outcomeAt: x.at || null }; })
+          outcome: x.outcome || 'Da seguire', outcomeNote: x.note || '', nextFollowup: x.next || null, outcomeByName: x.byName || '', outcomeAt: x.at || null,
+          lines: lines.get(o.id) || o.lines || [], linesAt: null }; })
         .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
     },
     async linkRadixOffer(id, customerId) {
@@ -1544,6 +1548,13 @@ function createLocalStore({ data, kv }) {
     },
     // "Aggiorna dati": nella versione su questo dispositivo si vede l'anteprima, il salvataggio è solo online
     async importRadixOffers() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
+    // 03/11: righe delle offerte: su questo dispositivo si salvano (servono anche alle prove), online con la funzione del database
+    async importRadixOfferLines({ lines, stats = {} }) {
+      const s = mustSession(); if (!s.canImport) throw new Error('Non sei abilitato ad aggiornare i dati');
+      const list = await col('radixLines'); let n = 0;
+      for (const [id, l] of Object.entries(lines || {})) { const i = list.findIndex(x => x.id === id); if (i >= 0) list.splice(i, 1); list.push({ id, lines: l }); n++; }
+      await save('radixLines'); return { ...stats, offers: n };
+    },
     async importSales() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
     async radixOrders() { return []; },
     async importRadixOrders() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
@@ -2065,7 +2076,12 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       const nm = await names();
       return rows.map(r => ({ id: r.id, customerId: r.customer_id ? custCode(r.customer_id) || null : null, customerLabel: r.customer_label, date: r.offer_date, validUntil: r.valid_until,
         subject: r.subject || '', contact: r.contact || '', total: r.total == null ? null : Number(r.total), radixAgent: r.radix_agent || '', followup: r.followup, open: r.open,
-        outcome: r.outcome, outcomeNote: r.outcome_note || '', nextFollowup: r.next_followup, outcomeByName: nm.get(r.outcome_by) || '', outcomeAt: r.outcome_at }));
+        outcome: r.outcome, outcomeNote: r.outcome_note || '', nextFollowup: r.next_followup, outcomeByName: nm.get(r.outcome_by) || '', outcomeAt: r.outcome_at,
+        lines: Array.isArray(r.lines) ? r.lines : [], linesAt: r.lines_at || null }));
+    },
+    // 03/11: righe delle offerte RADIX (abbinate nell'app, funzione hub_import_radix_offer_lines)
+    async importRadixOfferLines({ lines, stats = {}, file = '', sha = '' }) {
+      return api('/rest/v1/rpc/hub_import_radix_offer_lines', { method: 'POST', body: { p_lines: lines, p_file: file, p_sha: sha, p_stats: stats } });
     },
     // 02/11: collega l'offerta RADIX a un cliente dell'app (solo Direzione, funzione hub_link_radix_offer)
     async linkRadixOffer(id, customerId) {
@@ -2456,12 +2472,428 @@ async function pickNoteForOffer(app, customerId, ref) {
 
 return { offerRef, parseRef, canLinkNote, offerChoices, offerSelect, noteOfferChip, linkNoteDialog, pickNoteForOffer };
 })();
+__m["js/core/xlsx-read.js"] = (function () {
+// Lettura minima di un file Excel (.xlsx) nel browser, senza librerie esterne (02/11/2026, pagina "Aggiorna dati").
+// Un .xlsx è uno zip di XML: si legge l'indice dello zip, si decomprimono (DecompressionStream 'deflate-raw')
+// il primo foglio e le stringhe condivise. Restituisce le righe come array di valori (testo, numero, booleano o null).
+// Le date restano numeri seriali Excel: excelDate() le converte in AAAA-MM-GG.
+
+const u16 = (b, o) => b[o] | (b[o + 1] << 8);
+const u32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
+
+async function inflate(bytes) {
+  const s = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+
+async function unzip(buf) {
+  const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  let e = -1;
+  for (let i = b.length - 22; i >= Math.max(0, b.length - 65557); i--) if (u32(b, i) === 0x06054b50) { e = i; break; }
+  if (e < 0) throw new Error('Il file non è un Excel .xlsx valido');
+  const n = u16(b, e + 10); let p = u32(b, e + 16);
+  const files = new Map(), dec = new TextDecoder();
+  for (let k = 0; k < n; k++) {
+    if (u32(b, p) !== 0x02014b50) throw new Error('Indice del file Excel danneggiato');
+    const method = u16(b, p + 10), csize = u32(b, p + 20), nlen = u16(b, p + 28), xlen = u16(b, p + 30), clen = u16(b, p + 32), lho = u32(b, p + 42);
+    const name = dec.decode(b.subarray(p + 46, p + 46 + nlen));
+    files.set(name, { method, csize, lho });
+    p += 46 + nlen + xlen + clen;
+  }
+  return {
+    names: [...files.keys()],
+    async text(name) {
+      const f = files.get(name); if (!f) return null;
+      const start = f.lho + 30 + u16(b, f.lho + 26) + u16(b, f.lho + 28);
+      const raw = b.subarray(start, start + f.csize);
+      const out = f.method === 0 ? raw : f.method === 8 ? await inflate(raw) : null;
+      if (!out) throw new Error('Compressione del file Excel non supportata');
+      return dec.decode(out);
+    },
+  };
+}
+
+const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+const unxml = s => s.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (m, e) => e[0] === '#' ? String.fromCodePoint(e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : +e.slice(1)) : ENT[e] ?? m);
+const tText = x => [...x.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>|<t(?:\s[^>]*)?\/>/g)].map(m => unxml(m[1] || '')).join('');
+const colIndex = ref => { let n = 0; for (const ch of ref.replace(/\d+$/, '')) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
+
+// Righe del primo foglio (o del foglio indicato per nome)
+async function readXlsx(buf, { sheet } = {}) {
+  const z = await unzip(buf);
+  const shared = [];
+  const sst = await z.text('xl/sharedStrings.xml');
+  if (sst) for (const m of sst.matchAll(/<si>([\s\S]*?)<\/si>/g)) shared.push(tText(m[1]));
+  let path = 'xl/worksheets/sheet1.xml';
+  const wb = await z.text('xl/workbook.xml'), rels = await z.text('xl/_rels/workbook.xml.rels');
+  if (wb && rels) {
+    const sheets = [...wb.matchAll(/<sheet\b[^>]*?name="([^"]*)"[^>]*?r:id="([^"]*)"/g)].map(m => ({ name: unxml(m[1]), rid: m[2] }));
+    const pick = (sheet && sheets.find(s => s.name === sheet)) || sheets[0];
+    const rel = pick && [...rels.matchAll(/<Relationship\b[^>]*>/g)].map(m => m[0]).find(r => r.includes(`Id="${pick.rid}"`));
+    const target = rel && rel.match(/Target="([^"]*)"/)?.[1];
+    if (target) path = target.startsWith('/') ? target.slice(1) : 'xl/' + target.replace(/^\.\//, '');
+  }
+  const xml = await z.text(path);
+  if (!xml) throw new Error('Foglio non trovato nel file Excel');
+  const rows = [];
+  for (const rm of xml.matchAll(/<row\b([^>]*)>([\s\S]*?)<\/row>|<row\b([^>]*)\/>/g)) {
+    const rn = +((rm[1] || rm[3] || '').match(/\br="(\d+)"/)?.[1] || rows.length + 1);
+    const row = [];
+    for (const cm of (rm[2] || '').matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+      const attrs = cm[1], body = cm[2] || '';
+      const ref = attrs.match(/\br="([A-Z]+)\d+"/)?.[1];
+      const t = attrs.match(/\bt="(\w+)"/)?.[1];
+      const v = body.match(/<v>([\s\S]*?)<\/v>/)?.[1];
+      let val = null;
+      if (t === 's') val = v == null ? null : shared[+v] ?? null;
+      else if (t === 'inlineStr') val = tText(body);
+      else if (t === 'str') val = v == null ? null : unxml(v);
+      else if (t === 'b') val = v === '1';
+      else if (t === 'e') val = null;
+      else if (v != null) val = Number(v);
+      row[ref ? colIndex(ref) : row.length] = val;
+    }
+    rows[rn - 1] = Array.from(row, x => x === undefined ? null : x);
+  }
+  return Array.from(rows, r => r || []);
+}
+
+// Numero seriale Excel (sistema 1900) → 'AAAA-MM-GG'
+function excelDate(n) {
+  if (typeof n !== 'number' || !isFinite(n) || n < 1) return null;
+  const d = new Date(Math.round((n - 25569) * 86400000));
+  return d.toISOString().slice(0, 10);
+}
+
+return { unzip, readXlsx, excelDate };
+})();
+__m["js/core/purchases.js"] = (function () {
+// Cosa compra il cliente: famiglie per anno dal fatturato RADIX (tools/import_fatturato.py) e spunti di vendita.
+// Gli spunti seguono le priorità commerciali NORDTEX: sostituzione STEICO con NATURHELD; famiglie non più acquistate.
+
+const SALES_YEARS = ['2024', '2025', '2026'];
+const NOT_PRODUCT = new Set(['Acconti e spese senza articolo', 'Trasporti e bancali', 'Su ordinazione', 'Altro']);
+const STEICO = 'Fibra di legno STEICO';
+const NATURHELD = 'Fibra di legno NATURHELD';
+
+function purchaseSummary(c, currentYear = SALES_YEARS[SALES_YEARS.length - 1]) {
+  const fams = (c?.purchases?.families || []).filter(f => Math.abs(f.t || 0) >= 1);
+  const val = (f, y) => (f && f.y && f.y[y]) || 0;
+  const by = Object.fromEntries(fams.map(f => [f.f, f]));
+  const prev = SALES_YEARS.filter(y => y < currentYear);
+  const hints = [];
+  const st = by[STEICO], nh = by[NATURHELD];
+  if (st && st.t > 0) {
+    if (!nh || nh.t <= 0) hints.push({ kind: 'propose', text: 'Compra fibra di legno STEICO e mai NATURHELD: proponi NATURHELD' });
+    else if (val(st, currentYear) > val(nh, currentYear)) hints.push({ kind: 'propose', text: `Nel ${currentYear} compra più STEICO che NATURHELD: spingi il passaggio a NATURHELD` });
+  }
+  for (const f of fams) {
+    if (NOT_PRODUCT.has(f.f) || f.f === STEICO) continue;
+    const before = prev.reduce((s, y) => s + val(f, y), 0);
+    if (before >= 500 && val(f, currentYear) <= 0) {
+      const last = [...prev].reverse().find(y => val(f, y) > 0);
+      hints.push({ kind: 'lost', text: `${f.f}: acquistava fino al ${last}, nel ${currentYear} niente` });
+    }
+  }
+  const rows = fams.filter(f => !NOT_PRODUCT.has(f.f) || f.t >= 1).map(f => ({ name: f.f, years: SALES_YEARS.map(y => val(f, y)), total: f.t, other: NOT_PRODUCT.has(f.f) }));
+  rows.sort((a, b) => (a.other - b.other) || (b.total - a.total));
+  return { rows, hints, top: (c?.purchases?.top || []).slice(0, 6), has: rows.length > 0 };
+}
+
+return { SALES_YEARS, purchaseSummary };
+})();
+__m["js/core/radix-import.js"] = (function () {
+// Lettura nel browser delle esportazioni RADIX per la pagina "Aggiorna dati" (02/11/2026).
+// Stesse regole degli strumenti tools/import_offerte_radix.py e tools/import_fatturato.py (che restano validi):
+//  - Offerte aperte: Offerte › Selezione, stato "Aperto", esportazione Excel.
+//  - Fatturato: Statistica fatturato per movimenti, esportazione "Testo separato con TAB".
+// Nessun dato viene salvato qui: le funzioni restituiscono il risultato e il riepilogo da mostrare prima della conferma.
+const { excelDate } = __m["js/core/xlsx-read.js"];
+const { SALES_YEARS } = __m["js/core/purchases.js"];
+const OFFER_COLUMNS = ['Offerta', 'Data documento', 'Stato documento', 'Validità', 'Descrizione', 'Oggetto', 'Contatto', 'Totale imponibile', 'Agente', 'Follow-up previsto'];
+
+const normName = s => String(s ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\x00-\x7f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+
+function day(v) {
+  if (typeof v === 'number') return excelDate(v);
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  const m = String(v ?? '').trim().match(/^(\d{2})[./](\d{2})[./](\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  const iso = String(v ?? '').trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  return iso ? iso[1] : null;
+}
+const str = v => String(v ?? '').trim();
+
+// rows: righe del foglio (la prima è l'intestazione); customers: [{ id (N° cliente), name, city }]
+function parseRadixOffers(rows, customers = []) {
+  if (!rows?.length) throw new Error('Il file è vuoto');
+  const head = rows[0].map(str);
+  const miss = OFFER_COLUMNS.filter(c => !head.includes(c));
+  if (miss.length) throw new Error('Non sembra l\'esportazione delle offerte RADIX. Colonne mancanti: ' + miss.join(', '));
+  const col = Object.fromEntries(head.map((c, i) => [c, i]).filter(([c]) => c));
+  const byNC = new Map(), byN = new Map();
+  const add = (m, k, c) => { if (!m.has(k)) m.set(k, []); m.get(k).push(c); };
+  for (const c of customers) { add(byNC, normName(c.name) + '|' + normName(c.city), c); add(byN, normName(c.name), c); }
+  const offers = [], unmatched = [];
+  for (const r of rows.slice(1)) {
+    const g = k => (k in col ? r[col[k]] : null);
+    const num = str(g('Offerta')).replace(/\s+/g, '');
+    if (!num) continue;
+    if (!/^[A-Z]+-\d{4}-\d+$/.test(num)) throw new Error('Numero offerta non riconosciuto: ' + num);
+    const label = str(g('Descrizione'));
+    const cut = label.lastIndexOf(', ');
+    let name = cut >= 0 ? label.slice(0, cut) : '', city = cut >= 0 ? label.slice(cut + 2) : '';
+    if (!name) { name = label; city = ''; }
+    const m = byNC.get(normName(name) + '|' + normName(city)) || byN.get(normName(name)) || [];
+    const cust = m.length === 1 ? m[0].id : null;
+    if (!cust) unmatched.push(label);
+    const d = day(g('Data documento'));
+    if (!d) throw new Error(num + ': data documento mancante');
+    const tot = g('Totale imponibile');
+    offers.push({ id: num, customer: cust, customerLabel: label, date: d, validUntil: day(g('Validità')), subject: str(g('Oggetto')), contact: str(g('Contatto')),
+      total: typeof tot === 'number' && tot ? Math.round(tot * 100) / 100 : null, radixAgent: str(g('Agente')), followup: day(g('Follow-up previsto')),
+      typology: str(g('Tipologia cliente')), zone: str(g('Zona')), depot: str(g('Deposito')), status: str(g('Stato documento')) });
+  }
+  if (!offers.length) throw new Error('Nessuna offerta nel file');
+  if (new Set(offers.map(o => o.id)).size !== offers.length) throw new Error('Numeri offerta duplicati nel file');
+  const dates = offers.map(o => o.date).sort();
+  return { offers, from: dates[0], to: dates[dates.length - 1], unmatched: [...new Set(unmatched)].sort(),
+    total: Math.round(offers.reduce((s, o) => s + (o.total || 0), 0) * 100) / 100 };
+}
+
+// Confronto con le offerte aperte già nell'app: nuove, già presenti, da chiudere (non più aperte nel periodo del file)
+function offersPreview(parsed, current = []) {
+  const ids = new Set(parsed.offers.map(o => o.id));
+  const known = new Set(current.map(o => o.id));
+  return {
+    added: parsed.offers.filter(o => !known.has(o.id)),
+    kept: parsed.offers.filter(o => known.has(o.id)),
+    closed: current.filter(o => o.open !== false && o.date >= parsed.from && o.date <= parsed.to && !ids.has(o.id)),
+  };
+}
+
+// ---------- ordini clienti aperti (03/11/2026, file giornaliero n. 2 della routine)
+// Esportazione del riquadro RADIX "Ordini clienti aperti tutte le zone" in Excel. Ogni file è la fotografia di tutti gli ordini aperti.
+const ORDER_COLUMNS = ['Data documento', 'Ordine cliente', 'Cliente/Descrizione/Luogo', 'Cantiere', 'Termine consegna', 'Importo', 'Stato documento', 'Cond. pagamento', 'Avvisi', 'Agente'];
+function parseRadixOrders(rows, customers = []) {
+  if (!rows?.length) throw new Error('Il file è vuoto');
+  const head = rows[0].map(str);
+  const miss = ORDER_COLUMNS.filter(c => !head.includes(c));
+  if (miss.length) throw new Error('Non sembra l\'esportazione degli ordini clienti aperti di RADIX. Colonne mancanti: ' + miss.join(', '));
+  const col = Object.fromEntries(head.map((c, i) => [c, i]).filter(([c]) => c));
+  const byNC = new Map(), byN = new Map();
+  const add = (m, k, c) => { if (!m.has(k)) m.set(k, []); m.get(k).push(c); };
+  for (const c of customers) { add(byNC, normName(c.name) + '|' + normName(c.city), c); add(byN, normName(c.name), c); }
+  const orders = [], unmatched = [];
+  for (const r of rows.slice(1)) {
+    const g = k => (k in col ? r[col[k]] : null);
+    const num = str(g('Ordine cliente')).replace(/\s+/g, '');
+    if (!num) continue;
+    if (!/^[A-Z]+-\d{4}-\d+$/.test(num)) throw new Error('Numero ordine non riconosciuto: ' + num);
+    const label = str(g('Cliente/Descrizione/Luogo'));
+    const cut = label.lastIndexOf(', ');
+    let name = cut >= 0 ? label.slice(0, cut) : '', city = cut >= 0 ? label.slice(cut + 2) : '';
+    if (!name) { name = label; city = ''; }
+    const m = byNC.get(normName(name) + '|' + normName(city)) || byN.get(normName(name)) || [];
+    const cust = m.length === 1 ? m[0].id : null;
+    if (!cust) unmatched.push(label);
+    const d = day(g('Data documento'));
+    if (!d) throw new Error(num + ': data documento mancante');
+    const tot = g('Importo');
+    orders.push({ id: num, customer: cust, customerLabel: label, date: d, deliveryBy: day(g('Termine consegna')), site: str(g('Cantiere')),
+      total: typeof tot === 'number' ? Math.round(tot * 100) / 100 : null, status: str(g('Stato documento')), payment: str(g('Cond. pagamento')),
+      notes: str(g('Avvisi')), radixAgent: str(g('Agente')), zone: str(g('Zona')), typology: str(g('Tipologia cliente')) });
+  }
+  if (!orders.length) throw new Error('Nessun ordine nel file');
+  if (new Set(orders.map(o => o.id)).size !== orders.length) throw new Error('Numeri ordine duplicati nel file');
+  return { orders, unmatched: [...new Set(unmatched)].sort(), total: Math.round(orders.reduce((s, o) => s + (o.total || 0), 0) * 100) / 100,
+    blocked: orders.filter(o => /bloccat/i.test(o.status)).length };
+}
+// Confronto con gli ordini aperti già nell'app: nuovi, già presenti, non più aperti (evasi o chiusi)
+function ordersPreview(parsed, current = []) {
+  const ids = new Set(parsed.orders.map(o => o.id));
+  const known = new Set(current.map(o => o.id));
+  return { added: parsed.orders.filter(o => !known.has(o.id)), kept: parsed.orders.filter(o => known.has(o.id)), closed: current.filter(o => o.open !== false && !ids.has(o.id)) };
+}
+
+// ---------- fatturato
+// Colonne dell'esportazione "Quantità + valore (Std)" con i raggruppamenti Cliente / Numero, Data documento Anno, riepilogo Articolo (Codice)
+const C_CUST = 47, C_YEAR = 65, C_YEAR_VAL = 67, C_ITEM = 83, C_ITEM_QTY = 84, C_ITEM_VAL = 85;
+const TOP_ITEMS = 6;
+const KEYWORDS = [
+  [/^\(nessun articolo\)$/i, 'Acconti e spese senza articolo'],
+  [/su ordinazione/i, 'Su ordinazione'],
+  [/trasporto|euro bancale|bancal/i, 'Trasporti e bancali'],
+  [/fibrogesso|gessofibra|aktivboard|radiante|tubo |pe-rt|pexa|raccordo|attuatore|collettor/i, 'Sistemi radianti'],
+  [/vetro cellulare|vitrex|policell|nordtex cell|foamglas|\bV600\b/i, 'Vetro cellulare'],
+  [/steico/i, 'Fibra di legno STEICO'],
+  [/naturtex|naturheld/i, 'Fibra di legno NATURHELD'],
+  [/canap|cannatherm|konope/i, 'Canapa'],
+  [/thermopor|unipor|poroton|laterizi/i, 'Blocchi in laterizio'],
+  [/lana di roccia|boerner|lana minerale/i, 'Lana minerale'],
+  [/ampack|ampatex|tyvek|foliarex|freno al vapore|telo|tape/i, 'Sistemi di tenuta'],
+  [/vaku/i, 'Sottovuoto Vakuum'],
+  [/\blvl/i, 'Legno microlamellare'],
+  [/argilla/i, 'Argilla'],
+  [/\bTS14\b|perlite|nordtex perl/i, 'Granulati a secco'],
+  [/sughero/i, 'Sughero'],
+];
+
+function decodeText(buf) {
+  const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(b); } catch { return new TextDecoder('windows-1252').decode(b); }
+}
+
+// Testo separato da TAB, con eventuali campi tra virgolette (come csv.reader di Python)
+function parseTsv(text) {
+  const out = []; let row = [], f = '', q = false, i = 0, start = true;
+  for (; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch;
+      continue;
+    }
+    if (ch === '"' && start) { q = true; start = false; continue; }
+    if (ch === '\t') { row.push(f); f = ''; start = true; continue; }
+    if (ch === '\r' && text[i + 1] === '\n') continue;
+    if (ch === '\n' || ch === '\r') { row.push(f); out.push(row); row = []; f = ''; start = true; continue; }
+    f += ch; start = false;
+  }
+  if (f !== '' || row.length) { row.push(f); out.push(row); }
+  return out;
+}
+
+const num = s => { s = String(s ?? '').trim(); if (!s) return 0; return s.includes(',') ? Number(s.replace(/\./g, '').replace(',', '.')) : Number(s); };
+const r2 = v => Math.round(v * 100) / 100, r3 = v => Math.round(v * 1000) / 1000;
+
+function family(code, desc, products) {
+  const p = products.get(code);
+  if (p) {
+    let f = p.family || 'Altro';
+    if (f === 'Fibra di legno' && (p.producer === 'STEICO' || p.producer === 'NATURHELD')) f += ' ' + p.producer;
+    return f;
+  }
+  for (const [rx, f] of KEYWORDS) if (rx.test(desc)) return f;
+  return 'Altro';
+}
+
+// text: contenuto del file TXT; products: prodotti dell'app (radixCode, family, producer); asOf: data dei dati
+function parseRadixSales(text, products = [], { asOf, years = SALES_YEARS } = {}) {
+  const prod = new Map(products.filter(p => p.radixCode).map(p => [p.radixCode, p]));
+  const cust = new Map(), errors = [];
+  const rows = parseTsv(text);
+  rows.forEach((r, k) => {
+    const i = k + 1;
+    if (r.length <= C_ITEM_VAL) { if (r.length > 1 || (r[0] || '').trim()) errors.push(`riga ${i}: colonne insufficienti (${r.length})`); return; }
+    const m = r[C_CUST].match(/^\s*(\d+)\s+-\s+([\s\S]*)$/);
+    const year = r[C_YEAR].trim();
+    if (!m || !years.includes(year)) { errors.push(`riga ${i}: cliente o anno non leggibile (${r[C_CUST]}, ${year})`); return; }
+    const im = r[C_ITEM].trim().match(/^(\S+)\s+-\s+([\s\S]*)$/);
+    const [code, desc] = im ? [im[1], im[2].trim()] : ['', r[C_ITEM].trim() || '(nessun articolo)'];
+    if (!cust.has(m[1])) cust.set(m[1], { name: m[2].trim(), rev: {}, yearTot: {}, fam: new Map(), items: new Map() });
+    const c = cust.get(m[1]);
+    const v = num(r[C_ITEM_VAL]);
+    c.rev[year] = (c.rev[year] || 0) + v;
+    c.yearTot[year] = num(r[C_YEAR_VAL]);
+    const f = family(code, desc, prod);
+    if (!c.fam.has(f)) c.fam.set(f, {});
+    const fy = c.fam.get(f); fy[year] = (fy[year] || 0) + v;
+    const key = code || desc;
+    if (!c.items.has(key)) c.items.set(key, { c: code, d: desc.slice(0, 90), v: 0, q: 0, y: year });
+    const it = c.items.get(key); it.v += v; it.q += num(r[C_ITEM_QTY]); if (year > it.y) it.y = year;
+  });
+  for (const [k, c] of cust) for (const [y, tot] of Object.entries(c.yearTot))
+    if (Math.abs((c.rev[y] || 0) - tot) > 0.05) errors.push(`cliente ${k} anno ${y}: somma articoli ${(c.rev[y] || 0).toFixed(2)} diversa dal totale RADIX ${tot.toFixed(2)}`);
+  if (!cust.size && !errors.length) errors.push('Nessuna riga di fatturato nel file');
+  if (errors.length) throw Object.assign(new Error('File non importabile:\n' + errors.slice(0, 20).join('\n')), { errors });
+  const out = {};
+  for (const [k, c] of cust) {
+    const fams = [...c.fam].map(([f, ys]) => ({ f, y: Object.fromEntries(Object.entries(ys).filter(([, v]) => Math.abs(v) >= 0.005).map(([y, v]) => [y, r2(v)])), t: r2(Object.values(ys).reduce((s, v) => s + v, 0)) }))
+      .sort((a, b) => b.t - a.t).filter(x => Math.abs(x.t) >= 0.005);
+    const items = [...c.items.values()].sort((a, b) => b.v - a.v).slice(0, TOP_ITEMS).filter(x => x.v > 0)
+      .map(x => ({ c: x.c, d: x.d, v: r2(x.v), q: r3(x.q), y: x.y }));
+    out[k] = { name: c.name, sales: { asOf, rev: Object.fromEntries(years.map(y => [y, r2(c.rev[y] || 0)])), families: fams, top: items } };
+  }
+  const totals = Object.fromEntries(years.map(y => [y, r2([...cust.values()].reduce((s, c) => s + (c.rev[y] || 0), 0))]));
+  return { asOf, years, totals, customers: out };
+}
+
+// Confronto con l'anagrafica dell'app: clienti collegati, clienti del file non presenti (es. privati), fatturato per anno prima/dopo
+function salesPreview(parsed, customers = []) {
+  const known = new Map(customers.filter(c => c.origin !== 'HUB').map(c => [String(c.id), c]));
+  const linked = [], missing = [];
+  for (const [k, x] of Object.entries(parsed.customers)) (known.has(k) ? linked : missing).push({ code: k, name: x.name, rev: x.sales.rev });
+  const before = Object.fromEntries(parsed.years.map(y => [y, r2(customers.reduce((s, c) => s + (Number(c['rev' + y]) || 0), 0))]));
+  const after = Object.fromEntries(parsed.years.map(y => [y, r2(linked.reduce((s, c) => s + (c.rev[y] || 0), 0))]));
+  return { linked, missing, before, after, zeroed: [...known.keys()].filter(k => !parsed.customers[k]).length };
+}
+
+// ---- 03/11/2026: righe delle offerte (segnalazione Pajola: dall'offerta RADIX non si capisce il prodotto)
+// RADIX: Offerte › Liste & statistiche › Stampa volume offerte per movimenti; Stato-Doc. "(Tutto)"; lista "Quantità + valore (Std)";
+// Raggrup. 1 Cliente (Indirizzo corrispondenza) / Numero, Raggrup. 2 Riga documento, Riepilogo Articolo (Codice); Esporta › Testo separato con TAB.
+// L'esportazione NON contiene il numero dell'offerta, ma le righe di un'offerta sono consecutive: per ogni offerta dell'app si cerca
+// il blocco di righe consecutive dello stesso cliente il cui valore fa esattamente (al centesimo) il totale dell'offerta.
+const SERVICE_RX = /servizio di trasporto|trasporto|euro bancale|bancal/i;
+const L_CUST = 65, L_CUST_VAL = 69, L_ITEM = 92, L_QTY = 93, L_VAL = 96;
+const ENT = { '&lambda;': 'λ', '&amp;': '&', '&quot;': '"', '&lt;': '<', '&gt;': '>', '&deg;': '°' };
+const cleanDesc = s => String(s || '').replace(/&[a-z]+;/g, e => ENT[e] ?? e).replace(/m��?/g, 'm²').replace(/�+/g, '').replace(/ï¿½/g, '').replace(/\s+/g, ' ').trim();
+
+function parseRadixOfferLines(text) {
+  const rows = parseTsv(text).filter(r => r.length > 1 || (r[0] || '').trim());
+  if (!rows.length) throw new Error('Il file è vuoto');
+  if (!/^Volume offerte per movimenti/i.test(rows[0][0] || '') || rows[0].length <= L_VAL) throw new Error('Non sembra l\'esportazione «Stampa volume offerte per movimenti» (lista «Quantità + valore», testo separato con TAB)');
+  if (!/Riga documento/i.test(rows[0][2] || '')) throw new Error('Nell\'esportazione manca il raggruppamento «Riga documento»: Raggrup. 1 Cliente / Numero, Raggrup. 2 Riga documento');
+  const customers = new Map(), errors = []; let total = 0;
+  rows.forEach((r, k) => {
+    const m = String(r[L_CUST] || '').match(/^\s*(\d+)\s+-\s+([\s\S]*)$/);
+    const im = String(r[L_ITEM] || '').trim().match(/^(\S+)\s+-\s+([\s\S]*)$/);
+    if (!m || r.length <= L_VAL) { errors.push(`riga ${k + 1}: cliente non leggibile`); return; }
+    if (!customers.has(m[1])) customers.set(m[1], { name: m[2].trim(), tot: num(r[L_CUST_VAL]), rows: [] });
+    const v = num(r[L_VAL]); total += v;
+    customers.get(m[1]).rows.push({ c: im ? im[1] : '', d: cleanDesc(im ? im[2] : r[L_ITEM]).slice(0, 140), q: r3(num(r[L_QTY])), v: r2(v) });
+  });
+  for (const [k, c] of customers) { const s = c.rows.reduce((a, x) => a + x.v, 0); if (Math.abs(s - c.tot) > 0.05) errors.push(`cliente ${k}: somma righe ${s.toFixed(2)} diversa dal totale RADIX ${c.tot.toFixed(2)}`); }
+  if (errors.length) throw Object.assign(new Error('File non importabile:\n' + errors.slice(0, 20).join('\n')), { errors });
+  return { customers, lines: rows.length, total: r2(total) };
+}
+
+// offers: offerte dell'app { id, customerId (N° cliente) | null, customerLabel, total }. Restituisce le righe per numero offerta.
+function matchOfferLines(parsed, offers) {
+  const byName = new Map([...parsed.customers].map(([k, c]) => [normName(c.name), k]));
+  const out = { lines: {}, exact: [], noTotal: [], noRows: [], ambiguous: [] };
+  for (const o of offers) {
+    const code = o.customerId && parsed.customers.has(String(o.customerId)) ? String(o.customerId) : byName.get(normName(String(o.customerLabel || '').split(',')[0]));
+    const rows = code ? parsed.customers.get(code).rows : [];
+    const T = Math.round((Number(o.total) || 0) * 100);
+    if (!T) { out.noTotal.push(o.id); continue; }
+    if (!rows.length) { out.noRows.push(o.id); continue; }
+    const cents = rows.map(x => Math.round(x.v * 100)), pre = [0];
+    cents.forEach((c, i) => pre.push(pre[i] + c));
+    const blocks = [];
+    for (let i = 0; i < rows.length; i++) for (let j = i + 1; j <= rows.length; j++) if (pre[j] - pre[i] === T) blocks.push(rows.slice(i, j));
+    if (!blocks.length) { out.noRows.push(o.id); continue; }
+    // più blocchi possibili: di solito differiscono solo per righe a 0 € ai bordi (es. trasporto incluso) → si tengono le righe con valore
+    const key = b => b.filter(x => x.v).map(x => `${x.c}|${x.q}|${x.v}`).sort().join(';');
+    let chosen = blocks.length === 1 ? blocks[0] : new Set(blocks.map(key)).size === 1 ? blocks[0].filter(x => x.v) : null;
+    // ultima possibilità: stessi articoli, cambia solo la riga di trasporto/bancali → si mostrano solo gli articoli
+    const goods = b => b.filter(x => x.v && !SERVICE_RX.test(x.d));
+    if (!chosen && new Set(blocks.map(b => key(goods(b)))).size === 1 && goods(blocks[0]).length) chosen = goods(blocks[0]);
+    if (!chosen) { out.ambiguous.push(o.id); continue; }
+    out.lines[o.id] = chosen;
+    out.exact.push(o.id);
+  }
+  return out;
+}
+
+return { OFFER_COLUMNS, normName, parseRadixOffers, offersPreview, ORDER_COLUMNS, parseRadixOrders, ordersPreview, decodeText, parseTsv, parseRadixSales, salesPreview, SERVICE_RX, parseRadixOfferLines, matchOfferLines };
+})();
 __m["js/views/radix-offers.js"] = (function () {
 // Offerte aperte importate da RADIX (richiesta Tommaso 01/11/2026): l'app le mostra a chi segue il cliente
 // (senza cliente HUB solo alla Direzione) e permette di segnare l'esito. Le offerte restano in RADIX: qui si seguono.
 const { h, fill, eur, dateIt, today, toast, modal, field, emptyState } = __m["js/ui.js"];
 const { RADIX_OFFER_OUTCOMES, radixOfferDue, validityInfo, isExpiring, NOTE_OUTCOMES } = __m["js/data/model.js"];
 const { pickNoteForOffer } = __m["js/views/note-offers.js"];
+const { SERVICE_RX } = __m["js/core/radix-import.js"];
 const CLS = { 'Da seguire': 'warn', Sentito: 'info', Accettata: 'ok', Persa: 'bad' };
 const radixOfferOpen = o => o.outcome === 'Da seguire' || o.outcome === 'Sentito';
 const dueState = o => { const d = radixOfferDue(o); if (!d || !radixOfferOpen(o)) return ''; const t = today(); return d < t ? 'scaduto' : d === t ? 'oggi' : ''; };
@@ -2500,6 +2932,28 @@ function offerNoteText(o, outcome, note, next) {
 }
 const mentionsOffer = (n, id) => { const t = [n.subject, n.body].join(' '); const num = String(id).split('-').pop(); return t.includes(id) || new RegExp('(^|\\D)' + num + '(\\D|$)').test(t) && /off/i.test(t); };
 
+// 03/11: righe dell'offerta (da "Stampa volume offerte per movimenti"): servizi (trasporto, bancali) dopo gli articoli
+const isService = x => SERVICE_RX.test(x.d || '');
+const shortDesc = d => String(d || '').replace(/\s*\(.*$/, '').slice(0, 70);
+function linesSummary(lines = []) {
+  const goods = lines.filter(x => !isService(x) && x.v), serv = lines.filter(x => isService(x) && x.v);
+  if (!goods.length && !serv.length) return '';
+  return [...goods.slice(0, 2).map(x => shortDesc(x.d)), goods.length > 2 ? `+ altri ${goods.length - 2}` : '', serv.length ? '+ trasporto' : ''].filter(Boolean).join(' · ');
+}
+const qtyIt = q => Number(q || 0).toLocaleString('it-IT', { maximumFractionDigits: 3 });
+function linesCard(o) {
+  const lines = [...(o.lines || [])].sort((a, b) => isService(a) - isService(b));
+  if (!lines.length) return h('section', { class: 'card' }, h('h2', {}, 'Cosa c\'è in questa offerta'),
+    h('p', { class: 'muted' }, Number(o.total) ? 'Le righe (articoli, quantità, prezzi) non sono ancora state caricate da RADIX per questa offerta.'
+      : 'In RADIX questa offerta ha totale 0: le righe non si possono abbinare. Aprila in RADIX per vedere articoli e prezzi.'));
+  return h('section', { class: 'card rx-lines' }, h('h2', {}, 'Cosa c\'è in questa offerta'),
+    h('div', { class: 'tbl-wrap' }, h('table', { class: 'table' },
+      h('thead', {}, h('tr', {}, h('th', {}, 'Articolo'), h('th', { class: 'num' }, 'Quantità'), h('th', { class: 'num' }, 'Prezzo netto'), h('th', { class: 'num' }, 'Valore'))),
+      h('tbody', {}, lines.map(x => h('tr', { class: isService(x) ? 'muted' : '' }, h('td', {}, x.c ? h('small', { class: 'muted' }, x.c + ' ') : null, x.d),
+        h('td', { class: 'num' }, qtyIt(x.q)), h('td', { class: 'num' }, x.q ? eur(x.v / x.q) : '—'), h('td', { class: 'num' }, eur(x.v))))))),
+    h('p', { class: 'fine muted' }, 'Righe da RADIX abbinate al totale dell\'offerta. Prezzo netto = valore della riga diviso la quantità (sconti già applicati); l\'unità di misura è quella della riga in RADIX.'));
+}
+
 function radixOfferRow(app, o, refresh, opts) { return row(app, o, refresh, opts); }
 function row(app, o, refresh, { showCustomer = true } = {}) {
   const c = o.customerId ? app.store.customer(o.customerId) : null;
@@ -2511,6 +2965,7 @@ function row(app, o, refresh, { showCustomer = true } = {}) {
         (v => radixOfferOpen(o) && isExpiring(v) ? h('span', { class: 'due ' + (v.cls === 'bad' ? 'scaduto' : 'oggi') }, v.label) : null)(validityInfo(o.validUntil))),
       showCustomer ? (c ? h('span', { class: 'rx-cust' }, c.name + (c.city ? ' · ' + c.city : '')) : h('span', {}, o.customerLabel, h('small', { class: 'muted' }, ' (non nell\'anagrafica HUB)'))) : null,
       h('small', { class: 'muted' }, [o.subject || 'senza oggetto', 'del ' + dateIt(o.date), o.radixAgent ? 'RADIX: ' + o.radixAgent.toLowerCase() : '', o.contact].filter(Boolean).join(' · ')),
+      linesSummary(o.lines) ? h('small', { class: 'rx-items' }, '📦 ' + linesSummary(o.lines)) : null,
       o.outcomeNote ? h('small', { class: 'rx-note' }, `“${o.outcomeNote}” — ${o.outcomeByName || ''} ${o.outcomeAt ? dateIt(o.outcomeAt) : ''}`) : null),
     h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, o.total ? eur(o.total) : '—'),
       h('button', { class: 'btn small', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, 'Esito')));
@@ -2612,6 +3067,7 @@ async function viewRadixOffer(app, id) {
         !app.session.preview ? h('button', { class: 'act primary', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, h('span', { class: 'act-ico' }, '✓'), h('span', {}, 'Esito')) : null,
         c?.phone ? h('a', { class: 'act', href: 'tel:' + (String(c.phone).match(/[+\d][\d\s/.-]{5,}/) || [''])[0].replace(/[^\d+]/g, '') }, h('span', { class: 'act-ico' }, '☎'), h('span', {}, 'Chiama')) : null,
         c ? h('a', { class: 'act', href: '#/agenda/' + c.id }, h('span', { class: 'act-ico' }, '☰'), h('span', {}, 'Scheda cliente')) : null)),
+    linesCard(o),
     !c && app.session.role === 'direzione' && !app.session.preview && app.store.linkRadixOffer && app.ui ? h('section', { class: 'card rx-link' },
       h('h2', {}, 'Cliente non presente nell\'app'),
       h('p', { class: 'muted' }, `"${o.customerLabel}" non è stato riconosciuto nell'anagrafica (spesso è un cliente aperto in RADIX dopo l'ultima esportazione). Collegalo per avere telefono, storico, note e promemoria.`),
@@ -2630,10 +3086,10 @@ async function viewRadixOffer(app, id) {
       kv('Agente in RADIX', o.radixAgent ? o.radixAgent.toLowerCase() : ''), kv('Cliente seguito da', c?.assignee || ''),
       c && app.session.role === 'direzione' && !app.session.preview && app.store.linkRadixOffer ? h('p', { class: 'fine' }, 'Cliente sbagliato? ',
         h('button', { class: 'link', type: 'button', onclick: async () => { try { await app.store.linkRadixOffer(o.id, null); toast('Offerta scollegata'); refresh(); } catch (e) { toast(e.message, 'error'); } } }, 'Scollega e scegli di nuovo')) : null,
-      h('p', { class: 'fine' }, 'Le righe con articoli e prezzi sono in RADIX: l\'esportazione delle offerte non le contiene.')));
+      o.linesAt ? h('p', { class: 'fine' }, 'Righe aggiornate il ' + dateIt(o.linesAt)) : null));
 }
 
-return { radixOfferOpen, dueState, radixOfferDialog, offerNoteText, mentionsOffer, radixOfferRow, radixOffersPanel, radixOffersCard, radixFollowupBlock, viewRadixOffer };
+return { radixOfferOpen, dueState, radixOfferDialog, offerNoteText, mentionsOffer, linesSummary, radixOfferRow, radixOffersPanel, radixOffersCard, radixFollowupBlock, viewRadixOffer };
 })();
 __m["js/core/search.js"] = (function () {
 // Ricerca clienti: tollerante ad accenti, punteggiatura, forme societarie e piccoli errori di battitura.
@@ -2754,41 +3210,6 @@ async function radixOrdersSection(app) {
 }
 
 return { isBlocked, radixOrderRow, radixOrdersSection };
-})();
-__m["js/core/purchases.js"] = (function () {
-// Cosa compra il cliente: famiglie per anno dal fatturato RADIX (tools/import_fatturato.py) e spunti di vendita.
-// Gli spunti seguono le priorità commerciali NORDTEX: sostituzione STEICO con NATURHELD; famiglie non più acquistate.
-
-const SALES_YEARS = ['2024', '2025', '2026'];
-const NOT_PRODUCT = new Set(['Acconti e spese senza articolo', 'Trasporti e bancali', 'Su ordinazione', 'Altro']);
-const STEICO = 'Fibra di legno STEICO';
-const NATURHELD = 'Fibra di legno NATURHELD';
-
-function purchaseSummary(c, currentYear = SALES_YEARS[SALES_YEARS.length - 1]) {
-  const fams = (c?.purchases?.families || []).filter(f => Math.abs(f.t || 0) >= 1);
-  const val = (f, y) => (f && f.y && f.y[y]) || 0;
-  const by = Object.fromEntries(fams.map(f => [f.f, f]));
-  const prev = SALES_YEARS.filter(y => y < currentYear);
-  const hints = [];
-  const st = by[STEICO], nh = by[NATURHELD];
-  if (st && st.t > 0) {
-    if (!nh || nh.t <= 0) hints.push({ kind: 'propose', text: 'Compra fibra di legno STEICO e mai NATURHELD: proponi NATURHELD' });
-    else if (val(st, currentYear) > val(nh, currentYear)) hints.push({ kind: 'propose', text: `Nel ${currentYear} compra più STEICO che NATURHELD: spingi il passaggio a NATURHELD` });
-  }
-  for (const f of fams) {
-    if (NOT_PRODUCT.has(f.f) || f.f === STEICO) continue;
-    const before = prev.reduce((s, y) => s + val(f, y), 0);
-    if (before >= 500 && val(f, currentYear) <= 0) {
-      const last = [...prev].reverse().find(y => val(f, y) > 0);
-      hints.push({ kind: 'lost', text: `${f.f}: acquistava fino al ${last}, nel ${currentYear} niente` });
-    }
-  }
-  const rows = fams.filter(f => !NOT_PRODUCT.has(f.f) || f.t >= 1).map(f => ({ name: f.f, years: SALES_YEARS.map(y => val(f, y)), total: f.t, other: NOT_PRODUCT.has(f.f) }));
-  rows.sort((a, b) => (a.other - b.other) || (b.total - a.total));
-  return { rows, hints, top: (c?.purchases?.top || []).slice(0, 6), has: rows.length > 0 };
-}
-
-return { SALES_YEARS, purchaseSummary };
 })();
 __m["js/views/agenda.js"] = (function () {
 const { h, fill, eur, dateIt, dateTimeIt, statusBadge, toast, modal, field, emptyState, debounce, telLinks, today } = __m["js/ui.js"];
@@ -4686,7 +5107,7 @@ __m["js/views/offers-list.js"] = (function () {
 // All'apertura "Da seguire" (aperte) in ordine di prossimo contatto; in evidenza quelle in scadenza di validità.
 const { h, fill, eur, dateIt, today, toast, emptyState, debounce } = __m["js/ui.js"];
 const { unifiedOffers, quoteReminders, isExpiring } = __m["js/data/model.js"];
-const { radixOfferDialog } = __m["js/views/radix-offers.js"];
+const { radixOfferDialog, linesSummary } = __m["js/views/radix-offers.js"];
 const { quoteCls } = __m["js/views/agenda.js"];
 const { trashAction, trashQuote } = __m["js/views/quote-cancel.js"];
 const st = { filter: 'aperte', q: '', who: '', origin: '' };
@@ -4747,6 +5168,7 @@ async function offersList(app, { onNew }) {
       h('span', { class: 'rx-cust' }, c ? c.name + (c.city ? ' · ' + c.city : '') : o.customerName),
       h('small', { class: 'muted' }, [o.subject || null, 'del ' + dateIt(o.date), isDir && o.who ? 'segue ' + o.who : null,
         o.origin === 'radix' && o.radixAgent && isDir ? 'in RADIX: ' + o.radixAgent.toLowerCase() : null].filter(Boolean).join(' · ')),
+      o.origin === 'radix' && linesSummary(o.raw.lines) ? h('small', { class: 'rx-items' }, '📦 ' + linesSummary(o.raw.lines)) : null,
       o.origin === 'radix' && o.raw.outcomeNote ? h('small', { class: 'rx-note' }, `“${o.raw.outcomeNote}” — ${o.raw.outcomeByName || ''}`) : null);
     const side = h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, o.total ? eur(o.total) : '—'),
       o.origin === 'radix' && !app.session.preview ? h('button', { class: 'btn small', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o.raw).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, 'Esito')
@@ -4765,7 +5187,7 @@ async function offersList(app, { onNew }) {
       tile('Accettate nel mese', eur(sum(won)), `${won.length} offerte`, 'accettate'));
     const w = st.q.toLocaleLowerCase('it');
     const base = all.filter(o => (!st.who || o.who === st.who) && (!st.origin || o.origin === st.origin)
-      && (!w || [o.number, o.customerName, o.subject, o.who, o.radixAgent].join(' ').toLocaleLowerCase('it').includes(w)));
+      && (!w || [o.number, o.customerName, o.subject, o.who, o.radixAgent, o.origin === 'radix' ? (o.raw.lines || []).map(x => x.d).join(' ') : ''].join(' ').toLocaleLowerCase('it').includes(w)));
     fill(chips, FILTERS.map(([k, l, f]) => h('button', { class: 'chip' + (st.filter === k ? ' on' : ''), type: 'button', onclick: () => { st.filter = k; draw(); } }, l, h('b', {}, base.filter(f).length.toLocaleString('it-IT')))));
     const f = FILTERS.find(x => x[0] === st.filter)[2];
     const rows = base.filter(f).sort(sorters[st.filter] || ((a, b) => String(b.date).localeCompare(String(a.date))));
@@ -7111,6 +7533,7 @@ const HELP = {
       'I filtri in alto: Da seguire, Ultimi 7 giorni, Da sentire, In scadenza, Accettate, Perse, Annullate.',
       'Il pallino colorato dice l\'urgenza; "sentire il …" è la data del prossimo contatto.',
       'Offerte RADIX: "Esito" per segnare Sentito, Accettata o Persa (con nota): diventa anche una nota nella storia del cliente.',
+      'Offerte RADIX: sotto il cliente compaiono gli articoli (📦); aprendo l\'offerta, "Cosa c\'è in questa offerta" mostra articoli, quantità, prezzo netto e valore. Nella ricerca puoi scrivere anche il nome di un prodotto.',
       'Cestino 🗑 accanto ad "Apri": una bozza si elimina; un\'offerta inviata si ANNULLA con il motivo (resta in archivio, esce da aperte e statistiche).',
     ],
     notes: ['Le offerte del cliente di prova (numero PRV-…) non compaiono qui né nei totali: le trovi nella sua scheda (Clienti › PROVA - CLIENTE TEST POVE DEL GRAPPA).',
@@ -7174,7 +7597,8 @@ const HELP = {
     title: 'Aggiorna dati',
     intro: 'Caricare i file esportati da RADIX: offerte, ordini, giacenze, fatturato.',
     steps: [
-      'Ogni giorno: Offerte aperte (Excel) e Ordini clienti aperti (Excel). Ogni lunedì: Giacenze (PDF, anche tutti insieme) e Fatturato (TXT).',
+      'Ogni giorno: Offerte aperte (Excel), poi Righe delle offerte (TXT), e Ordini clienti aperti (Excel). Ogni lunedì: Giacenze (PDF, anche tutti insieme) e Fatturato (TXT).',
+      'Righe delle offerte: carica sempre prima le offerte aperte del giorno; l\'app abbina le righe a ogni offerta con lo stesso totale. Le offerte con totale 0 in RADIX restano senza righe.',
       'Scegli il file: l\'app lo legge e mostra cosa cambierà (nuovi, aggiornati, chiusi).',
       'Se va bene premi "Conferma e aggiorna"; se esci dalla pagina prima di confermare non si salva nulla.',
     ],
@@ -7412,329 +7836,6 @@ function canSeeSystems(session) {
 
 return { RSI, resolveLayers, uValue, totalCm, verdict, findProduct, mainThicknesses, systemQuote, systemByCode, canSeeSystems };
 })();
-__m["js/core/xlsx-read.js"] = (function () {
-// Lettura minima di un file Excel (.xlsx) nel browser, senza librerie esterne (02/11/2026, pagina "Aggiorna dati").
-// Un .xlsx è uno zip di XML: si legge l'indice dello zip, si decomprimono (DecompressionStream 'deflate-raw')
-// il primo foglio e le stringhe condivise. Restituisce le righe come array di valori (testo, numero, booleano o null).
-// Le date restano numeri seriali Excel: excelDate() le converte in AAAA-MM-GG.
-
-const u16 = (b, o) => b[o] | (b[o + 1] << 8);
-const u32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
-
-async function inflate(bytes) {
-  const s = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-  return new Uint8Array(await new Response(s).arrayBuffer());
-}
-
-async function unzip(buf) {
-  const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-  let e = -1;
-  for (let i = b.length - 22; i >= Math.max(0, b.length - 65557); i--) if (u32(b, i) === 0x06054b50) { e = i; break; }
-  if (e < 0) throw new Error('Il file non è un Excel .xlsx valido');
-  const n = u16(b, e + 10); let p = u32(b, e + 16);
-  const files = new Map(), dec = new TextDecoder();
-  for (let k = 0; k < n; k++) {
-    if (u32(b, p) !== 0x02014b50) throw new Error('Indice del file Excel danneggiato');
-    const method = u16(b, p + 10), csize = u32(b, p + 20), nlen = u16(b, p + 28), xlen = u16(b, p + 30), clen = u16(b, p + 32), lho = u32(b, p + 42);
-    const name = dec.decode(b.subarray(p + 46, p + 46 + nlen));
-    files.set(name, { method, csize, lho });
-    p += 46 + nlen + xlen + clen;
-  }
-  return {
-    names: [...files.keys()],
-    async text(name) {
-      const f = files.get(name); if (!f) return null;
-      const start = f.lho + 30 + u16(b, f.lho + 26) + u16(b, f.lho + 28);
-      const raw = b.subarray(start, start + f.csize);
-      const out = f.method === 0 ? raw : f.method === 8 ? await inflate(raw) : null;
-      if (!out) throw new Error('Compressione del file Excel non supportata');
-      return dec.decode(out);
-    },
-  };
-}
-
-const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
-const unxml = s => s.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (m, e) => e[0] === '#' ? String.fromCodePoint(e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : +e.slice(1)) : ENT[e] ?? m);
-const tText = x => [...x.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>|<t(?:\s[^>]*)?\/>/g)].map(m => unxml(m[1] || '')).join('');
-const colIndex = ref => { let n = 0; for (const ch of ref.replace(/\d+$/, '')) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
-
-// Righe del primo foglio (o del foglio indicato per nome)
-async function readXlsx(buf, { sheet } = {}) {
-  const z = await unzip(buf);
-  const shared = [];
-  const sst = await z.text('xl/sharedStrings.xml');
-  if (sst) for (const m of sst.matchAll(/<si>([\s\S]*?)<\/si>/g)) shared.push(tText(m[1]));
-  let path = 'xl/worksheets/sheet1.xml';
-  const wb = await z.text('xl/workbook.xml'), rels = await z.text('xl/_rels/workbook.xml.rels');
-  if (wb && rels) {
-    const sheets = [...wb.matchAll(/<sheet\b[^>]*?name="([^"]*)"[^>]*?r:id="([^"]*)"/g)].map(m => ({ name: unxml(m[1]), rid: m[2] }));
-    const pick = (sheet && sheets.find(s => s.name === sheet)) || sheets[0];
-    const rel = pick && [...rels.matchAll(/<Relationship\b[^>]*>/g)].map(m => m[0]).find(r => r.includes(`Id="${pick.rid}"`));
-    const target = rel && rel.match(/Target="([^"]*)"/)?.[1];
-    if (target) path = target.startsWith('/') ? target.slice(1) : 'xl/' + target.replace(/^\.\//, '');
-  }
-  const xml = await z.text(path);
-  if (!xml) throw new Error('Foglio non trovato nel file Excel');
-  const rows = [];
-  for (const rm of xml.matchAll(/<row\b([^>]*)>([\s\S]*?)<\/row>|<row\b([^>]*)\/>/g)) {
-    const rn = +((rm[1] || rm[3] || '').match(/\br="(\d+)"/)?.[1] || rows.length + 1);
-    const row = [];
-    for (const cm of (rm[2] || '').matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
-      const attrs = cm[1], body = cm[2] || '';
-      const ref = attrs.match(/\br="([A-Z]+)\d+"/)?.[1];
-      const t = attrs.match(/\bt="(\w+)"/)?.[1];
-      const v = body.match(/<v>([\s\S]*?)<\/v>/)?.[1];
-      let val = null;
-      if (t === 's') val = v == null ? null : shared[+v] ?? null;
-      else if (t === 'inlineStr') val = tText(body);
-      else if (t === 'str') val = v == null ? null : unxml(v);
-      else if (t === 'b') val = v === '1';
-      else if (t === 'e') val = null;
-      else if (v != null) val = Number(v);
-      row[ref ? colIndex(ref) : row.length] = val;
-    }
-    rows[rn - 1] = Array.from(row, x => x === undefined ? null : x);
-  }
-  return Array.from(rows, r => r || []);
-}
-
-// Numero seriale Excel (sistema 1900) → 'AAAA-MM-GG'
-function excelDate(n) {
-  if (typeof n !== 'number' || !isFinite(n) || n < 1) return null;
-  const d = new Date(Math.round((n - 25569) * 86400000));
-  return d.toISOString().slice(0, 10);
-}
-
-return { unzip, readXlsx, excelDate };
-})();
-__m["js/core/radix-import.js"] = (function () {
-// Lettura nel browser delle esportazioni RADIX per la pagina "Aggiorna dati" (02/11/2026).
-// Stesse regole degli strumenti tools/import_offerte_radix.py e tools/import_fatturato.py (che restano validi):
-//  - Offerte aperte: Offerte › Selezione, stato "Aperto", esportazione Excel.
-//  - Fatturato: Statistica fatturato per movimenti, esportazione "Testo separato con TAB".
-// Nessun dato viene salvato qui: le funzioni restituiscono il risultato e il riepilogo da mostrare prima della conferma.
-const { excelDate } = __m["js/core/xlsx-read.js"];
-const { SALES_YEARS } = __m["js/core/purchases.js"];
-const OFFER_COLUMNS = ['Offerta', 'Data documento', 'Stato documento', 'Validità', 'Descrizione', 'Oggetto', 'Contatto', 'Totale imponibile', 'Agente', 'Follow-up previsto'];
-
-const normName = s => String(s ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\x00-\x7f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
-
-function day(v) {
-  if (typeof v === 'number') return excelDate(v);
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
-  const m = String(v ?? '').trim().match(/^(\d{2})[./](\d{2})[./](\d{4})$/);
-  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
-  const iso = String(v ?? '').trim().match(/^(\d{4}-\d{2}-\d{2})/);
-  return iso ? iso[1] : null;
-}
-const str = v => String(v ?? '').trim();
-
-// rows: righe del foglio (la prima è l'intestazione); customers: [{ id (N° cliente), name, city }]
-function parseRadixOffers(rows, customers = []) {
-  if (!rows?.length) throw new Error('Il file è vuoto');
-  const head = rows[0].map(str);
-  const miss = OFFER_COLUMNS.filter(c => !head.includes(c));
-  if (miss.length) throw new Error('Non sembra l\'esportazione delle offerte RADIX. Colonne mancanti: ' + miss.join(', '));
-  const col = Object.fromEntries(head.map((c, i) => [c, i]).filter(([c]) => c));
-  const byNC = new Map(), byN = new Map();
-  const add = (m, k, c) => { if (!m.has(k)) m.set(k, []); m.get(k).push(c); };
-  for (const c of customers) { add(byNC, normName(c.name) + '|' + normName(c.city), c); add(byN, normName(c.name), c); }
-  const offers = [], unmatched = [];
-  for (const r of rows.slice(1)) {
-    const g = k => (k in col ? r[col[k]] : null);
-    const num = str(g('Offerta')).replace(/\s+/g, '');
-    if (!num) continue;
-    if (!/^[A-Z]+-\d{4}-\d+$/.test(num)) throw new Error('Numero offerta non riconosciuto: ' + num);
-    const label = str(g('Descrizione'));
-    const cut = label.lastIndexOf(', ');
-    let name = cut >= 0 ? label.slice(0, cut) : '', city = cut >= 0 ? label.slice(cut + 2) : '';
-    if (!name) { name = label; city = ''; }
-    const m = byNC.get(normName(name) + '|' + normName(city)) || byN.get(normName(name)) || [];
-    const cust = m.length === 1 ? m[0].id : null;
-    if (!cust) unmatched.push(label);
-    const d = day(g('Data documento'));
-    if (!d) throw new Error(num + ': data documento mancante');
-    const tot = g('Totale imponibile');
-    offers.push({ id: num, customer: cust, customerLabel: label, date: d, validUntil: day(g('Validità')), subject: str(g('Oggetto')), contact: str(g('Contatto')),
-      total: typeof tot === 'number' && tot ? Math.round(tot * 100) / 100 : null, radixAgent: str(g('Agente')), followup: day(g('Follow-up previsto')),
-      typology: str(g('Tipologia cliente')), zone: str(g('Zona')), depot: str(g('Deposito')), status: str(g('Stato documento')) });
-  }
-  if (!offers.length) throw new Error('Nessuna offerta nel file');
-  if (new Set(offers.map(o => o.id)).size !== offers.length) throw new Error('Numeri offerta duplicati nel file');
-  const dates = offers.map(o => o.date).sort();
-  return { offers, from: dates[0], to: dates[dates.length - 1], unmatched: [...new Set(unmatched)].sort(),
-    total: Math.round(offers.reduce((s, o) => s + (o.total || 0), 0) * 100) / 100 };
-}
-
-// Confronto con le offerte aperte già nell'app: nuove, già presenti, da chiudere (non più aperte nel periodo del file)
-function offersPreview(parsed, current = []) {
-  const ids = new Set(parsed.offers.map(o => o.id));
-  const known = new Set(current.map(o => o.id));
-  return {
-    added: parsed.offers.filter(o => !known.has(o.id)),
-    kept: parsed.offers.filter(o => known.has(o.id)),
-    closed: current.filter(o => o.open !== false && o.date >= parsed.from && o.date <= parsed.to && !ids.has(o.id)),
-  };
-}
-
-// ---------- ordini clienti aperti (03/11/2026, file giornaliero n. 2 della routine)
-// Esportazione del riquadro RADIX "Ordini clienti aperti tutte le zone" in Excel. Ogni file è la fotografia di tutti gli ordini aperti.
-const ORDER_COLUMNS = ['Data documento', 'Ordine cliente', 'Cliente/Descrizione/Luogo', 'Cantiere', 'Termine consegna', 'Importo', 'Stato documento', 'Cond. pagamento', 'Avvisi', 'Agente'];
-function parseRadixOrders(rows, customers = []) {
-  if (!rows?.length) throw new Error('Il file è vuoto');
-  const head = rows[0].map(str);
-  const miss = ORDER_COLUMNS.filter(c => !head.includes(c));
-  if (miss.length) throw new Error('Non sembra l\'esportazione degli ordini clienti aperti di RADIX. Colonne mancanti: ' + miss.join(', '));
-  const col = Object.fromEntries(head.map((c, i) => [c, i]).filter(([c]) => c));
-  const byNC = new Map(), byN = new Map();
-  const add = (m, k, c) => { if (!m.has(k)) m.set(k, []); m.get(k).push(c); };
-  for (const c of customers) { add(byNC, normName(c.name) + '|' + normName(c.city), c); add(byN, normName(c.name), c); }
-  const orders = [], unmatched = [];
-  for (const r of rows.slice(1)) {
-    const g = k => (k in col ? r[col[k]] : null);
-    const num = str(g('Ordine cliente')).replace(/\s+/g, '');
-    if (!num) continue;
-    if (!/^[A-Z]+-\d{4}-\d+$/.test(num)) throw new Error('Numero ordine non riconosciuto: ' + num);
-    const label = str(g('Cliente/Descrizione/Luogo'));
-    const cut = label.lastIndexOf(', ');
-    let name = cut >= 0 ? label.slice(0, cut) : '', city = cut >= 0 ? label.slice(cut + 2) : '';
-    if (!name) { name = label; city = ''; }
-    const m = byNC.get(normName(name) + '|' + normName(city)) || byN.get(normName(name)) || [];
-    const cust = m.length === 1 ? m[0].id : null;
-    if (!cust) unmatched.push(label);
-    const d = day(g('Data documento'));
-    if (!d) throw new Error(num + ': data documento mancante');
-    const tot = g('Importo');
-    orders.push({ id: num, customer: cust, customerLabel: label, date: d, deliveryBy: day(g('Termine consegna')), site: str(g('Cantiere')),
-      total: typeof tot === 'number' ? Math.round(tot * 100) / 100 : null, status: str(g('Stato documento')), payment: str(g('Cond. pagamento')),
-      notes: str(g('Avvisi')), radixAgent: str(g('Agente')), zone: str(g('Zona')), typology: str(g('Tipologia cliente')) });
-  }
-  if (!orders.length) throw new Error('Nessun ordine nel file');
-  if (new Set(orders.map(o => o.id)).size !== orders.length) throw new Error('Numeri ordine duplicati nel file');
-  return { orders, unmatched: [...new Set(unmatched)].sort(), total: Math.round(orders.reduce((s, o) => s + (o.total || 0), 0) * 100) / 100,
-    blocked: orders.filter(o => /bloccat/i.test(o.status)).length };
-}
-// Confronto con gli ordini aperti già nell'app: nuovi, già presenti, non più aperti (evasi o chiusi)
-function ordersPreview(parsed, current = []) {
-  const ids = new Set(parsed.orders.map(o => o.id));
-  const known = new Set(current.map(o => o.id));
-  return { added: parsed.orders.filter(o => !known.has(o.id)), kept: parsed.orders.filter(o => known.has(o.id)), closed: current.filter(o => o.open !== false && !ids.has(o.id)) };
-}
-
-// ---------- fatturato
-// Colonne dell'esportazione "Quantità + valore (Std)" con i raggruppamenti Cliente / Numero, Data documento Anno, riepilogo Articolo (Codice)
-const C_CUST = 47, C_YEAR = 65, C_YEAR_VAL = 67, C_ITEM = 83, C_ITEM_QTY = 84, C_ITEM_VAL = 85;
-const TOP_ITEMS = 6;
-const KEYWORDS = [
-  [/^\(nessun articolo\)$/i, 'Acconti e spese senza articolo'],
-  [/su ordinazione/i, 'Su ordinazione'],
-  [/trasporto|euro bancale|bancal/i, 'Trasporti e bancali'],
-  [/fibrogesso|gessofibra|aktivboard|radiante|tubo |pe-rt|pexa|raccordo|attuatore|collettor/i, 'Sistemi radianti'],
-  [/vetro cellulare|vitrex|policell|nordtex cell|foamglas|\bV600\b/i, 'Vetro cellulare'],
-  [/steico/i, 'Fibra di legno STEICO'],
-  [/naturtex|naturheld/i, 'Fibra di legno NATURHELD'],
-  [/canap|cannatherm|konope/i, 'Canapa'],
-  [/thermopor|unipor|poroton|laterizi/i, 'Blocchi in laterizio'],
-  [/lana di roccia|boerner|lana minerale/i, 'Lana minerale'],
-  [/ampack|ampatex|tyvek|foliarex|freno al vapore|telo|tape/i, 'Sistemi di tenuta'],
-  [/vaku/i, 'Sottovuoto Vakuum'],
-  [/\blvl/i, 'Legno microlamellare'],
-  [/argilla/i, 'Argilla'],
-  [/\bTS14\b|perlite|nordtex perl/i, 'Granulati a secco'],
-  [/sughero/i, 'Sughero'],
-];
-
-function decodeText(buf) {
-  const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-  try { return new TextDecoder('utf-8', { fatal: true }).decode(b); } catch { return new TextDecoder('windows-1252').decode(b); }
-}
-
-// Testo separato da TAB, con eventuali campi tra virgolette (come csv.reader di Python)
-function parseTsv(text) {
-  const out = []; let row = [], f = '', q = false, i = 0, start = true;
-  for (; i < text.length; i++) {
-    const ch = text[i];
-    if (q) {
-      if (ch === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch;
-      continue;
-    }
-    if (ch === '"' && start) { q = true; start = false; continue; }
-    if (ch === '\t') { row.push(f); f = ''; start = true; continue; }
-    if (ch === '\r' && text[i + 1] === '\n') continue;
-    if (ch === '\n' || ch === '\r') { row.push(f); out.push(row); row = []; f = ''; start = true; continue; }
-    f += ch; start = false;
-  }
-  if (f !== '' || row.length) { row.push(f); out.push(row); }
-  return out;
-}
-
-const num = s => { s = String(s ?? '').trim(); if (!s) return 0; return s.includes(',') ? Number(s.replace(/\./g, '').replace(',', '.')) : Number(s); };
-const r2 = v => Math.round(v * 100) / 100, r3 = v => Math.round(v * 1000) / 1000;
-
-function family(code, desc, products) {
-  const p = products.get(code);
-  if (p) {
-    let f = p.family || 'Altro';
-    if (f === 'Fibra di legno' && (p.producer === 'STEICO' || p.producer === 'NATURHELD')) f += ' ' + p.producer;
-    return f;
-  }
-  for (const [rx, f] of KEYWORDS) if (rx.test(desc)) return f;
-  return 'Altro';
-}
-
-// text: contenuto del file TXT; products: prodotti dell'app (radixCode, family, producer); asOf: data dei dati
-function parseRadixSales(text, products = [], { asOf, years = SALES_YEARS } = {}) {
-  const prod = new Map(products.filter(p => p.radixCode).map(p => [p.radixCode, p]));
-  const cust = new Map(), errors = [];
-  const rows = parseTsv(text);
-  rows.forEach((r, k) => {
-    const i = k + 1;
-    if (r.length <= C_ITEM_VAL) { if (r.length > 1 || (r[0] || '').trim()) errors.push(`riga ${i}: colonne insufficienti (${r.length})`); return; }
-    const m = r[C_CUST].match(/^\s*(\d+)\s+-\s+([\s\S]*)$/);
-    const year = r[C_YEAR].trim();
-    if (!m || !years.includes(year)) { errors.push(`riga ${i}: cliente o anno non leggibile (${r[C_CUST]}, ${year})`); return; }
-    const im = r[C_ITEM].trim().match(/^(\S+)\s+-\s+([\s\S]*)$/);
-    const [code, desc] = im ? [im[1], im[2].trim()] : ['', r[C_ITEM].trim() || '(nessun articolo)'];
-    if (!cust.has(m[1])) cust.set(m[1], { name: m[2].trim(), rev: {}, yearTot: {}, fam: new Map(), items: new Map() });
-    const c = cust.get(m[1]);
-    const v = num(r[C_ITEM_VAL]);
-    c.rev[year] = (c.rev[year] || 0) + v;
-    c.yearTot[year] = num(r[C_YEAR_VAL]);
-    const f = family(code, desc, prod);
-    if (!c.fam.has(f)) c.fam.set(f, {});
-    const fy = c.fam.get(f); fy[year] = (fy[year] || 0) + v;
-    const key = code || desc;
-    if (!c.items.has(key)) c.items.set(key, { c: code, d: desc.slice(0, 90), v: 0, q: 0, y: year });
-    const it = c.items.get(key); it.v += v; it.q += num(r[C_ITEM_QTY]); if (year > it.y) it.y = year;
-  });
-  for (const [k, c] of cust) for (const [y, tot] of Object.entries(c.yearTot))
-    if (Math.abs((c.rev[y] || 0) - tot) > 0.05) errors.push(`cliente ${k} anno ${y}: somma articoli ${(c.rev[y] || 0).toFixed(2)} diversa dal totale RADIX ${tot.toFixed(2)}`);
-  if (!cust.size && !errors.length) errors.push('Nessuna riga di fatturato nel file');
-  if (errors.length) throw Object.assign(new Error('File non importabile:\n' + errors.slice(0, 20).join('\n')), { errors });
-  const out = {};
-  for (const [k, c] of cust) {
-    const fams = [...c.fam].map(([f, ys]) => ({ f, y: Object.fromEntries(Object.entries(ys).filter(([, v]) => Math.abs(v) >= 0.005).map(([y, v]) => [y, r2(v)])), t: r2(Object.values(ys).reduce((s, v) => s + v, 0)) }))
-      .sort((a, b) => b.t - a.t).filter(x => Math.abs(x.t) >= 0.005);
-    const items = [...c.items.values()].sort((a, b) => b.v - a.v).slice(0, TOP_ITEMS).filter(x => x.v > 0)
-      .map(x => ({ c: x.c, d: x.d, v: r2(x.v), q: r3(x.q), y: x.y }));
-    out[k] = { name: c.name, sales: { asOf, rev: Object.fromEntries(years.map(y => [y, r2(c.rev[y] || 0)])), families: fams, top: items } };
-  }
-  const totals = Object.fromEntries(years.map(y => [y, r2([...cust.values()].reduce((s, c) => s + (c.rev[y] || 0), 0))]));
-  return { asOf, years, totals, customers: out };
-}
-
-// Confronto con l'anagrafica dell'app: clienti collegati, clienti del file non presenti (es. privati), fatturato per anno prima/dopo
-function salesPreview(parsed, customers = []) {
-  const known = new Map(customers.filter(c => c.origin !== 'HUB').map(c => [String(c.id), c]));
-  const linked = [], missing = [];
-  for (const [k, x] of Object.entries(parsed.customers)) (known.has(k) ? linked : missing).push({ code: k, name: x.name, rev: x.sales.rev });
-  const before = Object.fromEntries(parsed.years.map(y => [y, r2(customers.reduce((s, c) => s + (Number(c['rev' + y]) || 0), 0))]));
-  const after = Object.fromEntries(parsed.years.map(y => [y, r2(linked.reduce((s, c) => s + (c.rev[y] || 0), 0))]));
-  return { linked, missing, before, after, zeroed: [...known.keys()].filter(k => !parsed.customers[k]).length };
-}
-
-return { OFFER_COLUMNS, normName, parseRadixOffers, offersPreview, ORDER_COLUMNS, parseRadixOrders, ordersPreview, decodeText, parseTsv, parseRadixSales, salesPreview };
-})();
 __m["js/core/pdf-text.js"] = (function () {
 // Estrazione minima del testo da un PDF nel browser, senza librerie esterne (02/11/2026, giacenze RADIX del venerdì).
 // Pensata per i report Crystal Reports di RADIX: contenuti compressi FlateDecode, font con mappa ToUnicode, testo con Tm/Td/Tj/TJ.
@@ -7954,7 +8055,7 @@ __m["js/views/data-update.js"] = (function () {
 // Flusso: scegli il file → l'app lo legge sul dispositivo e mostra cosa cambierà → «Conferma e aggiorna».
 const { h, fill, eur, dateIt, dateTimeIt, today, toast, field } = __m["js/ui.js"];
 const { readXlsx } = __m["js/core/xlsx-read.js"];
-const { parseRadixOffers, offersPreview, parseRadixSales, salesPreview, decodeText, parseRadixOrders, ordersPreview } = __m["js/core/radix-import.js"];
+const { parseRadixOffers, offersPreview, parseRadixSales, salesPreview, decodeText, parseRadixOrders, ordersPreview, parseRadixOfferLines, matchOfferLines } = __m["js/core/radix-import.js"];
 const { parseStockPdf, stockPreview } = __m["js/core/stock-import.js"];
 const { stockDepot } = __m["js/core/quote-doc.js"];
 const canUpdateData = s => !!s?.canImport && !s.preview;
@@ -7978,7 +8079,7 @@ async function viewDataUpdate(app) {
   const loadLog = async () => {
     const rows = await app.store.importLog().catch(() => []);
     fill(logBox, rows.length ? h('ul', { class: 'du-log' }, rows.map(r => h('li', {},
-      h('span', { class: 'badge ' + (r.kind === 'offerte' ? 'info' : r.kind === 'giacenze' ? 'warn' : 'ok') }, { offerte: 'Offerte', giacenze: 'Giacenze', ordini: 'Ordini' }[r.kind] || 'Fatturato'),
+      h('span', { class: 'badge ' + (r.kind === 'offerte' || r.kind === 'righe offerte' ? 'info' : r.kind === 'giacenze' ? 'warn' : 'ok') }, { offerte: 'Offerte', giacenze: 'Giacenze', ordini: 'Ordini', 'righe offerte': 'Righe offerte' }[r.kind] || 'Fatturato'),
       h('span', {}, dateTimeIt(r.at) + ' · ' + (r.byName || '') + (r.file ? ' · ' + r.file : '')),
       h('small', { class: 'muted' }, logText(r))))) : h('p', { class: 'muted' }, 'Nessun caricamento fatto dall\'app finora.'));
   };
@@ -7986,13 +8087,14 @@ async function viewDataUpdate(app) {
   return h('div', { class: 'page du-page' },
     h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Aggiorna dati'),
       h('p', { class: 'muted' }, 'Carichi le esportazioni di RADIX: l\'app ti mostra cosa cambia e aggiorna solo quando confermi. Nessun dato si cancella.'))),
-    offersCard(app, loadLog), radixOrdersCard(app, loadLog), stockCard(app, loadLog), salesCard(app, loadLog),
+    offersCard(app, loadLog), offerLinesCard(app, loadLog), radixOrdersCard(app, loadLog), stockCard(app, loadLog), salesCard(app, loadLog),
     h('section', { class: 'card' }, h('h2', {}, 'Ultimi caricamenti'), logBox),
     h('p', { class: 'fine muted' }, 'Note clienti RADIX (file PDF): per ora si aggiornano ancora con Claude. Anagrafica clienti nuovi: si creano dall\'app o con l\'aggiornamento completo.'));
 }
 
 function logText(r) {
   const s = r.summary || {};
+  if (r.kind === 'righe offerte') return `righe abbinate a ${s.offers} offerte` + (s.noTotal ? ` · ${s.noTotal} con totale 0 in RADIX` : '') + (s.notFound ? ` · ${s.notFound} senza righe` : '');
   if (r.kind === 'ordini') return `${s.orders} ordini aperti: ${s.new} nuovi, ${s.updated} aggiornati, ${s.closed} evasi o chiusi`;
   if (r.kind === 'giacenze') return (s.depots || []).map(d => `${depotLabel(d.code)} al ${dateIt(d.date)}: ${d.items} articoli`).join(' · ');
   if (r.kind === 'offerte') return `${s.offers} offerte dal ${dateIt(s.from)} al ${dateIt(s.to)}: ${s.new} nuove, ${s.updated} aggiornate, ${s.closed} chiuse`;
@@ -8033,6 +8135,48 @@ function offersCard(app, done) {
     h('details', { class: 'fold-in' }, h('summary', {}, 'Come esportarlo da RADIX'),
       steps(['Offerte › Selezione.', 'Stato del documento: «Aperto»; Data documento: ultimi 3 mesi (fino a oggi).', 'Cerca, poi esporta in Excel e salva il file.',
         'Le offerte del periodo che non sono più nel file vengono segnate come chiuse: usa sempre un periodo che arrivi a oggi.'])),
+    out);
+}
+
+// 03/11: righe delle offerte (articoli, quantità, valore) per capire cosa c'è in un'offerta RADIX (segnalazione Pajola)
+function offerLinesCard(app, done) {
+  const out = h('div', { class: 'du-out' });
+  const run = async file => {
+    fill(out, h('p', { class: 'muted' }, 'Leggo ' + file.name + '…'));
+    try {
+      const buf = await file.arrayBuffer();
+      const parsed = parseRadixOfferLines(decodeText(buf));
+      const offers = await app.store.radixOffers();
+      const m = matchOfferLines(parsed, offers);
+      const sha = await sha256(buf);
+      const stats = { lines: parsed.lines, noTotal: m.noTotal.length, notFound: m.noRows.length + m.ambiguous.length };
+      const lbl = id => { const o = offers.find(x => x.id === id); return `${id} · ${o?.customerLabel || ''}${o?.subject ? ' · ' + o.subject : ''}`; };
+      fill(out, h('div', { class: 'du-preview' },
+        h('p', {}, h('strong', {}, file.name), ` · ${parsed.lines} righe di ${parsed.customers.size} clienti · ${offers.length} offerte aperte nell'app`),
+        h('div', { class: 'du-stats' }, stat(m.exact.length, 'offerte con le righe trovate'), stat(m.noTotal.length, 'con totale 0 in RADIX: non abbinabili', m.noTotal.length ? 'warn' : ''),
+          stat(m.noRows.length + m.ambiguous.length, 'righe non trovate', m.noRows.length + m.ambiguous.length ? 'warn' : '')),
+        m.noRows.length + m.ambiguous.length ? h('details', { class: 'fold-in' }, h('summary', {}, 'Offerte senza righe trovate'), h('ul', { class: 'du-list' }, [...m.noRows, ...m.ambiguous].map(id => h('li', {}, lbl(id))))) : null,
+        m.noTotal.length ? h('details', { class: 'fold-in' }, h('summary', {}, 'Offerte con totale 0 in RADIX'), h('ul', { class: 'du-list' }, m.noTotal.map(id => h('li', {}, lbl(id))))) : null,
+        h('p', { class: 'fine muted' }, 'Prima carica le offerte aperte di oggi, poi questo file: le righe si abbinano alle offerte già nell\'app.'),
+        h('div', { class: 'du-actions' }, h('button', { type: 'button', class: 'btn', onclick: () => fill(out) }, 'Annulla'),
+          h('button', { type: 'button', class: 'btn primary', disabled: !m.exact.length, onclick: async e => {
+            e.target.disabled = true;
+            try {
+              const r = await app.store.importRadixOfferLines({ lines: m.lines, stats, file: file.name, sha });
+              app.invalidate?.();
+              toast(`Righe caricate su ${r.offers} offerte`);
+              fill(out, h('p', { class: 'du-ok' }, '✓ ' + logText({ kind: 'righe offerte', summary: r }))); done();
+            } catch (err) { e.target.disabled = false; toast(err.message, 'error'); }
+          } }, 'Conferma e aggiorna'))));
+    } catch (err) { fill(out, h('p', { class: 'du-err' }, err.message)); }
+  };
+  return h('section', { class: 'card du-card' },
+    h('div', { class: 'du-head' }, h('div', {}, h('h2', {}, 'Righe delle offerte RADIX'), h('small', { class: 'muted' }, 'File di testo (TAB) · ogni giorno, dopo le offerte aperte')), picker('.txt,.TXT,.tsv,text/plain', 'Scegli il file TXT', run)),
+    h('details', { class: 'fold-in' }, h('summary', {}, 'Come esportarlo da RADIX'),
+      steps(['Menu ≡ › cerca «movimenti» › Offerte › Liste & statistiche › Stampa volume offerte per movimenti.',
+        'Data Doc. dal 01.01 dell\'anno a oggi; Stato-Doc. «(Tutto)»; campo Offerta vuoto.',
+        'Lista «Quantità + valore (Std)»; Raggrup. 1 Cliente (Indirizzo corrispondenza) / Numero; Raggrup. 2 Riga documento; Riepilogo Articolo (Codice).',
+        'Esporta › Testo separato con TAB › Destinazione Email (RADIX è sul server remoto): poi salva l\'allegato e caricalo qui.'])),
     out);
 }
 
