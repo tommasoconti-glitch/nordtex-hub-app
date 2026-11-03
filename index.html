@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="ba2fad232925">
+<meta name="ntx-build" content="037bc50c80aa">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -791,7 +791,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ba2fad232925"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"037bc50c80aa"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2502,6 +2502,15 @@ async function unzip(buf) {
   }
   return {
     names: [...files.keys()],
+    // 03/11: anche il contenuto binario (PDF dentro uno .zip)
+    async bytes(name) {
+      const f = files.get(name); if (!f) return null;
+      const start = f.lho + 30 + u16(b, f.lho + 26) + u16(b, f.lho + 28);
+      const raw = b.subarray(start, start + f.csize);
+      const out = f.method === 0 ? raw : f.method === 8 ? await inflate(raw) : null;
+      if (!out) throw new Error('Compressione del file .zip non supportata');
+      return out;
+    },
     async text(name) {
       const f = files.get(name); if (!f) return null;
       const start = f.lho + 30 + u16(b, f.lho + 26) + u16(b, f.lho + 28);
@@ -2945,13 +2954,17 @@ function linesCard(o) {
   const lines = [...(o.lines || [])].sort((a, b) => isService(a) - isService(b));
   if (!lines.length) return h('section', { class: 'card' }, h('h2', {}, 'Cosa c\'è in questa offerta'),
     h('p', { class: 'muted' }, Number(o.total) ? 'Le righe (articoli, quantità, prezzi) non sono ancora state caricate da RADIX per questa offerta.'
-      : 'In RADIX questa offerta ha totale 0: le righe non si possono abbinare. Aprila in RADIX per vedere articoli e prezzi.'));
+      : 'In RADIX questa offerta ha totale 0 (spesso perché contiene alternative): le righe arrivano con il PDF dell\'offerta. Intanto aprila in RADIX.'));
+  const pdf = lines.some(x => x.src === 'pdf');   // dal PDF: unità di misura, prezzo di listino e sconto
   return h('section', { class: 'card rx-lines' }, h('h2', {}, 'Cosa c\'è in questa offerta'),
+    lines.some(x => x.alt) ? h('p', { class: 'alert warn' }, 'L\'offerta contiene alternative: non tutte le righe si sommano.') : null,
     h('div', { class: 'tbl-wrap' }, h('table', { class: 'table' },
-      h('thead', {}, h('tr', {}, h('th', {}, 'Articolo'), h('th', { class: 'num' }, 'Quantità'), h('th', { class: 'num' }, 'Prezzo netto'), h('th', { class: 'num' }, 'Valore'))),
+      h('thead', {}, h('tr', {}, h('th', {}, 'Articolo'), h('th', { class: 'num' }, 'Quantità'), pdf ? h('th', { class: 'num' }, 'Listino') : null, pdf ? h('th', { class: 'num' }, 'Sconto %') : null,
+        h('th', { class: 'num' }, 'Prezzo netto'), h('th', { class: 'num' }, 'Valore'))),
       h('tbody', {}, lines.map(x => h('tr', { class: isService(x) ? 'muted' : '' }, h('td', {}, x.c ? h('small', { class: 'muted' }, x.c + ' ') : null, x.d),
-        h('td', { class: 'num' }, qtyIt(x.q)), h('td', { class: 'num' }, x.q ? eur(x.v / x.q) : '—'), h('td', { class: 'num' }, eur(x.v))))))),
-    h('p', { class: 'fine muted' }, 'Righe da RADIX abbinate al totale dell\'offerta. Prezzo netto = valore della riga diviso la quantità (sconti già applicati); l\'unità di misura è quella della riga in RADIX.'));
+        h('td', { class: 'num' }, qtyIt(x.q) + (x.u ? ' ' + x.u.toLowerCase() : '')), pdf ? h('td', { class: 'num' }, x.p != null ? eur(x.p) : '') : null, pdf ? h('td', { class: 'num' }, x.s || '') : null,
+        h('td', { class: 'num' }, x.q ? eur(x.v / x.q) : '—'), h('td', { class: 'num' }, eur(x.v))))))),
+    h('p', { class: 'fine muted' }, pdf ? 'Righe dal PDF dell\'offerta RADIX.' : 'Righe da RADIX abbinate al totale dell\'offerta. Prezzo netto = valore della riga diviso la quantità (sconti già applicati).'));
 }
 
 function radixOfferRow(app, o, refresh, opts) { return row(app, o, refresh, opts); }
@@ -7598,7 +7611,7 @@ const HELP = {
     intro: 'Caricare i file esportati da RADIX: offerte, ordini, giacenze, fatturato.',
     steps: [
       'Ogni giorno: Offerte aperte (Excel), poi Righe delle offerte (TXT), e Ordini clienti aperti (Excel). Ogni lunedì: Giacenze (PDF, anche tutti insieme) e Fatturato (TXT).',
-      'Righe delle offerte: carica sempre prima le offerte aperte del giorno; l\'app abbina le righe a ogni offerta con lo stesso totale. Le offerte con totale 0 in RADIX restano senza righe.',
+      'Righe delle offerte: carica sempre prima le offerte aperte del giorno. Puoi scegliere insieme lo .zip dei PDF di Irina (righe sicure, con listino e sconto) e il file di testo (tutte le offerte, abbinate per totale). Le conferme d\'ordine nello zip vengono ignorate.',
       'Scegli il file: l\'app lo legge e mostra cosa cambierà (nuovi, aggiornati, chiusi).',
       'Se va bene premi "Conferma e aggiorna"; se esci dalla pagina prima di confermare non si salva nulla.',
     ],
@@ -7986,6 +7999,52 @@ async function pdfLines(buf) {
 
 return { pdfLines };
 })();
+__m["js/core/offer-pdf.js"] = (function () {
+// Offerte RADIX in PDF (03/11/2026): Irina esporta ogni giorno i PDF delle offerte uscite ("<CLIENTE>_<n°>_OFF-<anno>-<numero>_<data>.pdf").
+// Dal PDF si leggono numero offerta, N° cliente e righe (codice, UM, quantità, prezzo di listino, sconto, imponibile netto):
+// a differenza dell'esportazione TXT c'è il numero dell'offerta, quindi l'abbinamento è sicuro (anche con alternative o totale 0).
+// La posizione verticale delle righe nei PDF RADIX non è affidabile: ogni riga articolo si riconosce dalla cella del codice (N + 5 cifre)
+// con le colonne numeriche sulla stessa riga; la descrizione è il testo a sinistra del codice sulla stessa riga.
+const { pdfLines } = __m["js/core/pdf-text.js"];
+const NUM = /^-?[\d.]+(,\d+)?$/;
+const num = s => Number(String(s).trim().replace(/\./g, '').replace(',', '.'));
+const r2 = v => Math.round(v * 100) / 100;
+// descrizione quando nel PDF la riga va a capo in modo illeggibile e il codice non è nel listino
+const SERVICE_NAMES = { N14126: 'Servizio di trasporto: carico diretto parziale', N88079: 'Servizio di trasporto: carico completo', N88081: 'Servizio di trasporto dal produttore', N14129: 'Euro bancale' };
+
+function parseOfferLines(pages) {
+  const rows = pages.flat();
+  const all = rows.map(l => l.map(c => c.text).join(' ')).join('\n');
+  const head = all.match(/OFFERTA NR\.\s*(\d+)\s*-\s*(\d{2})\.(\d{2})\.(\d{4})/);
+  if (!head) throw new Error('Non sembra un\'offerta RADIX (manca «OFFERTA NR.»)');
+  const id = `OFF-${head[4]}-${head[1]}`, date = `${head[4]}-${head[3]}-${head[2]}`;
+  const customer = all.match(/\((\d{1,7})\)/)?.[1] || null;
+  // colonne dall'intestazione (Codice, U.M., Quantità, Prezzo, Sconto, Imp.netto): le celle si assegnano per posizione orizzontale,
+  // perché sulla stessa riga possono finire anche pezzi dell'indirizzo del cliente
+  const hdr = rows.find(l => l.some(c => /^Codice/.test(c.text.trim())) && l.some(c => /Imp\.netto/.test(c.text)));
+  const hx = re => hdr?.find(c => re.test(c.text.trim()))?.x;
+  const X = { code: hx(/^Codice/) ?? 4742, um: hx(/^U\.M\./) ?? 5983, qty: hx(/^Quantit/) ?? 6698, price: hx(/^Prezzo/) ?? 8014, disc: hx(/^Sconto/) ?? 8959, net: hx(/^Imp\.netto/) ?? 10085 };
+  const lines = [];
+  for (const l of rows) {
+    const ci = l.findIndex(c => /^N\d{5}$/.test(c.text.trim()) && Math.abs(c.x - X.code) < 400);
+    if (ci < 0) continue;
+    const at = (from, to, re) => l.find(c => c.x >= from && c.x < to && re.test(c.text.trim()))?.text.trim();
+    const u = at(X.um - 200, X.qty - 100, /^[A-Z][A-Z0-9²³]{0,3}$/) || '';
+    const q = at(X.qty - 300, X.price - 200, NUM), p = at(X.price - 300, X.disc - 100, NUM), v = at(X.net - 300, X.net + 900, NUM);
+    if (!q || !v) continue;
+    const s = at(X.disc - 300, X.net - 300, /^\d+(,\d+)?(\+\d+(,\d+)?)*$/) || '';
+    const d = l.filter(c => c.x < X.code - 50 && !/OFFERTA NR\.|Deposito di uscita|CONSEGNA DIRETTA|Spett\.le/.test(c.text)).map(c => c.text).join(' ').replace(/\s+/g, ' ').trim();
+    const c = l[ci].text.trim();
+    lines.push({ c, d: d || SERVICE_NAMES[c] || '', u, q: num(q), p: p ? num(p) : null, s, v: r2(num(v)), src: 'pdf' });
+  }
+  const tot = all.match(/Totale imponibile\s*:\s*([\d.]+,\d{2})/)?.[1];
+  return { id, date, customer, lines, alternatives: /-{3,}\s*alternativa\s*-{3,}/i.test(all), total: tot ? num(tot) : null };
+}
+
+async function parseOfferPdf(buf) { return parseOfferLines(await pdfLines(buf)); }
+
+return { SERVICE_NAMES, parseOfferLines, parseOfferPdf };
+})();
 __m["js/core/stock-import.js"] = (function () {
 // Giacenze dei depositi dai PDF RADIX "Giacenza teorica" (uno per deposito, arrivano ogni venerdì) — 02/11/2026.
 // Stessa lettura di tools/import_giacenze.py (anche PDF con più depositi insieme): per ogni articolo UM, Giacenza, + Ordini fornitori, - Ordini clienti, Giacenza teorica.
@@ -8054,7 +8113,8 @@ __m["js/views/data-update.js"] = (function () {
 // Visibile solo agli abilitati (tabella private.hub_data_managers, oggi Tommaso; poi eventualmente Irina).
 // Flusso: scegli il file → l'app lo legge sul dispositivo e mostra cosa cambierà → «Conferma e aggiorna».
 const { h, fill, eur, dateIt, dateTimeIt, today, toast, field } = __m["js/ui.js"];
-const { readXlsx } = __m["js/core/xlsx-read.js"];
+const { readXlsx, unzip } = __m["js/core/xlsx-read.js"];
+const { parseOfferPdf } = __m["js/core/offer-pdf.js"];
 const { parseRadixOffers, offersPreview, parseRadixSales, salesPreview, decodeText, parseRadixOrders, ordersPreview, parseRadixOfferLines, matchOfferLines } = __m["js/core/radix-import.js"];
 const { parseStockPdf, stockPreview } = __m["js/core/stock-import.js"];
 const { stockDepot } = __m["js/core/quote-doc.js"];
@@ -8094,7 +8154,7 @@ async function viewDataUpdate(app) {
 
 function logText(r) {
   const s = r.summary || {};
-  if (r.kind === 'righe offerte') return `righe abbinate a ${s.offers} offerte` + (s.noTotal ? ` · ${s.noTotal} con totale 0 in RADIX` : '') + (s.notFound ? ` · ${s.notFound} senza righe` : '');
+  if (r.kind === 'righe offerte') return `righe su ${s.offers} offerte` + (s.pdf ? ` (${s.pdf} dai PDF)` : '') + (s.noTotal ? ` · ${s.noTotal} con totale 0 in RADIX` : '') + (s.notFound ? ` · ${s.notFound} senza righe` : '');
   if (r.kind === 'ordini') return `${s.orders} ordini aperti: ${s.new} nuovi, ${s.updated} aggiornati, ${s.closed} evasi o chiusi`;
   if (r.kind === 'giacenze') return (s.depots || []).map(d => `${depotLabel(d.code)} al ${dateIt(d.date)}: ${d.items} articoli`).join(' · ');
   if (r.kind === 'offerte') return `${s.offers} offerte dal ${dateIt(s.from)} al ${dateIt(s.to)}: ${s.new} nuove, ${s.updated} aggiornate, ${s.closed} chiuse`;
@@ -8138,31 +8198,56 @@ function offersCard(app, done) {
     out);
 }
 
-// 03/11: righe delle offerte (articoli, quantità, valore) per capire cosa c'è in un'offerta RADIX (segnalazione Pajola)
+// 03/11: righe delle offerte (articoli, quantità, valore) per capire cosa c'è in un'offerta RADIX (segnalazione Pajola).
+// Due fonti: i PDF delle offerte che Irina esporta ogni giorno (anche dentro lo .zip: numero offerta certo, prezzo e sconto)
+// e l'esportazione TXT "Stampa volume offerte per movimenti" (tutte le offerte, abbinate per totale). Il PDF vince sul TXT.
 function offerLinesCard(app, done) {
   const out = h('div', { class: 'du-out' });
-  const run = async file => {
-    fill(out, h('p', { class: 'muted' }, 'Leggo ' + file.name + '…'));
+  const run = async files => {
+    fill(out, h('p', { class: 'muted' }, `Leggo ${files.length} file…`));
     try {
-      const buf = await file.arrayBuffer();
-      const parsed = parseRadixOfferLines(decodeText(buf));
       const offers = await app.store.radixOffers();
-      const m = matchOfferLines(parsed, offers);
-      const sha = await sha256(buf);
-      const stats = { lines: parsed.lines, noTotal: m.noTotal.length, notFound: m.noRows.length + m.ambiguous.length };
-      const lbl = id => { const o = offers.find(x => x.id === id); return `${id} · ${o?.customerLabel || ''}${o?.subject ? ' · ' + o.subject : ''}`; };
+      const known = new Map(offers.map(o => [o.id, o]));
+      const fromPdf = o => (o?.lines || []).some(x => x.src === 'pdf');
+      const pdfs = [], txts = [], skipped = [], shas = [];
+      for (const f of files) {
+        const buf = await f.arrayBuffer(); shas.push(await sha256(buf));
+        if (/\.zip$/i.test(f.name)) { const z = await unzip(buf); for (const n of z.names.filter(n => /\.pdf$/i.test(n))) pdfs.push({ name: n.split('/').pop(), buf: await z.bytes(n) }); }
+        else if (/\.pdf$/i.test(f.name)) pdfs.push({ name: f.name, buf: new Uint8Array(buf) });
+        else txts.push({ name: f.name, buf });
+      }
+      const lines = {}, stats = { lines: 0, noTotal: 0, notFound: 0, pdf: 0 }, notInApp = [], fromTxt = [], noTot = [], notFound = [];
+      for (const t of txts) {
+        const parsed = parseRadixOfferLines(decodeText(t.buf));
+        const m = matchOfferLines(parsed, offers.filter(o => !fromPdf(o)));
+        Object.assign(lines, m.lines); fromTxt.push(...m.exact); noTot.push(...m.noTotal); notFound.push(...m.noRows, ...m.ambiguous);
+        stats.lines += parsed.lines;
+      }
+      const prod = new Map((await app.products()).filter(p => p.radixCode).map(p => [p.radixCode, p.description]));
+      const okPdf = [];
+      for (const p of pdfs) {
+        let r; try { r = await parseOfferPdf(p.buf); } catch { skipped.push(p.name); continue; }   // es. conferme d'ordine: non sono offerte
+        if (!r.lines.length) { skipped.push(p.name); continue; }
+        if (!known.has(r.id)) { notInApp.push(r.id); continue; }
+        lines[r.id] = r.lines.map(x => ({ ...x, d: x.d || prod.get(x.c) || '' })).map(x => (r.alternatives ? { ...x, alt: true } : x)); okPdf.push(r.id);
+      }
+      const noTotLeft = noTot.filter(id => !lines[id]), notFoundLeft = notFound.filter(id => !lines[id]);
+      Object.assign(stats, { pdf: okPdf.length, noTotal: noTotLeft.length, notFound: notFoundLeft.length });
+      const n = Object.keys(lines).length;
+      const lbl = id => { const o = known.get(id); return `${id} · ${o?.customerLabel || ''}${o?.subject ? ' · ' + o.subject : ''}`; };
+      const fold = (title, ids) => ids.length ? h('details', { class: 'fold-in' }, h('summary', {}, title), h('ul', { class: 'du-list' }, ids.map(id => h('li', {}, known.has(id) ? lbl(id) : id)))) : null;
       fill(out, h('div', { class: 'du-preview' },
-        h('p', {}, h('strong', {}, file.name), ` · ${parsed.lines} righe di ${parsed.customers.size} clienti · ${offers.length} offerte aperte nell'app`),
-        h('div', { class: 'du-stats' }, stat(m.exact.length, 'offerte con le righe trovate'), stat(m.noTotal.length, 'con totale 0 in RADIX: non abbinabili', m.noTotal.length ? 'warn' : ''),
-          stat(m.noRows.length + m.ambiguous.length, 'righe non trovate', m.noRows.length + m.ambiguous.length ? 'warn' : '')),
-        m.noRows.length + m.ambiguous.length ? h('details', { class: 'fold-in' }, h('summary', {}, 'Offerte senza righe trovate'), h('ul', { class: 'du-list' }, [...m.noRows, ...m.ambiguous].map(id => h('li', {}, lbl(id))))) : null,
-        m.noTotal.length ? h('details', { class: 'fold-in' }, h('summary', {}, 'Offerte con totale 0 in RADIX'), h('ul', { class: 'du-list' }, m.noTotal.map(id => h('li', {}, lbl(id))))) : null,
-        h('p', { class: 'fine muted' }, 'Prima carica le offerte aperte di oggi, poi questo file: le righe si abbinano alle offerte già nell\'app.'),
+        h('p', {}, [txts.length ? `${stats.lines} righe dal file di testo` : '', pdfs.length ? `${pdfs.length} PDF` : ''].filter(Boolean).join(' · ') + ` · ${offers.length} offerte aperte nell'app`),
+        h('div', { class: 'du-stats' }, stat(n, 'offerte con le righe'), stat(okPdf.length, 'dai PDF (numero certo)'),
+          stat(noTotLeft.length + notFoundLeft.length, 'ancora senza righe', noTotLeft.length + notFoundLeft.length ? 'warn' : ''), stat(notInApp.length, 'PDF di offerte non ancora nell\'app', notInApp.length ? 'warn' : '')),
+        fold('PDF di offerte non ancora nell\'app (carica prima le offerte aperte di oggi)', notInApp),
+        fold('Offerte con totale 0 in RADIX (servono i PDF)', noTotLeft), fold('Offerte senza righe trovate', notFoundLeft),
+        skipped.length ? h('p', { class: 'fine muted' }, `${skipped.length} PDF non sono offerte (es. conferme d'ordine) e vengono ignorati.`) : null,
         h('div', { class: 'du-actions' }, h('button', { type: 'button', class: 'btn', onclick: () => fill(out) }, 'Annulla'),
-          h('button', { type: 'button', class: 'btn primary', disabled: !m.exact.length, onclick: async e => {
+          h('button', { type: 'button', class: 'btn primary', disabled: !n, onclick: async e => {
             e.target.disabled = true;
             try {
-              const r = await app.store.importRadixOfferLines({ lines: m.lines, stats, file: file.name, sha });
+              const r = await app.store.importRadixOfferLines({ lines, stats, file: files.map(f => f.name).join(', '), sha: shas.join(',').slice(0, 64) });
               app.invalidate?.();
               toast(`Righe caricate su ${r.offers} offerte`);
               fill(out, h('p', { class: 'du-ok' }, '✓ ' + logText({ kind: 'righe offerte', summary: r }))); done();
@@ -8171,12 +8256,13 @@ function offerLinesCard(app, done) {
     } catch (err) { fill(out, h('p', { class: 'du-err' }, err.message)); }
   };
   return h('section', { class: 'card du-card' },
-    h('div', { class: 'du-head' }, h('div', {}, h('h2', {}, 'Righe delle offerte RADIX'), h('small', { class: 'muted' }, 'File di testo (TAB) · ogni giorno, dopo le offerte aperte')), picker('.txt,.TXT,.tsv,text/plain', 'Scegli il file TXT', run)),
-    h('details', { class: 'fold-in' }, h('summary', {}, 'Come esportarlo da RADIX'),
-      steps(['Menu ≡ › cerca «movimenti» › Offerte › Liste & statistiche › Stampa volume offerte per movimenti.',
-        'Data Doc. dal 01.01 dell\'anno a oggi; Stato-Doc. «(Tutto)»; campo Offerta vuoto.',
-        'Lista «Quantità + valore (Std)»; Raggrup. 1 Cliente (Indirizzo corrispondenza) / Numero; Raggrup. 2 Riga documento; Riepilogo Articolo (Codice).',
-        'Esporta › Testo separato con TAB › Destinazione Email (RADIX è sul server remoto): poi salva l\'allegato e caricalo qui.'])),
+    h('div', { class: 'du-head' }, h('div', {}, h('h2', {}, 'Righe delle offerte RADIX'), h('small', { class: 'muted' }, 'PDF delle offerte (anche lo .zip di Irina) e/o file di testo (TAB) · ogni giorno, dopo le offerte aperte')),
+      picker('.txt,.TXT,.tsv,text/plain,.pdf,.PDF,application/pdf,.zip,application/zip', 'Scegli i file', run, true)),
+    h('details', { class: 'fold-in' }, h('summary', {}, 'Quali file'),
+      steps(['PDF delle offerte uscite (lo .zip «OFF_gg_mm» di Irina va bene così com\'è): righe con numero offerta, prezzo e sconto. Le conferme d\'ordine vengono ignorate.',
+        'File di testo per tutte le offerte: menu ≡ › cerca «movimenti» › Offerte › Liste & statistiche › Stampa volume offerte per movimenti.',
+        'Data Doc. dal 01.01 dell\'anno a oggi; Stato-Doc. «(Tutto)»; campo Offerta vuoto; Lista «Quantità + valore (Std)»; Raggrup. 1 Cliente (Indirizzo corrispondenza) / Numero; Raggrup. 2 Riga documento; Riepilogo Articolo (Codice).',
+        'Esporta › Testo separato con TAB › Destinazione Email (RADIX è sul server remoto). Puoi scegliere PDF, zip e TXT insieme.'])),
     out);
 }
 
