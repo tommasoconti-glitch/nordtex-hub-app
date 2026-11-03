@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="bdf907807eb6">
+<meta name="ntx-build" content="5214b96a1a05">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -784,7 +784,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .hide-disc{display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 12px;border:1px dashed var(--line);border-radius:9px;flex-wrap:wrap}.hide-disc input{width:18px;height:18px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"bdf907807eb6"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"5214b96a1a05"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4982,6 +4982,8 @@ async function viewQuoteEditor(app, id, customerId) {
   const products = await app.products();
   const commRules = await app.store.getSetting?.('commissions').catch(() => null) ?? null;
   const viewerIsDir = app.session.role === 'direzione';
+  // 03/11 (Tommaso, opzione A): l'avviso "prezzo da verificare nel Master" lo vede solo la Direzione; per gli agenti vale il listino n.05
+  const showPriceWarn = viewerIsDir;
   const agentLabel = app.store.customer(q.customerId)?.assignee || app.session.assignee;
   const pct = n => n === null || n === undefined ? '—' : num(n, 1) + '%';
   const byId = new Map(products.map(p => [p.id, p]));
@@ -5003,11 +5005,11 @@ async function viewQuoteEditor(app, id, customerId) {
   function drawResults(text) {
     const found = searchProducts(products, text, 40);
     fill(results, ...found.map(p => {
-      const pl = priceLevel(p), ok = canQuote(p);
-      return h('button', { class: 'result ' + pl.level, disabled: !ok, title: pl.reasons.join('\n'), onclick: () => addLine(p) },
+      const pl = priceLevel(p), ok = canQuote(p), lv = !showPriceWarn && pl.level === PRICE_LEVEL.WARN ? PRICE_LEVEL.OK : pl.level;
+      return h('button', { class: 'result ' + lv, disabled: !ok, title: showPriceWarn ? pl.reasons.join('\n') : '', onclick: () => addLine(p) },
         h('span', { class: 'r-desc' }, productLabel(p), h('small', {}, [p.family, p.producer, p.listCode && 'cod. ' + p.listCode, p.radixCode && 'RADIX ' + p.radixCode, p.page && 'pag. ' + p.page].filter(Boolean).join(' · '))),
         h('span', { class: 'r-price' }, ok ? `${eur(p.price)}/${p.saleUnit}` : 'Su richiesta', stockFor(stock, p.radixCode).some(x => x.available > 0) ? h('small', { class: 'stock-badge' }, 'a magazzino') : null),
-        h('span', { class: 'lvl ' + pl.level }, { ok: 'Verificato', warn: 'Da verificare', blocked: 'Non quotabile' }[pl.level]));
+        showPriceWarn || lv === PRICE_LEVEL.BLOCKED ? h('span', { class: 'lvl ' + lv }, { ok: 'Verificato', warn: 'Da verificare', blocked: 'Non quotabile' }[lv]) : null);
     }), text && !found.length ? h('p', { class: 'muted' }, 'Nessun prodotto trovato.') : '');
   }
   function addLine(p) {
@@ -5111,7 +5113,7 @@ async function viewQuoteEditor(app, id, customerId) {
       const refresh = () => {
         const pal = palletsFor(l), disc = totalDiscount(l.discounts);
         fill(info, h('strong', {}, l.description), h('small', { class: 'muted' }, [l.listCode && 'cod. ' + l.listCode, l.radixCode && 'RADIX ' + l.radixCode, l.producer].filter(Boolean).join(' · ')),
-          l.level === PRICE_LEVEL.WARN ? h('small', { class: 'warn-text', title: l.warnings.join('\n') }, '⚠ Prezzo da verificare nel Master') : null,
+          showPriceWarn && l.level === PRICE_LEVEL.WARN ? h('small', { class: 'warn-text', title: l.warnings.join('\n') }, '⚠ Prezzo da verificare nel Master') : null,
           convBox(byId.get(l.productId), l.qty, pal), stockLine(l.radixCode), sheetLinks(byId.get(l.productId)),
           lineEcon(l), unitBox(l, i, () => refresh()),
           byId.get(l.productId)?.family === 'Blocchi in laterizio' && pal !== null && Math.ceil(pal - 1e-6) - pal > 1e-6 ? h('small', { class: 'warn-text' }, `Laterizi: vendita solo a bancali completi → ${Math.ceil(pal - 1e-6)} bancali = ${num(Math.ceil(pal - 1e-6) * l.palletQuantity)} ${String(l.unit).toLowerCase()}`) : null,
@@ -5121,7 +5123,7 @@ async function viewQuoteEditor(app, id, customerId) {
       };
       const live = () => { refresh(); tp?.redraw(); drawTotals(); };
       refresh();
-      return h('tr', { class: l.level === PRICE_LEVEL.WARN ? 'warnrow' : '' },
+      return h('tr', { class: showPriceWarn && l.level === PRICE_LEVEL.WARN ? 'warnrow' : '' },
         h('td', { class: 'art' }, info),
         h('td', { class: 'num', 'data-label': 'Quantità' }, numIn(l.qty, v => { l.qty = v > 0 ? v : l.qty; }, { 'aria-label': 'Quantità', class: 'qty' }, live), h('small', {}, l.unit)),
         h('td', { class: 'num', 'data-label': 'Listino' }, eur(l.listPrice)),
@@ -5158,7 +5160,7 @@ async function viewQuoteEditor(app, id, customerId) {
       h('div', {}, h('span', {}, 'Imponibile'), h('span', {}, eur(t.taxable))),
       h('div', {}, h('span', {}, `IVA ${num(t.vatRate)}%`), h('span', {}, eur(t.vat))),
       h('div', { class: 'grand' }, h('span', {}, 'Totale'), h('strong', {}, eur(t.total))),
-      t.warnings ? h('p', { class: 'warn-text' }, `${t.warnings} righe con prezzo da verificare nel Master`) : null,
+      showPriceWarn && t.warnings ? h('p', { class: 'warn-text' }, `${t.warnings} righe con prezzo da verificare nel Master`) : null,
       t.discountAlerts ? h('p', { class: 'bad-text' }, `${t.discountAlerts} righe con sconto oltre ${DISCOUNT_ALERT_LABEL}`) : null,
       t.freightPending ? h('p', { class: 'muted' }, 'Trasporto da definire: non è compreso nel totale.') : null,
       econBox());
@@ -7009,7 +7011,7 @@ const HELP = {
     ],
     notes: [
       'Prima di confermare quantità grandi controlla le Giacenze o chiedi all\'ufficio.',
-      'Righe in giallo "prezzo da verificare": il prezzo è del listino, ma nel Master non è ancora segnato come controllato.',
+      'Il prezzo è quello del listino n.05 in vigore. Per dubbi su un prezzo usa "✉ Chiedi all\'ufficio".',
     ],
   },
   ordini: {
