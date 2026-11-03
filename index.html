@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="760c04311f33">
+<meta name="ntx-build" content="9f221c46464b">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -749,9 +749,11 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .of-kv span{display:block;font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}.of-kv strong{font-weight:500;word-break:break-word}.of-kv.miss strong{color:var(--warn)}
 .of-actions{gap:8px;flex-wrap:wrap;align-items:center}.of-empty-line{margin:6px 0 0}
 @media (max-width:760px){ .of-grid{grid-template-columns:1fr 1fr} .of-sub{display:none} }
+/* 03/11 Ordini aperti RADIX */
+.rx-item{list-style:none;padding:8px 0;border-bottom:1px solid var(--line)}.rx-item:last-child{border-bottom:0}.rx-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px}.rx-item small{display:block;margin-top:2px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"760c04311f33"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"9f221c46464b"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1427,6 +1429,8 @@ function createLocalStore({ data, kv }) {
     // "Aggiorna dati": nella versione su questo dispositivo si vede l'anteprima, il salvataggio è solo online
     async importRadixOffers() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
     async importSales() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
+    async radixOrders() { return []; },
+    async importRadixOrders() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
     async importStock() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
     async importLog() { return []; },
     async setRadixOfferOutcome(id, fields) {
@@ -1899,6 +1903,19 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     },
     async removeStop(id) { return api('/rest/v1/hub_visit_stops?id=eq.' + id, { method: 'DELETE' }); },
     // Offerte aperte importate da RADIX (migrazione 20261101170000): tabella assente = elenco vuoto
+    // 03/11: ordini clienti aperti in RADIX (migrazione 20261103080000; se non applicata: elenco vuoto). Avvisi interni solo per Direzione/Ufficio.
+    async radixOrders({ customerId, all = false } = {}) {
+      const rows = await api('/rest/v1/hub_radix_orders?select=*,hub_radix_order_notes(notes)' + (all ? '' : '&open=eq.true') + '&order=order_date.desc,id.desc'
+        + (customerId ? '&customer_id=eq.' + custUuid(customerId) : '')).catch(() => null);
+      if (!rows) return [];
+      return rows.map(r => ({ id: r.id, customerId: r.customer_id ? custCode(r.customer_id) || null : null, customerLabel: r.customer_label, date: r.order_date,
+        deliveryBy: r.delivery_by, site: r.site || '', total: r.total == null ? null : Number(r.total), status: r.radix_status || '', payment: r.payment || '',
+        radixAgent: r.radix_agent || '', zone: r.zone || '', open: r.open, closedAt: r.closed_at, firstSeen: r.first_seen,
+        notes: (Array.isArray(r.hub_radix_order_notes) ? r.hub_radix_order_notes[0]?.notes : r.hub_radix_order_notes?.notes) || '' }));
+    },
+    async importRadixOrders({ orders, file = '', sha = '' }) {
+      return api('/rest/v1/rpc/hub_import_radix_orders', { method: 'POST', body: { p_orders: orders, p_file: file, p_sha: sha } });
+    },
     async radixOffers({ customerId } = {}) {
       const rows = await api('/rest/v1/hub_radix_offers?select=*&open=eq.true&order=offer_date.desc,id.desc'
         + (customerId ? '&customer_id=eq.' + custUuid(customerId) : '')).catch(() => null);
@@ -2498,6 +2515,35 @@ function highlight(text, query) {
 
 return { norm, buildIndex, searchCustomers, highlight };
 })();
+__m["js/views/radix-orders.js"] = (function () {
+// Ordini clienti aperti in RADIX (03/11/2026, file giornaliero n. 2 della routine): chi segue il cliente vede che c'è un ordine in corso
+// (caso Edilerre del 02/11). Gli "Avvisi" di RADIX sono appunti interni dell'ufficio: li vedono solo Direzione e Ufficio.
+const { h, eur, dateIt, today, emptyState } = __m["js/ui.js"];
+const isBlocked = o => /bloccat/i.test(o.status || '');
+
+function radixOrderRow(app, o, { showCustomer = true } = {}) {
+  const isDir = app.session.role === 'direzione';
+  const late = o.deliveryBy && o.deliveryBy < today();
+  return h('li', { class: 'rx-item' },
+    h('div', { class: 'rx-head' }, h('span', { class: 'badge ' + (isBlocked(o) ? 'warn' : 'info') }, isBlocked(o) ? 'Bloccato in RADIX' : 'Ordine in corso'),
+      showCustomer ? (o.customerId ? h('a', { href: '#/agenda/' + encodeURIComponent(o.customerId) }, h('strong', {}, o.customerLabel)) : h('strong', {}, o.customerLabel)) : null,
+      h('span', {}, ` ${o.id} del ${dateIt(o.date)}`), o.total ? h('strong', {}, ' · ' + eur(o.total)) : null),
+    h('small', { class: 'muted' }, [o.site ? 'cantiere ' + o.site : '', o.deliveryBy ? (late ? 'consegna prevista entro ' + dateIt(o.deliveryBy) + ' (superata)' : 'consegna entro ' + dateIt(o.deliveryBy)) : 'consegna da definire',
+      o.payment, showCustomer ? o.radixAgent : ''].filter(Boolean).join(' · ')),
+    isDir && o.notes ? h('div', { class: 'fine' }, 'Avvisi ufficio: ' + o.notes) : null);
+}
+
+// Elenco completo (pagina Ordini, Direzione/Ufficio)
+async function radixOrdersSection(app) {
+  const list = app.store.radixOrders ? await app.store.radixOrders().catch(() => []) : [];
+  const blocked = list.filter(isBlocked).length;
+  return h('section', { class: 'card' }, h('h2', {}, `Ordini aperti in RADIX (${list.length})`),
+    h('p', { class: 'muted' }, list.length ? `Fotografia dell'ultimo caricamento da RADIX · ${blocked} bloccati · totale ${eur(list.reduce((t, o) => t + (o.total || 0), 0))}` : ''),
+    list.length ? h('ul', { class: 'rx-list' }, list.map(o => radixOrderRow(app, o))) : emptyState('Nessun ordine RADIX caricato: si aggiornano da "Aggiorna dati" con il file giornaliero.'));
+}
+
+return { isBlocked, radixOrderRow, radixOrdersSection };
+})();
 __m["js/core/purchases.js"] = (function () {
 // Cosa compra il cliente: famiglie per anno dal fatturato RADIX (tools/import_fatturato.py) e spunti di vendita.
 // Gli spunti seguono le priorità commerciali NORDTEX: sostituzione STEICO con NATURHELD; famiglie non più acquistate.
@@ -2542,6 +2588,7 @@ const { openActions } = __m["js/views/actions.js"];
 const { CONTACT_KINDS, NOTE_OUTCOMES, STATUS_ORDER, STATUS_INFO, MANUAL_STATUSES, TYPOLOGIES, dueState, assigneeFor } = __m["js/data/model.js"];
 const { buildIndex, searchCustomers, highlight } = __m["js/core/search.js"];
 const { fiscalFields } = __m["js/views/fiscal.js"];
+const { radixOrderRow } = __m["js/views/radix-orders.js"];
 const { purchaseSummary, SALES_YEARS } = __m["js/core/purchases.js"];
 // 01/11 sera (Tommaso: "si può migliorare?"): all'apertura solo i clienti su cui lavorare (attivi, da recuperare, potenziali),
 // in ordine "da seguire prima"; la ricerca cerca sempre in tutti i clienti.
@@ -2754,8 +2801,9 @@ function purchasesCard(c) {
 }
 
 async function customerCard(app, c) {
-  const [notes, contacts, quotes, rxAll] = await Promise.all([app.store.notes(c.id), app.store.contacts(c.id), app.store.quotes(c.id),
-    app.store.radixOffers ? app.store.radixOffers({ customerId: c.id }).catch(() => []) : []]);
+  const [notes, contacts, quotes, rxAll, rxOrders] = await Promise.all([app.store.notes(c.id), app.store.contacts(c.id), app.store.quotes(c.id),
+    app.store.radixOffers ? app.store.radixOffers({ customerId: c.id }).catch(() => []) : [],
+    app.store.radixOrders ? app.store.radixOrders({ customerId: c.id }).catch(() => []) : []]);
   const lastVisit = notes.find(n => n.kind === 'Visita' || (n.source === 'RADIX' && /visita/i.test(n.kind || '')));
   const addr = [c.street, [c.cap, c.city].filter(Boolean).join(' '), c.prov ? `(${c.prov})` : ''].filter(Boolean).join(', ');
   const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([c.street, c.cap, c.city, c.prov].filter(Boolean).join(' '));
@@ -2806,8 +2854,9 @@ async function customerCard(app, c) {
     h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'In corso')),
       openActs.length ? [h('h3', { class: 'sub-h' }, 'Follow-up'), h('ul', { class: 'checks' }, openActs.map(({ a, n }) => h('li', {}, h('label', {}, h('input', { type: 'checkbox', onchange: () => toggle(n, a) }), h('span', {}, a.title)),
         a.due ? h('span', { class: 'due ' + dueState(a).replace(' ', '-') }, dateIt(a.due)) : null, h('small', { class: 'muted' }, ' · ' + (n.authorName || '')))))] : null,
+      rxOrders.length ? [h('h3', { class: 'sub-h' }, 'Ordini in corso (RADIX)'), h('ul', { class: 'rx-list' }, rxOrders.map(o => radixOrderRow(app, o, { showCustomer: false })))] : null,
       openQ.length || rxOpen.length ? [h('h3', { class: 'sub-h' }, 'Offerte aperte'), h('ul', { class: 'rx-list' }, openQ.map(quoteRow), rxOpen.map(o => radixOfferRow(app, o, refresh, { showCustomer: false })))] : null,
-      !openActs.length && !openQ.length && !rxOpen.length ? h('p', { class: 'muted' }, 'Niente in corso: nessuna offerta aperta né follow-up. Registra un contatto con «Nota» o prepara un\'offerta.') : null,
+      !openActs.length && !openQ.length && !rxOpen.length && !rxOrders.length ? h('p', { class: 'muted' }, 'Niente in corso: nessuna offerta aperta né follow-up. Registra un contatto con «Nota» o prepara un\'offerta.') : null,
       pastQ.length || rxPast.length ? h('details', { class: 'fold-in' }, h('summary', {}, `Offerte chiuse (${pastQ.length + rxPast.length})`),
         h('ul', { class: 'rx-list' }, pastQ.map(quoteRow), rxPast.map(o => radixOfferRow(app, o, refresh, { showCustomer: false })))) : null),
     // Ultime attività: le 3 più recenti, il resto a richiesta
@@ -6853,6 +6902,50 @@ function offersPreview(parsed, current = []) {
   };
 }
 
+// ---------- ordini clienti aperti (03/11/2026, file giornaliero n. 2 della routine)
+// Esportazione del riquadro RADIX "Ordini clienti aperti tutte le zone" in Excel. Ogni file è la fotografia di tutti gli ordini aperti.
+const ORDER_COLUMNS = ['Data documento', 'Ordine cliente', 'Cliente/Descrizione/Luogo', 'Cantiere', 'Termine consegna', 'Importo', 'Stato documento', 'Cond. pagamento', 'Avvisi', 'Agente'];
+function parseRadixOrders(rows, customers = []) {
+  if (!rows?.length) throw new Error('Il file è vuoto');
+  const head = rows[0].map(str);
+  const miss = ORDER_COLUMNS.filter(c => !head.includes(c));
+  if (miss.length) throw new Error('Non sembra l\'esportazione degli ordini clienti aperti di RADIX. Colonne mancanti: ' + miss.join(', '));
+  const col = Object.fromEntries(head.map((c, i) => [c, i]).filter(([c]) => c));
+  const byNC = new Map(), byN = new Map();
+  const add = (m, k, c) => { if (!m.has(k)) m.set(k, []); m.get(k).push(c); };
+  for (const c of customers) { add(byNC, normName(c.name) + '|' + normName(c.city), c); add(byN, normName(c.name), c); }
+  const orders = [], unmatched = [];
+  for (const r of rows.slice(1)) {
+    const g = k => (k in col ? r[col[k]] : null);
+    const num = str(g('Ordine cliente')).replace(/\s+/g, '');
+    if (!num) continue;
+    if (!/^[A-Z]+-\d{4}-\d+$/.test(num)) throw new Error('Numero ordine non riconosciuto: ' + num);
+    const label = str(g('Cliente/Descrizione/Luogo'));
+    const cut = label.lastIndexOf(', ');
+    let name = cut >= 0 ? label.slice(0, cut) : '', city = cut >= 0 ? label.slice(cut + 2) : '';
+    if (!name) { name = label; city = ''; }
+    const m = byNC.get(normName(name) + '|' + normName(city)) || byN.get(normName(name)) || [];
+    const cust = m.length === 1 ? m[0].id : null;
+    if (!cust) unmatched.push(label);
+    const d = day(g('Data documento'));
+    if (!d) throw new Error(num + ': data documento mancante');
+    const tot = g('Importo');
+    orders.push({ id: num, customer: cust, customerLabel: label, date: d, deliveryBy: day(g('Termine consegna')), site: str(g('Cantiere')),
+      total: typeof tot === 'number' ? Math.round(tot * 100) / 100 : null, status: str(g('Stato documento')), payment: str(g('Cond. pagamento')),
+      notes: str(g('Avvisi')), radixAgent: str(g('Agente')), zone: str(g('Zona')), typology: str(g('Tipologia cliente')) });
+  }
+  if (!orders.length) throw new Error('Nessun ordine nel file');
+  if (new Set(orders.map(o => o.id)).size !== orders.length) throw new Error('Numeri ordine duplicati nel file');
+  return { orders, unmatched: [...new Set(unmatched)].sort(), total: Math.round(orders.reduce((s, o) => s + (o.total || 0), 0) * 100) / 100,
+    blocked: orders.filter(o => /bloccat/i.test(o.status)).length };
+}
+// Confronto con gli ordini aperti già nell'app: nuovi, già presenti, non più aperti (evasi o chiusi)
+function ordersPreview(parsed, current = []) {
+  const ids = new Set(parsed.orders.map(o => o.id));
+  const known = new Set(current.map(o => o.id));
+  return { added: parsed.orders.filter(o => !known.has(o.id)), kept: parsed.orders.filter(o => known.has(o.id)), closed: current.filter(o => o.open !== false && !ids.has(o.id)) };
+}
+
 // ---------- fatturato
 // Colonne dell'esportazione "Quantità + valore (Std)" con i raggruppamenti Cliente / Numero, Data documento Anno, riepilogo Articolo (Codice)
 const C_CUST = 47, C_YEAR = 65, C_YEAR_VAL = 67, C_ITEM = 83, C_ITEM_QTY = 84, C_ITEM_VAL = 85;
@@ -6965,7 +7058,7 @@ function salesPreview(parsed, customers = []) {
   return { linked, missing, before, after, zeroed: [...known.keys()].filter(k => !parsed.customers[k]).length };
 }
 
-return { OFFER_COLUMNS, normName, parseRadixOffers, offersPreview, decodeText, parseTsv, parseRadixSales, salesPreview };
+return { OFFER_COLUMNS, normName, parseRadixOffers, offersPreview, ORDER_COLUMNS, parseRadixOrders, ordersPreview, decodeText, parseTsv, parseRadixSales, salesPreview };
 })();
 __m["js/core/pdf-text.js"] = (function () {
 // Estrazione minima del testo da un PDF nel browser, senza librerie esterne (02/11/2026, giacenze RADIX del venerdì).
@@ -7186,7 +7279,7 @@ __m["js/views/data-update.js"] = (function () {
 // Flusso: scegli il file → l'app lo legge sul dispositivo e mostra cosa cambierà → «Conferma e aggiorna».
 const { h, fill, eur, dateIt, dateTimeIt, today, toast, field } = __m["js/ui.js"];
 const { readXlsx } = __m["js/core/xlsx-read.js"];
-const { parseRadixOffers, offersPreview, parseRadixSales, salesPreview, decodeText } = __m["js/core/radix-import.js"];
+const { parseRadixOffers, offersPreview, parseRadixSales, salesPreview, decodeText, parseRadixOrders, ordersPreview } = __m["js/core/radix-import.js"];
 const { parseStockPdf, stockPreview } = __m["js/core/stock-import.js"];
 const { stockDepot } = __m["js/core/quote-doc.js"];
 const canUpdateData = s => !!s?.canImport && !s.preview;
@@ -7210,7 +7303,7 @@ async function viewDataUpdate(app) {
   const loadLog = async () => {
     const rows = await app.store.importLog().catch(() => []);
     fill(logBox, rows.length ? h('ul', { class: 'du-log' }, rows.map(r => h('li', {},
-      h('span', { class: 'badge ' + (r.kind === 'offerte' ? 'info' : r.kind === 'giacenze' ? 'warn' : 'ok') }, { offerte: 'Offerte', giacenze: 'Giacenze' }[r.kind] || 'Fatturato'),
+      h('span', { class: 'badge ' + (r.kind === 'offerte' ? 'info' : r.kind === 'giacenze' ? 'warn' : 'ok') }, { offerte: 'Offerte', giacenze: 'Giacenze', ordini: 'Ordini' }[r.kind] || 'Fatturato'),
       h('span', {}, dateTimeIt(r.at) + ' · ' + (r.byName || '') + (r.file ? ' · ' + r.file : '')),
       h('small', { class: 'muted' }, logText(r))))) : h('p', { class: 'muted' }, 'Nessun caricamento fatto dall\'app finora.'));
   };
@@ -7218,13 +7311,14 @@ async function viewDataUpdate(app) {
   return h('div', { class: 'page du-page' },
     h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Aggiorna dati'),
       h('p', { class: 'muted' }, 'Carichi le esportazioni di RADIX: l\'app ti mostra cosa cambia e aggiorna solo quando confermi. Nessun dato si cancella.'))),
-    offersCard(app, loadLog), stockCard(app, loadLog), salesCard(app, loadLog),
+    offersCard(app, loadLog), radixOrdersCard(app, loadLog), stockCard(app, loadLog), salesCard(app, loadLog),
     h('section', { class: 'card' }, h('h2', {}, 'Ultimi caricamenti'), logBox),
     h('p', { class: 'fine muted' }, 'Note clienti RADIX (file PDF): per ora si aggiornano ancora con Claude. Anagrafica clienti nuovi: si creano dall\'app o con l\'aggiornamento completo.'));
 }
 
 function logText(r) {
   const s = r.summary || {};
+  if (r.kind === 'ordini') return `${s.orders} ordini aperti: ${s.new} nuovi, ${s.updated} aggiornati, ${s.closed} evasi o chiusi`;
   if (r.kind === 'giacenze') return (s.depots || []).map(d => `${depotLabel(d.code)} al ${dateIt(d.date)}: ${d.items} articoli`).join(' · ');
   if (r.kind === 'offerte') return `${s.offers} offerte dal ${dateIt(s.from)} al ${dateIt(s.to)}: ${s.new} nuove, ${s.updated} aggiornate, ${s.closed} chiuse`;
   return `dati al ${dateIt(s.asOf)}: ${s.customers} clienti con fatturato` + (s.totals ? ' · ' + Object.entries(s.totals).map(([y, v]) => `${y} ${eur(v)}`).join(' · ') : '');
@@ -7356,6 +7450,44 @@ function stockCard(app, done) {
     out);
 }
 
+// 03/11: ordini clienti aperti RADIX (file giornaliero n. 2): fotografia completa, quelli che non ci sono più diventano "evasi o chiusi"
+function radixOrdersCard(app, done) {
+  const out = h('div', { class: 'du-out' });
+  const run = async file => {
+    fill(out, h('p', { class: 'muted' }, 'Leggo ' + file.name + '…'));
+    try {
+      const buf = await file.arrayBuffer();
+      const parsed = parseRadixOrders(await readXlsx(buf), await app.customers());
+      const current = app.store.radixOrders ? await app.store.radixOrders().catch(() => []) : [];
+      const pv = ordersPreview(parsed, current);
+      const sha = await sha256(buf);
+      fill(out, h('div', { class: 'du-preview' },
+        h('p', {}, h('strong', {}, file.name), ` · ${parsed.orders.length} ordini aperti · ${parsed.blocked} bloccati · totale ${eur(parsed.total)}`),
+        h('div', { class: 'du-stats' }, stat(pv.added.length, 'nuovi'), stat(pv.kept.length, 'già nell\'app, si aggiornano'), stat(pv.closed.length, 'non più aperti: evasi o chiusi', pv.closed.length ? 'warn' : ''),
+          stat(parsed.unmatched.length, 'senza cliente nell\'app', parsed.unmatched.length ? 'warn' : '')),
+        pv.added.length ? h('details', { class: 'fold-in' }, h('summary', {}, 'Ordini nuovi'), h('ul', { class: 'du-list' }, pv.added.map(o => h('li', {}, `${o.id} · ${o.customerLabel} · ${o.total ? eur(o.total) : '—'}`)))) : null,
+        pv.closed.length ? h('details', { class: 'fold-in' }, h('summary', {}, 'Ordini che escono (evasi o chiusi in RADIX)'), h('ul', { class: 'du-list' }, pv.closed.map(o => h('li', {}, `${o.id} · ${o.customerLabel}`)))) : null,
+        parsed.unmatched.length ? h('details', { class: 'fold-in' }, h('summary', {}, 'Senza cliente nell\'app (li vede solo la Direzione)'), h('ul', { class: 'du-list' }, parsed.unmatched.map(x => h('li', {}, x)))) : null,
+        current.length > 5 && pv.closed.length > current.length / 2 ? h('p', { class: 'alert warn' }, `Attenzione: uscirebbero ${pv.closed.length} ordini su ${current.length}. Controlla di aver esportato il riquadro "Ordini clienti aperti tutte le zone" completo.`) : null,
+        h('p', { class: 'fine muted' }, 'Gli agenti vedono gli ordini dei propri clienti nella scheda cliente; gli "Avvisi" interni li vedono solo Direzione e Ufficio.'),
+        h('div', { class: 'du-actions' }, h('button', { type: 'button', class: 'btn', onclick: () => fill(out) }, 'Annulla'),
+          h('button', { type: 'button', class: 'btn primary', onclick: async e => {
+            e.target.disabled = true;
+            try {
+              const r = await app.store.importRadixOrders({ orders: parsed.orders, file: file.name, sha });
+              toast(`Ordini aggiornati: ${r.new} nuovi, ${r.closed} evasi o chiusi`);
+              fill(out, h('p', { class: 'du-ok' }, '✓ ' + logText({ kind: 'ordini', summary: r }))); done();
+            } catch (err) { e.target.disabled = false; toast(err.message, 'error'); }
+          } }, 'Conferma e aggiorna'))));
+    } catch (err) { fill(out, h('p', { class: 'du-err' }, err.message)); }
+  };
+  return h('section', { class: 'card du-card' },
+    h('div', { class: 'du-head' }, h('div', {}, h('h2', {}, 'Ordini clienti aperti RADIX'), h('small', { class: 'muted' }, 'File Excel · ogni giorno')), picker('.xlsx', 'Scegli il file Excel', run)),
+    h('details', { class: 'fold-in' }, h('summary', {}, 'Come esportarlo da RADIX'),
+      steps(['Cockpit: riquadro «Ordini clienti aperti tutte le zone».', 'Esporta in Excel e salva il file.', 'Il file deve contenere tutti gli ordini aperti: quelli che non ci sono più vengono segnati come evasi o chiusi.'])),
+    out);
+}
+
 return { canUpdateData, viewDataUpdate };
 })();
 __m["js/views/orders.js"] = (function () {
@@ -7407,9 +7539,10 @@ const { canUpdateData } = __m["js/views/data-update.js"];
 const { canSeeOfficeDesk } = __m["js/views/office.js"];
 const { h } = __m["js/ui.js"];
 const { ordersSection } = __m["js/views/orders.js"];
+const { radixOrdersSection } = __m["js/views/radix-orders.js"];
 async function viewOrders(app) {
   return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Ordini'), h('p', { class: 'muted' }, 'Offerte accettate passate all\'ufficio: da inserire in RADIX.'))),
-    await ordersSection(app, () => app.go('ordini')));
+    await ordersSection(app, () => app.go('ordini')), await radixOrdersSection(app));
 }
 
 // Telefono Direzione: le voci che non stanno nella barra in basso
