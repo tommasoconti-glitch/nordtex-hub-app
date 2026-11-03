@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="f626a9e3def9">
+<meta name="ntx-build" content="be5417e4ad97">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -789,7 +789,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f626a9e3def9"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"be5417e4ad97"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2419,7 +2419,7 @@ function offerSelect(choices, current = '') {
     choices.map(c => h('option', { value: c.ref, selected: c.ref === current }, c.label)));
 }
 
-// Etichetta della nota: "📄 OFF-2026-0007" che apre l'offerta
+// Etichetta della nota: "📄 <numero offerta>" che apre l'offerta
 function noteOfferChip(n, choices = []) {
   const ref = offerRef(n); if (!ref) return null;
   const c = choices.find(x => x.ref === ref);
