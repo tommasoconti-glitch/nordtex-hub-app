@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="037bc50c80aa">
+<meta name="ntx-build" content="99cec762af5b">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -791,7 +791,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"037bc50c80aa"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"99cec762af5b"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -8168,10 +8168,14 @@ function offersCard(app, done) {
     try {
       const buf = await file.arrayBuffer();
       const parsed = parseRadixOffers(await readXlsx(buf), await app.customers());
-      const pv = offersPreview(parsed, await app.store.radixOffers());
+      // 03/11 (Foresti): il file contiene TUTTE le offerte aperte, quindi si chiudono anche quelle dell'app più vecchie della prima offerta
+      // del file (prima il periodo partiva dalla data della prima offerta del file e le offerte scadute più vecchie restavano aperte)
+      const current = await app.store.radixOffers();
+      parsed.from = [parsed.from, ...current.filter(o => o.open !== false).map(o => o.date)].sort()[0];
+      const pv = offersPreview(parsed, current);
       const sha = await sha256(buf);
       fill(out, h('div', { class: 'du-preview' },
-        h('p', {}, h('strong', {}, file.name), ` · ${parsed.offers.length} offerte aperte dal ${dateIt(parsed.from)} al ${dateIt(parsed.to)} · totale ${eur(parsed.total)}`),
+        h('p', {}, h('strong', {}, file.name), ` · ${parsed.offers.length} offerte aperte · totale ${eur(parsed.total)} · si confronta con le offerte dell'app dal ${dateIt(parsed.from)}`),
         h('div', { class: 'du-stats' }, stat(pv.added.length, 'nuove'), stat(pv.kept.length, 'già nell\'app, si aggiornano'), stat(pv.closed.length, 'non più aperte: si chiudono', pv.closed.length ? 'warn' : ''),
           stat(parsed.unmatched.length, 'senza cliente nell\'app', parsed.unmatched.length ? 'warn' : '')),
         pv.added.length ? h('details', { class: 'fold-in' }, h('summary', {}, 'Offerte nuove'), h('ul', { class: 'du-list' }, pv.added.map(o => h('li', {}, `${o.id} · ${o.customerLabel} · ${o.total ? eur(o.total) : '—'}`)))) : null,
@@ -8191,10 +8195,10 @@ function offersCard(app, done) {
     } catch (err) { fill(out, h('p', { class: 'du-err' }, err.message)); }
   };
   return h('section', { class: 'card du-card' },
-    h('div', { class: 'du-head' }, h('div', {}, h('h2', {}, 'Offerte aperte RADIX'), h('small', { class: 'muted' }, 'File Excel · ogni lunedì')), picker('.xlsx', 'Scegli il file Excel', run)),
+    h('div', { class: 'du-head' }, h('div', {}, h('h2', {}, 'Offerte aperte RADIX'), h('small', { class: 'muted' }, 'File Excel · ogni giorno')), picker('.xlsx', 'Scegli il file Excel', run)),
     h('details', { class: 'fold-in' }, h('summary', {}, 'Come esportarlo da RADIX'),
-      steps(['Offerte › Selezione.', 'Stato del documento: «Aperto»; Data documento: ultimi 3 mesi (fino a oggi).', 'Cerca, poi esporta in Excel e salva il file.',
-        'Le offerte del periodo che non sono più nel file vengono segnate come chiuse: usa sempre un periodo che arrivi a oggi.'])),
+      steps(['Offerte › Selezione: Registro OFF, Cliente vuoto.', 'Stato del documento: «Aperto»; Data documento: dal 01.01 dell\'anno a oggi.', 'Cerca, poi clic destro su un\'intestazione › Esporta in excel e salva il file.',
+        'Il file deve contenere tutte le offerte aperte: quelle dell\'app che non ci sono più vengono segnate come chiuse (restano in archivio con il loro esito).'])),
     out);
 }
 
