@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="90c21c28a366">
+<meta name="ntx-build" content="3966af0c5d17">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -791,7 +791,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"90c21c28a366"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"3966af0c5d17"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -7263,7 +7263,8 @@ __m["js/views/office.js"] = (function () {
 //  1. Ordini (offerte accettate da inserire in RADIX) — Christian
 //  2. Domande dei commerciali (03/11: "Chiedi all'ufficio" dalle offerte; risposta nella riga, avviso email al commerciale)
 //  3. Clienti nuovi da aprire in RADIX — Irina
-//  4. Note da riportare in RADIX (in arrivo: passo 4)
+//  4. Note della settimana (03/11 sera, richiesta Tommaso: sotto le offerte di oggi): visite, telefonate e note dei commerciali da lunedì,
+//     con "Copia per RADIX". Il formato definitivo per RADIX si decide con Christian e Irina.
 // Avvisi: la pagina si ricontrolla ogni minuto; titolo della scheda "(3) Ufficio" e notifica del PC quando arriva qualcosa di nuovo.
 const { h, fill, eur, dateIt, toast } = __m["js/ui.js"];
 const { ORDER_STATES, missingForOrder } = __m["js/data/model.js"];
@@ -7369,6 +7370,27 @@ function customerRow(app, c, refresh) {
 
 const localDay = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const hhmm = iso => new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+// Note dei commerciali dalla settimana in corso (da lunedì), le più recenti prima; escluse quelle importate da RADIX
+function weekNotes(notes, now = new Date()) {
+  const d = new Date(now); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  const from = d.getTime();
+  return notes.filter(n => n.source !== 'RADIX' && n.createdAt && new Date(n.createdAt).getTime() >= from)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+const noteRadixText = (n, c) => [`${dateIt(n.createdAt)} · ${n.kind}${n.outcome ? ' · ' + n.outcome : ''} · ${n.authorName || ''}`, c ? `Cliente: ${c.name}${c.id ? ' (' + c.id + ')' : ''}` : '', n.body,
+  ...(n.actions || []).filter(a => !a.done).map(a => `Da fare: ${a.title}${a.due ? ' entro ' + dateIt(a.due) : ''}`)].filter(Boolean).join('\n');
+function noteRow(app, n) {
+  const c = n.customerId ? app.store.customer(n.customerId) : null;
+  const ref = n.quoteId ? 'offerta dell\'app' : n.radixOfferId ? 'offerta ' + n.radixOfferId : '';
+  return row([h('span', { class: 'badge info' }, n.kind), h('strong', {}, c?.name || '—'),
+    h('span', { class: 'of-sub' }, [n.outcome, n.authorName, ref, (n.body || '').slice(0, 70)].filter(Boolean).join(' · ')), h('span', { class: 'of-age' }, localDay(n.createdAt) === localDay(new Date().toISOString()) ? 'alle ' + hhmm(n.createdAt) : dateIt(n.createdAt))],
+  [h('p', { class: 'of-line', style: { whiteSpace: 'pre-wrap' } }, n.body),
+    (n.actions || []).length ? h('p', { class: 'of-line muted' }, n.actions.map(a => (a.done ? '✓ ' : '• ') + a.title + (a.due ? ' (' + dateIt(a.due) + ')' : '')).join('  ')) : null,
+    h('div', { class: 'row of-actions' }, c ? h('a', { class: 'btn small', href: '#/agenda/' + encodeURIComponent(c.id) }, 'Scheda cliente') : null,
+      n.radixOfferId ? h('a', { class: 'btn small', href: '#/rxofferta/' + encodeURIComponent(n.radixOfferId) }, 'Apri l\'offerta') : n.quoteId ? h('a', { class: 'btn small', href: '#/offerta/' + n.quoteId }, 'Apri l\'offerta') : null,
+      h('button', { class: 'btn small', type: 'button', onclick: () => copy(noteRadixText(n, c)) }, 'Copia per RADIX'))]);
+}
+
 // Offerte fatte oggi nell'app (tutta la rete), le più recenti prima; escluse quelle del cliente di prova
 function todaysQuotes(quotes, now = new Date()) {
   const day = localDay(now.toISOString());
@@ -7400,7 +7422,9 @@ async function viewOfficeHome(app) {
 
   const ask = app.store.threads ? staffPanel(app, 'ufficio', 'Domande dei commerciali', { id: 'of-domande', empty: 'Nessuna domanda aperta. Arrivano da "Chiedi all\'ufficio" nelle offerte (trasporti, prezzi, sconti, disponibilità).' }) : null;
   async function load(force = false) {
-    const [{ orders, customers }, quotes, asked] = await Promise.all([app.store.officeQueue(), app.store.quotes(), ask ? ask.load(force).catch(() => null) : null]);
+    const [{ orders, customers }, quotes, asked, allNotes] = await Promise.all([app.store.officeQueue(), app.store.quotes(), ask ? ask.load(force).catch(() => null) : null, app.store.notes().catch(() => [])]);
+    const notes = weekNotes(allNotes);
+    const notesToday = notes.filter(n => localDay(n.createdAt) === localDay(new Date().toISOString())).length;
     const questions = (asked?.all || []).filter(t => isWaiting(t));
     const qById = new Map(quotes.map(q => [q.id, q]));
     const newIds = new Set(customers.map(c => c.id));
@@ -7426,12 +7450,12 @@ async function viewOfficeHome(app) {
       h('small', {}, label), h('strong', {}, n === null ? '—' : String(n)), h('span', {}, sub));
     fill(tiles,
       tile('offerte', 'Offerte di oggi', offers.length, offers.length ? eur(offers.reduce((t, q) => t + (q.total || 0), 0)) + ' in totale' : 'nessuna per ora', false),
+      tile('note', 'Note della settimana', notes.length, notes.length ? `${notesToday} oggi · da lunedì` : 'nessuna da lunedì', false),
       tile('ordini', 'Ordini da inserire', open.length, open.length ? oldest(open) : 'nessuno in attesa', open.some(o => Date.now() - new Date(o.requestedAt) > 4 * 3600e3)),
       ask ? tile('domande', 'Domande dei commerciali', questions.length, questions.length ? oldestQ(questions) : 'nessuna da rispondere', questions.some(t => Date.now() - new Date(t.lastAt) > 3600e3)) : tile('domande', 'Domande dei commerciali', null, 'in arrivo'),
-      tile('clienti', 'Clienti da aprire in RADIX', custs.length, custs.length ? oldest(custs) : 'nessuno in attesa', custs.some(c => Date.now() - new Date(c.createdAt) > 24 * 3600e3)),
-      tile('note', 'Note da riportare in RADIX', null, 'in arrivo'));
+      tile('clienti', 'Clienti da aprire in RADIX', custs.length, custs.length ? oldest(custs) : 'nessuno in attesa', custs.some(c => Date.now() - new Date(c.createdAt) > 24 * 3600e3)));
     // code: si ridisegnano solo se è cambiato qualcosa e nessuno sta scrivendo in una riga aperta
-    const sig = JSON.stringify([offers.map(q => q.id + q.status + q.total), open.map(o => o.id + o.status), custs.map(c => c.id + c.vat + c.sdi + c.pec + c.bank + c.paymentTerms)]);
+    const sig = JSON.stringify([offers.map(q => q.id + q.status + q.total), notes.map(n => n.id), open.map(o => o.id + o.status), custs.map(c => c.id + c.vat + c.sdi + c.pec + c.bank + c.paymentTerms)]);
     const busy = box.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '');
     if (!force && (sig === lastSig || busy)) return;
     lastSig = sig;
@@ -7440,9 +7464,9 @@ async function viewOfficeHome(app) {
       ordini: queue('ordini', 'Ordini da inserire', open.length, open.map(o => { const q = qById.get(o.quoteId); return orderRow(app, o, q, !!q && newIds.has(q.customerId), load); }), 'Nessun ordine in attesa.'),
       domande: ask ? ask.card : queue('domande', 'Domande dei commerciali', null, null, 'Qui arriveranno le domande dei commerciali.'),
       clienti: queue('clienti', 'Clienti nuovi da aprire in RADIX', custs.length, custs.map(c => customerRow(app, c, load)), 'Nessun cliente da aprire.'),
-      note: queue('note', 'Note da riportare in RADIX', null, null, 'Qui arriveranno le note e le visite dei commerciali, con il pulsante Copia.'),
+      note: queue('note', 'Note della settimana', notes.length, notes.map(n => noteRow(app, n)), 'Nessuna nota dei commerciali da lunedì.'),
     };
-    const order = /irina/i.test(app.session.name || '') ? ['clienti', 'note', 'offerte', 'ordini', 'domande'] : ['offerte', 'ordini', 'domande', 'clienti', 'note'];
+    const order = /irina/i.test(app.session.name || '') ? ['clienti', 'note', 'offerte', 'ordini', 'domande'] : ['offerte', 'note', 'ordini', 'domande', 'clienti'];
     fill(box, order.map(k => cards[k]));
   }
   await load(true);
@@ -7452,7 +7476,7 @@ async function viewOfficeHome(app) {
     tiles, box);
 }
 
-return { isOffice, canSeeOfficeDesk, radixCustomerText, waitText, chime, todaysQuotes, viewOfficeHome };
+return { isOffice, canSeeOfficeDesk, radixCustomerText, waitText, chime, weekNotes, noteRadixText, todaysQuotes, viewOfficeHome };
 })();
 __m["js/core/help.js"] = (function () {
 // Istruzioni dentro l'app (03/11/2026, idea di Tommaso): pulsante "?" in alto a destra, spiega la pagina in cui ci si trova.
@@ -7520,6 +7544,7 @@ const HELP = {
       'Ogni riga si apre col clic: dentro trovi i dati e i pulsanti.',
       'Ordini: inseriscili in RADIX, poi scegli "Inserito" e scrivi il N° d\'ordine RADIX.',
       'Clienti nuovi: "Copia dati per RADIX", apri l\'anagrafica in RADIX, poi scrivi il N° cliente e premi "Aperto in RADIX": il cliente dell\'app diventa quello di RADIX con note e offerte.',
+      'Note della settimana: visite, telefonate e note scritte dai commerciali da lunedì, le più recenti prima. Apri la riga per leggerla tutta; "Copia per RADIX" copia data, tipo, commerciale, cliente, testo e cose da fare, pronti da incollare.',
       'Domande dei commerciali: arrivano da "Chiedi all\'ufficio" dentro le offerte. Apri la riga, rispondi e premi Invia: il commerciale la vede nell\'offerta e riceve un\'email. "✓ Risolta" la archivia.',
       'Premi "Attiva le notifiche sul PC" una volta: per ogni ordine, cliente o domanda nuova la pagina suona e arriva un avviso di Windows. Niente email: tieni l\'HUB aperto.',
     ],
