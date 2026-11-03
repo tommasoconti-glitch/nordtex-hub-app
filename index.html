@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="8f490973fb99">
+<meta name="ntx-build" content="39ac8751fe2f">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -751,9 +751,16 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 @media (max-width:760px){ .of-grid{grid-template-columns:1fr 1fr} .of-sub{display:none} }
 /* 03/11 Ordini aperti RADIX */
 .rx-item{list-style:none;padding:8px 0;border-bottom:1px solid var(--line)}.rx-item:last-child{border-bottom:0}.rx-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px}.rx-item small{display:block;margin-top:2px}
+/* 03/11 Istruzioni: pulsante "?" in alto a destra */
+.help-btn{width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 15px/1 Poppins,Arial,sans-serif;cursor:pointer;box-shadow:var(--shadow)}
+.help-btn:hover{border-color:#c9ced6}.help-fixed{position:fixed;top:14px;right:18px;z-index:15}.mb-right{display:flex;align-items:center;gap:10px}
+.help-intro{font-size:1rem;margin:0 0 8px}.help-h{margin:12px 0 4px;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}.help-list{margin:0;padding-left:20px}.help-list li{margin:4px 0}
+.help-others{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+@media (max-width:760px){ .help-fixed{display:none} }
+@media (min-width:761px){ .main .page-head{padding-right:52px} }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8f490973fb99"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"39ac8751fe2f"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -6604,6 +6611,152 @@ async function viewOfficeHome(app) {
 
 return { isOffice, canSeeOfficeDesk, radixCustomerText, waitText, todaysQuotes, viewOfficeHome };
 })();
+__m["js/core/help.js"] = (function () {
+// Istruzioni dentro l'app (03/11/2026, idea di Tommaso): pulsante "?" in alto a destra, spiega la pagina in cui ci si trova.
+// Sostituisce il libretto PDF: si aggiorna insieme all'app. REGOLA: quando cambia una funzione, si aggiorna qui il testo della sua pagina.
+// Ogni pagina: title, intro (a cosa serve), steps (cosa fare), notes (attenzione). Testi diversi per ruolo dove serve:
+// 'agente', 'direzione', 'ufficio' (chiave con suffisso, es. home@ufficio), altrimenti il testo comune.
+
+const HELP = {
+  home: {
+    title: 'Home',
+    intro: 'La tua giornata: cosa fare oggi e come sta andando il tuo lavoro.',
+    steps: [
+      'In "Da fare oggi" trovi i follow-up in scadenza, le offerte da risentire e quelle che aspettano un esito: parti da lì.',
+      'Un\'offerta inviata va risentita dopo 7 giorni; dopo 30 giorni l\'app chiede l\'esito (Accettata o Persa) prima di farne una nuova.',
+      'I riquadri di "Andamento" si cliccano e portano all\'elenco corrispondente.',
+    ],
+    notes: ['La riga in fondo dice a che data sono aggiornati i dati RADIX (clienti, fatturato, giacenze).'],
+  },
+  'home@ufficio': {
+    title: 'Ufficio',
+    intro: 'Il ponte tra HUB e RADIX: quello che nasce nell\'app e va portato in RADIX, dalla cosa più urgente.',
+    steps: [
+      'I contatori in alto dicono quante richieste aspettano e da quanto; diventano rossi se un ordine aspetta più di 4 ore o un cliente più di 24. Cliccali per andare alla coda.',
+      'Ogni riga si apre col clic: dentro trovi i dati e i pulsanti.',
+      'Ordini: inseriscili in RADIX, poi scegli "Inserito" e scrivi il N° d\'ordine RADIX.',
+      'Clienti nuovi: "Copia dati per RADIX", apri l\'anagrafica in RADIX, poi scrivi il N° cliente e premi "Aperto in RADIX": il cliente dell\'app diventa quello di RADIX con note e offerte.',
+      'Premi "Attiva le notifiche sul PC" una volta: arriva un avviso di Windows per ogni ordine o cliente nuovo.',
+    ],
+    notes: ['Tieni sempre aperta una scheda del browser con l\'HUB: la pagina si aggiorna da sola ogni minuto e il titolo della scheda mostra il numero di richieste, es. "(3) Ufficio".'],
+  },
+  ufficio: { ref: 'home@ufficio' },
+  agenda: {
+    title: 'Clienti',
+    intro: 'Tutti i tuoi clienti con stato, fatturato, offerte e storia dei contatti.',
+    steps: [
+      'Cerca per nome, località o P.IVA; i filtri in alto separano Attivi, Da recuperare, Persi, Mai fatturato e Potenziali.',
+      'Nella scheda cliente, "In corso" mostra offerte aperte (app e RADIX), ordini in corso in RADIX e follow-up.',
+      'Dopo ogni visita o telefonata premi "+ Nota": scegli il tipo di contatto, scrivi o detta, aggiungi un follow-up con la data.',
+      'Nuovo cliente: bastano ragione sociale, indirizzo con provincia e un contatto. I dati per l\'ordine (SDI/PEC, pagamento, banca) si possono mettere subito o quando arriva l\'ordine.',
+      'Lo stato del cliente si cambia a mano solo con un motivo (es. "Cessata attività").',
+    ],
+    notes: ['Il fatturato e lo stato vengono da RADIX e si aggiornano ogni lunedì.'],
+  },
+  preventivi: {
+    title: 'Offerte',
+    intro: 'Le offerte dell\'app e quelle aperte in RADIX in un solo elenco.',
+    steps: [
+      'I filtri in alto: Da seguire, Ultimi 7 giorni, Da sentire, In scadenza, Accettate, Perse, Annullate.',
+      'Il pallino colorato dice l\'urgenza; "sentire il …" è la data del prossimo contatto.',
+      'Offerte RADIX: "Esito" per segnare Sentito, Accettata o Persa (con nota): diventa anche una nota nella storia del cliente.',
+      'Cestino 🗑 accanto ad "Apri": una bozza si elimina; un\'offerta inviata si ANNULLA con il motivo (resta in archivio, esce da aperte e statistiche).',
+    ],
+    notes: ['Per correggere un\'offerta già inviata: aprila, "Duplica", correggi la copia e inviala; poi annulla la vecchia con motivo "Sostituita".'],
+  },
+  offerta: {
+    title: 'Offerta',
+    intro: 'Preparare un\'offerta con prezzi del listino n.05, sconti, trasporto e documento PDF.',
+    steps: [
+      'Prodotti: cerca per nome, codice listino/RADIX o famiglia; nella riga compaiono spessore e formato. Scrivi quantità e sconti (Sc.1, Sc.2, Sc.3).',
+      'Trasporto e carico: controlla l\'indirizzo di consegna; i km si calcolano da soli (via Brennero) e il trasporto entra nell\'offerta. Verde = calcolo sicuro, giallo = stima da confermare, rosso = chiedi all\'ufficio.',
+      'Condizioni: pagamento, deposito di uscita, Consegna ("Con trasporto" o "Ritiro al deposito, senza trasporto"), cantiere, note per il cliente.',
+      '"Nascondi gli sconti nel documento": il cliente vede solo il prezzo netto.',
+      'Salva, controlla con "Anteprima PDF", poi "Invia per email".',
+      'Quando il cliente accetta: stato "Accettata" e "Passa l\'ordine all\'ufficio". Per un cliente nuovo servono P.IVA, SDI o PEC, pagamento e banca.',
+    ],
+    notes: [
+      'Prima di confermare quantità grandi controlla le Giacenze o chiedi all\'ufficio.',
+      'Righe in giallo "prezzo da verificare": il prezzo è del listino, ma nel Master non è ancora segnato come controllato.',
+    ],
+  },
+  ordini: {
+    title: 'Ordini',
+    intro: 'Gli ordini passati all\'ufficio dall\'app e gli ordini aperti in RADIX.',
+    steps: [
+      'Sopra: ordini passati dai commerciali (offerte accettate). L\'ufficio li inserisce in RADIX e segna "Inserito" con il N° d\'ordine.',
+      'Sotto: tutti gli ordini aperti in RADIX dall\'ultimo caricamento, con cantiere, consegna entro e stato (Bloccato = fermo in RADIX, es. pagamento).',
+    ],
+    notes: ['"Cliente nuovo: prima aprilo in RADIX" vuol dire che il cliente è nato nell\'app: va aperto in RADIX prima dell\'ordine.'],
+  },
+  bacheca: {
+    title: 'Bacheca',
+    intro: 'Comunicazioni della Direzione e cose assegnate a te.',
+    steps: ['Leggi le comunicazioni nuove (pallino sul menu).', 'Le attività assegnate a te si spuntano quando sono fatte, con una nota se serve.'],
+    notes: [],
+  },
+  mappe: {
+    title: 'Mappe',
+    intro: 'I tuoi clienti sulla mappa, colorati per cosa fare, e il giro visite.',
+    steps: [
+      'Rosso = da sentire subito, arancio = da recuperare o non visitato da 90 giorni, verde = visitato da poco, grigio = persi e mai fatturati.',
+      'Clicca un cliente per vedere ultima visita e offerte; aggiungilo al giro.',
+      'Il giro visite si apre in Google Maps (fino a 10 tappe).',
+    ],
+    notes: [],
+  },
+  giri: { ref: 'mappe' },
+  giro: { ref: 'mappe' },
+  giacenze: {
+    title: 'Giacenze',
+    intro: 'Il materiale nei depositi NORDTEX, dai report RADIX.',
+    steps: [
+      'Cerca l\'articolo per nome o codice RADIX; filtra per famiglia o deposito.',
+      'Disponibile = giacenza + arrivi da fornitori − già impegnato su ordini clienti. "Bancali" converte il disponibile in bancali.',
+    ],
+    notes: ['La data in alto dice quanto sono freschi i dati: per quantità grandi o dati vecchi conferma con l\'ufficio prima di promettere la merce al cliente.'],
+  },
+  dati: {
+    title: 'Aggiorna dati',
+    intro: 'Caricare i file esportati da RADIX: offerte, ordini, giacenze, fatturato.',
+    steps: [
+      'Ogni giorno: Offerte aperte (Excel) e Ordini clienti aperti (Excel). Ogni lunedì: Giacenze (PDF, anche tutti insieme) e Fatturato (TXT).',
+      'Scegli il file: l\'app lo legge e mostra cosa cambierà (nuovi, aggiornati, chiusi).',
+      'Se va bene premi "Conferma e aggiorna"; se esci dalla pagina prima di confermare non si salva nulla.',
+    ],
+    notes: ['Un riquadro giallo "Attenzione" o un errore: non confermare e chiedi a Claude. In fondo, "Ultimi caricamenti" dice cosa è stato caricato e quando.'],
+  },
+  rete: {
+    title: 'Attività rete',
+    intro: 'Note, visite e offerte di tutta la rete, le più recenti prima.',
+    steps: ['Serve a vedere chi sta lavorando e su cosa: apri una riga per andare al cliente o all\'offerta.'],
+    notes: [],
+  },
+  manager: {
+    title: 'Area manager',
+    intro: 'Portafogli degli agenti, provvigioni e accessi.',
+    steps: ['Confronta i portafogli; da qui si attiva o disattiva l\'accesso di un utente.'],
+    notes: [],
+  },
+  sistemi: { title: 'Sistemi', intro: 'Pacchetti e stratigrafie (in prova, visibile solo alla Direzione).', steps: [], notes: [] },
+  profilo: {
+    title: 'Profilo',
+    intro: 'Il tuo accesso.',
+    steps: ['Cambia password: almeno 10 caratteri; cambiala al primo accesso.', 'Esci dall\'app sui dispositivi che non usi tu.'],
+    notes: ['Password dimenticata: chiedila a Tommaso.'],
+  },
+};
+
+// Testo della pagina per il ruolo: prima la chiave specifica (es. home@ufficio), poi quella comune; i rimandi (ref) si seguono
+function helpFor(route, session) {
+  const role = session?.office ? 'ufficio' : session?.role === 'direzione' ? 'direzione' : 'agente';
+  let e = HELP[`${route}@${role}`] || HELP[route] || HELP.home;
+  for (let i = 0; e?.ref && i < 3; i++) e = HELP[e.ref];
+  return e;
+}
+
+return { HELP, helpFor };
+})();
 __m["js/data/systems-data.js"] = (function () {
 // Sistemi NORDTEX (02/11/2026, pilota solo Direzione-Tommaso). Fonti: tavole "Proposta progettuale" dei cataloghi
 // Fibra di legno (B2 p.8, D1 p.12), Blocchi Laterizio (B1 p.8) e Listino n.05 (consumi: Pura Calce p.64-65, cicli intonaco p.101).
@@ -7799,7 +7952,7 @@ return { stratSvg, viewSystems, viewSystem };
 })();
 __m["js/main.js"] = (function () {
 // NORDTEX HUB — piattaforma commerciale unica (Agenti e Direzione)
-const { h, toast, eur, dateTimeIt } = __m["js/ui.js"];
+const { h, toast, eur, dateTimeIt, modal } = __m["js/ui.js"];
 const { LOGO, MARK_WHITE, MARK_GREY, FONT_CSS } = __m["js/brand-assets.js"];
 const { watchTables } = __m["js/core/responsive.js"];
 const { previewStore, previewChoices } = __m["js/core/preview.js"];
@@ -7813,6 +7966,7 @@ const { viewNetwork, viewManager } = __m["js/views/direction.js"];
 const { viewMaps } = __m["js/views/maps.js"];
 const { viewStock } = __m["js/views/stock.js"];
 const { viewOfficeHome, isOffice, canSeeOfficeDesk } = __m["js/views/office.js"];
+const { HELP, helpFor } = __m["js/core/help.js"];
 const { viewOrders, viewMore } = __m["js/views/more.js"];
 const { viewRadixOffer } = __m["js/views/radix-offers.js"];
 const { viewPlans, viewPlan } = __m["js/views/plans.js"];
@@ -7959,7 +8113,17 @@ function loginView() {
 function localStorageGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
 function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch { /* facoltativo */ } }
 
-function shell(active, content) {
+// 03/11: istruzioni della pagina (pulsante "?" in alto a destra)
+function helpDialog(key) {
+  const e = helpFor(key, app.session);
+  const list = (title, items, tag = 'ol') => items?.length ? [h('h4', { class: 'help-h' }, title), h(tag, { class: 'help-list' }, items.map(x => h('li', {}, x)))] : null;
+  const others = h('details', { class: 'fold-in' }, h('summary', {}, 'Istruzioni delle altre pagine'),
+    h('div', { class: 'help-others' }, [...new Set(Object.keys(HELP).map(k => k.split('@')[0]))].filter(k => !HELP[k]?.ref && k !== key && HELP[k] && !(isOffice(app.session) ? ['mappe', 'rete', 'manager', 'sistemi'] : app.session.role === 'direzione' ? [] : ['rete', 'manager', 'dati', 'ordini', 'sistemi']).includes(k))
+      .map(k => h('button', { class: 'chip', type: 'button', onclick: () => { document.querySelector('.modal-back')?.remove(); helpDialog(k); } }, helpFor(k, app.session).title))));
+  return modal('Come si usa: ' + e.title, h('div', { class: 'help' }, h('p', { class: 'help-intro' }, e.intro), list('Cosa fare', e.steps), list('Attenzione', e.notes, 'ul'), others), [{ label: 'Chiudi', primary: true, value: true }]);
+}
+
+function shell(active, content, key = active) {
   const isDir = app.session.role === 'direzione', pv = app.session.preview;
   const office = isOffice(app.session);
   // 02/11 Ufficio: menu corto (il resto lo consultano in RADIX)
@@ -7980,7 +8144,9 @@ function shell(active, content) {
     h('aside', { class: 'side' }, h('div', { class: 'brand' }, h('img', { class: 'logo-full', src: LOGO, alt: 'NORDTEX' }), h('img', { class: 'logo-mark', src: MARK_WHITE, alt: 'NORDTEX' }), h('img', { class: 'logo-mark-grey', src: MARK_GREY, alt: 'NORDTEX' }), h('span', { class: 'brand-sub' }, 'HUB commerciale')), h('nav', {}, nav), who),
     h('main', { class: 'main', id: 'main' }, bar,
       h('div', { class: 'mobile-brand' }, h('div', { class: 'mb-left' }, h('img', { src: LOGO, alt: 'NORDTEX' }), h('span', {}, 'HUB')),
-        h('a', { href: '#/profilo', class: 'avatar' + (active === 'profilo' ? ' on' : ''), title: 'Profilo', 'aria-label': 'Profilo' }, initials(pv ? pv.by : app.session.name))), content),
+        h('div', { class: 'mb-right' }, h('button', { class: 'help-btn', type: 'button', title: 'Come si usa questa pagina', 'aria-label': 'Istruzioni', onclick: () => helpDialog(key) }, '?'),
+          h('a', { href: '#/profilo', class: 'avatar' + (active === 'profilo' ? ' on' : ''), title: 'Profilo', 'aria-label': 'Profilo' }, initials(pv ? pv.by : app.session.name)))),
+      h('button', { class: 'help-btn help-fixed', type: 'button', title: 'Come si usa questa pagina', 'aria-label': 'Istruzioni', onclick: () => helpDialog(key) }, '?'), content),
     h('nav', { class: 'tabbar' }, tabs.map(n => h('a', { href: '#/' + n.id, class: tabActive(n.id) ? 'active' : '' }, h('span', { class: 'ico' }, n.icon), h('small', {}, n.label),
       (n.id === 'altro' && app.navCounts?.ordini) || (n.id === 'bacheca' && app.navCounts?.bacheca) ? h('span', { class: 'tab-dot' + (n.id === 'bacheca' ? ' nav-badge-bacheca' : '') }) : null))));
 }
@@ -8065,7 +8231,7 @@ async function render() {
   try { content = await (key === 'home' && isOffice(app.session) ? viewOfficeHome : views[key])(app, ...args); } catch (e) { console.error(e); content = h('div', { class: 'page' }, h('p', { class: 'error' }, e.message)); }
   if (seq !== renderSeq) return;
   const activeNav = key === 'offerta' || key === 'rxofferta' ? 'preventivi' : key === 'giri' || key === 'giro' ? 'mappe' : key === 'sistema' ? 'sistemi' : key;
-  root.replaceChildren(shell(activeNav, content));
+  root.replaceChildren(shell(activeNav, content, key === 'home' && isOffice(app.session) ? 'home' : key));
   document.getElementById('main')?.scrollTo?.(0, 0);
 }
 
