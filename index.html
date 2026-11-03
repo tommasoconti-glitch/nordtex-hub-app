@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="5214b96a1a05">
+<meta name="ntx-build" content="f626a9e3def9">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -782,9 +782,14 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .msg-panels>*{min-width:0}.msg-row>summary{min-width:0}.msg-row .of-sub{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .of-rows{grid-template-columns:minmax(0,1fr)}
 .hide-disc{display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 12px;border:1px dashed var(--line);border-radius:9px;flex-wrap:wrap}.hide-disc input{width:18px;height:18px}
+/* 03/11 note collegate alle offerte */
+.note-offer{text-decoration:none}.note-link{font-size:.8rem;margin-left:auto}
+.pick-notes{max-height:60vh;overflow:auto}.pick-note{display:flex;gap:10px;align-items:flex-start;padding:8px 6px;border-bottom:1px solid var(--line);cursor:pointer}
+.pick-note>span{display:flex;flex-direction:column;gap:2px}.pick-note-body{white-space:pre-wrap}
+.quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"5214b96a1a05"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f626a9e3def9"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1411,6 +1416,13 @@ function createLocalStore({ data, kv }) {
         actions: actions.filter(a => String(a.title || '').trim()).map(a => ({ id: uid(), title: a.title.trim(), due: a.due || null, done: false, doneAt: null })) };
       (await col('notes')).push(note); await save('notes'); return note;
     },
+    async linkNote(noteId, { quoteId = null, radixOfferId = null } = {}) {
+      const s = mustSession(); const n = (await col('notes')).find(x => x.id === noteId);
+      if (!n || !(n.authorId === s.userId || isDir())) throw new Error('Nota non trovata o non tua');
+      if (quoteId && radixOfferId) throw new Error('Una sola offerta per nota');
+      if (quoteId) { const q = (await col('quotes')).find(x => x.id === quoteId); if (!q || q.customerId !== n.customerId) throw new Error('L\'offerta non è di questo cliente'); }
+      Object.assign(n, { quoteId: quoteId || null, radixOfferId: radixOfferId || null }); await save('notes');
+    },
     // Note vocali nella versione locale: l'audio resta su questo dispositivo; la trascrizione automatica è solo online
     supportsAudio: true,
     async saveNoteAudio(noteId, blob) {
@@ -1854,10 +1866,10 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     async setSetting(key, value) { return api('/rest/v1/hub_settings', { method: 'POST', prefer: 'resolution=merge-duplicates', body: { key, value } }); },
 
     async notes(customerId) {
-      const q = '/rest/v1/hub_notes?select=id,customer_id,author_id,body,contact_kind,outcome,created_at,hub_actions(id,title,due_date,done,completed_at,position)' + (customerId ? ',hub_note_audio(path,mime_type,size_bytes,hub_note_transcripts(status,raw_text,approved_text,reviewed_at,error_code))' : '') + '&order=created_at.desc'
+      const q = '/rest/v1/hub_notes?select=id,customer_id,author_id,body,contact_kind,outcome,created_at,quote_id,radix_offer_id,hub_actions(id,title,due_date,done,completed_at,position)' + (customerId ? ',hub_note_audio(path,mime_type,size_bytes,hub_note_transcripts(status,raw_text,approved_text,reviewed_at,error_code))' : '') + '&order=created_at.desc'
         + (customerId ? '&customer_id=eq.' + custUuid(customerId) : '&limit=500');
       const nm = await names();
-      const own = (await api(q)).map(n => ({ id: n.id, customerId: custCode(n.customer_id), authorId: n.author_id, authorName: nm.get(n.author_id) || '', kind: n.contact_kind || 'Altro', outcome: n.outcome || '', body: n.body, createdAt: n.created_at,
+      const own = (await api(q)).map(n => ({ id: n.id, customerId: custCode(n.customer_id), authorId: n.author_id, authorName: nm.get(n.author_id) || '', kind: n.contact_kind || 'Altro', outcome: n.outcome || '', body: n.body, createdAt: n.created_at, quoteId: n.quote_id || null, radixOfferId: n.radix_offer_id || null,
         actions: (n.hub_actions || []).sort((a, b) => a.position - b.position).map(a => ({ id: a.id, title: a.title, due: a.due_date, done: a.done, doneAt: a.completed_at })),
         audio: audioView(n.hub_note_audio) }));
       if (!customerId) return own;
@@ -1873,6 +1885,10 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       const acts = actions.filter(a => String(a.title || '').trim()).map(a => ({ title: a.title.trim(), due_date: a.due || '' }));
       await api('/rest/v1/rpc/hub_save_activity', { method: 'POST', body: { p_note_id: id, p_customer_id: custUuid(customerId), p_body: body.trim(), p_kind: kind, p_outcome: outcome, p_actions: acts } });
       return { id, customerId, kind, outcome, body: body.trim(), createdAt: nowIso(), authorId: session.userId, authorName: session.name, actions: [] };
+    },
+    // 03/11: nota collegata a un'offerta dello stesso cliente (app o RADIX); entrambi null = scollega
+    async linkNote(noteId, { quoteId = null, radixOfferId = null } = {}) {
+      await api('/rest/v1/rpc/hub_note_link', { method: 'POST', body: { p_note: noteId, p_quote: quoteId, p_radix: radixOfferId } });
     },
     // Note vocali (migrazione 20261101180000): file nel contenitore privato hub-audio, trascrizione con la funzione hub-transcribe
     supportsAudio: true,
@@ -2379,11 +2395,69 @@ async function startRecording({ onTick = () => {}, onStop = () => {} } = {}) {
 
 return { RECORD_MAX_SECONDS, recordingAvailable, pickMime, mmss, startRecording };
 })();
+__m["js/views/note-offers.js"] = (function () {
+// Note collegate alle offerte (03/11/2026, richiesta Tommaso): una nota può riferirsi a un'offerta dello stesso cliente,
+// dell'app (quoteId) o di RADIX (radixOfferId). Qui le parti comuni a scheda cliente, offerta dell'app e offerta RADIX.
+// Nessuna dipendenza da agenda.js / quotes.js (il builder non ammette import circolari).
+const { h, toast, modal, field, eur, dateIt } = __m["js/ui.js"];
+// valore della scelta: "q:<id>" offerta dell'app, "r:<numero>" offerta RADIX
+const offerRef = n => (n?.quoteId ? 'q:' + n.quoteId : n?.radixOfferId ? 'r:' + n.radixOfferId : '');
+const parseRef = v => (String(v || '').startsWith('q:') ? { quoteId: v.slice(2), radixOfferId: null } : String(v || '').startsWith('r:') ? { quoteId: null, radixOfferId: v.slice(2) } : { quoteId: null, radixOfferId: null });
+const canLinkNote = (s, n) => !!s && !s.preview && n?.source !== 'RADIX' && (n?.authorId === s.userId || s.role === 'direzione');
+
+// Offerte del cliente da proporre: dell'app (tranne le annullate) e RADIX aperte, le più recenti prima
+async function offerChoices(app, customerId) {
+  const [qs, rx] = await Promise.all([app.store.quotes(customerId).catch(() => []), app.store.radixOffers ? app.store.radixOffers({ customerId }).catch(() => []) : []]);
+  return [
+    ...qs.filter(q => q.status !== 'Annullata').map(q => ({ ref: 'q:' + q.id, href: '#/offerta/' + q.id, label: `${q.number} · ${q.status}${q.total ? ' · ' + eur(q.total) : ''}`, short: q.number })),
+    ...rx.map(o => ({ ref: 'r:' + o.id, href: '#/rxofferta/' + encodeURIComponent(o.id), label: `${o.id} · RADIX del ${dateIt(o.date)}${o.total ? ' · ' + eur(o.total) : ''}${o.subject ? ' · ' + o.subject : ''}`, short: o.id })),
+  ];
+}
+
+function offerSelect(choices, current = '') {
+  return h('select', { 'aria-label': 'Offerta collegata' }, h('option', { value: '' }, 'Nessuna offerta'),
+    choices.map(c => h('option', { value: c.ref, selected: c.ref === current }, c.label)));
+}
+
+// Etichetta della nota: "📄 OFF-2026-0007" che apre l'offerta
+function noteOfferChip(n, choices = []) {
+  const ref = offerRef(n); if (!ref) return null;
+  const c = choices.find(x => x.ref === ref);
+  const href = n.quoteId ? '#/offerta/' + n.quoteId : '#/rxofferta/' + encodeURIComponent(n.radixOfferId);
+  return h('a', { class: 'badge info note-offer', href, title: 'Apri l\'offerta' }, '📄 ' + (c?.short || n.radixOfferId || 'offerta'));
+}
+
+// Collega (o scollega) una nota già scritta a un'offerta del cliente
+async function linkNoteDialog(app, n, choices = null) {
+  choices = choices || await offerChoices(app, n.customerId);
+  if (!choices.length) { toast('Questo cliente non ha offerte da collegare', 'error'); return false; }
+  const sel = offerSelect(choices, offerRef(n));
+  return modal('Collega la nota a un\'offerta', h('div', { class: 'form' },
+    h('p', { class: 'muted' }, (n.body || '').slice(0, 160) + ((n.body || '').length > 160 ? '…' : '')), field('Offerta del cliente', sel)),
+  [{ label: 'Annulla', value: false }, { label: 'Salva', primary: true, run: async () => { await app.store.linkNote(n.id, parseRef(sel.value)); toast(sel.value ? 'Nota collegata all\'offerta' : 'Nota scollegata'); return true; } }]);
+}
+
+// Dalla pagina dell'offerta: scegli una nota esistente del cliente e collegala a questa offerta
+async function pickNoteForOffer(app, customerId, ref) {
+  const notes = (await app.store.notes(customerId).catch(() => [])).filter(n => canLinkNote(app.session, n) && offerRef(n) !== ref);
+  if (!notes.length) { toast('Nessuna nota del cliente da collegare', 'error'); return false; }
+  let chosen = null;
+  const items = notes.slice(0, 30).map(n => h('label', { class: 'pick-note' }, h('input', { type: 'radio', name: 'pick-note', onchange: () => { chosen = n; } }),
+    h('span', {}, h('small', { class: 'muted' }, `${dateIt(n.createdAt)} · ${n.kind}${n.outcome ? ' · ' + n.outcome : ''}${offerRef(n) ? ' · già su un\'altra offerta' : ''}`), h('span', { class: 'pick-note-body' }, (n.body || '').slice(0, 140)))));
+  return modal('Collega una nota esistente', h('div', { class: 'form pick-notes' }, h('p', { class: 'muted' }, 'Le note di questo cliente, le più recenti prima.'), items),
+    [{ label: 'Annulla', value: false }, { label: 'Collega', primary: true, run: async () => {
+      if (!chosen) throw new Error('Scegli una nota');
+      await app.store.linkNote(chosen.id, parseRef(ref)); toast('Nota collegata all\'offerta'); return true; } }]);
+}
+
+return { offerRef, parseRef, canLinkNote, offerChoices, offerSelect, noteOfferChip, linkNoteDialog, pickNoteForOffer };
+})();
 __m["js/views/radix-offers.js"] = (function () {
 // Offerte aperte importate da RADIX (richiesta Tommaso 01/11/2026): l'app le mostra a chi segue il cliente
 // (senza cliente HUB solo alla Direzione) e permette di segnare l'esito. Le offerte restano in RADIX: qui si seguono.
 const { h, fill, eur, dateIt, today, toast, modal, field, emptyState } = __m["js/ui.js"];
 const { RADIX_OFFER_OUTCOMES, radixOfferDue, validityInfo, isExpiring, NOTE_OUTCOMES } = __m["js/data/model.js"];
+const { pickNoteForOffer } = __m["js/views/note-offers.js"];
 const CLS = { 'Da seguire': 'warn', Sentito: 'info', Accettata: 'ok', Persa: 'bad' };
 const radixOfferOpen = o => o.outcome === 'Da seguire' || o.outcome === 'Sentito';
 const dueState = o => { const d = radixOfferDue(o); if (!d || !radixOfferOpen(o)) return ''; const t = today(); return d < t ? 'scaduto' : d === t ? 'oggi' : ''; };
@@ -2506,7 +2580,7 @@ async function viewRadixOffer(app, id) {
   if (!o) return h('div', { class: 'page' }, h('a', { class: 'back', href: '#/preventivi' }, '← Offerte'), emptyState('Offerta non trovata o non visibile con il tuo accesso.'));
   const c = o.customerId ? app.store.customer(o.customerId) : null;
   const notes = c ? await app.store.notes(c.id).catch(() => []) : [];
-  const about = notes.filter(n => mentionsOffer(n, o.id));
+  const about = notes.filter(n => n.radixOfferId === o.id || (!n.quoteId && !n.radixOfferId && mentionsOffer(n, o.id)));   // 03/11: collegate + quelle che la citano
   const others = notes.filter(n => !about.includes(n)).slice(0, 5);
   const sameCust = all.filter(x => x.customerId && x.customerId === o.customerId && x.id !== o.id && radixOfferOpen(x));
   const refresh = () => app.go('rxofferta/' + encodeURIComponent(o.id));
@@ -2541,7 +2615,8 @@ async function viewRadixOffer(app, id) {
         h('button', { class: 'act primary', type: 'button', onclick: () => linkOffer(app, o, refresh) }, h('span', { class: 'act-ico' }, '⇄'), h('span', {}, 'Collega a un cliente')),
         h('button', { class: 'act', type: 'button', onclick: () => app.ui.newCustomerDialog(app, o.customerLabel.split(',')[0].trim(), { onCreated: async nc => { await app.store.linkRadixOffer(o.id, nc.id); app.invalidate?.(); toast('Offerta collegata a ' + nc.name); refresh(); } }) },
           h('span', { class: 'act-ico' }, '+'), h('span', {}, 'Crea il cliente')))) : null,
-    h('section', { class: 'card' }, h('h2', {}, 'Storia di questa offerta'),
+    h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'Storia di questa offerta'),
+        c && !app.session.preview && app.store.linkNote ? h('button', { class: 'btn small', type: 'button', onclick: async () => { if (await pickNoteForOffer(app, c.id, 'r:' + o.id).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, 'Collega una nota esistente') : null),
       about.length ? h('ol', { class: 'timeline' }, about.map(noteLi)) : h('p', { class: 'muted' }, 'Quando segni un esito, il contatto finisce qui e nella storia del cliente.')),
     c ? h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'Ultimi contatti con il cliente'), h('a', { class: 'more', href: '#/agenda/' + c.id }, 'Tutti →')),
       others.length ? h('ol', { class: 'timeline' }, others.map(noteLi)) : h('p', { class: 'muted' }, 'Nessun altro contatto registrato.')) : null,
@@ -2722,6 +2797,7 @@ const { buildIndex, searchCustomers, highlight } = __m["js/core/search.js"];
 const { fiscalFields } = __m["js/views/fiscal.js"];
 const { radixOrderRow } = __m["js/views/radix-orders.js"];
 const { purchaseSummary, SALES_YEARS } = __m["js/core/purchases.js"];
+const { offerChoices, offerSelect, parseRef, noteOfferChip, linkNoteDialog, canLinkNote } = __m["js/views/note-offers.js"];
 // 01/11 sera (Tommaso: "si può migliorare?"): all'apertura solo i clienti su cui lavorare (attivi, da recuperare, potenziali),
 // in ordine "da seguire prima"; la ricerca cerca sempre in tutti i clienti.
 const WORK = ['Attivo', 'Da recuperare', 'Potenziale'];
@@ -2951,8 +3027,11 @@ async function customerCard(app, c) {
   const openActs = notes.flatMap(n => (n.actions || []).filter(a => !a.done).map(a => ({ a, n }))).sort((x, y) => (x.a.due || '9999').localeCompare(y.a.due || '9999'));
   const toggle = async (n, a) => { try { await app.store.toggleAction(n.id, a.id); toast('Follow-up completato'); refresh(); } catch (e) { toast(e.message, 'error'); } };
   const act = (label, icon, { primary, ...attrs }) => h(attrs.href ? 'a' : 'button', { class: 'act' + (primary ? ' primary' : ''), ...attrs }, h('span', { class: 'act-ico', 'aria-hidden': 'true' }, icon), h('span', {}, label));
+  const offerShort = [...quotes.map(q => ({ ref: 'q:' + q.id, short: q.number })), ...rxAll.map(o => ({ ref: 'r:' + o.id, short: o.id }))];
+  const linkBtn = n => canLinkNote(app.session, n) && app.store.linkNote && offerShort.length ? h('button', { class: 'link note-link', type: 'button', title: 'Collega la nota a un\'offerta del cliente',
+    onclick: async () => { if (await linkNoteDialog(app, n).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, n.quoteId || n.radixOfferId ? 'cambia offerta' : '🔗 collega a un\'offerta') : null;
   const noteItem = n => h('li', { class: n.source === 'RADIX' ? 'tl-radix' : '' },
-    h('div', { class: 'tl-head' }, h('span', { class: 'badge muted' }, n.kind), n.outcome ? h('span', { class: 'badge' }, n.outcome) : null, h('small', { class: 'muted' }, `${n.source === 'RADIX' ? dateIt(n.createdAt) : dateTimeIt(n.createdAt)} · ${n.authorName}`)),
+    h('div', { class: 'tl-head' }, h('span', { class: 'badge muted' }, n.kind), n.outcome ? h('span', { class: 'badge' }, n.outcome) : null, noteOfferChip(n, offerShort), h('small', { class: 'muted' }, `${n.source === 'RADIX' ? dateIt(n.createdAt) : dateTimeIt(n.createdAt)} · ${n.authorName}`), linkBtn(n)),
     n.source === 'RADIX' ? radixBody(n) : (n.audio && n.body === 'Nota vocale' ? null : h('p', {}, n.body)),
     n.audio ? noteVoice(app, n, refresh) : null,
     (n.actions || []).length ? h('ul', { class: 'checks' }, n.actions.map(a => h('li', {}, h('label', {}, h('input', { type: 'checkbox', checked: a.done, onchange: () => toggle(n, a) }),
@@ -3035,7 +3114,11 @@ async function noteDialog(app, c, preset = {}) {
   const fu = h('input', { placeholder: 'es. richiamare per offerta fibra', value: preset.fu || '' });
   const due = h('input', { type: 'date', min: today(), value: preset.due && preset.due >= today() ? preset.due : '' });
   const voice = app.store.saveNoteAudio && recordingAvailable() ? voiceRecorder() : null;
+  // 03/11: la nota si può collegare a un'offerta del cliente (app o RADIX)
+  const choices = app.store.linkNote ? await offerChoices(app, c.id).catch(() => []) : [];
+  const offSel = choices.length ? offerSelect(choices, preset.offer || '') : null;
   const res = await modal('Nuova nota — ' + c.name, h('div', { class: 'form' }, field('Tipo di contatto', kind), field('Esito', outcome),
+    offSel ? field('Offerta (facoltativo)', offSel, 'La nota compare anche nella pagina dell\'offerta.') : null,
     h('div', { class: 'field' }, h('div', { class: 'note-head' }, h('span', {}, 'Nota'), dictateButton(body)), body),
     voice ? voice.el : null,
     h('fieldset', {}, h('legend', {}, 'Follow-up (facoltativo)'), field('Cosa fare', fu), field('Entro il', due))),
@@ -3044,6 +3127,7 @@ async function noteDialog(app, c, preset = {}) {
     const blob = voice?.blob();
     const text = body.value.trim() || (blob ? 'Nota vocale' : '');
     const n = await app.store.addNote({ customerId: c.id, kind: kind.value, outcome: outcome.value, body: text, actions: fu.value ? [{ title: fu.value, due: due.value || null }] : [] });
+    if (offSel?.value) await app.store.linkNote(n.id, parseRef(offSel.value)).catch(e => toast('Nota salvata, ma non collegata all\'offerta: ' + e.message, 'error'));
     if (blob) {
       try { await app.store.saveNoteAudio(n.id, blob); }
       catch (e) { toast('Nota salvata, ma l\'audio non è stato caricato: ' + e.message, 'error'); return true; }
@@ -4851,7 +4935,8 @@ const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions
 const { fiscalFields } = __m["js/views/fiscal.js"];
 const { makeLine, totals, lineNet, lineAmount, priceLevel, canQuote, searchProducts, totalDiscount, palletsFor, PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL } = __m["js/core/pricing.js"];
 const { regionOf } = __m["js/core/geo.js"];
-const { quoteCls } = __m["js/views/agenda.js"];
+const { quoteCls, noteDialog } = __m["js/views/agenda.js"];
+const { offerChoices, noteOfferChip, pickNoteForOffer, linkNoteDialog, canLinkNote } = __m["js/views/note-offers.js"];
 const { buildIndex, searchCustomers } = __m["js/core/search.js"];
 const { OFFER_HEADER, OFFER_FOOTER, OFFER_HEADER_JPG, OFFER_FOOTER_JPG } = __m["js/brand-assets.js"];
 const { quotePdf } = __m["js/core/quote-pdf.js"];
@@ -5413,6 +5498,8 @@ async function viewQuoteEditor(app, id, customerId) {
     h('section', { class: 'card' }, h('h2', {}, 'Trasporto e carico'), tp.el),
     // 03/11: domande all'ufficio (trasporti, prezzi, sconti, disponibilità) dentro l'offerta; solo versione agente
     showsAssist(app.session) ? askOfficeCard(app, q) : null,
+    // 03/11: note collegate a questa offerta (nuove o già scritte)
+    app.store.linkNote ? quoteNotesCard(app, q) : null,
     h('div', { class: 'grid2' },
       h('section', { class: 'card' }, h('h2', {}, 'Condizioni'),
         field('Trasporto in offerta (€)', freightIn, 'Si compila da solo dal riquadro “Trasporto e carico”. Se scrivi un importo a mano, resta il tuo.'),
@@ -5428,6 +5515,29 @@ async function viewQuoteEditor(app, id, customerId) {
         cond('Note', notesIn)),
       h('section', { class: 'card' }, h('h2', {}, 'Riepilogo'), totBox)), dock);
   return root;
+}
+
+// Note su questa offerta (03/11, richiesta Tommaso): le note del cliente collegate all'offerta, + nota collegata, collega una nota esistente
+function quoteNotesCard(app, q) {
+  const card = h('section', { class: 'card quote-notes' }), list = h('div', {});
+  const c = app.store.customer(q.customerId);
+  const load = async () => {
+    if (!q.id || !c) { fill(list, h('p', { class: 'muted' }, 'Salva l\'offerta per collegarle le note di visite e telefonate.')); return; }
+    const notes = (await app.store.notes(c.id).catch(() => [])).filter(n => n.quoteId === q.id);
+    fill(list, notes.length ? h('ol', { class: 'timeline' }, notes.map(n => h('li', {},
+      h('div', { class: 'tl-head' }, h('span', { class: 'badge muted' }, n.kind), n.outcome ? h('span', { class: 'badge' }, n.outcome) : null,
+        h('small', { class: 'muted' }, `${dateIt(n.createdAt)} · ${n.authorName || ''}`),
+        canLinkNote(app.session, n) ? h('button', { class: 'link note-link', type: 'button', onclick: async () => { if (await linkNoteDialog(app, n).catch(e => { toast(e.message, 'error'); return false; })) load(); } }, 'cambia offerta') : null),
+      h('p', {}, n.body))))
+      : h('p', { class: 'muted' }, 'Nessuna nota su questa offerta. Dopo una telefonata o una visita al cliente, aggiungila qui.'));
+  };
+  const busy = () => !q.id ? (toast('Prima salva l\'offerta', 'error'), true) : false;
+  fill(card, h('div', { class: 'card-head' }, h('h2', {}, 'Note su questa offerta'),
+    !app.session.preview && c ? h('div', { class: 'row' },
+      h('button', { class: 'btn small', type: 'button', onclick: async () => { if (busy()) return; if (await noteDialog(app, c, { offer: 'q:' + q.id })) load(); } }, '+ Nota'),
+      h('button', { class: 'btn small', type: 'button', onclick: async () => { if (busy()) return; if (await pickNoteForOffer(app, c.id, 'q:' + q.id).catch(e => { toast(e.message, 'error'); return false; })) load(); } }, 'Collega una nota esistente')) : null), list);
+  load();
+  return card;
 }
 
 function printQuote(q) {
@@ -6979,7 +7089,8 @@ const HELP = {
     steps: [
       'Cerca per nome, località o P.IVA; i filtri in alto separano Attivi, Da recuperare, Persi, Mai fatturato e Potenziali.',
       'Nella scheda cliente, "In corso" mostra offerte aperte (app e RADIX), ordini in corso in RADIX e follow-up.',
-      'Dopo ogni visita o telefonata premi "+ Nota": scegli il tipo di contatto, scrivi o detta, aggiungi un follow-up con la data.',
+      'Dopo ogni visita o telefonata premi "+ Nota": scegli il tipo di contatto, scrivi o detta, aggiungi un follow-up con la data. Se riguarda un\'offerta, sceglila in "Offerta": la nota compare anche lì.',
+      'Una nota già scritta si collega a un\'offerta con "🔗 collega a un\'offerta" accanto alla nota.',
       'Nuovo cliente: bastano ragione sociale, indirizzo con provincia e un contatto. I dati per l\'ordine (SDI/PEC, pagamento, banca) si possono mettere subito o quando arriva l\'ordine.',
       'Lo stato del cliente si cambia a mano solo con un motivo (es. "Cessata attività").',
     ],
@@ -7007,6 +7118,7 @@ const HELP = {
       '"Prezzo netto – nascondi sconto" (sotto la tabella dei prodotti): nel PDF e nell\'email il cliente vede solo il prezzo netto, senza la colonna sconto.',
       'Bloccato su trasporto, prezzi, sconti o disponibilità? Sotto "Trasporto e carico" premi "✉ Chiedi all\'ufficio": Christian e Irina rispondono lì, nell\'offerta, e ti arriva un\'email. L\'offerta va prima salvata.',
       'Salva, controlla con "Anteprima PDF", poi "Invia per email".',
+      '"Note su questa offerta": "+ Nota" dopo una telefonata o una visita sull\'offerta, oppure "Collega una nota esistente" del cliente.',
       'Quando il cliente accetta: stato "Accettata" e "Passa l\'ordine all\'ufficio". Per un cliente nuovo servono P.IVA, SDI o PEC, pagamento e banca.',
     ],
     notes: [
