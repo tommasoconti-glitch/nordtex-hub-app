@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="9f221c46464b">
+<meta name="ntx-build" content="00036a530f13">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -753,7 +753,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .rx-item{list-style:none;padding:8px 0;border-bottom:1px solid var(--line)}.rx-item:last-child{border-bottom:0}.rx-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px}.rx-item small{display:block;margin-top:2px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"9f221c46464b"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"00036a530f13"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2091,13 +2091,22 @@ function validDiscounts(d) {
 function totalDiscount(d) { return round2((1 - d.reduce((v, x) => v * (1 - x / 100), 1)) * 100); }
 
 // Riga di offerta: fotografa il prodotto al momento dell'inserimento.
+// 03/11 (segnalazione Christian, offerta OFF-2026-0007 Sacchi): nel Master le varianti di un prodotto hanno spesso la stessa descrizione
+// (es. "NORDTEX - Naturtex 110 ROOF" da 40 a 160 mm): la riga d'offerta porta sempre spessore e formato, come productLabel di model.js.
+function lineDescription(p) {
+  const s = p.description || p.id;
+  const dims = [];
+  if (p.thickness && !s.includes(String(Math.round(p.thickness)))) dims.push(Math.round(p.thickness) + ' mm');
+  if (p.length && p.width && !s.includes('×') && !s.includes(' x ')) dims.push(`${Math.round(p.length)}×${Math.round(p.width)}`);
+  return dims.length ? `${s} — ${dims.join(', ')}` : s;
+}
 function makeLine(p, qty, discounts = [0, 0, 0], policy = 'avvisa') {
   if (!canQuote(p, policy)) throw new Error('Articolo non quotabile: ' + priceLevel(p).reasons.join('; '));
   if (!(typeof qty === 'number' && Number.isFinite(qty) && qty > 0)) throw new Error('Quantità non valida');
   if (!validDiscounts(discounts)) throw new Error('Sconti non validi (0–100%)');
   const pl = priceLevel(p);
   return {
-    productId: p.id, listCode: p.listCode || '', radixCode: p.radixCode || '', description: p.description,
+    productId: p.id, listCode: p.listCode || '', radixCode: p.radixCode || '', description: lineDescription(p),
     family: p.family, producer: p.producer || '', unit: normUnit(p.saleUnit), listPrice: p.price,
     qty, discounts: [...discounts], level: pl.level, warnings: pl.reasons,
     palletQuantity: p.palletQuantity ?? null, palletUnit: p.palletUnit ?? null,
@@ -2147,7 +2156,7 @@ function palletsFor(l) {
   return l.qty / l.palletQuantity;
 }
 
-return { PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL, normUnit, round2, priceLevel, canQuote, validDiscounts, totalDiscount, makeLine, lineNet, lineAmount, totals, searchProducts, palletsFor };
+return { PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL, normUnit, round2, priceLevel, canQuote, validDiscounts, totalDiscount, lineDescription, makeLine, lineNet, lineAmount, totals, searchProducts, palletsFor };
 })();
 __m["js/core/geo.js"] = (function () {
 // Sigla provincia -> regione (nomi come nelle tabelle trasporto del listino n.05)
