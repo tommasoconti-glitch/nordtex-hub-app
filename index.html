@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="e1f87d6322e9">
+<meta name="ntx-build" content="8d369c5fc977">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -791,7 +791,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"e1f87d6322e9"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8d369c5fc977"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -917,7 +917,142 @@ function watchTables(root) {
 
 return { stackWideTables, watchTables };
 })();
+__m["js/core/pricing.js"] = (function () {
+// Calcolo offerte NORDTEX HUB.
+// Prezzi sempre dal Master prodotti (listino n.05); nessuna conversione di unità inventata.
+
+const PRICE_LEVEL = Object.freeze({ OK: 'ok', WARN: 'warn', BLOCKED: 'blocked' });
+const DISCOUNT_ALERT = 52.5; // Condizioni agenti 2026: sconto massimo previsto 50+5 (52,5% complessivo); oltre serve autorizzazione Direzione
+const DISCOUNT_ALERT_LABEL = '50+5 (52,5%)';
+
+const UNITS = new Set(['M2', 'M3', 'PZ', 'ML', 'CONF', 'ROTOLO', 'KG', 'SACCO', 'BIGBAG']);
+const txt = x => String(x ?? '').trim();
+const normUnit = x => ({ MQ: 'M2', MC: 'M3' }[txt(x).toUpperCase()] || txt(x).toUpperCase());
+const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
+
+// Livello di affidabilità del prezzo di un articolo del Master.
+function priceLevel(p) {
+  const reasons = [];
+  if (!(typeof p.price === 'number' && Number.isFinite(p.price) && p.price > 0)) {
+    return { level: PRICE_LEVEL.BLOCKED, reasons: ['Prezzo non pubblicato o pari a zero: quotazione ufficio'] };
+  }
+  const sale = normUnit(p.saleUnit), unit = normUnit(p.priceUnit), list = normUnit(p.listPriceUnit);
+  if (!UNITS.has(sale) || !UNITS.has(unit) || !UNITS.has(list) || sale !== unit || unit !== list) {
+    return { level: PRICE_LEVEL.BLOCKED, reasons: ['Unità di vendita e di prezzo non coerenti: serve conversione documentata'] };
+  }
+  if (txt(p.priceStatus) !== 'RISCONTRO DOCUMENTALE OK') reasons.push('Stato prezzo nel Master: ' + (txt(p.priceStatus) || 'non indicato'));
+  if (txt(p.anomalies)) reasons.push('Anomalie aperte: ' + txt(p.anomalies));
+  return { level: reasons.length ? PRICE_LEVEL.WARN : PRICE_LEVEL.OK, reasons };
+}
+
+// policy: 'avvisa' = articoli con anomalie ammessi con segnalazione; 'rigida' = solo prezzi verificati
+function canQuote(p, policy = 'avvisa') {
+  const l = priceLevel(p).level;
+  return l === PRICE_LEVEL.OK || (l === PRICE_LEVEL.WARN && policy === 'avvisa');
+}
+
+function validDiscounts(d) {
+  return Array.isArray(d) && d.length === 3 && d.every(x => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 100);
+}
+
+function totalDiscount(d) { return round2((1 - d.reduce((v, x) => v * (1 - x / 100), 1)) * 100); }
+
+// Riga di offerta: fotografa il prodotto al momento dell'inserimento.
+// 03/11 (segnalazione Christian su un'offerta del 02/11): nel Master le varianti di un prodotto hanno spesso la stessa descrizione
+// (es. "NORDTEX - Naturtex 110 ROOF" da 40 a 160 mm): la riga d'offerta porta sempre spessore e formato, come productLabel di model.js.
+// 04/11 (segnalazione Christian, offerta 11 Alda): "Naturtex 160" da 60 mm perdeva lo spessore perché "60" sta dentro "160".
+// Lo spessore conta come già scritto solo se il numero intero è seguito da "mm" o da "×"/"x" (es. "45×240 mm", "120 ×60").
+const mmText = t => String(t >= 1 ? Math.round(t) : +(+t).toFixed(1));
+function hasThickness(s, t) {
+  const n = mmText(t).replace('.', '[.,]');
+  return new RegExp(`(^|[^\\d.,])${n}\\s*(mm|×|x(?![a-z]))`, 'i').test(String(s || ''));
+}
+function lineDescription(p) {
+  const s = p.description || p.id;
+  const dims = [];
+  if (p.thickness && !hasThickness(s, p.thickness)) dims.push(mmText(p.thickness) + ' mm');
+  if (p.length && p.width && !s.includes('×') && !s.includes(' x ')) dims.push(`${Math.round(p.length)}×${Math.round(p.width)}`);
+  return dims.length ? `${s} — ${dims.join(', ')}` : s;
+}
+// Descrizione come la scriveva la regola vecchia (prima del 04/11): serve a riconoscere le righe salvate senza spessore
+function oldLineDescription(p) {
+  const s = p.description || p.id;
+  const dims = [];
+  if (p.thickness && !s.includes(String(Math.round(p.thickness)))) dims.push(Math.round(p.thickness) + ' mm');
+  if (p.length && p.width && !s.includes('×') && !s.includes(' x ')) dims.push(`${Math.round(p.length)}×${Math.round(p.width)}`);
+  return dims.length ? `${s} — ${dims.join(', ')}` : s;
+}
+// Righe già salvate con la descrizione senza spessore: la riporta a quella giusta (solo se non è stata scritta a mano)
+function fixLineDescriptions(lines, byId) {
+  let n = 0;
+  for (const l of lines || []) {
+    const p = byId.get(l.productId); if (!p) continue;
+    const right = lineDescription(p);
+    if (l.description !== right && l.description === oldLineDescription(p)) { l.description = right; n++; }
+  }
+  return n;
+}
+function makeLine(p, qty, discounts = [0, 0, 0], policy = 'avvisa') {
+  if (!canQuote(p, policy)) throw new Error('Articolo non quotabile: ' + priceLevel(p).reasons.join('; '));
+  if (!(typeof qty === 'number' && Number.isFinite(qty) && qty > 0)) throw new Error('Quantità non valida');
+  if (!validDiscounts(discounts)) throw new Error('Sconti non validi (0–100%)');
+  const pl = priceLevel(p);
+  return {
+    productId: p.id, listCode: p.listCode || '', radixCode: p.radixCode || '', description: lineDescription(p),
+    family: p.family, producer: p.producer || '', unit: normUnit(p.saleUnit), listPrice: p.price,
+    qty, discounts: [...discounts], level: pl.level, warnings: pl.reasons,
+    palletQuantity: p.palletQuantity ?? null, palletUnit: p.palletUnit ?? null,
+  };
+}
+
+function lineNet(l) { return l.listPrice * l.discounts.reduce((v, d) => v * (1 - d / 100), 1); }
+function lineAmount(l) { return round2(lineNet(l) * l.qty); }
+
+// Totali documento. freight null = trasporto da definire (mai trattato come zero).
+function totals(q) {
+  const lines = q.lines || [];
+  for (const l of lines) {
+    if (!(l.qty > 0) || !validDiscounts(l.discounts) || !(l.listPrice > 0)) throw new Error('Riga non valida: ' + (l.description || l.productId));
+  }
+  const goods = round2(lines.reduce((s, l) => s + lineAmount(l), 0));
+  const listValue = round2(lines.reduce((s, l) => s + round2(l.listPrice * l.qty), 0));
+  const extras = Number(q.extras) || 0;
+  const freight = q.freight === null || q.freight === undefined || q.freight === '' ? null : Number(q.freight);
+  if (freight !== null && !(Number.isFinite(freight) && freight >= 0)) throw new Error('Trasporto non valido');
+  const vatRate = q.vatRate === undefined || q.vatRate === null || q.vatRate === '' ? 22 : Number(q.vatRate);
+  if (!(Number.isFinite(vatRate) && vatRate >= 0 && vatRate <= 100)) throw new Error('IVA non valida');
+  const taxable = round2(goods + extras + (freight ?? 0));
+  const vat = round2(taxable * vatRate / 100);
+  return {
+    listValue, discountValue: round2(listValue - goods), goods, extras, freight, taxable, vatRate, vat,
+    total: round2(taxable + vat), freightPending: freight === null,
+    warnings: lines.filter(l => l.level === PRICE_LEVEL.WARN).length,
+    discountAlerts: lines.filter(l => totalDiscount(l.discounts) > DISCOUNT_ALERT).length,
+  };
+}
+
+function searchProducts(products, query, limit = 60) {
+  const words = txt(query).toLocaleLowerCase('it').split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const out = [];
+  for (const p of products) {
+    if (p.hidden) continue;   // 03/11: prodotti ritirati (codici doppi Staudacher, Holcim): non si aggiungono più alle offerte
+    const hay = [p.listCode, p.radixCode, p.description, p.family, p.subfamily, p.producer, p.id, p.thickness && Math.round(p.thickness) + ' ' + Math.round(p.thickness) + 'mm', p.length && p.width && Math.round(p.length) + 'x' + Math.round(p.width)].map(txt).join(' ').toLocaleLowerCase('it');
+    if (words.every(w => hay.includes(w))) { out.push(p); if (out.length >= limit) break; }
+  }
+  return out;
+}
+
+// Bancali occupati (solo se il Master documenta quantità per bancale nella stessa unità)
+function palletsFor(l) {
+  if (!(l.palletQuantity > 0) || normUnit(l.palletUnit) !== l.unit) return null;
+  return l.qty / l.palletQuantity;
+}
+
+return { PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL, normUnit, round2, priceLevel, canQuote, validDiscounts, totalDiscount, hasThickness, lineDescription, oldLineDescription, fixLineDescriptions, makeLine, lineNet, lineAmount, totals, searchProducts, palletsFor };
+})();
 __m["js/data/model.js"] = (function () {
+const { lineDescription } = __m["js/core/pricing.js"];
 // Modello comune ai due archivi (locale e Supabase)
 const STATUS_ORDER = ['Attivo', 'Da recuperare', 'Perso', 'Mai fatturato', 'Potenziale', 'Non interessato', 'Cessata attività'];
 // Stati che agenti e Direzione possono impostare a mano (con motivo)
@@ -1023,13 +1158,7 @@ function uid() {
 function nowIso() { return new Date().toISOString(); }
 
 // Etichetta prodotto leggibile: aggiunge spessore e formato quando la descrizione non li riporta
-function productLabel(p) {
-  let s = p.description || p.id;
-  const dims = [];
-  if (p.thickness && !s.includes(String(Math.round(p.thickness)))) dims.push(Math.round(p.thickness) + ' mm');
-  if (p.length && p.width && !s.includes('×') && !s.includes(' x ')) dims.push(`${Math.round(p.length)}×${Math.round(p.width)}`);
-  return dims.length ? `${s} — ${dims.join(', ')}` : s;
-}
+function productLabel(p) { return lineDescription(p); }   // 04/11: stessa regola della riga d'offerta (pricing.js)
 
 // Visibilità: la Direzione vede tutto; un agente/consulente solo i clienti assegnati alla propria etichetta
 function visibleTo(session, customer) {
@@ -2225,115 +2354,6 @@ function fiscalFields(app, c = {}, { withVat = true, payment = '' } = {}) {
 }
 
 return { fiscalFields };
-})();
-__m["js/core/pricing.js"] = (function () {
-// Calcolo offerte NORDTEX HUB.
-// Prezzi sempre dal Master prodotti (listino n.05); nessuna conversione di unità inventata.
-
-const PRICE_LEVEL = Object.freeze({ OK: 'ok', WARN: 'warn', BLOCKED: 'blocked' });
-const DISCOUNT_ALERT = 52.5; // Condizioni agenti 2026: sconto massimo previsto 50+5 (52,5% complessivo); oltre serve autorizzazione Direzione
-const DISCOUNT_ALERT_LABEL = '50+5 (52,5%)';
-
-const UNITS = new Set(['M2', 'M3', 'PZ', 'ML', 'CONF', 'ROTOLO', 'KG', 'SACCO', 'BIGBAG']);
-const txt = x => String(x ?? '').trim();
-const normUnit = x => ({ MQ: 'M2', MC: 'M3' }[txt(x).toUpperCase()] || txt(x).toUpperCase());
-const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
-
-// Livello di affidabilità del prezzo di un articolo del Master.
-function priceLevel(p) {
-  const reasons = [];
-  if (!(typeof p.price === 'number' && Number.isFinite(p.price) && p.price > 0)) {
-    return { level: PRICE_LEVEL.BLOCKED, reasons: ['Prezzo non pubblicato o pari a zero: quotazione ufficio'] };
-  }
-  const sale = normUnit(p.saleUnit), unit = normUnit(p.priceUnit), list = normUnit(p.listPriceUnit);
-  if (!UNITS.has(sale) || !UNITS.has(unit) || !UNITS.has(list) || sale !== unit || unit !== list) {
-    return { level: PRICE_LEVEL.BLOCKED, reasons: ['Unità di vendita e di prezzo non coerenti: serve conversione documentata'] };
-  }
-  if (txt(p.priceStatus) !== 'RISCONTRO DOCUMENTALE OK') reasons.push('Stato prezzo nel Master: ' + (txt(p.priceStatus) || 'non indicato'));
-  if (txt(p.anomalies)) reasons.push('Anomalie aperte: ' + txt(p.anomalies));
-  return { level: reasons.length ? PRICE_LEVEL.WARN : PRICE_LEVEL.OK, reasons };
-}
-
-// policy: 'avvisa' = articoli con anomalie ammessi con segnalazione; 'rigida' = solo prezzi verificati
-function canQuote(p, policy = 'avvisa') {
-  const l = priceLevel(p).level;
-  return l === PRICE_LEVEL.OK || (l === PRICE_LEVEL.WARN && policy === 'avvisa');
-}
-
-function validDiscounts(d) {
-  return Array.isArray(d) && d.length === 3 && d.every(x => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 100);
-}
-
-function totalDiscount(d) { return round2((1 - d.reduce((v, x) => v * (1 - x / 100), 1)) * 100); }
-
-// Riga di offerta: fotografa il prodotto al momento dell'inserimento.
-// 03/11 (segnalazione Christian su un'offerta del 02/11): nel Master le varianti di un prodotto hanno spesso la stessa descrizione
-// (es. "NORDTEX - Naturtex 110 ROOF" da 40 a 160 mm): la riga d'offerta porta sempre spessore e formato, come productLabel di model.js.
-function lineDescription(p) {
-  const s = p.description || p.id;
-  const dims = [];
-  if (p.thickness && !s.includes(String(Math.round(p.thickness)))) dims.push(Math.round(p.thickness) + ' mm');
-  if (p.length && p.width && !s.includes('×') && !s.includes(' x ')) dims.push(`${Math.round(p.length)}×${Math.round(p.width)}`);
-  return dims.length ? `${s} — ${dims.join(', ')}` : s;
-}
-function makeLine(p, qty, discounts = [0, 0, 0], policy = 'avvisa') {
-  if (!canQuote(p, policy)) throw new Error('Articolo non quotabile: ' + priceLevel(p).reasons.join('; '));
-  if (!(typeof qty === 'number' && Number.isFinite(qty) && qty > 0)) throw new Error('Quantità non valida');
-  if (!validDiscounts(discounts)) throw new Error('Sconti non validi (0–100%)');
-  const pl = priceLevel(p);
-  return {
-    productId: p.id, listCode: p.listCode || '', radixCode: p.radixCode || '', description: lineDescription(p),
-    family: p.family, producer: p.producer || '', unit: normUnit(p.saleUnit), listPrice: p.price,
-    qty, discounts: [...discounts], level: pl.level, warnings: pl.reasons,
-    palletQuantity: p.palletQuantity ?? null, palletUnit: p.palletUnit ?? null,
-  };
-}
-
-function lineNet(l) { return l.listPrice * l.discounts.reduce((v, d) => v * (1 - d / 100), 1); }
-function lineAmount(l) { return round2(lineNet(l) * l.qty); }
-
-// Totali documento. freight null = trasporto da definire (mai trattato come zero).
-function totals(q) {
-  const lines = q.lines || [];
-  for (const l of lines) {
-    if (!(l.qty > 0) || !validDiscounts(l.discounts) || !(l.listPrice > 0)) throw new Error('Riga non valida: ' + (l.description || l.productId));
-  }
-  const goods = round2(lines.reduce((s, l) => s + lineAmount(l), 0));
-  const listValue = round2(lines.reduce((s, l) => s + round2(l.listPrice * l.qty), 0));
-  const extras = Number(q.extras) || 0;
-  const freight = q.freight === null || q.freight === undefined || q.freight === '' ? null : Number(q.freight);
-  if (freight !== null && !(Number.isFinite(freight) && freight >= 0)) throw new Error('Trasporto non valido');
-  const vatRate = q.vatRate === undefined || q.vatRate === null || q.vatRate === '' ? 22 : Number(q.vatRate);
-  if (!(Number.isFinite(vatRate) && vatRate >= 0 && vatRate <= 100)) throw new Error('IVA non valida');
-  const taxable = round2(goods + extras + (freight ?? 0));
-  const vat = round2(taxable * vatRate / 100);
-  return {
-    listValue, discountValue: round2(listValue - goods), goods, extras, freight, taxable, vatRate, vat,
-    total: round2(taxable + vat), freightPending: freight === null,
-    warnings: lines.filter(l => l.level === PRICE_LEVEL.WARN).length,
-    discountAlerts: lines.filter(l => totalDiscount(l.discounts) > DISCOUNT_ALERT).length,
-  };
-}
-
-function searchProducts(products, query, limit = 60) {
-  const words = txt(query).toLocaleLowerCase('it').split(/\s+/).filter(Boolean);
-  if (!words.length) return [];
-  const out = [];
-  for (const p of products) {
-    if (p.hidden) continue;   // 03/11: prodotti ritirati (codici doppi Staudacher, Holcim): non si aggiungono più alle offerte
-    const hay = [p.listCode, p.radixCode, p.description, p.family, p.subfamily, p.producer, p.id, p.thickness && Math.round(p.thickness) + ' ' + Math.round(p.thickness) + 'mm', p.length && p.width && Math.round(p.length) + 'x' + Math.round(p.width)].map(txt).join(' ').toLocaleLowerCase('it');
-    if (words.every(w => hay.includes(w))) { out.push(p); if (out.length >= limit) break; }
-  }
-  return out;
-}
-
-// Bancali occupati (solo se il Master documenta quantità per bancale nella stessa unità)
-function palletsFor(l) {
-  if (!(l.palletQuantity > 0) || normUnit(l.palletUnit) !== l.unit) return null;
-  return l.qty / l.palletQuantity;
-}
-
-return { PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL, normUnit, round2, priceLevel, canQuote, validDiscounts, totalDiscount, lineDescription, makeLine, lineNet, lineAmount, totals, searchProducts, palletsFor };
 })();
 __m["js/core/geo.js"] = (function () {
 // Sigla provincia -> regione (nomi come nelle tabelle trasporto del listino n.05)
@@ -5417,7 +5437,7 @@ __m["js/views/quotes.js"] = (function () {
 const { h, fill, eur, num, dateIt, toast, modal, field, emptyState, debounce } = __m["js/ui.js"];
 const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions, normPayment, LOST_REASONS, QUOTE_SNOOZE_DAYS, quoteReminders, missingForOrder } = __m["js/data/model.js"];
 const { fiscalFields } = __m["js/views/fiscal.js"];
-const { makeLine, totals, lineNet, lineAmount, priceLevel, canQuote, searchProducts, totalDiscount, palletsFor, PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL } = __m["js/core/pricing.js"];
+const { makeLine, fixLineDescriptions, totals, lineNet, lineAmount, priceLevel, canQuote, searchProducts, totalDiscount, palletsFor, PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL } = __m["js/core/pricing.js"];
 const { regionOf } = __m["js/core/geo.js"];
 const { quoteCls, noteDialog } = __m["js/views/agenda.js"];
 const { offerChoices, noteOfferChip, pickNoteForOffer, linkNoteDialog, canLinkNote } = __m["js/views/note-offers.js"];
@@ -5550,6 +5570,7 @@ async function viewQuoteEditor(app, id, customerId) {
     q = await app.store.quote(id); if (!q) throw new Error('Offerta non trovata');
   }
   const products = await app.products();
+  if (id) fixLineDescriptions(q.lines, new Map(products.map(p => [p.id, p])));   // 04/11: spessore mancante nelle righe salvate prima della correzione
   const commRules = await app.store.getSetting?.('commissions').catch(() => null) ?? null;
   const viewerIsDir = app.session.role === 'direzione';
   // 03/11 (Tommaso, opzione A): l'avviso "prezzo da verificare nel Master" lo vede solo la Direzione; per gli agenti vale il listino n.05
