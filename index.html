@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="7295875b4dee">
+<meta name="ntx-build" content="92e8e5d44b6b">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -791,9 +791,11 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
 .tabbar.tabbar-6 small{font-size:.6rem;letter-spacing:-.01em} .tabbar.tabbar-6 .ico{font-size:1.05rem}   /* 04/11: 6 voci per gli agenti (Giacenze) */
 .lines .qty-unit{display:block;width:92px;margin:4px 0 0 auto;padding:4px 6px;font-size:.8rem} .lines .qty-eq{display:block;white-space:nowrap}   /* 04/11: quantità in bancali, m³, pannelli */
+.ps-card{padding-bottom:10px} .ps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 4px} .ps-year{display:flex;flex-direction:column;min-width:0} .ps-year small{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em} .ps-year strong{font-size:1.15rem;white-space:nowrap} .ps-year span{font-size:.72rem;color:var(--muted)} .ps-year:first-child strong{font-size:1.3rem}   /* 04/11 fatturato portafoglio in Home */
+@media (max-width:400px){.ps-year strong,.ps-year:first-child strong{font-size:1rem}} .ps-year strong{overflow-wrap:anywhere}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"7295875b4dee"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"92e8e5d44b6b"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -6204,7 +6206,7 @@ async function viewHome(app) {
       h('span', { class: 'todo-text' }, h('strong', {}, c.name), h('small', { class: 'muted' }, [c.city, c.rev2025 ? 'acquistato 2025 ' + eur(c.rev2025) : ''].filter(Boolean).join(' · ')))),
     c.phone ? h('span', { class: 'todo-tel' }, telLinks(c.phone.split(';')[0])) : null);
 
-  return h('div', { class: 'page' }, head,
+  return h('div', { class: 'page' }, head, salesSection(customers),   // 04/11: il fatturato è la prima cosa che vedono (sul telefono si scorre poco)
     h('section', { class: 'card' }, h('h2', {}, 'Da fare oggi'),
       toOrder.length ? h('ul', { class: 'todo-list' }, toOrder.map(q => h('li', { class: 'todo' }, h('a', { href: '#/offerta/' + q.id, class: 'todo-main' },
         h('span', { class: 'due oggi' }, 'ordine'), h('span', { class: 'todo-text' }, h('strong', {}, 'Passa l\'ordine all\'ufficio'), h('small', { class: 'muted' }, `${q.number} · ${q.customer?.name || ''} · ${eur(q.total || 0)}`)))))) : null,
@@ -6217,7 +6219,6 @@ async function viewHome(app) {
         h('ul', { class: 'todo-list' }, toCall.map(callItem)),
         h('a', { class: 'more', href: '#/agenda/stato/Da recuperare' }, 'Tutti i clienti da recuperare →')] : null),
     h('h2', { class: 'section-title' }, 'Il mio andamento'), await trendSection(app, { customers, quotes, notes, rxOpen }),
-    salesSection(customers),
     h('div', { class: 'grid2' },
       h('section', { class: 'card' }, h('h2', {}, 'Prossimi follow-up'),
         upcoming.length ? h('ul', { class: 'todo-list' }, upcoming.map(actionItem))
@@ -6233,17 +6234,18 @@ async function viewHome(app) {
 function salesSection(customers) {
   const f = portfolioSales(customers);
   if (!f.customers || !(f.y2024 || f.y2025 || f.y2026)) return null;
-  const k = (label, value, sub) => h('div', { class: 'kpi' }, h('small', {}, label), h('strong', {}, value), sub ? h('span', {}, sub) : null);
-  return [h('h2', { class: 'section-title' }, 'Fatturato del mio portafoglio'),
-    h('section', { class: 'kpis trend' },
-      k('2026' + (f.asOf ? ' al ' + dateIt(f.asOf) : ''), eur(f.y2026), `${f.buyers2026} clienti su ${f.customers} hanno acquistato`),
-      k('2025 (anno intero)', eur(f.y2025), `${f.buyers2025} clienti hanno acquistato`),
-      k('2024 (anno intero)', eur(f.y2024), null)),
-    f.top.length ? h('section', { class: 'card' }, h('h2', {}, 'Primi clienti del 2026'),
-      h('ul', { class: 'todo-list' }, f.top.map(c => h('li', { class: 'todo' }, h('a', { href: '#/agenda/' + c.id, class: 'todo-main' },
-        h('span', { class: 'todo-text' }, h('strong', {}, c.name), h('small', { class: 'muted' }, [c.city, '2026 ' + eur(c.rev2026), c.rev2025 ? '2025 ' + eur(c.rev2025) : ''].filter(Boolean).join(' · '))))))) ) : null,
-    h('p', { class: 'fine' }, 'Fatturato RADIX (imponibile delle fatture) dei clienti assegnati a te, anche se l\'ordine è passato da altri. Il 2026 è parziale: va confrontato con il 2025 solo a fine anno. ',
-      h('strong', {}, 'Versione Beta: i dati possono contenere errori. '), 'Se qualcosa non torna, segnalalo con "Scrivi a Tommaso".')];
+  const e0 = n => Math.round(n).toLocaleString('it-IT') + ' €';
+  const y = (label, v, sub) => h('div', { class: 'ps-year' }, h('small', {}, label), h('strong', {}, e0(v)), sub ? h('span', {}, sub) : null);
+  // 04/11: compatto, in cima alla Home (sul telefono si scorre poco): tre anni su una riga, il resto si apre a richiesta
+  return h('section', { class: 'card ps-card' }, h('h2', {}, 'Fatturato del mio portafoglio'),
+    h('div', { class: 'ps-grid' },
+      y('2026' + (f.asOf ? ' al ' + dateIt(f.asOf).slice(0, 5) : ''), f.y2026, `${f.buyers2026} clienti su ${f.customers}`),
+      y('2025', f.y2025, `${f.buyers2025} clienti`), y('2024', f.y2024, null)),
+    h('p', { class: 'fine' }, h('strong', {}, 'Versione Beta: i dati possono contenere errori. '), 'Se qualcosa non torna, segnalalo con "Scrivi a Tommaso".'),
+    h('details', { class: 'fold-in' }, h('summary', {}, 'Primi clienti del 2026 e come si calcola'),
+      f.top.length ? h('ul', { class: 'todo-list' }, f.top.map(c => h('li', { class: 'todo' }, h('a', { href: '#/agenda/' + c.id, class: 'todo-main' },
+        h('span', { class: 'todo-text' }, h('strong', {}, c.name), h('small', { class: 'muted' }, [c.city, '2026 ' + e0(c.rev2026), c.rev2025 ? '2025 ' + e0(c.rev2025) : ''].filter(Boolean).join(' · '))))))) : null,
+      h('p', { class: 'fine' }, 'Fatturato RADIX (imponibile delle fatture) dei clienti assegnati a te, anche se l\'ordine è passato da altri. 2025 e 2024 sono anni interi; il 2026 è fino alla data indicata, quindi non va confrontato con un anno intero.')));
 }
 
 // "+ Nuova nota" dalla Home (richiesta Tommaso 01/11): scegli il cliente, scrivi/detta/registra, poi si apre la sua scheda
