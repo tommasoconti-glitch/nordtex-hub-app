@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="f9dfd5dad14c">
+<meta name="ntx-build" content="7295875b4dee">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -793,7 +793,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .lines .qty-unit{display:block;width:92px;margin:4px 0 0 auto;padding:4px 6px;font-size:.8rem} .lines .qty-eq{display:block;white-space:nowrap}   /* 04/11: quantità in bancali, m³, pannelli */
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f9dfd5dad14c"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"7295875b4dee"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2649,7 +2649,19 @@ function purchaseSummary(c, currentYear = SALES_YEARS[SALES_YEARS.length - 1]) {
   return { rows, hints, top: (c?.purchases?.top || []).slice(0, 6), has: rows.length > 0 };
 }
 
-return { SALES_YEARS, purchaseSummary };
+// 04/11 (richiesta rete): fatturato dei clienti assegnati all'agente, per la sua Home. Fonte: fatturato RADIX per cliente e anno
+// (imponibile delle fatture a quel cliente, anche se l'ordine è passato da altri). L'anno in corso è parziale: fino a salesAsOf.
+function portfolioSales(customers) {
+  const list = (customers || []).filter(c => !c.isTest);
+  const tot = k => Math.round(list.reduce((s, c) => s + (Number(c[k]) || 0), 0) * 100) / 100;
+  const asOf = list.reduce((m, c) => (c.salesAsOf && c.salesAsOf > m ? c.salesAsOf : m), '');
+  const buyers = list.filter(c => (Number(c.rev2026) || 0) > 0);
+  const top = buyers.slice().sort((a, b) => b.rev2026 - a.rev2026).slice(0, 5);
+  return { asOf, y2024: tot('rev2024'), y2025: tot('rev2025'), y2026: tot('rev2026'), customers: list.length, buyers2026: buyers.length,
+    buyers2025: list.filter(c => (Number(c.rev2025) || 0) > 0).length, top };
+}
+
+return { SALES_YEARS, purchaseSummary, portfolioSales };
 })();
 __m["js/core/radix-import.js"] = (function () {
 // Lettura nel browser delle esportazioni RADIX per la pagina "Aggiorna dati" (02/11/2026).
@@ -6145,6 +6157,7 @@ const { radixOfferOpen, dueState } = __m["js/views/radix-offers.js"];
 const { radixOfferDue, validityInfo, isExpiring } = __m["js/data/model.js"];
 const { isAssistDesk } = __m["js/core/messages.js"];
 const { directionMessages } = __m["js/views/messages.js"];
+const { portfolioSales } = __m["js/core/purchases.js"];
 
 const greeting = () => { const hr = new Date().getHours(); return hr < 13 ? 'Buongiorno' : hr < 18 ? 'Buon pomeriggio' : 'Buonasera'; };
 
@@ -6204,6 +6217,7 @@ async function viewHome(app) {
         h('ul', { class: 'todo-list' }, toCall.map(callItem)),
         h('a', { class: 'more', href: '#/agenda/stato/Da recuperare' }, 'Tutti i clienti da recuperare →')] : null),
     h('h2', { class: 'section-title' }, 'Il mio andamento'), await trendSection(app, { customers, quotes, notes, rxOpen }),
+    salesSection(customers),
     h('div', { class: 'grid2' },
       h('section', { class: 'card' }, h('h2', {}, 'Prossimi follow-up'),
         upcoming.length ? h('ul', { class: 'todo-list' }, upcoming.map(actionItem))
@@ -6213,6 +6227,23 @@ async function viewHome(app) {
           : h('p', { class: 'muted' }, 'Nessuna comunicazione.'),
         h('a', { class: 'more', href: '#/bacheca' }, 'Apri la bacheca →'))),
     foot);
+}
+
+// 04/11 (richiesta rete): fatturato dei clienti assegnati, con l'avvertenza Beta
+function salesSection(customers) {
+  const f = portfolioSales(customers);
+  if (!f.customers || !(f.y2024 || f.y2025 || f.y2026)) return null;
+  const k = (label, value, sub) => h('div', { class: 'kpi' }, h('small', {}, label), h('strong', {}, value), sub ? h('span', {}, sub) : null);
+  return [h('h2', { class: 'section-title' }, 'Fatturato del mio portafoglio'),
+    h('section', { class: 'kpis trend' },
+      k('2026' + (f.asOf ? ' al ' + dateIt(f.asOf) : ''), eur(f.y2026), `${f.buyers2026} clienti su ${f.customers} hanno acquistato`),
+      k('2025 (anno intero)', eur(f.y2025), `${f.buyers2025} clienti hanno acquistato`),
+      k('2024 (anno intero)', eur(f.y2024), null)),
+    f.top.length ? h('section', { class: 'card' }, h('h2', {}, 'Primi clienti del 2026'),
+      h('ul', { class: 'todo-list' }, f.top.map(c => h('li', { class: 'todo' }, h('a', { href: '#/agenda/' + c.id, class: 'todo-main' },
+        h('span', { class: 'todo-text' }, h('strong', {}, c.name), h('small', { class: 'muted' }, [c.city, '2026 ' + eur(c.rev2026), c.rev2025 ? '2025 ' + eur(c.rev2025) : ''].filter(Boolean).join(' · '))))))) ) : null,
+    h('p', { class: 'fine' }, 'Fatturato RADIX (imponibile delle fatture) dei clienti assegnati a te, anche se l\'ordine è passato da altri. Il 2026 è parziale: va confrontato con il 2025 solo a fine anno. ',
+      h('strong', {}, 'Versione Beta: i dati possono contenere errori. '), 'Se qualcosa non torna, segnalalo con "Scrivi a Tommaso".')];
 }
 
 // "+ Nuova nota" dalla Home (richiesta Tommaso 01/11): scegli il cliente, scrivi/detta/registra, poi si apre la sua scheda
