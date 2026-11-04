@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="a24904813c02">
+<meta name="ntx-build" content="31ef34b4dcb6">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -791,7 +791,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a24904813c02"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"31ef34b4dcb6"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4802,6 +4802,8 @@ function palletInfo(p, per = perSaleUnit(p)) {
 
 const fmt = (n, d) => Number(n).toLocaleString('it-IT', { maximumFractionDigits: d, minimumFractionDigits: 0 });
 const smart = n => fmt(n, n >= 100 ? 0 : n >= 10 ? 1 : n >= 1 ? 2 : 3);
+// 04/11 (Christian): le quantità per bancale e per carico sono dati del produttore e vanno mostrate esatte (22,68 m², 907,2 m²), non arrotondate
+const exact = n => fmt(Math.round(n * 1000) / 1000, 3);
 
 // Righe di testo per la scheda/offerta: "1 m² = 16 pz", "1 bancale = 40 pz · 2,5 m² · 570 kg", "1 carico = 36 bancali = 1.440 pz"
 function conversionLines(p) {
@@ -4823,17 +4825,17 @@ function conversionLines(p) {
     if (v.m2) out.push(`1 m³ = ${smart(v.m2)} m² (spessore ${fmt(p.thickness, 0)} mm)`);
   } else if (su === 'CONF' && v.pz) out.push(`1 conf. = ${smart(v.pz)} pz`);
   if (pal.qty) {
-    const parts = [`${smart(pal.qty)} ${U}`];
+    const parts = [`${exact(pal.qty)} ${U}`];
     if (su !== 'M2' && pal.m2) parts.push(`${smart(pal.m2)} m²${per.block ? ' di muro' : ''}`);
     if (su !== 'PZ' && pal.pz) parts.push(`${smart(pal.pz)} pz`);
     if (su !== 'M3' && pal.m3) parts.push(`${smart(pal.m3)} m³`);
     if (pal.kg) parts.push(`${smart(pal.kg)} kg${pal.kgSource === 'stima densità' ? ' (stima)' : ''}`);
     out.push('1 bancale = ' + parts.join(' · '));
-  } else if (pal.rawQty) out.push(`1 bancale = ${smart(pal.rawQty)} ${ul(pal.rawUnit)}${pal.kg ? ' · ' + smart(pal.kg) + ' kg' : ''}`);
+  } else if (pal.rawQty) out.push(`1 bancale = ${exact(pal.rawQty)} ${ul(pal.rawUnit)}${pal.kg ? ' · ' + smart(pal.kg) + ' kg' : ''}`);
   if (pal.perLoad && pal.qty) {
     const whole = Number.isInteger(pal.perLoad) || pal.perLoad >= 30;
     const pl = whole ? Math.floor(pal.perLoad + 1e-9) : pal.perLoad;
-    out.push(`1 carico = ${smart(pl)} bancali = ${smart(pl * pal.qty)} ${U}${pal.loadLimit ? ` (${pal.loadLimit})` : ''}`);
+    out.push(`1 carico = ${smart(pl)} bancali = ${exact(pl * pal.qty)} ${U}${pal.loadLimit ? ` (${pal.loadLimit})` : ''}`);
   }
   return out;
 }
