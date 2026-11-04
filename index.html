@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="28aa2bd48e75">
+<meta name="ntx-build" content="f9dfd5dad14c">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -790,9 +790,10 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .pick-note>span{display:flex;flex-direction:column;gap:2px}.pick-note-body{white-space:pre-wrap}
 .quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
 .tabbar.tabbar-6 small{font-size:.6rem;letter-spacing:-.01em} .tabbar.tabbar-6 .ico{font-size:1.05rem}   /* 04/11: 6 voci per gli agenti (Giacenze) */
+.lines .qty-unit{display:block;width:92px;margin:4px 0 0 auto;padding:4px 6px;font-size:.8rem} .lines .qty-eq{display:block;white-space:nowrap}   /* 04/11: quantità in bancali, m³, pannelli */
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"28aa2bd48e75"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f9dfd5dad14c"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4914,7 +4915,26 @@ function quantityEquivalents(p, qty) {
   return out;
 }
 
-return { UNIT_LABEL, notesFacts, perSaleUnit, palletInfo, conversionLines, quantityEquivalents };
+// 04/11 (richiesta rete): la quantità di riga si può scrivere anche in bancali, carichi, m³, m², pannelli/pezzi, rotoli.
+// La riga resta nell'unità di vendita (prezzo e RADIX): factor = unità di vendita per 1 unità scelta. Solo conversioni note dai dati.
+function entryUnits(p) {
+  if (!p) return [];
+  const per = perSaleUnit(p), v = per.values, su = per.unit, pal = palletInfo(p, per);
+  const out = [{ key: su, label: ul(su), factor: 1 }];
+  const add = (key, label, f) => { if (f > 0 && Number.isFinite(f) && !out.some(x => x.key === key)) out.push({ key, label, factor: f }); };
+  if (pal.qty) add('BANCALE', 'bancali', pal.qty);
+  if (pal.qty && pal.perLoad) add('CARICO', 'carichi', Math.floor(pal.perLoad + 1e-9) * pal.qty);
+  if (su !== 'M2' && v.m2) add('M2', 'm²', 1 / v.m2);
+  if (su !== 'M3' && v.m3) add('M3', 'm³', 1 / v.m3);
+  if (su !== 'PZ' && v.pz) add('PZ', su === 'M2' ? 'pannelli' : 'pz', 1 / v.pz);
+  if (v.roll) add('ROTOLO', 'rotoli', 1 / v.roll);
+  return out;
+}
+// quantità in unità di vendita da quella scritta (3 decimali, come RADIX)
+const fromEntry = (value, factor) => Math.round(value * factor * 1000) / 1000;
+const toEntry = (qty, factor) => Math.round(qty / factor * 1000) / 1000;
+
+return { UNIT_LABEL, notesFacts, perSaleUnit, palletInfo, conversionLines, quantityEquivalents, entryUnits, fromEntry, toEntry };
 })();
 __m["js/core/unit-prices.js"] = (function () {
 // Prezzo per unità di misura (richiesta Tommaso 02/11/2026): dal prezzo netto di riga ricava €/kg, €/sacco, €/m², €/m³,
@@ -5448,7 +5468,7 @@ const { quotePdf } = __m["js/core/quote-pdf.js"];
 const { mailtoUrl, quoteMailBody, quoteMailIntro, openMailto } = __m["js/core/mailto.js"];
 const { quoteMargin, quoteCommission, unitCost } = __m["js/core/margins.js"];
 const { transportPanel, stockFor } = __m["js/views/transport-panel.js"];
-const { conversionLines, quantityEquivalents } = __m["js/core/conversions.js"];
+const { conversionLines, quantityEquivalents, entryUnits, fromEntry, toEntry } = __m["js/core/conversions.js"];
 const { unitPrices, fullLoadTransport, offerTransportPerUnit, unitPriceNote, fullLoadQty } = __m["js/core/unit-prices.js"];
 const { planTransport } = __m["js/core/logistics.js"];
 const { quoteEmail, QUOTE_BCC, isEmail } = __m["js/core/quote-email.js"];
@@ -5615,6 +5635,17 @@ async function viewQuoteEditor(app, id, customerId) {
   const dock = h('div', { class: 'quote-dock' });
   // campi numerici: il calcolo si aggiorna mentre si scrive (iPad/iPhone non confermano finché il campo resta attivo)
   const selectAll = el => setTimeout(() => { try { el.setSelectionRange(0, el.value.length); } catch { el.select(); } }, 0);
+  // 04/11: quantità scritta in bancali, carichi, m³, pannelli…; la riga resta nell'unità di vendita (l.qty), l.entryUnit ricorda la scelta
+  const qtyCell = (l, live) => {
+    const us = entryUnits(byId.get(l.productId));
+    if (us.length < 2) return [numIn(l.qty, v => { l.qty = v > 0 ? v : l.qty; }, { 'aria-label': 'Quantità', class: 'qty' }, live), h('small', {}, l.unit)];
+    const u = us.find(x => x.key === l.entryUnit) || us[0];
+    const sel = h('select', { class: 'qty-unit', 'aria-label': 'Unità della quantità', disabled: locked,
+      onchange: e => { l.entryUnit = e.target.value === us[0].key ? undefined : e.target.value; mark(); drawLines(); } },
+      us.map(x => h('option', { value: x.key, selected: x.key === u.key }, x.label)));
+    return [numIn(u.factor === 1 ? l.qty : toEntry(l.qty, u.factor), v => { if (v > 0) l.qty = fromEntry(v, u.factor); }, { 'aria-label': 'Quantità in ' + u.label, class: 'qty' }, live), sel,
+      u.factor === 1 ? null : h('small', { class: 'qty-eq' }, '= ' + num(l.qty, 3) + ' ' + String(l.unit).toLowerCase().replace('m2', 'm²').replace('m3', 'm³'))];
+  };
   const numIn = (value, onset, attrs = {}, live = null) => {
     let t = null;
     const read = e => { const v = Number(String(e.target.value).replace(',', '.')); return Number.isFinite(v) ? v : 0; };
@@ -5717,7 +5748,7 @@ async function viewQuoteEditor(app, id, customerId) {
       refresh();
       return h('tr', { class: showPriceWarn && l.level === PRICE_LEVEL.WARN ? 'warnrow' : '' },
         h('td', { class: 'art' }, info),
-        h('td', { class: 'num', 'data-label': 'Quantità' }, numIn(l.qty, v => { l.qty = v > 0 ? v : l.qty; }, { 'aria-label': 'Quantità', class: 'qty' }, live), h('small', {}, l.unit)),
+        h('td', { class: 'num', 'data-label': 'Quantità' }, qtyCell(l, live)),
         h('td', { class: 'num', 'data-label': 'Listino' }, eur(l.listPrice)),
         ...[0, 1, 2].map(k => h('td', { class: 'num disc', 'data-label': `Sc.${k + 1} %` }, numIn(l.discounts[k], v => { l.discounts[k] = Math.min(100, Math.max(0, v)); }, { max: 100, 'aria-label': `Sconto ${k + 1}` }, live))),
         netTd, amtTd,
@@ -7658,7 +7689,7 @@ const HELP = {
     title: 'Offerta',
     intro: 'Preparare un\'offerta con prezzi del listino n.05, sconti, trasporto e documento PDF.',
     steps: [
-      'Prodotti: cerca per nome, codice listino/RADIX o famiglia; nella riga compaiono spessore e formato. Scrivi quantità e sconti (Sc.1, Sc.2, Sc.3).',
+      'Prodotti: cerca per nome, codice listino/RADIX o famiglia; nella riga compaiono spessore e formato. Scrivi quantità e sconti (Sc.1, Sc.2, Sc.3). Sotto la quantità scegli l\'unità in cui la scrivi (m², bancali, carichi, m³, pannelli, quando i dati del prodotto lo permettono): l\'app la converte nell\'unità di vendita, che resta quella del prezzo e del PDF.',
       'Trasporto e carico: controlla l\'indirizzo di consegna; i km si calcolano da soli (via Brennero) e il trasporto entra nell\'offerta. Verde = calcolo sicuro, giallo = stima da confermare, rosso = chiedi all\'ufficio.',
       'Condizioni: pagamento, deposito di uscita, Consegna ("Con trasporto" o "Ritiro al deposito, senza trasporto"), cantiere, note per il cliente.',
       'Ritiro al deposito: si può scegliere solo se tutti gli articoli ci sono in quel deposito, con quantità sufficiente, secondo le ultime giacenze RADIX. Altrimenti l\'app lo blocca e spiega quale articolo manca; finché non correggi (altro deposito, togli l\'articolo o "Con trasporto") l\'offerta non si salva, non si invia e non diventa ordine.',
