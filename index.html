@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="31ef34b4dcb6">
+<meta name="ntx-build" content="2132e9d05695">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -791,7 +791,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"31ef34b4dcb6"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"2132e9d05695"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3990,7 +3990,28 @@ function quoteFileName(q, now = new Date()) {
   return [clean(q.customer?.name), customerCode(q), (/^OFF-\d{4}-\d+$/.test(q.number || '') ? q.number : 'OFF-' + clean(q.number || 'BOZZA')), d.toISOString().slice(0, 10)].filter(Boolean).join('_');
 }
 
-return { DEPOTS, RADIX_DEPOTS, stockDepot, TRANSPORT_BY, isPickup, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, customerLines, lineExtra, quoteDocHtml, quoteFileName };
+// 04/11 (offerta di Nonini): "ritiro al deposito" solo se il materiale c'è in quel deposito secondo le giacenze RADIX.
+// Restituisce le righe che non si possono ritirare: assente nel deposito, non disponibile, o quantità oltre il disponibile
+// (confronto solo se l'unità di misura coincide). Servizi senza codice RADIX (trasporti, bancali) esclusi.
+const UM_EQ = { MQ: 'M2', M2: 'M2', MC: 'M3', M3: 'M3', PZ: 'PZ', NR: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CONF' };
+function pickupStockIssues(q, stock) {
+  const radix = Object.entries(RADIX_DEPOTS).find(([, k]) => k === q?.depot)?.[0];
+  const dep = radix && stock?.depots ? stock.depots.find(d => d.code === radix) : null;
+  const out = [];
+  for (const l of q?.lines || []) {
+    if (!l.radixCode || /trasport|bancal/i.test(l.description || '')) continue;
+    const it = dep?.items?.[l.radixCode];
+    const avail = it ? Number(it.available) || 0 : 0;
+    const same = it && UM_EQ[String(it.um || '').toUpperCase()] && UM_EQ[String(it.um).toUpperCase()] === UM_EQ[String(l.unit || '').toUpperCase()];
+    if (!dep) out.push({ line: l, reason: 'giacenze del deposito non disponibili' });
+    else if (!it) out.push({ line: l, reason: 'non presente in questo deposito' });
+    else if (avail <= 0) out.push({ line: l, reason: 'non disponibile (giacenza teorica ' + avail + ')' });
+    else if (same && avail < l.qty) out.push({ line: l, reason: `disponibili solo ${String(avail).replace('.', ',')} ${String(it.um).toLowerCase()} su ${String(l.qty).replace('.', ',')}` });
+  }
+  return { depotDate: dep?.date || null, issues: out };
+}
+
+return { DEPOTS, RADIX_DEPOTS, stockDepot, TRANSPORT_BY, isPickup, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, customerLines, lineExtra, quoteDocHtml, quoteFileName, pickupStockIssues };
 })();
 __m["js/core/quote-pdf.js"] = (function () {
 // PDF dell'offerta nel formato NORDTEX/RADIX, generato nell'app (nessun servizio esterno): lo stesso contenuto di quote-doc.js.
@@ -5392,7 +5413,7 @@ const { conversionLines, quantityEquivalents } = __m["js/core/conversions.js"];
 const { unitPrices, fullLoadTransport, offerTransportPerUnit, unitPriceNote, fullLoadQty } = __m["js/core/unit-prices.js"];
 const { planTransport } = __m["js/core/logistics.js"];
 const { quoteEmail, QUOTE_BCC, isEmail } = __m["js/core/quote-email.js"];
-const { quoteDocHtml, quoteFileName, DEPOTS, TRANSPORT_BY, isPickup } = __m["js/core/quote-doc.js"];
+const { quoteDocHtml, quoteFileName, DEPOTS, TRANSPORT_BY, isPickup, pickupStockIssues } = __m["js/core/quote-doc.js"];
 const { techSheetFor, sheetLinksText, sheetEntries } = __m["js/core/tech-sheets.js"];
 const { orderMailBody, orderMailSubject, orderMailTo } = __m["js/core/order-mail.js"];
 const { ORDER_STATES } = __m["js/data/model.js"];
@@ -5519,7 +5540,7 @@ async function viewQuoteEditor(app, id, customerId) {
   const byId = new Map(products.map(p => [p.id, p]));
   const isOwner = !q.ownerId || q.ownerId === app.session.userId || app.session.role === 'direzione' || !!app.session.preview;
   const locked = !isOwner || q.status === 'Accettata' || q.status === 'Persa' || q.status === 'Annullata';
-  let dirty = false, tp = null;
+  let dirty = false, tp = null, pickupReady = false;
   let order = q.id ? ((await (app.store.orders?.() ?? Promise.resolve([])).catch(() => [])) || []).find(o => o.quoteId === q.id) || null : null;
   const refreshOrder = async () => { order = ((await app.store.orders?.().catch(() => [])) || []).find(o => o.quoteId === q.id) || null; const n = header(); head.replaceWith(n); head = n; };
   const askOrder = async () => { try { if (await orderDialog(app, q)) await refreshOrder(); } catch (e) { toast(e.message, 'error'); } };
@@ -5664,6 +5685,7 @@ async function viewQuoteEditor(app, id, customerId) {
     if (!q.lines.length) fill(linesBody, h('tr', {}, h('td', { colspan: 9 }, emptyState('Cerca e aggiungi i prodotti qui sopra.'))));
     tp?.redraw();
     drawTotals();
+    if (pickupReady) drawPickup();
   }
   function econBox() {
     if (!q.lines.length) return null;
@@ -5723,18 +5745,28 @@ async function viewQuoteEditor(app, id, customerId) {
       h('option', { value: 'ritiro', selected: on, disabled: !can }, 'Ritiro al deposito, senza trasporto'));
     fill(byBox, h('select', { disabled: locked || on, 'aria-label': 'Trasporto a cura', onchange: e => { q.transportBy = e.target.value; mark(); } },
       TRANSPORT_BY.map(t => h('option', { value: t, selected: t === (q.transportBy || 'DESTINATARIO') }, t))));
-    pickupHint.textContent = on ? `Ritiro presso ${DEPOTS[q.depot].pickup.join(', ')}: prezzo franco deposito, nessun trasporto in offerta.`
+    const why = on ? pickupBlockText() : '';
+    pickupHint.classList.toggle('warn-text', !!why);
+    pickupHint.textContent = why ? '⚠ ' + why : on ? `Ritiro presso ${DEPOTS[q.depot].pickup.join(', ')}: prezzo franco deposito, nessun trasporto in offerta.`
       : can ? '' : 'Per il ritiro scegli prima il deposito di uscita (Chiusa, Lecco, Casale, Castelfranco, Torri, Marche).';
   }
+  // 04/11: il ritiro si può scegliere solo se tutti gli articoli ci sono nel deposito (giacenze RADIX)
+  const pickupBlockText = () => {
+    const r = pickupStockIssues(q, stock);
+    if (!r.issues.length) return '';
+    const dep = DEPOTS[q.depot]?.label || 'questo deposito';
+    return `Ritiro non possibile da ${dep}${r.depotDate ? ' (giacenze al ' + dateIt(r.depotDate) + ')' : ''}: ` + r.issues.map(x => `${x.line.description.split(' — ')[0]} – ${x.reason}`).join('; ') + '. Scegli un altro deposito, togli l\'articolo o lascia "Con trasporto" (consegna diretta). In caso di dubbio chiedi all\'ufficio.';
+  };
   function setPickup(on, quiet) {
     if (on && !DEPOTS[q.depot || 'diretta']?.pickup) { toast('Scegli prima il deposito di ritiro', 'error'); drawPickup(); return; }
+    if (on && !quiet) { const why = pickupBlockText(); if (why) { toast(why, 'error'); drawPickup(); return; } }
     q.pickup = on;
     if (on) { q.transportBy = 'DESTINATARIO'; q.freight = 0; q.freightAuto = false; q.freightNote = 'Ritiro al deposito: nessun trasporto'; q.transportEstimate = null; }
     else if (q.freightNote === 'Ritiro al deposito: nessun trasporto') { q.freight = null; q.freightAuto = true; q.freightNote = ''; }
     freightIn.value = q.freight ?? ''; freightNote.textContent = q.freightNote || '';
     if (!quiet) { mark(); drawPickup(); tp?.redraw(); drawTotals(); }
   }
-  drawPickup();
+  drawPickup(); pickupReady = true;
   const isDir = app.session.role === 'direzione';
   // Agenti: "Inviata" solo tramite invio email (non si sceglie a mano)
   const statusOpts = QUOTE_STATES.filter(st => isDir || st !== 'Inviata' || q.status === 'Inviata').concat(q.status === 'Annullata' ? ['Annullata'] : []);
@@ -5778,6 +5810,7 @@ async function viewQuoteEditor(app, id, customerId) {
     } catch (e) { toast(e.message, 'error'); }
   }
   async function sendDialog() {
+    if (isPickup(q)) { const why = pickupBlockText(); if (why) throw new Error(why); }
     if (dirty) { await save(); if (dirty) return; }
     const c = app.store.customer(q.customerId) || {};
     const contacts = await app.store.contacts(q.customerId).catch(() => []);
@@ -7586,6 +7619,7 @@ const HELP = {
       'Prodotti: cerca per nome, codice listino/RADIX o famiglia; nella riga compaiono spessore e formato. Scrivi quantità e sconti (Sc.1, Sc.2, Sc.3).',
       'Trasporto e carico: controlla l\'indirizzo di consegna; i km si calcolano da soli (via Brennero) e il trasporto entra nell\'offerta. Verde = calcolo sicuro, giallo = stima da confermare, rosso = chiedi all\'ufficio.',
       'Condizioni: pagamento, deposito di uscita, Consegna ("Con trasporto" o "Ritiro al deposito, senza trasporto"), cantiere, note per il cliente.',
+      'Ritiro al deposito: si può scegliere solo se tutti gli articoli ci sono in quel deposito, con quantità sufficiente, secondo le ultime giacenze RADIX. Altrimenti l\'app lo blocca e spiega quale articolo manca: scegli un altro deposito, togli l\'articolo o lascia "Con trasporto".',
       '"Prezzo netto – nascondi sconto" (sotto la tabella dei prodotti): nel PDF e nell\'email il cliente vede solo il prezzo netto, senza la colonna sconto.',
       'Bloccato su trasporto, prezzi, sconti o disponibilità? Sotto "Trasporto e carico" premi "✉ Chiedi all\'ufficio": Christian e Irina rispondono lì, nell\'offerta, e ti arriva un\'email. L\'offerta va prima salvata.',
       'Salva, controlla con "Anteprima PDF", poi "Invia per email".',
