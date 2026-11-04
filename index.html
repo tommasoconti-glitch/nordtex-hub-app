@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="92e8e5d44b6b">
+<meta name="ntx-build" content="eceae6bf7916">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -795,7 +795,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 @media (max-width:400px){.ps-year strong,.ps-year:first-child strong{font-size:1rem}} .ps-year strong{overflow-wrap:anywhere}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"92e8e5d44b6b"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"eceae6bf7916"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2228,11 +2228,27 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       return rows.map(r => ({ id: r.id, customerId: r.customer_id ? custCode(r.customer_id) || null : null, customerLabel: r.customer_label, date: r.offer_date, validUntil: r.valid_until,
         subject: r.subject || '', contact: r.contact || '', total: r.total == null ? null : Number(r.total), radixAgent: r.radix_agent || '', followup: r.followup, open: r.open,
         outcome: r.outcome, outcomeNote: r.outcome_note || '', nextFollowup: r.next_followup, outcomeByName: nm.get(r.outcome_by) || '', outcomeAt: r.outcome_at,
-        lines: Array.isArray(r.lines) ? r.lines : [], linesAt: r.lines_at || null }));
+        lines: Array.isArray(r.lines) ? r.lines : [], linesAt: r.lines_at || null, pdfAt: r.pdf_at || null }));
     },
     // 03/11: righe delle offerte RADIX (abbinate nell'app, funzione hub_import_radix_offer_lines)
     async importRadixOfferLines({ lines, stats = {}, file = '', sha = '' }) {
       return api('/rest/v1/rpc/hub_import_radix_offer_lines', { method: 'POST', body: { p_lines: lines, p_file: file, p_sha: sha, p_stats: stats } });
+    },
+    // 04/11: PDF originale delle offerte RADIX (contenitore privato hub-radix-pdf, migrazione 20261104200000)
+    async uploadRadixOfferPdfs(files) {
+      const ok = [];
+      for (const f of files) {
+        if (!/^[A-Z]+-\d{4}-\d+$/.test(f.id)) continue;
+        const r = await rawFetch('/storage/v1/object/hub-radix-pdf/' + f.id + '.pdf', { method: 'POST', body: new Blob([f.bytes], { type: 'application/pdf' }), headers: { 'Content-Type': 'application/pdf', 'x-upsert': 'true' } });
+        if (r.ok) ok.push(f.id);
+      }
+      const marked = ok.length ? await api('/rest/v1/rpc/hub_mark_radix_pdfs', { method: 'POST', body: { p_ids: ok } }) : 0;
+      return { uploaded: ok.length, failed: files.length - ok.length, marked };
+    },
+    async radixOfferPdf(id) {
+      const r = await rawFetch('/storage/v1/object/authenticated/hub-radix-pdf/' + encodeURIComponent(id) + '.pdf');
+      if (!r.ok) throw fail('HTTP_' + r.status, 'PDF dell\'offerta non disponibile');
+      return r.blob();
     },
     // 02/11: collega l'offerta RADIX a un cliente dell'app (solo Direzione, funzione hub_link_radix_offer)
     async linkRadixOffer(id, customerId) {
@@ -3004,6 +3020,16 @@ function linesSummary(lines = []) {
   return [...goods.slice(0, 2).map(x => shortDesc(x.d)), goods.length > 2 ? `+ altri ${goods.length - 2}` : '', serv.length ? '+ trasporto' : ''].filter(Boolean).join(' · ');
 }
 const qtyIt = q => Number(q || 0).toLocaleString('it-IT', { maximumFractionDigits: 3 });
+// 04/11 (richiesta rete): il PDF originale dell'offerta RADIX, quando l'ufficio l'ha caricato con le righe
+async function openRadixPdf(app, o) {
+  const w = window.open('', '_blank');   // aperta subito (prima dell'attesa), altrimenti il telefono la blocca
+  try {
+    const url = URL.createObjectURL(await app.store.radixOfferPdf(o.id));
+    if (w) w.location.href = url; else { const a = h('a', { href: url, download: o.id + '.pdf' }); document.body.append(a); a.click(); a.remove(); }
+    setTimeout(() => URL.revokeObjectURL(url), 300000);
+  } catch (e) { w?.close(); toast(e.message, 'error'); }
+}
+
 function linesCard(o) {
   const lines = [...(o.lines || [])].sort((a, b) => isService(a) - isService(b));
   if (!lines.length) return h('section', { class: 'card' }, h('h2', {}, 'Cosa c\'è in questa offerta'),
@@ -3133,7 +3159,8 @@ async function viewRadixOffer(app, id) {
       h('div', { class: 'cactions' },
         !app.session.preview ? h('button', { class: 'act primary', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, h('span', { class: 'act-ico' }, '✓'), h('span', {}, 'Esito')) : null,
         c?.phone ? h('a', { class: 'act', href: 'tel:' + (String(c.phone).match(/[+\d][\d\s/.-]{5,}/) || [''])[0].replace(/[^\d+]/g, '') }, h('span', { class: 'act-ico' }, '☎'), h('span', {}, 'Chiama')) : null,
-        c ? h('a', { class: 'act', href: '#/agenda/' + c.id }, h('span', { class: 'act-ico' }, '☰'), h('span', {}, 'Scheda cliente')) : null)),
+        c ? h('a', { class: 'act', href: '#/agenda/' + c.id }, h('span', { class: 'act-ico' }, '☰'), h('span', {}, 'Scheda cliente')) : null,
+        o.pdfAt && app.store.radixOfferPdf ? h('button', { class: 'act', type: 'button', onclick: () => openRadixPdf(app, o) }, h('span', { class: 'act-ico' }, '⎙'), h('span', {}, 'PDF RADIX')) : null)),
     linesCard(o),
     !c && app.session.role === 'direzione' && !app.session.preview && app.store.linkRadixOffer && app.ui ? h('section', { class: 'card rx-link' },
       h('h2', {}, 'Cliente non presente nell\'app'),
@@ -7712,7 +7739,7 @@ const HELP = {
       'I filtri in alto: Da seguire, Ultimi 7 giorni, Da sentire, In scadenza, Accettate, Perse, Annullate.',
       'Il pallino colorato dice l\'urgenza; "sentire il …" è la data del prossimo contatto.',
       'Offerte RADIX: "Esito" per segnare Sentito, Accettata o Persa (con nota): diventa anche una nota nella storia del cliente.',
-      'Offerte RADIX: sotto il cliente compaiono gli articoli (📦); aprendo l\'offerta, "Cosa c\'è in questa offerta" mostra articoli, quantità, prezzo netto e valore. Nella ricerca puoi scrivere anche il nome di un prodotto.',
+      'Offerte RADIX: sotto il cliente compaiono gli articoli (📦); aprendo l\'offerta, "Cosa c\'è in questa offerta" mostra articoli, quantità, prezzo netto e valore. Se l\'ufficio ha caricato il PDF dell\'offerta, il pulsante "PDF RADIX" apre il documento originale. Nella ricerca puoi scrivere anche il nome di un prodotto.',
       'Cestino 🗑 accanto ad "Apri": una bozza si elimina; un\'offerta inviata si ANNULLA con il motivo (resta in archivio, esce da aperte e statistiche).',
     ],
     notes: ['Le offerte del cliente di prova (numero PRV-…) non compaiono qui né nei totali: le trovi nella sua scheda (Clienti › PROVA - CLIENTE TEST POVE DEL GRAPPA).',
@@ -8395,12 +8422,12 @@ function offerLinesCard(app, done) {
         stats.lines += parsed.lines;
       }
       const prod = new Map((await app.products()).filter(p => p.radixCode).map(p => [p.radixCode, p.description]));
-      const okPdf = [];
+      const okPdf = [], pdfFiles = new Map();   // 04/11: il PDF originale si salva anche per aprirlo dall'offerta
       for (const p of pdfs) {
         let r; try { r = await parseOfferPdf(p.buf); } catch { skipped.push(p.name); continue; }   // es. conferme d'ordine: non sono offerte
         if (!r.lines.length) { skipped.push(p.name); continue; }
         if (!known.has(r.id)) { notInApp.push(r.id); continue; }
-        lines[r.id] = r.lines.map(x => ({ ...x, d: x.d || prod.get(x.c) || '' })).map(x => (r.alternatives ? { ...x, alt: true } : x)); okPdf.push(r.id);
+        lines[r.id] = r.lines.map(x => ({ ...x, d: x.d || prod.get(x.c) || '' })).map(x => (r.alternatives ? { ...x, alt: true } : x)); okPdf.push(r.id); pdfFiles.set(r.id, p.buf);
       }
       const noTotLeft = noTot.filter(id => !lines[id]), notFoundLeft = notFound.filter(id => !lines[id]);
       Object.assign(stats, { pdf: okPdf.length, noTotal: noTotLeft.length, notFound: notFoundLeft.length });
@@ -8420,7 +8447,12 @@ function offerLinesCard(app, done) {
             try {
               const r = await app.store.importRadixOfferLines({ lines, stats, file: files.map(f => f.name).join(', '), sha: shas.join(',').slice(0, 64) });
               app.invalidate?.();
-              toast(`Righe caricate su ${r.offers} offerte`);
+              let pdfMsg = '';
+              if (pdfFiles.size && app.store.uploadRadixOfferPdfs) {
+                const u = await app.store.uploadRadixOfferPdfs([...pdfFiles].map(([id, bytes]) => ({ id, bytes }))).catch(() => null);
+                pdfMsg = u ? ` · ${u.uploaded} PDF consultabili dall'offerta${u.failed ? ` (${u.failed} non salvati)` : ''}` : ' · PDF non salvati';
+              }
+              toast(`Righe caricate su ${r.offers} offerte${pdfMsg}`);
               fill(out, h('p', { class: 'du-ok' }, '✓ ' + logText({ kind: 'righe offerte', summary: r }))); done();
             } catch (err) { e.target.disabled = false; toast(err.message, 'error'); }
           } }, 'Conferma e aggiorna'))));
