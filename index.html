@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="2132e9d05695">
+<meta name="ntx-build" content="605a9a8bfeba">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -791,7 +791,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"2132e9d05695"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"605a9a8bfeba"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -5466,6 +5466,7 @@ async function resolveOutcome(app, q, choice) {
 }
 // Offerta accettata → richiesta d'ordine all'ufficio (registrata nell'app) + email pronta per commerciale@ (01/11/2026)
 async function orderDialog(app, q) {
+  if (isPickup(q) && pickupStockIssues(q, app.store.stock || null).issues.length) throw new Error('Ordine non possibile: l\'offerta è con ritiro al deposito ma alcuni articoli non ci sono in quel deposito. Correggi l\'offerta (deposito, articoli o "Con trasporto") e salvala.');
   const today = new Date().toISOString().slice(0, 10);
   const date = h('input', { type: 'date', min: today });
   const addr = h('textarea', { rows: 2, placeholder: 'Sede del cliente oppure indirizzo del cantiere' }, q.site || '');
@@ -5784,6 +5785,7 @@ async function viewQuoteEditor(app, id, customerId) {
   async function save() {
     try {
       if (!q.lines.length) throw new Error('Aggiungi almeno un prodotto');
+      if (isPickup(q)) { const why = pickupBlockText(); if (why) throw new Error('Offerta non salvata. ' + why); }   // 04/11 (prova Christian)
       totals(q); const saved = await app.store.saveQuote(q); Object.assign(q, saved); dirty = false; saveBtn.classList.remove('attn'); dock.querySelector('.qd-act .attn')?.classList.remove('attn');
       toast('Offerta salvata: ' + saved.number); if (id === 'nuova') app.go('offerta/' + saved.id); else { const n = header(); head.replaceWith(n); head = n; if (q.status === 'Accettata' && !order && !app.session.preview) await askOrder(); };
     } catch (e) { toast(e.message, 'error'); }
@@ -7619,7 +7621,7 @@ const HELP = {
       'Prodotti: cerca per nome, codice listino/RADIX o famiglia; nella riga compaiono spessore e formato. Scrivi quantità e sconti (Sc.1, Sc.2, Sc.3).',
       'Trasporto e carico: controlla l\'indirizzo di consegna; i km si calcolano da soli (via Brennero) e il trasporto entra nell\'offerta. Verde = calcolo sicuro, giallo = stima da confermare, rosso = chiedi all\'ufficio.',
       'Condizioni: pagamento, deposito di uscita, Consegna ("Con trasporto" o "Ritiro al deposito, senza trasporto"), cantiere, note per il cliente.',
-      'Ritiro al deposito: si può scegliere solo se tutti gli articoli ci sono in quel deposito, con quantità sufficiente, secondo le ultime giacenze RADIX. Altrimenti l\'app lo blocca e spiega quale articolo manca: scegli un altro deposito, togli l\'articolo o lascia "Con trasporto".',
+      'Ritiro al deposito: si può scegliere solo se tutti gli articoli ci sono in quel deposito, con quantità sufficiente, secondo le ultime giacenze RADIX. Altrimenti l\'app lo blocca e spiega quale articolo manca; finché non correggi (altro deposito, togli l\'articolo o "Con trasporto") l\'offerta non si salva, non si invia e non diventa ordine.',
       '"Prezzo netto – nascondi sconto" (sotto la tabella dei prodotti): nel PDF e nell\'email il cliente vede solo il prezzo netto, senza la colonna sconto.',
       'Bloccato su trasporto, prezzi, sconti o disponibilità? Sotto "Trasporto e carico" premi "✉ Chiedi all\'ufficio": Christian e Irina rispondono lì, nell\'offerta, e ti arriva un\'email. L\'offerta va prima salvata.',
       'Salva, controlla con "Anteprima PDF", poi "Invia per email".',
