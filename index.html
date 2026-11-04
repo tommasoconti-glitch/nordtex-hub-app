@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="8d369c5fc977">
+<meta name="ntx-build" content="28aa2bd48e75">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -789,9 +789,10 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .pick-notes{max-height:60vh;overflow:auto}.pick-note{display:flex;gap:10px;align-items:flex-start;padding:8px 6px;border-bottom:1px solid var(--line);cursor:pointer}
 .pick-note>span{display:flex;flex-direction:column;gap:2px}.pick-note-body{white-space:pre-wrap}
 .quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
+.tabbar.tabbar-6 small{font-size:.6rem;letter-spacing:-.01em} .tabbar.tabbar-6 .ico{font-size:1.05rem}   /* 04/11: 6 voci per gli agenti (Giacenze) */
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8d369c5fc977"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"28aa2bd48e75"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -8778,7 +8779,7 @@ const NAV = [
   { id: 'ordini', label: 'Ordini', icon: '⇪', dir: true, phone: false },
   { id: 'bacheca', label: 'Bacheca', icon: '✓' },
   { id: 'mappe', label: 'Mappe', icon: '◎', phoneDir: false },
-  { id: 'giacenze', label: 'Giacenze', icon: '▦', phone: false },   // 02/11: agenti e Direzione; da telefono si apre da Mappe (agenti) o Altro (Direzione)
+  { id: 'giacenze', label: 'Giacenze', icon: '▦', phoneDir: false },   // 04/11 (Nonini non la trovava in Mappe): sul telefono degli agenti è una voce della barra in basso; Direzione da Altro
   { id: 'sistemi', label: 'Sistemi', icon: '▥', only: canSeeSystems, phone: false },
   { id: 'rete', label: 'Attività rete', icon: '↻', dir: true, group: 'Direzione', phone: false },
   { id: 'manager', label: 'Area manager', icon: '▤', dir: true, phone: false },
@@ -8943,7 +8944,7 @@ function shell(active, content, key = active) {
       // 03/11: Assistenza (scrive a Tommaso) fissa su ogni pagina, tranne la costruzione dell'offerta (lì c'è "Chiedi all'ufficio")
       showsAssist(app.session) && key !== 'offerta' ? h('button', { class: 'assist-fab', type: 'button', title: 'Scrivi a Tommaso', onclick: () => app.session.preview ? toast('Anteprima: qui l\'agente scrive a Tommaso. In anteprima non si inviano messaggi.') : assistDialog(app, key).catch(e => toast(e.message, 'error')) },
         h('span', { 'aria-hidden': 'true' }, '💬'), h('span', { class: 'assist-label' }, 'Assistenza'), h('span', { class: 'assist-count', hidden: !app.navCounts?.assist }, app.navCounts?.assist || '')) : null),
-    h('nav', { class: 'tabbar' }, tabs.map(n => h('a', { href: '#/' + n.id, class: tabActive(n.id) ? 'active' : '' }, h('span', { class: 'ico' }, n.icon), h('small', {}, n.label),
+    h('nav', { class: 'tabbar' + (tabs.length > 5 ? ' tabbar-6' : '') }, tabs.map(n => h('a', { href: '#/' + n.id, class: tabActive(n.id) ? 'active' : '' }, h('span', { class: 'ico' }, n.icon), h('small', {}, n.label),
       (n.id === 'altro' && app.navCounts?.ordini) || (n.id === 'bacheca' && app.navCounts?.bacheca) ? h('span', { class: 'tab-dot' + (n.id === 'bacheca' ? ' nav-badge-bacheca' : '') }) : null))));
 }
 
