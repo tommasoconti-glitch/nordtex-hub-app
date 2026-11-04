@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="605a9a8bfeba">
+<meta name="ntx-build" content="e1f87d6322e9">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -791,7 +791,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"605a9a8bfeba"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"e1f87d6322e9"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1197,6 +1197,22 @@ __m["js/core/preview.js"] = (function () {
 const { radixOfferForAgent } = __m["js/data/model.js"];
 const WRITE = /^(add|save|delete|set|toggle|mark|import|changePassword|followupDone|logQuoteSend|request|update|transcribe|approve|remove)/;
 
+// 04/11: profilo "sola lettura" (accessi di prova Meridian): vede come la Direzione, ogni scrittura è bloccata qui e nel database.
+// Restano permessi: cambio della propria password, registro aperture, calcolo km (sola lettura dei percorsi).
+const READ_ONLY_WRITE = /^(add|save|delete|set|toggle|mark|import|followupDone|logQuoteSend|request|update|transcribe|approve|remove|link|send|close|readThread)/;
+const READ_ONLY_TEXT = 'Profilo in sola lettura: puoi consultare tutto, ma non modificare né inviare.';
+class ReadOnlyError extends Error { constructor() { super(READ_ONLY_TEXT); this.code = 'READ_ONLY'; } }
+function readOnlyStore(store) {
+  return new Proxy(store, {
+    get(target, prop) {
+      const v = Reflect.get(target, prop, target);
+      if (typeof v !== 'function') return v;
+      if (READ_ONLY_WRITE.test(String(prop))) return async () => { throw new ReadOnlyError(); };
+      return v.bind(target);
+    },
+  });
+}
+
 class PreviewError extends Error { constructor() { super('Anteprima agente: sola lettura. Esci dall\'anteprima per modificare.'); this.code = 'PREVIEW'; } }
 
 function previewStore(store, label) {
@@ -1234,7 +1250,7 @@ function previewChoices(customers, assignees = []) {
     .map(name => ({ name, role: roles.get(name) || '' }));
 }
 
-return { PreviewError, previewStore, previewChoices };
+return { READ_ONLY_TEXT, ReadOnlyError, readOnlyStore, PreviewError, previewStore, previewChoices };
 })();
 __m["js/core/messages.js"] = (function () {
 // Messaggi (03/11/2026, richiesta Tommaso per la Beta): logica senza interfaccia, condivisa da archivio locale, online e test.
@@ -1327,14 +1343,15 @@ function createLocalStore({ data, kv }) {
     // Profili selezionabili in modalità locale (in Supabase arrivano dal login)
     profiles() {
       // comunicazioni alla rete: Tommaso e Marco sì (dalla propria casella), Christian no (decisione 31/10/2026)
-      return [{ id: 'dir', name: 'Tommaso Conti', role: 'direzione', assignee: null, label: DIREZIONE, commEmail: 'tommaso.conti@nordtex.it' }, { id: 'dir-marco', name: 'Marco Ferrari', role: 'direzione', assignee: null, label: DIREZIONE, commEmail: 'marco.ferrari@nordtex.it' }, { id: 'dir-cristian', name: 'Christian Fink', role: 'direzione', assignee: null, label: DIREZIONE, commEmail: null, office: true }, { id: 'uff-irina', name: 'Irina', role: 'direzione', assignee: null, label: DIREZIONE, commEmail: null, office: true }]
+      return [{ id: 'dir', name: 'Tommaso Conti', role: 'direzione', assignee: null, label: DIREZIONE, commEmail: 'tommaso.conti@nordtex.it' }, { id: 'dir-marco', name: 'Marco Ferrari', role: 'direzione', assignee: null, label: DIREZIONE, commEmail: 'marco.ferrari@nordtex.it' }, { id: 'dir-cristian', name: 'Christian Fink', role: 'direzione', assignee: null, label: DIREZIONE, commEmail: null, office: true }, { id: 'uff-irina', name: 'Irina', role: 'direzione', assignee: null, label: DIREZIONE, commEmail: null, office: true },
+        { id: 'lettura', name: 'Meridian (prova)', role: 'direzione', assignee: null, label: 'Sola lettura', commEmail: null, readOnly: true }]
         .concat(data.assignees.filter(a => a.name !== 'Direzionale').map(a => ({ id: 'ag:' + a.name, name: a.name, role: 'agente', assignee: a.name, label: a.role })));
     },
     async signIn(profileId) {
       const p = this.profiles().find(x => x.id === profileId);
       if (!p) throw new Error('Profilo non trovato');
       session = { userId: p.id, name: p.name, role: p.role, assignee: p.assignee, canCommunicate: p.role === 'direzione' && !!p.commEmail, commEmail: p.commEmail || null,
-        canImport: p.role === 'direzione' && /tommaso/i.test(p.name || ''), office: !!p.office };
+        canImport: p.role === 'direzione' && /tommaso/i.test(p.name || ''), office: !!p.office, readOnly: !!p.readOnly };
       for (const c of await col('prospects')) byId.set(c.id, c);
       await applyAllStatus();
       return session;
@@ -1727,7 +1744,8 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     token = j.access_token;
     const p = await api('/rest/v1/hub_profiles?select=*&id=eq.' + j.user.id);   // select=*: le colonne nuove (is_office) arrivano solo se la migrazione c'è
     profile = p[0]; if (!profile?.active) { token = null; storage.set(null); throw fail('LOGIN', 'Profilo non attivo: contatta la Direzione'); }
-    session = { userId: profile.id, name: profile.display_name, role: profile.role, assignee: profile.assignee_label, email: j.user.email,
+    const readOnly = profile.role === 'lettura';   // 04/11: sola lettura (accessi Meridian) = viste della Direzione, nessuna scrittura
+    session = { userId: profile.id, name: profile.display_name, role: readOnly ? 'direzione' : profile.role, readOnly, assignee: profile.assignee_label, email: j.user.email,
       canCommunicate: profile.role === 'direzione' && !!profile.comm_email, commEmail: profile.comm_email || null,
       office: profile.role === 'direzione' && profile.is_office === true };   // 02/11: interfaccia Ufficio (migrazione 20261102200000)
     // 02/11: pagina "Aggiorna dati" solo per gli abilitati (migrazione 20261102140000; se non applicata: nessuno)
@@ -8706,7 +8724,7 @@ __m["js/main.js"] = (function () {
 const { h, toast, eur, dateTimeIt, modal } = __m["js/ui.js"];
 const { LOGO, MARK_WHITE, MARK_GREY, FONT_CSS } = __m["js/brand-assets.js"];
 const { watchTables } = __m["js/core/responsive.js"];
-const { previewStore, previewChoices } = __m["js/core/preview.js"];
+const { previewStore, previewChoices, readOnlyStore, READ_ONLY_TEXT } = __m["js/core/preview.js"];
 const { createLocalStore, indexedDbKv } = __m["js/data/local-store.js"];
 const { createSupabaseStore } = __m["js/data/supabase-store.js"];
 const { viewHome } = __m["js/views/home.js"];
@@ -8826,13 +8844,13 @@ async function boot() {
   const cfg = window.NTX_CONFIG || {};
   try {
     if (cfg.mode === 'supabase') {
-      app.store = createSupabaseStore({ url: cfg.supabaseUrl, key: cfg.supabaseKey });
+      app.store = app.baseStore = createSupabaseStore({ url: cfg.supabaseUrl, key: cfg.supabaseKey });
       if (idleTooLong()) { app.store.signOut(); localStorageSet('ntx-last-use', ''); }
-      else app.session = await app.store.restore().catch(() => null);
+      else useSession(await app.store.restore().catch(() => null));
       logOpen(true);
     } else {
       const data = window.NTX_DATA || await fetch(cfg.dataUrl || '../data-private/hub-data.json').then(r => { if (!r.ok) throw new Error('Dati non trovati'); return r.json(); });
-      app.store = createLocalStore({ data, kv: indexedDbKv() });
+      app.store = app.baseStore = createLocalStore({ data, kv: indexedDbKv() });
     }
   } catch (e) {
     document.getElementById('app').replaceChildren(h('div', { class: 'login' }, h('h1', {}, 'NORDTEX HUB'), h('p', { class: 'error' }, 'Avvio non riuscito: ' + e.message)));
@@ -8848,14 +8866,14 @@ function loginView() {
   if (s.mode === 'supabase') {
     const email = h('input', { type: 'email', autocomplete: 'username', placeholder: 'nome@nordtex.it' });
     const pw = h('input', { type: 'password', autocomplete: 'current-password', placeholder: 'Password' });
-    const submit = async e => { e.preventDefault(); try { app.session = await s.signIn(email.value, pw.value); logOpen(true); app.go('home'); } catch (err) { toast(err.message, 'error'); } };
+    const submit = async e => { e.preventDefault(); try { useSession(await s.signIn(email.value, pw.value)); logOpen(true); app.go('home'); } catch (err) { toast(err.message, 'error'); } };
     return h('form', { class: 'login', onsubmit: submit }, h('div', { class: 'brand-lg' }, h('img', { src: LOGO, alt: 'NORDTEX' }), h('span', {}, 'HUB commerciale')), email, pw, h('button', { class: 'btn primary', type: 'submit' }, 'Accedi'),
       h('p', { class: 'fine' }, 'Password dimenticata? Contatta la Direzione commerciale. · v' + VERSION));
   }
   const profiles = s.profiles();
-  const sel = h('select', { 'aria-label': 'Profilo' }, profiles.map(p => h('option', { value: p.id }, p.role === 'direzione' ? `${p.name} — Direzione` : `${p.name} — ${p.label}`)));
+  const sel = h('select', { 'aria-label': 'Profilo' }, profiles.map(p => h('option', { value: p.id }, p.readOnly ? `${p.name} — Sola lettura` : p.role === 'direzione' ? `${p.name} — Direzione` : `${p.name} — ${p.label}`)));
   const remembered = localStorageGet('ntx-profile'); if (remembered && profiles.some(p => p.id === remembered)) sel.value = remembered;
-  const enter = async e => { e.preventDefault(); app.session = await s.signIn(sel.value); localStorageSet('ntx-profile', sel.value); app.cache = {}; app.go('home'); };
+  const enter = async e => { e.preventDefault(); useSession(await s.signIn(sel.value)); localStorageSet('ntx-profile', sel.value); app.cache = {}; app.go('home'); };
   return h('form', { class: 'login', onsubmit: enter },
     h('div', { class: 'brand-lg' }, h('img', { src: LOGO, alt: 'NORDTEX' }), h('span', {}, 'HUB commerciale')),
     h('p', { class: 'muted' }, 'Versione locale: scegli il profilo con cui vedere l\'app. Con la versione online ognuno accede con le proprie credenziali.'),
@@ -8889,10 +8907,11 @@ function shell(active, content, key = active) {
     h('a', { href: '#/' + n.id, class: 'nav-item' + (active === n.id ? ' active' : '') }, h('span', { class: 'ico', 'aria-hidden': 'true' }, n.icon), h('span', {}, n.label), badge(n.id))]);
   const tabs = items.filter(n => n.phone !== false && !(isDir && n.phoneDir === false) && !(office && n.id === 'giacenze'));
   const tabActive = id => active === id || (id === 'altro' && ['ordini', 'rete', 'manager', 'mappe', 'giacenze', 'sistemi', 'dati', 'ufficio'].includes(active) && isDir);
-  const who = h('div', { class: 'who' }, h('a', { href: '#/profilo', class: 'who-name' }, h('strong', {}, pv ? pv.by : app.session.name)), h('small', {}, pv ? 'Direzione · anteprima' : office ? 'Ufficio' : isDir ? 'Direzione' : (app.session.assignee || 'Agente')),
+  const who = h('div', { class: 'who' }, h('a', { href: '#/profilo', class: 'who-name' }, h('strong', {}, pv ? pv.by : app.session.name)), h('small', {}, pv ? 'Direzione · anteprima' : app.session.readOnly ? 'Sola lettura' : office ? 'Ufficio' : isDir ? 'Direzione' : (app.session.assignee || 'Agente')),
     h('button', { class: 'link', onclick: signOut }, 'Esci'));
   const bar = pv ? h('div', { class: 'preview-bar', role: 'status' }, h('span', {}, h('strong', {}, 'Anteprima '), app.session.assignee, h('small', {}, ' · sola lettura')),
-    h('button', { class: 'btn small', onclick: () => app.stopPreview() }, 'Esci')) : null;
+    h('button', { class: 'btn small', onclick: () => app.stopPreview() }, 'Esci'))
+    : app.session.readOnly ? h('div', { class: 'preview-bar', role: 'status' }, h('span', {}, h('strong', {}, 'Sola lettura '), h('small', {}, READ_ONLY_TEXT.replace('Profilo in sola lettura: ', '· ')))) : null;
   return h('div', { class: 'shell' + (pv ? ' previewing' : '') },
     h('aside', { class: 'side' }, h('div', { class: 'brand' }, h('img', { class: 'logo-full', src: LOGO, alt: 'NORDTEX' }), h('img', { class: 'logo-mark', src: MARK_WHITE, alt: 'NORDTEX' }), h('img', { class: 'logo-mark-grey', src: MARK_GREY, alt: 'NORDTEX' }), h('span', { class: 'brand-sub' }, 'HUB commerciale')), h('nav', {}, nav), who),
     h('main', { class: 'main', id: 'main' }, bar,
@@ -8907,7 +8926,9 @@ function shell(active, content, key = active) {
       (n.id === 'altro' && app.navCounts?.ordini) || (n.id === 'bacheca' && app.navCounts?.bacheca) ? h('span', { class: 'tab-dot' + (n.id === 'bacheca' ? ' nav-badge-bacheca' : '') }) : null))));
 }
 
-function signOut() { if (app.real) app.stopPreview(); app.store.signOut(); app.session = null; app.cache = {}; app.go(''); }
+function signOut() { if (app.real) app.stopPreview(); app.store.signOut(); useSession(null); app.cache = {}; app.go(''); }
+// 04/11: profilo in sola lettura (accessi Meridian) → archivio con le scritture bloccate
+function useSession(sess) { app.session = sess; app.store = sess?.readOnly ? readOnlyStore(app.baseStore) : app.baseStore; }
 
 function download(name, text) {
   const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: 'application/json' })), download: name });
