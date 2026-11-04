@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="3966af0c5d17">
+<meta name="ntx-build" content="a24904813c02">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -791,7 +791,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"3966af0c5d17"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a24904813c02"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -8222,7 +8222,7 @@ function offersCard(app, done) {
   return h('section', { class: 'card du-card' },
     h('div', { class: 'du-head' }, h('div', {}, h('h2', {}, 'Offerte aperte RADIX'), h('small', { class: 'muted' }, 'File Excel · ogni giorno')), picker('.xlsx', 'Scegli il file Excel', run)),
     h('details', { class: 'fold-in' }, h('summary', {}, 'Come esportarlo da RADIX'),
-      steps(['Offerte › Selezione: Registro OFF, Cliente vuoto.', 'Stato del documento: «Aperto»; Data documento: dal 01.01.2026 al 31.12.2027 (sempre queste date).', 'Cerca, poi clic destro su un\'intestazione › Esporta in excel e salva il file.',
+      steps(['Offerte › Selezione: lascia tutti i campi vuoti, solo «Stato del documento: Aperto» (è già così).', 'Premi Cerca (il 04/11 erano 131 offerte).', 'Clic destro su un\'intestazione › Esporta in excel e salva il file.',
         'Il file deve contenere tutte le offerte aperte: quelle dell\'app che non ci sono più vengono segnate come chiuse (restano in archivio con il loro esito).'])),
     out);
 }
