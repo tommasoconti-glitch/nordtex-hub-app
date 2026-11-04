@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="af6c0b38477f">
+<meta name="ntx-build" content="dde63915f989">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -796,7 +796,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .ps-moved{font-size:.82rem;margin:6px 0 2px;color:var(--muted)} .ps-moved strong{color:var(--text,inherit);white-space:normal}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"af6c0b38477f"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"dde63915f989"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4279,10 +4279,11 @@ function validateBands(bands) {
 
 // Regola 2026 decisa dalla Direzione (doc. "NORDTEX Condizioni Agenzie di Commercio – Listino Sconti Massimi e Provvigioni 2026"):
 // uguale per tutte le classi merceologiche; sconto fino al 30% → 8%, fino al 40% → 7%, fino a 50+5 (52,5% complessivo, massimo previsto) → 5%;
-// oltre 50+5 → 3% (precisazione Direzione 31/10/2026).
+// 04/11 (decisione Tommaso): la soglia resta 50+5 al 5%; oltre non c'è una fascia (prima 3%): condizioni da autorizzare, provvigione da definire.
+// Gli agenti non vedono le provvigioni nell'app (04/11).
 const DEFAULT_COMMISSION_RULES = Object.freeze({
   source: 'Condizioni Agenzie di Commercio 2026',
-  default: { bands: [{ maxDiscount: 30, rate: 8 }, { maxDiscount: 40, rate: 7 }, { maxDiscount: 52.5, rate: 5 }, { maxDiscount: 100, rate: 3 }] },
+  default: { bands: [{ maxDiscount: 30, rate: 8 }, { maxDiscount: 40, rate: 7 }, { maxDiscount: 52.5, rate: 5 }] },
   agents: {},
 });
 const effectiveRules = rules => (rules?.default?.bands?.length ? rules : { ...DEFAULT_COMMISSION_RULES, agents: rules?.agents || {} });
@@ -4292,15 +4293,15 @@ function bandsFor(rules, assignee) { const r = effectiveRules(rules); return r.a
 function commissionRate(bands, discountPct) {
   if (!bands?.length) return null;
   const b = bands.find(x => discountPct <= x.maxDiscount + 1e-9);
-  return b ? b.rate : 0;   // oltre l'ultima fascia: nessuna provvigione salvo regola diversa
+  return b ? b.rate : null;   // oltre l'ultima fascia: provvigione da definire con la Direzione (sconto da autorizzare)
 }
 
 function quoteCommission(q, rules, assignee) {
   const bands = bandsFor(rules, assignee);
   if (!bands) return { configured: false, amount: null, lines: [] };
-  const lines = q.lines.map(l => { const d = totalDiscount(l.discounts), rate = commissionRate(bands, d), net = lineAmount(l); return { productId: l.productId, discount: d, rate, net, amount: round2(net * rate / 100) }; });
-  const amount = round2(lines.reduce((s, x) => s + x.amount, 0)), base = round2(lines.reduce((s, x) => s + x.net, 0));
-  return { configured: true, amount, base, avgRate: base > 0 ? amount / base * 100 : 0, lines, custom: !!rules?.agents?.[assignee], isDefault: !rules?.default?.bands?.length };
+  const lines = q.lines.map(l => { const d = totalDiscount(l.discounts), rate = commissionRate(bands, d), net = lineAmount(l); return { productId: l.productId, discount: d, rate, net, amount: rate === null ? 0 : round2(net * rate / 100), undefinedRate: rate === null }; });
+  const amount = round2(lines.reduce((s, x) => s + x.amount, 0)), base = round2(lines.reduce((s, x) => s + (x.undefinedRate ? 0 : x.net), 0));
+  return { configured: true, amount, base, avgRate: base > 0 ? amount / base * 100 : 0, lines, toDefine: lines.filter(x => x.undefinedRate).length, custom: !!rules?.agents?.[assignee], isDefault: !rules?.default?.bands?.length };
 }
 
 return { unitCost, quoteMargin, validateBands, DEFAULT_COMMISSION_RULES, effectiveRules, bandsFor, commissionRate, quoteCommission };
@@ -5711,8 +5712,7 @@ async function viewQuoteEditor(app, id, customerId) {
       const net = lineNet(l), m = (net - uc.cost) / net * 100;
       return h('small', { class: 'econ ' + (m < 0 ? 'neg' : '') }, `Costo ${eur(uc.cost)} · margine ${eur(net - uc.cost)}/${l.unit.toLowerCase()} · ${pct(m)}`);
     }
-    const c = quoteCommission({ lines: [l] }, commRules, agentLabel);
-    return c.configured ? h('small', { class: 'econ' }, `Provvigione ${pct(c.lines[0].rate)} · ${eur(c.amount)}`) : null;
+    return null;   // 04/11 (Tommaso): gli agenti non vedono le provvigioni
   }
   // Equivalenze della quantità (m², m³, bancali, peso) e conversioni di massima dell'articolo
   function convBox(p, qty, pal) {
@@ -5789,7 +5789,7 @@ async function viewQuoteEditor(app, id, customerId) {
           lineEcon(l), unitBox(l, i, () => refresh()),
           byId.get(l.productId)?.family === 'Blocchi in laterizio' && pal !== null && Math.ceil(pal - 1e-6) - pal > 1e-6 ? h('small', { class: 'warn-text' }, `Laterizi: vendita solo a bancali completi → ${Math.ceil(pal - 1e-6)} bancali = ${num(Math.ceil(pal - 1e-6) * l.palletQuantity)} ${String(l.unit).toLowerCase()}`) : null,
           bigLoad(l, pal),
-          disc > DISCOUNT_ALERT ? h('small', { class: 'bad-text' }, `Sconto complessivo ${num(disc)}%: oltre ${DISCOUNT_ALERT_LABEL} serve autorizzazione Direzione (provvigione 3%)`) : null);
+          disc > DISCOUNT_ALERT ? h('small', { class: 'bad-text' }, `Sconto complessivo ${num(disc)}%: oltre ${DISCOUNT_ALERT_LABEL} serve autorizzazione Direzione`) : null);
         fill(netTd, eur(lineNet(l))); fill(amtTd, h('strong', {}, eur(lineAmount(l))));
       };
       const live = () => { refresh(); tp?.redraw(); drawTotals(); };
@@ -5811,12 +5811,11 @@ async function viewQuoteEditor(app, id, customerId) {
     if (!q.lines.length) return null;
     const c = quoteCommission(q, commRules, agentLabel);
     const row = (k, v, cls = '') => h('div', { class: cls }, h('span', {}, k), h('span', {}, v));
-    if (!viewerIsDir) return h('div', { class: 'econ-box' }, h('small', {}, 'La tua provvigione'),
-      c.configured ? [row('Provvigione stimata', eur(c.amount), 'grand-sm'), row('Media sulla merce', pct(c.avgRate))] : h('p', { class: 'muted' }, 'Regole provvigioni non ancora impostate dalla Direzione.'));
+    if (!viewerIsDir) return null;   // 04/11 (Tommaso): gli agenti non vedono le provvigioni
     const m = quoteMargin(q, byId);
     return h('div', { class: 'econ-box dir' }, h('small', {}, 'Solo Direzione · margine'),
       row('Costo merce (RADIX storico)', eur(m.cost)), row('Margine merce', `${eur(m.margin)} · ${pct(m.pct)}`, 'grand-sm' + (m.margin < 0 ? ' neg' : '')),
-      c.configured ? [row(`Provvigione ${agentLabel || ''}`, `${eur(c.amount)} · ${pct(c.avgRate)}`), row('Margine dopo provvigione', `${eur(m.margin - c.amount)} · ${pct(m.revenue > 0 ? (m.margin - c.amount) / m.revenue * 100 : null)}`, 'grand-sm')] : row('Provvigione', 'regole da impostare'),
+      c.configured ? [row(`Provvigione ${agentLabel || ''}`, `${eur(c.amount)} · ${pct(c.avgRate)}` + (c.toDefine ? ` · ${c.toDefine} ${c.toDefine === 1 ? 'riga' : 'righe'} oltre 50+5: da definire` : '')), row('Margine dopo provvigione', `${eur(m.margin - c.amount)} · ${pct(m.revenue > 0 ? (m.margin - c.amount) / m.revenue * 100 : null)}`, 'grand-sm')] : row('Provvigione', 'regole da impostare'),
       m.missing ? h('p', { class: 'warn-text' }, `${m.missing} ${m.missing === 1 ? 'riga' : 'righe'} senza costo utilizzabile: margine calcolato sulle altre`) : null,
       h('p', { class: 'fine' }, 'Costi d\'acquisto RADIX storici, attualità da verificare. Trasporto e altri addebiti esclusi dal margine.'));
   }
@@ -6674,7 +6673,7 @@ async function commissionCard(app, refresh) {
         h('button', { class: 'btn small primary', onclick: save }, 'Salva regole'),
         target && rules.agents?.[target] ? h('button', { class: 'btn small ghost', onclick: async () => { delete rules.agents[target]; await app.store.setSetting('commissions', rules); toast('Torna alla regola generale'); draw(); } }, 'Usa regola generale') : null),
       !stored?.default?.bands?.length && !target ? h('p', { class: 'info-text' }, 'In uso la regola delle Condizioni Agenzie di Commercio 2026 (uguale per tutte le classi merceologiche). Modificala e salva solo se cambia.') : null,
-      h('p', { class: 'fine' }, 'La provvigione si calcola riga per riga sulla merce netta, in base allo sconto complessivo della riga. Fascia 52,5% = sconto 50+5. Oltre 50+5: provvigione 3% e condizioni da autorizzare. Premio di fine anno 2% oltre € 500.000 di fatturato annuo (trasporti e servizi esclusi), riconosciuto a consuntivo sul fatturato incassato. Gli agenti vedono solo la propria provvigione.'));
+      h('p', { class: 'fine' }, 'La provvigione si calcola riga per riga sulla merce netta, in base allo sconto complessivo della riga. Fascia 52,5% = sconto 50+5, ultima fascia (5%). Oltre 50+5: condizioni da autorizzare e provvigione da definire caso per caso (nessuna fascia automatica). Premio di fine anno 2% oltre € 500.000 di fatturato annuo (trasporti e servizi esclusi), riconosciuto a consuntivo sul fatturato incassato. Gli agenti non vedono le provvigioni nell\'app (decisione 04/11).'));
   };
   draw();
   return h('details', { class: 'card fold-box' }, h('summary', {}, 'Regole provvigioni'), box);
