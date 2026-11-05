@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="f16dd83d560c">
+<meta name="ntx-build" content="e7fbd4cdbba2">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -804,7 +804,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .offers-list .of-valid{display:block}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f16dd83d560c"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"e7fbd4cdbba2"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -5309,7 +5309,7 @@ async function offersList(app, { onNew }) {
   const TABS = [['chiamare', 'Da richiamare', toCall], ['aperte', 'Aperte', live], ['scadute', 'Scadute', x => !!x.expired], ['chiuse', 'Chiuse', x => ['accettata', 'persa'].includes(x.state)]];
   const FILTERS = [...TABS, ['recenti', 'Ultimi 7 giorni', x => !!x.date && x.date >= since7], ['sentire', 'Da sentire', x => live(x) && late(x)], ['scadenza', 'In scadenza', x => live(x) && isExpiring(x.validity)],
     ['accettate', 'Accettate', x => x.state === 'accettata'], ['perse', 'Perse', x => x.state === 'persa'], ['annullate', 'Annullate', x => x.state === 'annullata'], ['tutte', 'Tutte', x => x.state !== 'annullata']];
-  const sorters = { chiamare: (a, b) => (a.due || '').localeCompare(b.due || '') || (b.total || 0) - (a.total || 0), sentire: (a, b) => (a.due || '').localeCompare(b.due || '') || (b.total || 0) - (a.total || 0), aperte: (a, b) => (a.due || '9999').localeCompare(b.due || '9999') || (b.total || 0) - (a.total || 0),
+  const sorters = { chiamare: (a, b) => (a.due || '').localeCompare(b.due || '') || (b.total || 0) - (a.total || 0), sentire: (a, b) => (a.due || '').localeCompare(b.due || '') || (b.total || 0) - (a.total || 0), aperte: (a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.number || '').localeCompare(String(a.number || '')),   // 05/11 (Tommaso): Aperte dalla più recente
     scadenza: (a, b) => a.validity.days - b.validity.days || (b.total || 0) - (a.total || 0), scadute: (a, b) => String(b.raw.validUntil || b.date).localeCompare(String(a.raw.validUntil || a.date)) || (b.total || 0) - (a.total || 0) };
 
   const chips = h('div', { class: 'chips' });
@@ -5356,8 +5356,8 @@ async function offersList(app, { onNew }) {
     const rows = base.filter(f).sort(sorters[st.filter] || ((a, b) => String(b.date).localeCompare(String(a.date))));
     counter.textContent = `${rows.length} ${rows.length === 1 ? 'offerta' : 'offerte'} · ${eur(sum(rows))}`;
     // con le offerte aperte l'elenco è diviso per urgenza, ogni gruppo con colore, numero e valore
-    const grouped = ['aperte', 'sentire', 'scadenza', 'chiamare'].includes(st.filter);
-    const hint = { chiamare: 'Clienti da richiamare oggi o già in ritardo, e offerte con i prezzi in scadenza. Dopo la telefonata tocca «Com\'è andata?».', aperte: 'Tutte le offerte ancora aperte, divise per urgenza.', scadute: 'Offerte con i prezzi scaduti o non più aperte in RADIX, senza un esito registrato: da recuperare o da chiudere.', chiuse: 'Offerte accettate o perse.' }[st.filter];
+    const grouped = ['sentire', 'scadenza', 'chiamare'].includes(st.filter);   // Aperte: elenco semplice per data, non per urgenza
+    const hint = { chiamare: 'Clienti da richiamare oggi o già in ritardo, e offerte con i prezzi in scadenza. Dopo la telefonata tocca «Com\'è andata?».', aperte: 'Tutte le offerte ancora aperte, dalla più recente.', scadute: 'Offerte con i prezzi scaduti o non più aperte in RADIX, senza un esito registrato: da recuperare o da chiudere.', chiuse: 'Offerte accettate o perse.' }[st.filter];
     fill(tabHint, hint || '');
     const body = !rows.length ? [h('li', {}, emptyState(all.length ? 'Nessuna offerta con questi filtri.' : 'Nessuna offerta. Tocca “+ Nuova offerta” e scegli il cliente.'))]
       : grouped ? URG.flatMap(([k, l]) => { const g = rows.filter(o => urgency(o, t) === k); return g.length ? [h('li', { class: 'urg-head ' + k }, h('span', { class: 'urg-dot ' + k }), h('strong', {}, l), h('small', {}, `${g.length} · ${eur(sum(g))}`)), ...g.slice(0, 200).map(row)] : []; })
@@ -7770,7 +7770,7 @@ const HELP = {
     title: 'Offerte',
     intro: 'Le offerte dell\'app e quelle aperte in RADIX in un solo elenco.',
     steps: [
-      'In alto quattro schede: Da richiamare (clienti da chiamare oggi o in ritardo, prezzi in scadenza), Aperte, Scadute (prezzi scaduti o offerta non più aperta in RADIX: da recuperare o chiudere), Chiuse. Gli altri filtri sono in «Altri filtri».',
+      'In alto quattro schede: Da richiamare (clienti da chiamare oggi o in ritardo, prezzi in scadenza), Aperte (dalla più recente), Scadute (prezzi scaduti o offerta non più aperta in RADIX: da recuperare o chiudere), Chiuse. Gli altri filtri sono in «Altri filtri».',
       'Il pallino colorato dice l\'urgenza; "sentire il …" è la data del prossimo contatto.',
       'Offerte RADIX (fatte dall\'ufficio): dopo la telefonata tocca «Com\'è andata?» per segnare Sentito, Accettata o Persa (con nota): diventa anche una nota nella storia del cliente. Le offerte RADIX non si cancellano: si chiudono come Accettata o Persa.',
       'Offerte RADIX: sotto il cliente compaiono gli articoli (📦); aprendo l\'offerta, "Cosa c\'è in questa offerta" mostra articoli, quantità, prezzo netto e valore. Se l\'ufficio ha caricato il PDF dell\'offerta, il pulsante "PDF RADIX" apre il documento originale. Nella ricerca puoi scrivere anche il nome di un prodotto.',
