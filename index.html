@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="7070101a03f4">
+<meta name="ntx-build" content="f16dd83d560c">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -794,9 +794,17 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .ps-card{padding-bottom:10px} .ps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 4px} .ps-year{display:flex;flex-direction:column;min-width:0} .ps-year small{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em} .ps-year strong{font-size:1.15rem;white-space:nowrap} .ps-year span{font-size:.72rem;color:var(--muted)} .ps-year:first-child strong{font-size:1.3rem}   /* 04/11 fatturato portafoglio in Home */
 @media (max-width:400px){.ps-year strong,.ps-year:first-child strong{font-size:1rem}} .ps-year strong{overflow-wrap:anywhere}
 .ps-moved{font-size:.82rem;margin:6px 0 2px;color:var(--muted)} .ps-moved strong{color:var(--text,inherit);white-space:normal}
+/* 05/11 pagina Offerte più chiara */
+.of-tabs{display:flex;gap:6px;margin:4px 0 6px} .of-tab{flex:1 1 0;border:1px solid var(--line);background:var(--card,#fff);border-radius:10px;padding:10px 6px;font-weight:600;font-size:.9rem;color:inherit;cursor:pointer;line-height:1.2}
+.of-tab b{display:block;font-size:1.15rem;margin-top:2px} .of-tab.on{border-color:var(--nt-red,#D40E41);box-shadow:inset 0 -3px 0 var(--nt-red,#D40E41)}
+.of-more summary{font-size:.85rem;color:var(--muted);margin:4px 0} .of-more select{margin-top:6px}
+.offers-list .of-cust{display:block;font-weight:700;font-size:1.02rem;line-height:1.25} .offers-list .of-cust small{font-weight:400;color:var(--muted)}
+.offers-list .of-what{display:block;font-size:.9rem;margin:2px 0 4px}
+.offers-list .of-call{display:inline-block;margin:2px 0;font-weight:600} .offers-list .of-state{display:block;font-weight:600;margin:2px 0}
+.offers-list .of-valid{display:block}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"7070101a03f4"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f16dd83d560c"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2221,8 +2229,9 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     async importRadixOrders({ orders, file = '', sha = '' }) {
       return api('/rest/v1/rpc/hub_import_radix_orders', { method: 'POST', body: { p_orders: orders, p_file: file, p_sha: sha } });
     },
-    async radixOffers({ customerId } = {}) {
-      const rows = await api('/rest/v1/hub_radix_offers?select=*&open=eq.true&order=offer_date.desc,id.desc'
+    // 05/11: withClosed = anche le offerte non più aperte in RADIX (scadute o diventate ordine), dal 2026, per la scheda "Scadute"
+    async radixOffers({ customerId, withClosed = false } = {}) {
+      const rows = await api('/rest/v1/hub_radix_offers?select=*' + (withClosed ? '&offer_date=gte.2026-01-01' : '&open=eq.true') + '&order=offer_date.desc,id.desc'
         + (customerId ? '&customer_id=eq.' + custUuid(customerId) : '')).catch(() => null);
       if (!rows) return [];
       const nm = await names();
@@ -5248,18 +5257,18 @@ return { CANCEL_REASONS, cancelDialog, trashAction, trashQuote };
 })();
 __m["js/views/offers-list.js"] = (function () {
 // Offerte (01/11 sera, Tommaso): un solo elenco con le offerte dell'app e quelle RADIX.
-// All'apertura "Da seguire" (aperte) in ordine di prossimo contatto; in evidenza quelle in scadenza di validità.
+// 05/11: quattro schede (Da richiamare, Aperte, Scadute, Chiuse), righe in parole semplici; la Direzione vede la stessa pagina degli agenti.
 const { h, fill, eur, dateIt, today, toast, emptyState, debounce } = __m["js/ui.js"];
 const { unifiedOffers, quoteReminders, isExpiring } = __m["js/data/model.js"];
 const { radixOfferDialog, linesSummary } = __m["js/views/radix-offers.js"];
 const { quoteCls } = __m["js/views/agenda.js"];
 const { trashAction, trashQuote } = __m["js/views/quote-cancel.js"];
-const st = { filter: 'aperte', q: '', who: '', origin: '' };
+const st = { filter: null, q: '', who: '', origin: '' };   // 05/11: filter null = scelta automatica (Da richiamare se ce ne sono, altrimenti Aperte)
 // Urgenza a colpo d'occhio (01/11 sera, Tommaso: "far capire l'urgenza di intervento, non per forza scritta"):
 // rosso = subito (contatto scaduto o validità entro 2 giorni), arancio = questa settimana, verde = più avanti
-const URG = [['subito', 'Subito'], ['settimana', 'Questa settimana'], ['dopo', 'Più avanti']];
+const URG = [['subito', 'Da fare subito'], ['settimana', 'Questa settimana'], ['dopo', 'Più avanti']];
 function urgency(o, t = today()) {
-  if (o.state !== 'aperta') return null;
+  if (o.state !== 'aperta' || o.expired) return null;
   const in7 = new Date(new Date(t + 'T12:00:00').getTime() + 7 * 864e5).toISOString().slice(0, 10);
   if ((o.due && o.due < t) || (o.validity && o.validity.days >= 0 && o.validity.days <= 2)) return 'subito';
   if ((o.due && o.due <= in7) || (o.validity && o.validity.days >= 0 && o.validity.days <= 7)) return 'settimana';
@@ -5269,14 +5278,19 @@ const RX_CLS = { 'Da seguire': 'warn', Sentito: 'info', Accettata: 'ok', Persa: 
 
 async function offersList(app, { onNew }) {
   const isDir = app.session.role === 'direzione';
-  const [quotes, radix, notes, sends] = await Promise.all([app.store.quotes(), app.store.radixOffers ? app.store.radixOffers().catch(() => []) : [],
+  const [quotes, radix, notes, sends] = await Promise.all([app.store.quotes(), app.store.radixOffers ? app.store.radixOffers({ withClosed: true }).catch(() => []) : [],
     app.store.notes().catch(() => []), app.store.quoteSends ? app.store.quoteSends().catch(() => []) : []]);
-  const t = today(), month = t.slice(0, 7);
+  const orders = app.store.radixOrders ? await app.store.radixOrders({ all: true }).catch(() => []) : [];
+  const t = today();
   // 02/11: le offerte del cliente di prova non entrano nell'elenco e nei totali (si vedono nella scheda del cliente)
   const real = list => list.filter(q => !app.store.customer(q.customerId)?.isTest);
-  let all = unifiedOffers({ quotes: real(quotes), radix, reminders: quoteReminders(quotes, notes, sends), customer: id => app.store.customer(id), today: t });
-  const reload = async () => { const r = app.store.radixOffers ? await app.store.radixOffers().catch(() => radix) : radix;
-    all = unifiedOffers({ quotes: real(quotes), radix: r, reminders: quoteReminders(quotes, notes, sends), customer: id => app.store.customer(id), today: t }); draw(); };
+  // 05/11 (richiesta rete): offerte scadute = ancora senza esito ma con i prezzi scaduti, o non più aperte in RADIX (scadute o diventate ordine)
+  const mark = list => list.map(o => (o.state === 'aperta' && ((o.origin === 'radix' && o.raw.open === false) || (o.validity && o.validity.days < 0)) ? { ...o, expired: true } : o));
+  const build = r => mark(unifiedOffers({ quotes: real(quotes), radix: r, reminders: quoteReminders(quotes, notes, sends), customer: id => app.store.customer(id), today: t }));
+  let all = build(radix);
+  const reload = async () => { const r = app.store.radixOffers ? await app.store.radixOffers({ withClosed: true }).catch(() => radix) : radix; all = build(r); draw(); };
+  // ordine RADIX dello stesso cliente arrivato dopo l'offerta: probabilmente l'offerta è diventata ordine
+  const orderAfter = o => o.customerId && orders.filter(x => x.customerId === o.customerId && x.date && o.date && x.date >= o.date).sort((a, b) => a.date.localeCompare(b.date))[0];
 
   // 03/11: cestino accanto ad "Apri": bozza → elimina; inviata/persa → annulla con motivo; cliente di prova → elimina (Direzione)
   const trashBtn = q => {
@@ -5285,59 +5299,66 @@ async function offersList(app, { onNew }) {
     return h('button', { class: 'btn small ghost', type: 'button', title: what === 'annulla' ? 'Annulla l\'offerta' : 'Elimina', 'aria-label': what === 'annulla' ? 'Annulla l\'offerta' : 'Elimina',
       onclick: async () => { try { if (await trashQuote(app, q)) { if (what !== 'annulla') quotes.splice(quotes.indexOf(q), 1); await reload(); } } catch (e) { toast(e.message, 'error'); } } }, '🗑');
   };
-  const open = () => all.filter(o => o.state === 'aperta');
+  const open = () => all.filter(o => o.state === 'aperta' && !o.expired);
   const late = o => o.due && o.due <= t;
   // 02/11 (Tommaso): offerte fatte negli ultimi 7 giorni, di qualunque stato, dalla più recente
   const since7 = new Date(new Date(t + 'T12:00:00').getTime() - 7 * 864e5).toISOString().slice(0, 10);
-  const FILTERS = [['aperte', 'Da seguire', x => x.state === 'aperta'], ['recenti', 'Ultimi 7 giorni', x => !!x.date && x.date >= since7], ['sentire', 'Da sentire', x => x.state === 'aperta' && late(x)], ['scadenza', 'In scadenza', x => x.state === 'aperta' && isExpiring(x.validity)],
+  // 05/11 (Tommaso: "così non si capisce nulla, mi chiamano i commerciali"): tre schede semplici in alto, gli altri filtri in "Altri filtri"
+  const live = x => x.state === 'aperta' && !x.expired;
+  const toCall = x => live(x) && urgency(x, t) === 'subito';
+  const TABS = [['chiamare', 'Da richiamare', toCall], ['aperte', 'Aperte', live], ['scadute', 'Scadute', x => !!x.expired], ['chiuse', 'Chiuse', x => ['accettata', 'persa'].includes(x.state)]];
+  const FILTERS = [...TABS, ['recenti', 'Ultimi 7 giorni', x => !!x.date && x.date >= since7], ['sentire', 'Da sentire', x => live(x) && late(x)], ['scadenza', 'In scadenza', x => live(x) && isExpiring(x.validity)],
     ['accettate', 'Accettate', x => x.state === 'accettata'], ['perse', 'Perse', x => x.state === 'persa'], ['annullate', 'Annullate', x => x.state === 'annullata'], ['tutte', 'Tutte', x => x.state !== 'annullata']];
-  const sorters = { sentire: (a, b) => (a.due || '').localeCompare(b.due || '') || (b.total || 0) - (a.total || 0), aperte: (a, b) => (a.due || '9999').localeCompare(b.due || '9999') || (b.total || 0) - (a.total || 0),
-    scadenza: (a, b) => a.validity.days - b.validity.days || (b.total || 0) - (a.total || 0) };
+  const sorters = { chiamare: (a, b) => (a.due || '').localeCompare(b.due || '') || (b.total || 0) - (a.total || 0), sentire: (a, b) => (a.due || '').localeCompare(b.due || '') || (b.total || 0) - (a.total || 0), aperte: (a, b) => (a.due || '9999').localeCompare(b.due || '9999') || (b.total || 0) - (a.total || 0),
+    scadenza: (a, b) => a.validity.days - b.validity.days || (b.total || 0) - (a.total || 0), scadute: (a, b) => String(b.raw.validUntil || b.date).localeCompare(String(a.raw.validUntil || a.date)) || (b.total || 0) - (a.total || 0) };
 
-  const kpis = h('section', { class: 'kpis trend' });
   const chips = h('div', { class: 'chips' });
   const list = h('ul', { class: 'rx-list offers-list' });
   const counter = h('small', { class: 'muted' });
+  const tabs = h('div', { class: 'of-tabs', role: 'tablist' }), tabHint = h('p', { class: 'fine' });
 
+  const days = d => Math.round((new Date(t + 'T12:00:00') - new Date(d + 'T12:00:00')) / 864e5);
+  const callText = o => !o.due ? null : o.due < t ? `📞 Da richiamare: in ritardo di ${days(o.due)} ${days(o.due) === 1 ? 'giorno' : 'giorni'} (era il ${dateIt(o.due)})` : o.due === t ? '📞 Da richiamare oggi' : `📞 Richiamare il ${dateIt(o.due)}`;
+  const validText = v => !v ? null : v.days < 0 ? `Prezzi scaduti il ${v.label.split(' il ')[1] || ''}: se il cliente conferma, chiedi all'ufficio di rinnovarla` : v.days === 0 ? 'Prezzi validi fino a oggi' : v.days === 1 ? 'Prezzi validi fino a domani' : v.days <= 7 ? `Prezzi validi ancora ${v.days} giorni` : v.label.replace('valida', 'Prezzi validi');
+  const stateText = o => o.state === 'accettata' ? '✓ Accettata' : o.state === 'persa' ? '✗ Persa' : o.state === 'annullata' ? 'Annullata' : o.origin === 'app' && o.label === 'Bozza' ? 'Bozza: non ancora inviata al cliente' : null;
   const row = o => {
     const c = o.customerId ? app.store.customer(o.customerId) : null;
     const dueCls = o.due ? (o.due < t ? 'scaduto' : o.due === t ? 'oggi' : 'in-programma') : '';
-    // "Da seguire" è implicito nei gruppi per urgenza: il bollino resta solo per gli stati che dicono qualcosa (Sentito, Bozza, Accettata…)
-    const badge = o.origin === 'radix' && o.label === 'Da seguire' ? null : o.origin === 'app' ? h('span', { class: 'badge ' + quoteCls(o.label) }, o.label) : h('span', { class: 'badge ' + (RX_CLS[o.label] || 'muted') }, o.label);
-    // tutta la riga apre il riepilogo dell'offerta (RADIX) o l'offerta (app): lì c'è la storia dei contatti
+    const items = o.origin === 'radix' ? linesSummary(o.raw.lines) : '';
+    // tutta la riga apre l'offerta: lì ci sono articoli, PDF e la storia dei contatti
     const main = h('a', { class: 'rx-main plain', href: o.origin === 'radix' ? '#/rxofferta/' + encodeURIComponent(o.id) : '#/offerta/' + o.id },
-      h('div', { class: 'rx-top' }, h('strong', {}, o.number || 'bozza'), h('span', { class: 'origin ' + o.origin }, o.origin === 'app' ? 'app' : 'RADIX'), badge,
-        o.due ? h('span', { class: 'due ' + dueCls }, o.due < t ? 'da sentire dal ' + dateIt(o.due) : o.due === t ? 'sentire oggi' : 'sentire il ' + dateIt(o.due)) : null,
-        o.validity && o.validity.cls ? h('span', { class: 'due ' + (o.validity.cls === 'muted' ? '' : o.validity.cls === 'bad' ? 'scaduto' : 'oggi') }, o.validity.label) : null),
-      h('span', { class: 'rx-cust' }, c ? c.name + (c.city ? ' · ' + c.city : '') : o.customerName),
-      h('small', { class: 'muted' }, [o.subject || null, 'del ' + dateIt(o.date), isDir && o.who ? 'segue ' + o.who : null,
-        o.origin === 'radix' && o.radixAgent && isDir ? 'in RADIX: ' + o.radixAgent.toLowerCase() : null].filter(Boolean).join(' · ')),
-      o.origin === 'radix' && linesSummary(o.raw.lines) ? h('small', { class: 'rx-items' }, '📦 ' + linesSummary(o.raw.lines)) : null,
-      o.origin === 'radix' && o.raw.outcomeNote ? h('small', { class: 'rx-note' }, `“${o.raw.outcomeNote}” — ${o.raw.outcomeByName || ''}`) : null);
+      h('span', { class: 'of-cust' }, c ? c.name : o.customerName, c?.city ? h('small', {}, ' · ' + c.city) : null),
+      h('span', { class: 'of-what' }, items ? '📦 ' + items : o.subject || 'Contenuto: apri l\'offerta'),
+      o.expired ? h('span', { class: 'of-call due scaduto' }, o.validity && o.validity.days < 0 ? `⏱ Scaduta il ${o.validity.label.split(' il ')[1] || ''}` : '⏱ Non più aperta in RADIX') : callText(o) ? h('span', { class: 'of-call due ' + dueCls }, callText(o)) : null,
+      o.expired && orderAfter(o) ? h('small', { class: 'of-valid' }, `Probabile ordine: c'è un ordine RADIX del cliente del ${dateIt(orderAfter(o).date)} (${orderAfter(o).id})`) : null,
+      o.expired ? h('small', { class: 'of-valid muted' }, 'Se il cliente è ancora interessato, richiamalo e chiedi all\'ufficio di rinnovarla; altrimenti tocca «Com\'è andata?» e segnala «Persa».') : null,
+      stateText(o) ? h('span', { class: 'of-state' }, stateText(o)) : null,
+      !o.expired && validText(o.validity) ? h('small', { class: 'of-valid ' + (o.validity.days < 0 || o.validity.days <= 2 ? 'bad-text' : o.validity.days <= 7 ? 'warn-text' : 'muted') }, validText(o.validity)) : null,
+      h('small', { class: 'muted' }, [`Offerta ${o.number || 'bozza'}`, o.origin === 'radix' ? 'fatta dall\'ufficio in RADIX' : 'fatta nell\'app', 'il ' + dateIt(o.date), isDir && o.who ? 'segue ' + o.who : null].filter(Boolean).join(' · ')),
+      o.origin === 'radix' && o.raw.outcomeNote ? h('small', { class: 'rx-note' }, `Ultima nota: “${o.raw.outcomeNote}” — ${o.raw.outcomeByName || ''}`) : null);
     const side = h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, o.total ? eur(o.total) : '—'),
-      o.origin === 'radix' && !app.session.preview ? h('button', { class: 'btn small', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o.raw).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, 'Esito')
+      o.origin === 'radix' && o.state === 'aperta' && !app.session.preview ? h('button', { class: 'btn small primary', type: 'button', title: 'Hai sentito il cliente? Registra com\'è andata', onclick: async () => { if (await radixOfferDialog(app, o.raw).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, 'Com\'è andata?')
         : o.origin === 'app' ? h('div', { class: 'row', style: { gap: '6px', justifyContent: 'flex-end' } }, h('a', { class: 'btn small', href: '#/offerta/' + o.id }, 'Apri'), trashBtn(o.raw)) : null);
     const u = urgency(o, t);
     return h('li', { class: 'rx-offer' + (u ? ' urg-' + u : '') }, u ? h('span', { class: 'urg-dot ' + u, title: URG.find(x => x[0] === u)[1], 'aria-label': URG.find(x => x[0] === u)[1] }) : null, main, side);
   };
 
   function draw() {
-    const op = open(), lateN = op.filter(late).length, exp = op.filter(o => isExpiring(o.validity));
-    const won = all.filter(o => o.state === 'accettata' && String(o.origin === 'app' ? (o.raw.outcome?.at || o.raw.updatedAt) : o.raw.outcomeAt || '').slice(0, 7) === month);
+    const op = open();
     const sum = xs => xs.reduce((a, x) => a + (x.total || 0), 0);
-    const tile = (label, value, sub, f) => h('button', { class: 'kpi' + (st.filter === f ? ' on' : ''), type: 'button', onclick: () => { st.filter = f; draw(); } }, h('small', {}, label), h('strong', {}, value), sub ? h('span', {}, sub) : null);
-    fill(kpis, tile('Offerte aperte', eur(sum(op)), `${op.length} offerte`, 'aperte'), tile('Da sentire', lateN.toLocaleString('it-IT'), 'scadute o di oggi', 'sentire'),
-      tile('In scadenza di validità', exp.length.toLocaleString('it-IT'), exp.length ? eur(sum(exp)) + ' entro 7 giorni' : 'nei prossimi 7 giorni', 'scadenza'),
-      tile('Accettate nel mese', eur(sum(won)), `${won.length} offerte`, 'accettate'));
+    if (!st.filter) st.filter = op.some(toCall) ? 'chiamare' : 'aperte';
     const w = st.q.toLocaleLowerCase('it');
     const base = all.filter(o => (!st.who || o.who === st.who) && (!st.origin || o.origin === st.origin)
       && (!w || [o.number, o.customerName, o.subject, o.who, o.radixAgent, o.origin === 'radix' ? (o.raw.lines || []).map(x => x.d).join(' ') : ''].join(' ').toLocaleLowerCase('it').includes(w)));
-    fill(chips, FILTERS.map(([k, l, f]) => h('button', { class: 'chip' + (st.filter === k ? ' on' : ''), type: 'button', onclick: () => { st.filter = k; draw(); } }, l, h('b', {}, base.filter(f).length.toLocaleString('it-IT')))));
-    const f = FILTERS.find(x => x[0] === st.filter)[2];
+    fill(tabs, TABS.map(([k, l, f]) => h('button', { class: 'of-tab' + (st.filter === k ? ' on' : ''), type: 'button', onclick: () => { st.filter = k; draw(); } }, l, h('b', {}, base.filter(f).length.toLocaleString('it-IT')))));
+    fill(chips, FILTERS.slice(TABS.length).map(([k, l, f]) => h('button', { class: 'chip' + (st.filter === k ? ' on' : ''), type: 'button', onclick: () => { st.filter = k; draw(); } }, l, h('b', {}, base.filter(f).length.toLocaleString('it-IT')))));
+    const f = (FILTERS.find(x => x[0] === st.filter) || FILTERS[0])[2];
     const rows = base.filter(f).sort(sorters[st.filter] || ((a, b) => String(b.date).localeCompare(String(a.date))));
-    counter.textContent = `${rows.length} offerte · ${eur(sum(rows))}`;
+    counter.textContent = `${rows.length} ${rows.length === 1 ? 'offerta' : 'offerte'} · ${eur(sum(rows))}`;
     // con le offerte aperte l'elenco è diviso per urgenza, ogni gruppo con colore, numero e valore
-    const grouped = ['aperte', 'sentire', 'scadenza'].includes(st.filter);
+    const grouped = ['aperte', 'sentire', 'scadenza', 'chiamare'].includes(st.filter);
+    const hint = { chiamare: 'Clienti da richiamare oggi o già in ritardo, e offerte con i prezzi in scadenza. Dopo la telefonata tocca «Com\'è andata?».', aperte: 'Tutte le offerte ancora aperte, divise per urgenza.', scadute: 'Offerte con i prezzi scaduti o non più aperte in RADIX, senza un esito registrato: da recuperare o da chiudere.', chiuse: 'Offerte accettate o perse.' }[st.filter];
+    fill(tabHint, hint || '');
     const body = !rows.length ? [h('li', {}, emptyState(all.length ? 'Nessuna offerta con questi filtri.' : 'Nessuna offerta. Tocca “+ Nuova offerta” e scegli il cliente.'))]
       : grouped ? URG.flatMap(([k, l]) => { const g = rows.filter(o => urgency(o, t) === k); return g.length ? [h('li', { class: 'urg-head ' + k }, h('span', { class: 'urg-dot ' + k }), h('strong', {}, l), h('small', {}, `${g.length} · ${eur(sum(g))}`)), ...g.slice(0, 200).map(row)] : []; })
       : rows.slice(0, 300).map(row);
@@ -5345,14 +5366,16 @@ async function offersList(app, { onNew }) {
   }
   const whoList = [...new Set(all.map(o => o.who).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
   const tools = h('div', { class: 'list-tools row' },
-    h('input', { type: 'search', placeholder: 'Cerca numero, cliente, oggetto…', value: st.q, oninput: debounce(e => { st.q = e.target.value; draw(); }) }),
-    isDir ? h('select', { 'aria-label': 'Chi la segue', onchange: e => { st.who = e.target.value; draw(); } }, h('option', { value: '' }, 'Tutti gli agenti'), whoList.map(x => h('option', { selected: x === st.who }, x))) : null,
-    h('select', { 'aria-label': 'Origine', onchange: e => { st.origin = e.target.value; draw(); } }, [['', 'App e RADIX'], ['app', 'Solo app'], ['radix', 'Solo RADIX']].map(([v, l]) => h('option', { value: v, selected: v === st.origin }, l))));
+    h('input', { type: 'search', placeholder: 'Cerca cliente, prodotto o numero…', value: st.q, oninput: debounce(e => { st.q = e.target.value; draw(); }) }),
+    isDir ? h('select', { 'aria-label': 'Chi la segue', onchange: e => { st.who = e.target.value; draw(); } }, h('option', { value: '' }, 'Tutti gli agenti'), whoList.map(x => h('option', { selected: x === st.who }, x))) : null);
+  const originSel = h('select', { 'aria-label': 'Origine', onchange: e => { st.origin = e.target.value; draw(); } }, [['', 'Fatte nell\'app e in RADIX'], ['app', 'Solo fatte nell\'app'], ['radix', 'Solo fatte dall\'ufficio (RADIX)']].map(([v, l]) => h('option', { value: v, selected: v === st.origin }, l)));
   draw();
   return h('div', { class: 'page' },
-    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Offerte'), h('p', { class: 'muted' }, 'Offerte dell\'app e offerte aperte importate da RADIX · prezzi dal listino n.05 del 01/10/2026')),
+    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Offerte'), h('p', { class: 'muted' }, 'Le offerte dei tuoi clienti: quelle fatte da te nell\'app e quelle fatte dall\'ufficio in RADIX.')),
       h('button', { class: 'btn primary', onclick: onNew }, '+ Nuova offerta')),
-    kpis, tools, chips, counter, list);
+    tabs, tabHint, tools,   // 05/11: niente riquadri in alto, la Direzione vede la stessa pagina degli agenti (con il filtro per agente)
+    h('details', { class: 'fold-in of-more' }, h('summary', {}, 'Altri filtri'), chips, originSel),
+    counter, list);
 }
 
 return { urgency, offersList };
@@ -7747,9 +7770,9 @@ const HELP = {
     title: 'Offerte',
     intro: 'Le offerte dell\'app e quelle aperte in RADIX in un solo elenco.',
     steps: [
-      'I filtri in alto: Da seguire, Ultimi 7 giorni, Da sentire, In scadenza, Accettate, Perse, Annullate.',
+      'In alto quattro schede: Da richiamare (clienti da chiamare oggi o in ritardo, prezzi in scadenza), Aperte, Scadute (prezzi scaduti o offerta non più aperta in RADIX: da recuperare o chiudere), Chiuse. Gli altri filtri sono in «Altri filtri».',
       'Il pallino colorato dice l\'urgenza; "sentire il …" è la data del prossimo contatto.',
-      'Offerte RADIX: "Esito" per segnare Sentito, Accettata o Persa (con nota): diventa anche una nota nella storia del cliente.',
+      'Offerte RADIX (fatte dall\'ufficio): dopo la telefonata tocca «Com\'è andata?» per segnare Sentito, Accettata o Persa (con nota): diventa anche una nota nella storia del cliente. Le offerte RADIX non si cancellano: si chiudono come Accettata o Persa.',
       'Offerte RADIX: sotto il cliente compaiono gli articoli (📦); aprendo l\'offerta, "Cosa c\'è in questa offerta" mostra articoli, quantità, prezzo netto e valore. Se l\'ufficio ha caricato il PDF dell\'offerta, il pulsante "PDF RADIX" apre il documento originale. Nella ricerca puoi scrivere anche il nome di un prodotto.',
       'Cestino 🗑 accanto ad "Apri": una bozza si elimina; un\'offerta inviata si ANNULLA con il motivo (resta in archivio, esce da aperte e statistiche).',
     ],
