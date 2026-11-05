@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="501f9211ff3d">
+<meta name="ntx-build" content="8c81e9e53b5e">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -804,7 +804,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .offers-list .of-valid{display:block}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"501f9211ff3d"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8c81e9e53b5e"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2764,11 +2764,20 @@ function day(v) {
   return iso ? iso[1] : null;
 }
 const str = v => String(v ?? '').trim();
+// 05/11: RADIX di Irina è in tedesco: stesse colonne con le intestazioni in tedesco → si riportano ai nomi italiani
+const DE_HEADERS = { Angebot: 'Offerta', Auftrag: 'Ordine cliente', Dokumentdatum: 'Data documento', Dokumentzustand: 'Stato documento', 'Dokumentzustand/Bezeichnung': 'Stato documento',
+  'Gültigkeit': 'Validità', Bezeichnung: 'Descrizione', Betreff: 'Oggetto', Kontakt: 'Contatto', Gesamtbetrag: 'Totale imponibile', 'Vertreter/Suchbegriff': 'Agente', 'Vertreter/Bezeichnung': 'Agente',
+  'Antwort innerhalb': 'Follow-up previsto', 'Kunde/Bezeichnung/Ort': 'Cliente/Descrizione/Luogo', Baustelle: 'Cantiere', Liefertermin: 'Termine consegna', 'Zahlungsart/Kurzbezeichnung IT': 'Cond. pagamento',
+  Hinweise: 'Avvisi', 'Kunde/Kundentyp': 'Tipologia cliente', 'Kunde/Zone': 'Zona', 'Kunde/Gruppi e consorzi': 'Gruppi e consorzi', Lager: 'Deposito' };
+const DE_VALUES = { 'Baustoffhändler': 'Magazzini edili', Firmen: 'Imprese', 'Holz-Industrie': 'Industria del legno', Industrie: 'Industria', Privat: 'Privati',
+  Bozen: 'Bolzano', Trient: 'Trento', Mailand: 'Milano', Turin: 'Torino', Venedig: 'Venezia', Genua: 'Genova', Mantua: 'Mantova', Neapel: 'Napoli', Rom: 'Roma', Florenz: 'Firenze', Padua: 'Padova', Sizilien: 'Sicilia' };
+const it = v => DE_VALUES[str(v)] || str(v);
+const headIt = row => row.map(c => { const t = str(c); return DE_HEADERS[t] || t; });
 
 // rows: righe del foglio (la prima è l'intestazione); customers: [{ id (N° cliente), name, city }]
 function parseRadixOffers(rows, customers = []) {
   if (!rows?.length) throw new Error('Il file è vuoto');
-  const head = rows[0].map(str);
+  const head = headIt(rows[0]);
   const miss = OFFER_COLUMNS.filter(c => !head.includes(c));
   if (miss.length) throw new Error('Non sembra l\'esportazione delle offerte RADIX. Colonne mancanti: ' + miss.join(', '));
   const col = Object.fromEntries(head.map((c, i) => [c, i]).filter(([c]) => c));
@@ -2793,7 +2802,7 @@ function parseRadixOffers(rows, customers = []) {
     const tot = g('Totale imponibile');
     offers.push({ id: num, customer: cust, customerLabel: label, date: d, validUntil: day(g('Validità')), subject: str(g('Oggetto')), contact: str(g('Contatto')),
       total: typeof tot === 'number' && tot ? Math.round(tot * 100) / 100 : null, radixAgent: str(g('Agente')), followup: day(g('Follow-up previsto')),
-      typology: str(g('Tipologia cliente')), zone: str(g('Zona')), depot: str(g('Deposito')), status: str(g('Stato documento')) });
+      typology: it(g('Tipologia cliente')), zone: it(g('Zona')), depot: str(g('Deposito')), status: str(g('Stato documento')) });
   }
   if (!offers.length) throw new Error('Nessuna offerta nel file');
   if (new Set(offers.map(o => o.id)).size !== offers.length) throw new Error('Numeri offerta duplicati nel file');
@@ -2818,7 +2827,7 @@ function offersPreview(parsed, current = []) {
 const ORDER_COLUMNS = ['Data documento', 'Ordine cliente', 'Cliente/Descrizione/Luogo', 'Cantiere', 'Termine consegna', 'Importo', 'Stato documento', 'Cond. pagamento', 'Avvisi', 'Agente'];
 function parseRadixOrders(rows, customers = []) {
   if (!rows?.length) throw new Error('Il file è vuoto');
-  const head = rows[0].map(str);
+  const head = headIt(rows[0]);
   const miss = ORDER_COLUMNS.filter(c => !head.includes(c));
   if (miss.length) throw new Error('Non sembra l\'esportazione degli ordini clienti aperti di RADIX. Colonne mancanti: ' + miss.join(', '));
   const col = Object.fromEntries(head.map((c, i) => [c, i]).filter(([c]) => c));
@@ -2843,7 +2852,7 @@ function parseRadixOrders(rows, customers = []) {
     const tot = g('Importo');
     orders.push({ id: num, customer: cust, customerLabel: label, date: d, deliveryBy: day(g('Termine consegna')), site: str(g('Cantiere')),
       total: typeof tot === 'number' ? Math.round(tot * 100) / 100 : null, status: str(g('Stato documento')), payment: str(g('Cond. pagamento')),
-      notes: str(g('Avvisi')), radixAgent: str(g('Agente')), zone: str(g('Zona')), typology: str(g('Tipologia cliente')) });
+      notes: str(g('Avvisi')), radixAgent: str(g('Agente')), zone: it(g('Zona')), typology: it(g('Tipologia cliente')) });
   }
   if (!orders.length) throw new Error('Nessun ordine nel file');
   if (new Set(orders.map(o => o.id)).size !== orders.length) throw new Error('Numeri ordine duplicati nel file');
@@ -3026,7 +3035,7 @@ function matchOfferLines(parsed, offers) {
   return out;
 }
 
-return { OFFER_COLUMNS, normName, parseRadixOffers, offersPreview, ORDER_COLUMNS, parseRadixOrders, ordersPreview, decodeText, parseTsv, parseRadixSales, salesPreview, SERVICE_RX, parseRadixOfferLines, matchOfferLines };
+return { OFFER_COLUMNS, normName, headIt, parseRadixOffers, offersPreview, ORDER_COLUMNS, parseRadixOrders, ordersPreview, decodeText, parseTsv, parseRadixSales, salesPreview, SERVICE_RX, parseRadixOfferLines, matchOfferLines };
 })();
 __m["js/views/radix-offers.js"] = (function () {
 // Offerte aperte importate da RADIX (richiesta Tommaso 01/11/2026): l'app le mostra a chi segue il cliente
