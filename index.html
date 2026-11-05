@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="6029e2288aad">
+<meta name="ntx-build" content="43eabbad9bca">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -804,7 +804,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .offers-list .of-valid{display:block}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"6029e2288aad"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"43eabbad9bca"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -8336,6 +8336,7 @@ function parseOfferLines(pages) {
   const rows = pages.flat();
   const all = rows.map(l => l.map(c => c.text).join(' ')).join('\n');
   const head = all.match(/OFFERTA NR\.\s*(\d+)\s*-\s*(\d{2})\.(\d{2})\.(\d{4})/);
+  if (!head && /Angebot \| Offerta/.test(all)) return parseStdLines(rows, all);
   if (!head) throw new Error('Non sembra un\'offerta RADIX (manca «OFFERTA NR.»)');
   const id = `OFF-${head[4]}-${head[1]}`, date = `${head[4]}-${head[3]}-${head[2]}`;
   const customer = all.match(/\((\d{1,7})\)/)?.[1] || null;
@@ -8359,6 +8360,46 @@ function parseOfferLines(pages) {
   }
   const tot = all.match(/Totale imponibile\s*:\s*([\d.]+,\d{2})/)?.[1];
   return { id, date, customer, lines, alternatives: /-{3,}\s*alternativa\s*-{3,}/i.test(all), total: tot ? num(tot) : null };
+}
+
+// 05/11 (Tommaso, esportazione in blocco dalla selezione offerte): modulo «Offerta (Std)» bilingue tedesco/italiano.
+// Intestazione «Nummer | Numero … OFF-1248 | 15.10.2026 | 142 (N° cliente)»; righe: codice a sinistra, descrizione, poi
+// U.M., quantità, prezzo «3,770 €», sconto «50+5», importo netto «1,79 €», IVA «22.00». Le celle numeriche si riconoscono
+// dall'ordine e dal simbolo €, non dalla posizione (le colonne sono allineate a destra e le intestazioni non coincidono).
+// Se la quantità manca sulla riga del codice si ricava da importo netto / prezzo netto unitario.
+const EUR = /^-?[\d.]+(,\d+)?\s*€$/, DISC = /^\d+(,\d+)?(\+\d+(,\d+)?)*$/, IVA = /^\d+\.\d{2}$/;
+const eur = s => num(String(s).replace('€', ''));
+function parseStdLines(rows, all) {
+  const hi = rows.findIndex(l => l.some(c => /^Nummer \| Numero$/.test(c.text.trim())) || (l[0]?.text.trim() === 'Nummer' && l.some(c => c.text.trim() === 'Numero')));
+  const vals = rows.slice(Math.max(hi, 0)).find(l => l.some(c => /^OFF-\d+$/.test(c.text.trim())));
+  const no = vals?.find(c => /^OFF-\d+$/.test(c.text.trim()))?.text.trim().slice(4);
+  const dm = vals?.map(c => c.text.trim()).find(t => /^\d{2}\.\d{2}\.\d{4}$/.test(t))?.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  if (!no || !dm) throw new Error('Non sembra un\'offerta RADIX (manca il numero dell\'offerta)');
+  const id = `OFF-${dm[3]}-${no}`, date = `${dm[3]}-${dm[2]}-${dm[1]}`;
+  const hdr = hi >= 0 ? rows[hi] : null, kx = hdr?.find(c => /Kunden-Nr/.test(c.text))?.x;
+  const customer = (kx != null && vals.find(c => Math.abs(c.x - kx) < 300 && /^\d{1,7}$/.test(c.text.trim()))?.text.trim()) || null;
+  const lines = []; let alt = false, seenLine = false;
+  for (const l of rows) {
+    const t0 = l[0]?.text.trim() || '';
+    if (seenLine && l.length === 1 && /^-{5,}$/.test(t0)) { alt = true; continue; }
+    if (!/^N\d{5}$/.test(t0)) continue;
+    const rest = l.slice(1).map(c => c.text.trim());
+    const ui = rest.findIndex(t => /^[A-Z][A-Z0-9²³]{0,3}$/.test(t));
+    const pi = rest.findIndex(t => EUR.test(t));
+    if (pi < 0) continue;
+    const vi = rest.findIndex((t, i) => i > pi && EUR.test(t));
+    if (vi < 0) continue;
+    const between = rest.slice(pi + 1, vi), s = between.find(t => DISC.test(t)) || '';
+    const qs = rest.slice(ui >= 0 ? ui + 1 : 1, pi).find(t => NUM.test(t));
+    const p = eur(rest[pi]), v = r2(eur(rest[vi]));
+    const unitNet = p * s.split('+').filter(Boolean).reduce((f, d) => f * (1 - num(d) / 100), 1);
+    const q = qs ? num(qs) : unitNet > 0 ? Math.round(v / unitNet * 1000) / 1000 : null;
+    if (!q) continue;
+    const d = rest.slice(0, ui >= 0 ? ui : pi).filter(t => !NUM.test(t) && !EUR.test(t)).join(' ').replace(/\s+/g, ' ').trim();
+    seenLine = true;
+    lines.push({ c: t0, d: d || SERVICE_NAMES[t0] || '', u: ui >= 0 ? rest[ui] : '', q, p, s, v, src: 'pdf' });
+  }
+  return { id, date, customer, lines, alternatives: alt, total: null };
 }
 
 async function parseOfferPdf(buf) { return parseOfferLines(await pdfLines(buf)); }
