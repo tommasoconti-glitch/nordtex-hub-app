@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="43eabbad9bca">
+<meta name="ntx-build" content="18928d46c130">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -804,7 +804,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .offers-list .of-valid{display:block}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"43eabbad9bca"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"18928d46c130"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -937,6 +937,9 @@ __m["js/core/pricing.js"] = (function () {
 const PRICE_LEVEL = Object.freeze({ OK: 'ok', WARN: 'warn', BLOCKED: 'blocked' });
 const DISCOUNT_ALERT = 52.5; // Condizioni agenti 2026: sconto massimo previsto 50+5 (52,5% complessivo); oltre serve autorizzazione Direzione
 const DISCOUNT_ALERT_LABEL = '50+5 (52,5%)';
+// 05/11 (decisione Tommaso): sconto massimo applicabile 50+15+5 (59,625%, 59,63 arrotondato); oltre: avviso rosso, senza blocco
+const DISCOUNT_MAX = 59.63;
+const DISCOUNT_MAX_LABEL = '50+15+5 (59,63%)';
 
 const UNITS = new Set(['M2', 'M3', 'PZ', 'ML', 'CONF', 'ROTOLO', 'KG', 'SACCO', 'BIGBAG']);
 const txt = x => String(x ?? '').trim();
@@ -1041,6 +1044,7 @@ function totals(q) {
     total: round2(taxable + vat), freightPending: freight === null,
     warnings: lines.filter(l => l.level === PRICE_LEVEL.WARN).length,
     discountAlerts: lines.filter(l => totalDiscount(l.discounts) > DISCOUNT_ALERT).length,
+    discountOverMax: lines.filter(l => totalDiscount(l.discounts) > DISCOUNT_MAX).length,
   };
 }
 
@@ -1062,7 +1066,7 @@ function palletsFor(l) {
   return l.qty / l.palletQuantity;
 }
 
-return { PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL, normUnit, round2, priceLevel, canQuote, validDiscounts, totalDiscount, hasThickness, lineDescription, oldLineDescription, fixLineDescriptions, makeLine, lineNet, lineAmount, totals, searchProducts, palletsFor };
+return { PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL, DISCOUNT_MAX, DISCOUNT_MAX_LABEL, normUnit, round2, priceLevel, canQuote, validDiscounts, totalDiscount, hasThickness, lineDescription, oldLineDescription, fixLineDescriptions, makeLine, lineNet, lineAmount, totals, searchProducts, palletsFor };
 })();
 __m["js/data/model.js"] = (function () {
 const { lineDescription } = __m["js/core/pricing.js"];
@@ -5605,7 +5609,7 @@ __m["js/views/quotes.js"] = (function () {
 const { h, fill, eur, num, dateIt, toast, modal, field, emptyState, debounce } = __m["js/ui.js"];
 const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions, normPayment, LOST_REASONS, QUOTE_SNOOZE_DAYS, quoteReminders, missingForOrder } = __m["js/data/model.js"];
 const { fiscalFields } = __m["js/views/fiscal.js"];
-const { makeLine, fixLineDescriptions, totals, lineNet, lineAmount, priceLevel, canQuote, searchProducts, totalDiscount, palletsFor, PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL } = __m["js/core/pricing.js"];
+const { makeLine, fixLineDescriptions, totals, lineNet, lineAmount, priceLevel, canQuote, searchProducts, totalDiscount, palletsFor, PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL, DISCOUNT_MAX, DISCOUNT_MAX_LABEL } = __m["js/core/pricing.js"];
 const { regionOf } = __m["js/core/geo.js"];
 const { quoteCls, noteDialog } = __m["js/views/agenda.js"];
 const { offerChoices, noteOfferChip, pickNoteForOffer, linkNoteDialog, canLinkNote } = __m["js/views/note-offers.js"];
@@ -5888,7 +5892,8 @@ async function viewQuoteEditor(app, id, customerId) {
           byId.get(l.productId)?.clearance ? h('small', { class: 'warn-text' }, '⚠ ' + byId.get(l.productId).clearance + (pal !== null && Math.ceil(pal - 1e-6) - pal > 1e-6 ? ` → ${Math.ceil(pal - 1e-6)} bancali = ${num(Math.ceil(pal - 1e-6) * l.palletQuantity)} m²` : '')) : null,   // 05/11: articoli fuori listino a esaurimento (Isorel N88174)
           byId.get(l.productId)?.family === 'Blocchi in laterizio' && pal !== null && Math.ceil(pal - 1e-6) - pal > 1e-6 ? h('small', { class: 'warn-text' }, `Laterizi: vendita solo a bancali completi → ${Math.ceil(pal - 1e-6)} bancali = ${num(Math.ceil(pal - 1e-6) * l.palletQuantity)} ${String(l.unit).toLowerCase()}`) : null,
           bigLoad(l, pal),
-          disc > DISCOUNT_ALERT ? h('small', { class: 'bad-text' }, `Sconto complessivo ${num(disc)}%: oltre ${DISCOUNT_ALERT_LABEL} serve autorizzazione Direzione`) : null);
+          disc > DISCOUNT_MAX ? h('small', { class: 'bad-text' }, h('strong', {}, `⛔ Sconto complessivo ${num(disc)}%: oltre lo sconto massimo applicabile ${DISCOUNT_MAX_LABEL}`))
+            : disc > DISCOUNT_ALERT ? h('small', { class: 'warn-text' }, `⚠ Sconto complessivo ${num(disc)}%: oltre ${DISCOUNT_ALERT_LABEL} serve autorizzazione Direzione`) : null);
         fill(netTd, eur(lineNet(l))); fill(amtTd, h('strong', {}, eur(lineAmount(l))));
       };
       const live = () => { refresh(); tp?.redraw(); drawTotals(); };
@@ -5931,7 +5936,8 @@ async function viewQuoteEditor(app, id, customerId) {
       h('div', {}, h('span', {}, `IVA ${num(t.vatRate)}%`), h('span', {}, eur(t.vat))),
       h('div', { class: 'grand' }, h('span', {}, 'Totale'), h('strong', {}, eur(t.total))),
       showPriceWarn && t.warnings ? h('p', { class: 'warn-text' }, `${t.warnings} righe con prezzo da verificare nel Master`) : null,
-      t.discountAlerts ? h('p', { class: 'bad-text' }, `${t.discountAlerts} righe con sconto oltre ${DISCOUNT_ALERT_LABEL}`) : null,
+      t.discountOverMax ? h('p', { class: 'bad-text' }, h('strong', {}, `⛔ ${t.discountOverMax} ${t.discountOverMax === 1 ? 'riga' : 'righe'} oltre lo sconto massimo applicabile ${DISCOUNT_MAX_LABEL}`)) : null,
+      t.discountAlerts > (t.discountOverMax || 0) ? h('p', { class: 'warn-text' }, `⚠ ${t.discountAlerts - (t.discountOverMax || 0)} ${t.discountAlerts - (t.discountOverMax || 0) === 1 ? 'riga' : 'righe'} oltre ${DISCOUNT_ALERT_LABEL}: serve autorizzazione Direzione`) : null,
       t.freightPending ? h('p', { class: 'muted' }, 'Trasporto da definire: non è compreso nel totale.') : null,
       econBox());
     const tr = isPickup(q) && !t.freight ? 'ritiro al deposito' : t.freightPending ? 'trasporto da definire' : t.freight ? 'trasporto ' + eur(t.freight) : 'trasporto compreso';
