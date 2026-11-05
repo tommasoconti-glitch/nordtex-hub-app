@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="8c81e9e53b5e">
+<meta name="ntx-build" content="6029e2288aad">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -804,7 +804,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .offers-list .of-valid{display:block}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8c81e9e53b5e"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"6029e2288aad"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4362,11 +4362,12 @@ function validateBands(bands) {
 
 // Regola 2026 decisa dalla Direzione (doc. "NORDTEX Condizioni Agenzie di Commercio – Listino Sconti Massimi e Provvigioni 2026"):
 // uguale per tutte le classi merceologiche; sconto fino al 30% → 8%, fino al 40% → 7%, fino a 50+5 (52,5% complessivo, massimo previsto) → 5%;
-// 04/11 (decisione Tommaso): la soglia resta 50+5 al 5%; oltre non c'è una fascia (prima 3%): condizioni da autorizzare, provvigione da definire.
+// 05/11 (decisione Tommaso, corregge il 04/11): fino a 50+5 → 5%; oltre 50+5 e fino a 50+15+5 (59,625%, sconto massimo applicabile) → 3%;
+// oltre 50+15+5: nessuna fascia, provvigione da definire. Fascia a 59,63 perché lo sconto complessivo è arrotondato a 2 decimali.
 // Gli agenti non vedono le provvigioni nell'app (04/11).
 const DEFAULT_COMMISSION_RULES = Object.freeze({
   source: 'Condizioni Agenzie di Commercio 2026',
-  default: { bands: [{ maxDiscount: 30, rate: 8 }, { maxDiscount: 40, rate: 7 }, { maxDiscount: 52.5, rate: 5 }] },
+  default: { bands: [{ maxDiscount: 30, rate: 8 }, { maxDiscount: 40, rate: 7 }, { maxDiscount: 52.5, rate: 5 }, { maxDiscount: 59.63, rate: 3 }] },
   agents: {},
 });
 const effectiveRules = rules => (rules?.default?.bands?.length ? rules : { ...DEFAULT_COMMISSION_RULES, agents: rules?.agents || {} });
@@ -5913,7 +5914,7 @@ async function viewQuoteEditor(app, id, customerId) {
     const m = quoteMargin(q, byId);
     return h('div', { class: 'econ-box dir' }, h('small', {}, 'Solo Direzione · margine'),
       row('Costo merce (RADIX storico)', eur(m.cost)), row('Margine merce', `${eur(m.margin)} · ${pct(m.pct)}`, 'grand-sm' + (m.margin < 0 ? ' neg' : '')),
-      c.configured ? [row(`Provvigione ${agentLabel || ''}`, `${eur(c.amount)} · ${pct(c.avgRate)}` + (c.toDefine ? ` · ${c.toDefine} ${c.toDefine === 1 ? 'riga' : 'righe'} oltre 50+5: da definire` : '')), row('Margine dopo provvigione', `${eur(m.margin - c.amount)} · ${pct(m.revenue > 0 ? (m.margin - c.amount) / m.revenue * 100 : null)}`, 'grand-sm')] : row('Provvigione', 'regole da impostare'),
+      c.configured ? [row(`Provvigione ${agentLabel || ''}`, `${eur(c.amount)} · ${pct(c.avgRate)}` + (c.toDefine ? ` · ${c.toDefine} ${c.toDefine === 1 ? 'riga' : 'righe'} oltre 50+15+5: da definire` : '')), row('Margine dopo provvigione', `${eur(m.margin - c.amount)} · ${pct(m.revenue > 0 ? (m.margin - c.amount) / m.revenue * 100 : null)}`, 'grand-sm')] : row('Provvigione', 'regole da impostare'),
       m.missing ? h('p', { class: 'warn-text' }, `${m.missing} ${m.missing === 1 ? 'riga' : 'righe'} senza costo utilizzabile: margine calcolato sulle altre`) : null,
       h('p', { class: 'fine' }, 'Costi d\'acquisto RADIX storici, attualità da verificare. Trasporto e altri addebiti esclusi dal margine.'));
   }
@@ -6751,7 +6752,7 @@ async function commissionCard(app, refresh) {
     const rows = (cur.length ? cur : [{ maxDiscount: '', rate: '' }]).map(b => ({ ...b }));
     const body = h('tbody');
     const drawRows = () => fill(body, rows.map((b, i) => h('tr', {},
-      h('td', {}, 'fino a ', h('input', { type: 'number', min: 0, max: 100, step: 0.5, value: b.maxDiscount, class: 'num-in', 'aria-label': 'Sconto massimo', onchange: e => { b.maxDiscount = e.target.value === '' ? '' : +e.target.value; } }), ' % di sconto'),
+      h('td', {}, 'fino a ', h('input', { type: 'number', min: 0, max: 100, step: 0.01, value: b.maxDiscount, class: 'num-in', 'aria-label': 'Sconto massimo', onchange: e => { b.maxDiscount = e.target.value === '' ? '' : +e.target.value; } }), ' % di sconto'),
       h('td', {}, h('input', { type: 'number', min: 0, max: 30, step: 0.25, value: b.rate, class: 'num-in', 'aria-label': 'Provvigione', onchange: e => { b.rate = e.target.value === '' ? '' : +e.target.value; } }), ' % provvigione'),
       h('td', {}, rows.length > 1 ? h('button', { class: 'icon-btn', 'aria-label': 'Togli fascia', onclick: () => { rows.splice(i, 1); drawRows(); } }, '✕') : null))));
     drawRows();
@@ -6771,7 +6772,7 @@ async function commissionCard(app, refresh) {
         h('button', { class: 'btn small primary', onclick: save }, 'Salva regole'),
         target && rules.agents?.[target] ? h('button', { class: 'btn small ghost', onclick: async () => { delete rules.agents[target]; await app.store.setSetting('commissions', rules); toast('Torna alla regola generale'); draw(); } }, 'Usa regola generale') : null),
       !stored?.default?.bands?.length && !target ? h('p', { class: 'info-text' }, 'In uso la regola delle Condizioni Agenzie di Commercio 2026 (uguale per tutte le classi merceologiche). Modificala e salva solo se cambia.') : null,
-      h('p', { class: 'fine' }, 'La provvigione si calcola riga per riga sulla merce netta, in base allo sconto complessivo della riga. Fascia 52,5% = sconto 50+5, ultima fascia (5%). Oltre 50+5: condizioni da autorizzare e provvigione da definire caso per caso (nessuna fascia automatica). Premio di fine anno 2% oltre € 500.000 di fatturato annuo (trasporti e servizi esclusi), riconosciuto a consuntivo sul fatturato incassato. Gli agenti non vedono le provvigioni nell\'app (decisione 04/11).'));
+      h('p', { class: 'fine' }, 'La provvigione si calcola riga per riga sulla merce netta, in base allo sconto complessivo della riga. Fascia 52,5% = sconto 50+5 (5%); fascia 59,63% = sconto 50+15+5, sconto massimo applicabile (3%). Oltre 50+15+5: provvigione da definire caso per caso (nessuna fascia automatica). Premio di fine anno 2% oltre € 500.000 di fatturato annuo (trasporti e servizi esclusi), riconosciuto a consuntivo sul fatturato incassato. Gli agenti non vedono le provvigioni nell\'app (decisione 04/11).'));
   };
   draw();
   return h('details', { class: 'card fold-box' }, h('summary', {}, 'Regole provvigioni'), box);
