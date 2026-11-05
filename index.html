@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="dde63915f989">
+<meta name="ntx-build" content="7070101a03f4">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -796,7 +796,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .ps-moved{font-size:.82rem;margin:6px 0 2px;color:var(--muted)} .ps-moved strong{color:var(--text,inherit);white-space:normal}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"dde63915f989"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"7070101a03f4"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -5668,7 +5668,7 @@ async function viewQuoteEditor(app, id, customerId) {
     fill(results, ...found.map(p => {
       const pl = priceLevel(p), ok = canQuote(p), lv = !showPriceWarn && pl.level === PRICE_LEVEL.WARN ? PRICE_LEVEL.OK : pl.level;
       return h('button', { class: 'result ' + lv, disabled: !ok, title: showPriceWarn ? pl.reasons.join('\n') : '', onclick: () => addLine(p) },
-        h('span', { class: 'r-desc' }, productLabel(p), h('small', {}, [p.family, p.producer, p.listCode && 'cod. ' + p.listCode, p.radixCode && 'RADIX ' + p.radixCode, p.page && 'pag. ' + p.page].filter(Boolean).join(' · '))),
+        h('span', { class: 'r-desc' }, productLabel(p), h('small', {}, [p.family, p.producer, p.listCode && 'cod. ' + p.listCode, p.radixCode && 'RADIX ' + p.radixCode, p.page && 'pag. ' + p.page].filter(Boolean).join(' · ')), p.clearance ? h('small', { class: 'warn-text' }, 'A esaurimento: solo giacenza') : null),
         h('span', { class: 'r-price' }, ok ? `${eur(p.price)}/${p.saleUnit}` : 'Su richiesta', stockFor(stock, p.radixCode).some(x => x.available > 0) ? h('small', { class: 'stock-badge' }, 'a magazzino') : null),
         showPriceWarn || lv === PRICE_LEVEL.BLOCKED ? h('span', { class: 'lvl ' + lv }, { ok: 'Verificato', warn: 'Da verificare', blocked: 'Non quotabile' }[lv]) : null);
     }), text && !found.length ? h('p', { class: 'muted' }, 'Nessun prodotto trovato.') : '');
@@ -5787,6 +5787,7 @@ async function viewQuoteEditor(app, id, customerId) {
           showPriceWarn && l.level === PRICE_LEVEL.WARN ? h('small', { class: 'warn-text', title: l.warnings.join('\n') }, '⚠ Prezzo da verificare nel Master') : null,
           convBox(byId.get(l.productId), l.qty, pal), stockLine(l.radixCode), sheetLinks(byId.get(l.productId)),
           lineEcon(l), unitBox(l, i, () => refresh()),
+          byId.get(l.productId)?.clearance ? h('small', { class: 'warn-text' }, '⚠ ' + byId.get(l.productId).clearance + (pal !== null && Math.ceil(pal - 1e-6) - pal > 1e-6 ? ` → ${Math.ceil(pal - 1e-6)} bancali = ${num(Math.ceil(pal - 1e-6) * l.palletQuantity)} m²` : '')) : null,   // 05/11: articoli fuori listino a esaurimento (Isorel N88174)
           byId.get(l.productId)?.family === 'Blocchi in laterizio' && pal !== null && Math.ceil(pal - 1e-6) - pal > 1e-6 ? h('small', { class: 'warn-text' }, `Laterizi: vendita solo a bancali completi → ${Math.ceil(pal - 1e-6)} bancali = ${num(Math.ceil(pal - 1e-6) * l.palletQuantity)} ${String(l.unit).toLowerCase()}`) : null,
           bigLoad(l, pal),
           disc > DISCOUNT_ALERT ? h('small', { class: 'bad-text' }, `Sconto complessivo ${num(disc)}%: oltre ${DISCOUNT_ALERT_LABEL} serve autorizzazione Direzione`) : null);
