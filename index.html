@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="9a4e26318018">
+<meta name="ntx-build" content="3362e6455420">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -804,7 +804,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .offers-list .of-valid{display:block}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"9a4e26318018"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"3362e6455420"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4478,6 +4478,11 @@ function regimeFor(p) {
       warn: 'Sfuso solo su walking floor (3,10 €/km, pag. 43); capienza 90 m³ (confermata dall\'ufficio 03/11): conferma sempre con l\'ufficio', note: 'Gennaio e agosto prezzi variabili' };
     return { id: 'policell', kind: 'km', label: 'Vetro cellulare BigBag · tariffa a km', page: 43, origin: ORIGINS.policell, rates: { centinato: 2.1, walkingfloor: 3.1 }, loadM3: 66, note: 'Massimo 22 BigBag da 3 m³ per autoarticolato; gennaio e agosto prezzi variabili' };
   }
+  // 06/11 (decisione Tommaso, dopo il confronto con l'ufficio): V600 dal deposito di Inverigo in groupage con corriere,
+  // 80 € a bancale (costo reale ~73 € per Verona), Nord Italia, fino a 6 bancali; oltre conviene un bilico: quotazione ufficio
+  if (fam === 'Vetro cellulare' && /\bV600\b/.test(txt)) return { id: 'v600', kind: 'pallet', label: 'Vetro cellulare V600 · groupage con corriere dal deposito di Inverigo', page: 45,
+    perPallet: 80, maxPallets: 6, regions: NORTH, warn: 'Groupage con corriere: stima da confermare con l\'ufficio',
+    note: '80 € a bancale, Nord Italia, fino a 6 bancali; oltre si valuta un bilico con l\'ufficio. Ogni bancale V600 comporta anche il bancale Euro (20 €, listino pag. 45)' };
   if (fam === 'Canapa' && unit(p.saleUnit) === 'M2') return { id: 'canapa', kind: 'north', label: 'Canapa · franco destino Nord Italia per carichi completi', page: 31, regions: NORTH,
     note: 'Carichi completi diretti franco destino nel Nord Italia; ordine minimo per consegna diretta 5 bancali; altrimenti franco partenza deposito previa verifica giacenze (pag. 31)' };
   // VAKUM: nessuna regola (02/11 Christian: "togli la regola dei 2.000 €, se c'è fa fede il listino"; il listino n.05 non ha tariffe) → quotazione ufficio
@@ -4514,6 +4519,10 @@ function lineLoad(p, qty, regime = regimeFor(p)) {
   if (out.pallets !== null && p.palletWeight > 0) out.kg = out.pallets * p.palletWeight;
   if (!regime) { out.reason = 'Nessuna tariffa di trasporto nel listino per questo articolo'; return out; }
   if (regime.kind === 'threshold') { out.fraction = 0; out.basis = 'importo ordine'; return out; }   // conta l'importo, non l'ingombro
+  if (regime.kind === 'pallet') {   // groupage: si paga a bancale (bancali interi); "fraction" = quota del massimo di bancali con corriere
+    if (out.pallets === null) { out.reason = 'Quantità per bancale non documentata'; return out; }
+    out.pallets = Math.ceil(out.pallets - 1e-6); out.fraction = out.pallets / regime.maxPallets; out.basis = `corriere fino a ${regime.maxPallets} bancali`; return out;
+  }
   if (regime.maxPallets) {
     // accessori dei blocchi (collanti, rulli): viaggiano con i blocchi, ingombro trascurabile; da verificare se ordinati da soli
     if (out.pallets === null && isBlockAccessory(p)) { out.fraction = 0; out.basis = 'accessorio'; out.reason = `${accessoryLabel(p)} considerati senza ingombro né peso sul mezzo dei blocchi: verificare con l'ufficio`; return out; }
@@ -4547,6 +4556,12 @@ function groupCost(regime, { fraction, pallets, m3, amount }, ctx) {
     if (!(amount >= 0)) return { cost: null, vehicles: 1, reason: 'Importo delle righe non disponibile: quotazione ufficio' };
     if (amount + eps >= regime.minAmount) return { cost: 0, vehicles: 1, detail: `ordine ${eur(amount)} (almeno ${eur(regime.minAmount)}): consegna compresa nel prezzo` };
     return { cost: null, vehicles: 1, reason: `Ordine ${eur(amount)}, sotto ${eur(regime.minAmount)}: consegna da quotare con l'ufficio` };
+  }
+  if (regime.kind === 'pallet') {
+    if (!regime.regions.includes(ctx.region)) return { cost: null, vehicles: 1, reason: `${ctx.region || 'Regione non indicata'}: tariffa a bancale solo nel Nord Italia, quotazione ufficio` };
+    if (!(pallets > 0)) return { cost: null, vehicles: 1, reason: 'Numero di bancali non ricavabile' };
+    if (pallets > regime.maxPallets) return { cost: null, vehicles: 1, reason: `${pallets} bancali: oltre ${regime.maxPallets} conviene un bilico, quotazione ufficio` };
+    return { cost: pallets * regime.perPallet, vehicles: 1, detail: `${pallets} ${pallets === 1 ? 'bancale' : 'bancali'} × ${regime.perPallet} € (groupage con corriere)` };
   }
   if (regime.kind === 'north') {
     const vehicles = Math.max(1, Math.ceil(fraction - eps));
@@ -4623,7 +4638,7 @@ function planTransport(lines, ctx = {}) {
     // scenari sulla riga principale (quella che occupa di più): attuale, mezzo carico, carico completo
     const main = g.lines.slice().sort((a, b) => (b.load.fraction ?? 0) - (a.load.fraction ?? 0))[0];
     const scenarios = [];
-    if (known && main.load.fraction > 0) {
+    if (known && main.load.fraction > 0 && reg.kind !== 'pallet') {   // groupage a bancale: niente scenari di riempimento del mezzo
       const pqMain = main.product.palletQuantity > 0 && unit(main.product.palletUnit) === unit(main.product.saleUnit) ? main.product.palletQuantity : null;
       const mainPal = pqMain ? Math.ceil(main.qty / pqMain - 1e-6) : null;
       // vendita a bancali completi (laterizi): la quota di mezzo è per bancale intero, non per pezzo
@@ -4667,7 +4682,7 @@ function planTransport(lines, ctx = {}) {
 // Riempimento leggibile: mezzi pieni + ultimo mezzo (bancali presenti/capienza) e bancali mancanti per completarlo
 function fillSummary(g) {
   const eps = 1e-6, f = g.occupancy.fraction, pal = g.occupancy.pallets;
-  if (!(f > 0)) return null;
+  if (!(f > 0) || g.regime?.kind === 'pallet') return null;   // groupage a bancale: non c'è un mezzo da riempire
   const vehicles = Math.max(1, Math.ceil(f - eps)), lastFrac = f - (vehicles - 1), allFull = Math.abs(lastFrac - 1) < eps;
   const out = { vehicles, full: allFull ? vehicles : vehicles - 1, lastPct: Math.min(100, Math.round(lastFrac * 100)), allFull, limit: g.basis || '',
     capPallets: null, lastPallets: null, missingPallets: null, missingQty: null, unit: g.main?.unit || '' };
@@ -4876,7 +4891,8 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
 
     return h('div', { class: 'tp-group' },
       h('div', { class: 'tp-head' }, h('strong', {}, reg.label), h('small', { class: 'muted' }, `Listino pag. ${reg.page}`)),
-      h('div', { class: 'tp-fill' }, h('div', { class: 'tp-bar', role: 'img', 'aria-label': `Riempimento dell'ultimo mezzo ${fs ? fs.lastPct : pct}%` }, h('i', { style: { width: (fs ? fs.lastPct : pct) + '%' } })),
+      reg.kind === 'pallet' ? h('small', { class: 'muted' }, occ.pallets !== null ? `Totale ${num(occ.pallets, 0)} ${occ.pallets === 1 ? 'bancale' : 'bancali'}${occ.m3 !== null ? ` · ${num(occ.m3, 1)} m³` : ''}` : '')   // 06/11 groupage: niente barra del mezzo
+      : h('div', { class: 'tp-fill' }, h('div', { class: 'tp-bar', role: 'img', 'aria-label': `Riempimento dell'ultimo mezzo ${fs ? fs.lastPct : pct}%` }, h('i', { style: { width: (fs ? fs.lastPct : pct) + '%' } })),
         fs ? h('span', {}, h('strong', {}, fillText(fs)), fs.missingPallets ? ` · per riempire l'ultimo mezzo: +${fs.missingPallets} ${fs.missingPallets === 1 ? 'bancale' : 'bancali'}${fs.missingQty ? ` (+${qtyFmt(fs.missingQty, fs.unit)})` : ''}` : '') : null,
         h('small', { class: 'muted' }, [occ.pallets !== null ? `Totale ${num(occ.pallets, 1)} bancali` : '', occ.m3 !== null ? `${num(occ.m3, 1)} m³` : '', fs?.limit ? `per mezzo: ${fs.limit}` : ''].filter(Boolean).join(' · '),
           '. La barra mostra quanto è pieno l\'ultimo mezzo.')),
