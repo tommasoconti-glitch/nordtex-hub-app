@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="8267aba86a95">
+<meta name="ntx-build" content="9a4e26318018">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -804,7 +804,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .offers-list .of-valid{display:block}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8267aba86a95"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"9a4e26318018"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -5084,6 +5084,10 @@ function entryUnits(p) {
   if (su !== 'M3' && v.m3) add('M3', 'm³', 1 / v.m3);
   if (su !== 'PZ' && v.pz) add('PZ', su === 'M2' ? 'pannelli' : 'pz', 1 / v.pz);
   if (v.roll) add('ROTOLO', 'rotoli', 1 / v.roll);
+  // 06/11 (Tommaso): vetro cellulare in BigBag (Policell, Vitrex) venduto a m³: quantità anche a big bag.
+  // La misura del sacco è quella del prodotto scelto (3 o 1,5 m³: prezzi al m³ diversi, quindi sono articoli distinti)
+  const bag = su === 'M3' && /BigBag\s*([\d]+(?:[.,]\d+)?)\s*m³/i.exec(p.description || '');
+  if (bag) { const m3 = Number(bag[1].replace(',', '.')); add('BIGBAG', 'big bag', m3); }
   return out;
 }
 // quantità in unità di vendita da quella scritta (3 decimali, come RADIX)
