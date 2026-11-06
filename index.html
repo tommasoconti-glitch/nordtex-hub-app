@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="6f2412e5df0b">
+<meta name="ntx-build" content="69099e303794">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -814,7 +814,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .sys-thick input.sys-cm { min-width: 0; width: 72px; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"6f2412e5df0b"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"69099e303794"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4514,6 +4514,16 @@ const up = s => String(s ?? '').toUpperCase();
 const unit = s => ({ MQ: 'M2', MC: 'M3' }[up(s).trim()] || up(s).trim());
 
 // Regola di trasporto dell'articolo (null = nessuna tariffa nel listino: quotazione ufficio)
+// 06/11 (Tommaso): blocchi rettificati con "collante incluso" (Staudacher e Leipfinger Bader): su ogni mezzo un bancale è la colla,
+// quindi un posto e il suo peso in meno per i blocchi. Peso del bancale di colla: stima, da confermare con Christian.
+const GLUE_PALLET = { slots: 1, kg: 1000, confirmed: false };
+const hasGlue = p => p?.family === 'Blocchi in laterizio' && /collante incluso/i.test(p?.technical || '');
+// capacità utile del mezzo per i blocchi di questo articolo (bancali e kg)
+function loadCapacity(p, regime = regimeFor(p)) {
+  if (!regime?.maxPallets) return null;
+  const g = hasGlue(p);
+  return { pallets: regime.maxPallets - (g ? GLUE_PALLET.slots : 0), kg: regime.maxKg ? regime.maxKg - (g ? GLUE_PALLET.kg : 0) : null, glue: g };
+}
 function regimeFor(p) {
   const prod = up(p.producer), fam = String(p.family || ''), txt = up([p.description, p.subfamily].join(' '));
   if (prod === 'NATURHELD') return { id: 'naturheld', kind: 'zone', label: 'Fibra di legno NATURHELD · consegna diretta dal produttore', page: 11, table: ZONES_NATURHELD, loadM3: 70, minPartial: 12, secondKm: 2 };
@@ -4580,8 +4590,9 @@ function lineLoad(p, qty, regime = regimeFor(p)) {
       if (whole - out.pallets > 1e-6) out.reason = `Vendita solo a bancali completi: ${fmtQty(qty)} ${unit(p.saleUnit).toLowerCase()} = ${fmtQty(out.pallets)} bancali, arrotonda a ${whole} bancali (${fmtQty(whole * pq)} ${unit(p.saleUnit).toLowerCase()})`;
       out.pallets = whole; if (p.palletWeight > 0) out.kg = whole * p.palletWeight;
     }
-    const byPal = out.pallets / regime.maxPallets, byKg = out.kg !== null ? out.kg / regime.maxKg : null;
-    out.fraction = Math.max(byPal, byKg ?? 0); out.basis = byKg !== null && byKg > byPal ? 'limite peso 24 t' : `limite ${regime.maxPallets} bancali`;
+    const cap = loadCapacity(p, regime), glue = cap.glue ? ' + 1 di colla' : '';
+    const byPal = out.pallets / cap.pallets, byKg = out.kg !== null && cap.kg ? out.kg / cap.kg : null;
+    out.fraction = Math.max(byPal, byKg ?? 0); out.basis = byKg !== null && byKg > byPal ? `limite peso ${regime.maxKg / 1000} t${cap.glue ? ' (colla compresa)' : ''}` : `limite ${cap.pallets} bancali${glue}`;
     if (byKg === null) out.reason = [out.reason, 'Peso bancale non documentato: limite 24 t non verificato'].filter(Boolean).join('; ');
     return out;
   }
@@ -4774,7 +4785,7 @@ function googleMapsUrl(origin, destination, { prov, corridor } = {}) {
   return 'https://www.google.com/maps/dir/?' + q.toString();
 }
 
-return { LISTINO, BRENNERO, CORRIDORS, corridorFor, ORIGIN_VIA, routeVia, ORIGINS, regimeFor, isBlockAccessory, volumeM3, lineLoad, m3ZoneRate, planTransport, fillSummary, transportVerdict, googleMapsUrl };
+return { LISTINO, BRENNERO, CORRIDORS, corridorFor, ORIGIN_VIA, routeVia, ORIGINS, GLUE_PALLET, hasGlue, loadCapacity, regimeFor, isBlockAccessory, volumeM3, lineLoad, m3ZoneRate, planTransport, fillSummary, transportVerdict, googleMapsUrl };
 })();
 __m["js/core/route.js"] = (function () {
 // Distanza stradale (sola andata) dal luogo di carico al cliente, con passaggio obbligato dal Brennero.
@@ -4998,7 +5009,7 @@ __m["js/core/conversions.js"] = (function () {
 // Conversioni di massima per articolo: pezzi ↔ m² ↔ m³ ↔ kg ↔ bancale ↔ carico.
 // Fonti, in ordine di affidabilità: valori dichiarati nel listino (note Master), dati Master (bancale, peso bancale,
 // bancali/carico), calcoli da dimensioni/spessore/densità. Ogni valore porta la sua fonte; le stime sono segnalate.
-const { regimeFor } = __m["js/core/logistics.js"];
+const { regimeFor, loadCapacity } = __m["js/core/logistics.js"];
 const unit = s => ({ MQ: 'M2', MC: 'M3' }[String(s ?? '').toUpperCase().trim()] || String(s ?? '').toUpperCase().trim());
 const pos = v => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
 const dec = s => Number(String(s).replace(/\./g, '').replace(',', '.'));
@@ -5078,10 +5089,11 @@ function palletInfo(p, per = perSaleUnit(p)) {
   const reg = regimeFor(p);
   if (pos(p.palletsPerLoad)) { out.perLoad = p.palletsPerLoad; out.perLoadSource = p.palletsPerLoadSource || 'Master'; }
   else if (reg?.maxPallets) {
-    const byKg = out.kg ? Math.floor(reg.maxKg / out.kg + 1e-9) : null;
-    out.perLoad = byKg !== null ? Math.min(reg.maxPallets, byKg) : reg.maxPallets;
+    const cap = loadCapacity(p, reg);   // 06/11: un bancale di colla per mezzo sui blocchi con collante incluso
+    const byKg = out.kg && cap.kg ? Math.floor(cap.kg / out.kg + 1e-9) : null;
+    out.perLoad = byKg !== null ? Math.min(cap.pallets, byKg) : cap.pallets;
     out.perLoadSource = `listino pag. ${reg.page}`;
-    out.loadLimit = byKg !== null && byKg < reg.maxPallets ? `limite peso ${reg.maxKg / 1000} t` : '';
+    out.loadLimit = [byKg !== null && byKg < cap.pallets ? `limite peso ${reg.maxKg / 1000} t` : '', cap.glue ? '1 bancale di colla per mezzo' : ''].filter(Boolean).join(' · ');
   }
   if (!out.perLoad && reg?.loadM3 && out.m3) { out.perLoad = reg.loadM3 / out.m3; out.perLoadSource = `listino pag. ${reg.page}`; out.loadLimit = `volume ${reg.loadM3} m³`; }
   return out;
@@ -5714,7 +5726,7 @@ const { quoteMargin, quoteCommission, unitCost } = __m["js/core/margins.js"];
 const { transportPanel, stockFor } = __m["js/views/transport-panel.js"];
 const { conversionLines, quantityEquivalents, entryUnits, fromEntry, toEntry } = __m["js/core/conversions.js"];
 const { unitPrices, fullLoadTransport, offerTransportPerUnit, unitPriceNote, fullLoadQty } = __m["js/core/unit-prices.js"];
-const { planTransport } = __m["js/core/logistics.js"];
+const { planTransport, regimeFor, lineLoad, loadCapacity } = __m["js/core/logistics.js"];
 const { quoteEmail, QUOTE_BCC, isEmail } = __m["js/core/quote-email.js"];
 const { quoteDocHtml, quoteFileName, DEPOTS, TRANSPORT_BY, isPickup, pickupStockIssues } = __m["js/core/quote-doc.js"];
 const { techSheetFor, sheetLinksText, sheetEntries } = __m["js/core/tech-sheets.js"];
@@ -5965,12 +5977,15 @@ async function viewQuoteEditor(app, id, customerId) {
         fullQty && !locked && Math.abs(l.qty - fullQty) > 1e-6 ? h('button', { type: 'button', class: 'link', onclick: () => { l.qty = fullQty; mark(); drawLines(); } }, `Quantità a carico completo (${num(fullQty, 0)} ${String(l.unit).toLowerCase()})`) : null));
     return box;
   }
-  // quantità che richiede 3 o più mezzi pieni: avviso ben visibile (spesso è un errore di battitura)
+  // 06/11 (Tommaso): ordine che richiede più di un mezzo. I mezzi si contano su bancali E peso (24 t), con il bancale di colla
+  // dei blocchi rettificati; avviso arancione (la quantità può essere voluta), utile anche contro gli errori di battitura
   function bigLoad(l, pal) {
     const p = byId.get(l.productId); if (!p || pal === null) return null;
-    const per = p.palletsPerLoad || (p.family === 'Blocchi in laterizio' ? 36 : null);
-    if (!per || pal / per < 3) return null;
-    return h('small', { class: 'bad-text big-load' }, `⚠ ${num(l.qty, 0)} ${String(l.unit).toLowerCase()} = ${num(Math.ceil(pal - 1e-6), 0)} bancali, circa ${num(Math.ceil(pal / per - 1e-6), 0)} camion: controlla la quantità`);
+    const reg = regimeFor(p), cap = loadCapacity(p, reg); if (!cap) return null;
+    const ld = lineLoad(p, l.qty, reg); if (!(ld.fraction > 1 + 1e-6)) return null;
+    const mezzi = Math.ceil(ld.fraction - 1e-6), t = ld.kg ? ` · ${num(ld.kg / 1000, 1)} t` : '';
+    const lim = `massimo ${reg.maxKg / 1000} t o ${cap.pallets} bancali${cap.glue ? ' + 1 di colla' : ''} a mezzo`;
+    return h('small', { class: 'warn-text big-load' }, `⚠ Ordine grande: ${num(ld.pallets, 0)} bancali${t} → ${mezzi} mezzi (${lim}). Se la quantità è giusta, ignora l'avviso.`);
   }
   function drawLines() {
     fill(linesBody, ...q.lines.map((l, i) => {
@@ -5986,7 +6001,7 @@ async function viewQuoteEditor(app, id, customerId) {
           byId.get(l.productId)?.family === 'Blocchi in laterizio' && pal !== null && Math.ceil(pal - 1e-6) - pal > 1e-6 ? h('small', { class: 'warn-text' }, `Laterizi: vendita solo a bancali completi → ${Math.ceil(pal - 1e-6)} bancali = ${num(Math.ceil(pal - 1e-6) * l.palletQuantity)} ${String(l.unit).toLowerCase()}`) : null,
           bigLoad(l, pal),
           disc > DISCOUNT_MAX ? h('small', { class: 'bad-text' }, h('strong', {}, `⛔ Sconto complessivo ${num(disc)}%: oltre lo sconto massimo applicabile ${DISCOUNT_MAX_LABEL}`))
-            : disc > DISCOUNT_ALERT ? h('small', { class: 'warn-text' }, `⚠ Sconto complessivo ${num(disc)}%: oltre ${DISCOUNT_ALERT_LABEL} serve autorizzazione Direzione`) : null);
+            : disc > DISCOUNT_ALERT ? h('small', { class: 'warn-text' }, `⚠ ${num(disc)}% · oltre ${DISCOUNT_ALERT_LABEL}`) : null);   // 06/11: sulla riga solo l'etichetta, la spiegazione una volta sotto il totale
         fill(netTd, eur(lineNet(l))); fill(amtTd, h('strong', {}, eur(lineAmount(l))));
       };
       const live = () => { refresh(); tp?.redraw(); drawTotals(); };
@@ -6036,7 +6051,7 @@ async function viewQuoteEditor(app, id, customerId) {
       h('div', { class: 'grand' }, h('span', {}, 'Totale'), h('strong', {}, eur(t.total))),
       showPriceWarn && t.warnings ? h('p', { class: 'warn-text' }, `${t.warnings} righe con prezzo da verificare nel Master`) : null,
       t.discountOverMax ? h('p', { class: 'bad-text' }, h('strong', {}, `⛔ ${t.discountOverMax} ${t.discountOverMax === 1 ? 'riga' : 'righe'} oltre lo sconto massimo applicabile ${DISCOUNT_MAX_LABEL}`)) : null,
-      t.discountAlerts > (t.discountOverMax || 0) ? h('p', { class: 'warn-text' }, `⚠ ${t.discountAlerts - (t.discountOverMax || 0)} ${t.discountAlerts - (t.discountOverMax || 0) === 1 ? 'riga' : 'righe'} oltre ${DISCOUNT_ALERT_LABEL}: serve autorizzazione Direzione`) : null,
+      t.discountAlerts > (t.discountOverMax || 0) ? h('p', { class: 'warn-text' }, `⚠ ${t.discountAlerts - (t.discountOverMax || 0)} ${t.discountAlerts - (t.discountOverMax || 0) === 1 ? 'riga' : 'righe'} con sconto complessivo oltre ${DISCOUNT_ALERT_LABEL}: ${viewerIsDir ? 'per gli agenti serve la tua autorizzazione' : 'serve autorizzazione Direzione'}`) : null,
       t.freightPending ? h('p', { class: 'muted' }, 'Trasporto da definire: non è compreso nel totale.') : null,
       econBox());
     const tr = isPickup(q) && !t.freight ? 'ritiro al deposito' : t.freightPending ? 'trasporto da definire' : t.freight ? 'trasporto ' + eur(t.freight) : 'trasporto compreso';
