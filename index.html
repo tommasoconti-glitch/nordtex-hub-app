@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="6fb8064dc11d">
+<meta name="ntx-build" content="d6553adb52da">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -807,9 +807,14 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .heat-canvas { pointer-events: none; }
 .heat-legend { display: inline-flex; align-items: center; gap: 6px; }
 .heat-bar { display: inline-block; width: 90px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, #3168ff, #00c8c8, #50c83c, #ffd200, #dc1e1e); }
+/* Sistemi: spessori modificabili per strato (06/11) */
+.sys-thick { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; }
+.sys-thick label { display: inline-flex; align-items: center; gap: 6px; font-size: .82rem; color: var(--muted, #676568); }
+.sys-thick select, .sys-thick input { padding: 4px 6px; font-size: .88rem; min-width: 92px; width: auto; }
+.sys-thick input.sys-cm { min-width: 0; width: 72px; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"6fb8064dc11d"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"d6553adb52da"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -8187,9 +8192,9 @@ const SYSTEMS = [
     main: 'isolante', // strato di cui si sceglie lo spessore
     layers: [
       { key: 'muro', name: 'Parete esistente', cm: 30, lambda: 0.80, rho: '>1000', mu: '7/11', mat: 'muro', existing: true },
-      { key: 'isolante', name: { STEICO: 'NORDTEX flex 036 (STEICO) tra montanti Joist', NATURHELD: 'Naturtex flex (NATURHELD) tra montanti Joist' }, cm: 20, lambda: 0.038, rho: 50, mu: '1/2', mat: 'fibra', frame: JOIST,
+      { key: 'isolante', name: { STEICO: 'NORDTEX flex 036 (STEICO) {mm} tra montanti Joist', NATURHELD: 'Naturtex flex (NATURHELD) {mm} tra montanti Joist' }, cm: 20, lambda: 0.038, rho: 50, mu: '1/2', mat: 'fibra', frame: JOIST, edit: true,
         product: { STEICO: { sub: 'flex 036' }, NATURHELD: { sub: 'Naturtex flex' } }, perM2: 0.93, unit: 'm2', waste: 5 },
-      { key: 'portaintonaco', name: { STEICO: 'NORDTEX protect H 270 (STEICO) 60 mm', NATURHELD: 'Naturtex 180 (NATURHELD) 60 mm' }, cm: 6, lambda: { STEICO: 0.048, NATURHELD: 0.043 }, rho: { STEICO: 270, NATURHELD: 180 }, mu: 3, mat: 'fibraRigida',
+      { key: 'portaintonaco', name: { STEICO: 'NORDTEX protect H 270 (STEICO) {mm}', NATURHELD: 'Naturtex 180 (NATURHELD) {mm}' }, cm: 6, edit: true, lambda: { STEICO: 0.048, NATURHELD: 0.043 }, rho: { STEICO: 270, NATURHELD: 180 }, mu: 3, mat: 'fibraRigida',
         product: { STEICO: { sub: 'protect H 270', thick: 60 }, NATURHELD: { sub: 'Naturtex 180', thick: 60 } }, perM2: 1, unit: 'm2', waste: 5,
         check: { STEICO: 'Il catalogo usa "Duo Dry", che non è a listino: proposto protect H 270 (λ 0,048) — da confermare' } },
       { key: 'rasatura', name: 'NORDTEX Pura Calce + rete di armatura', cm: 1, lambda: 0.82, rho: 1700, mu: 12, mat: 'intonaco' },
@@ -8213,11 +8218,11 @@ const SYSTEMS = [
       { key: 'finitura', name: 'Intonaco e finitura di sola calce', cm: 0.2, lambda: 0.76, rho: 1600, mu: 10, mat: 'finitura' },
       { key: 'gesso', name: 'Lastra NORDTEX Gessoforte 25 mm', cm: 2.5, lambda: 0.35, rho: 900, mu: 4.5, mat: 'gesso',
         product: { all: { sub: 'NORDTEX Gessoforte', thick: 25 } }, perM2: 1, unit: 'm2', waste: 5 },
-      { key: 'impianti', name: { STEICO: 'NORDTEX flex 036 (STEICO) 50 mm, vano impianti', NATURHELD: 'Naturtex flex (NATURHELD) 50 mm, vano impianti' }, cm: 5, lambda: 0.038, rho: 50, mu: '1/2', mat: 'fibra',
+      { key: 'impianti', name: { STEICO: 'NORDTEX flex 036 (STEICO) {mm}, vano impianti', NATURHELD: 'Naturtex flex (NATURHELD) {mm}, vano impianti' }, cm: 5, edit: true, lambda: 0.038, rho: 50, mu: '1/2', mat: 'fibra',
         product: { STEICO: { sub: 'flex 036', thick: 50 }, NATURHELD: { sub: 'Naturtex flex', thick: 50 } }, perM2: 0.95, unit: 'm2', waste: 5 },
       { key: 'freno', name: 'Freno vapore Ampatex Variano 3', cm: 0.05, lambda: null, mat: 'membrana', thin: true,
         product: { all: { sub: 'Ampatex Variano 3' } }, perM2: 1.1, unit: 'm2', pack: 75 },
-      { key: 'isolante', name: { STEICO: 'NORDTEX flex 036 (STEICO) tra montanti Joist', NATURHELD: 'Naturtex flex (NATURHELD) tra montanti Joist' }, cm: 20, lambda: 0.038, rho: 50, mu: '1/2', mat: 'fibra', frame: JOIST,
+      { key: 'isolante', name: { STEICO: 'NORDTEX flex 036 (STEICO) {mm} tra montanti Joist', NATURHELD: 'Naturtex flex (NATURHELD) {mm} tra montanti Joist' }, cm: 20, lambda: 0.038, rho: 50, mu: '1/2', mat: 'fibra', frame: JOIST, edit: true,
         product: { STEICO: { sub: 'flex 036' }, NATURHELD: { sub: 'Naturtex flex' } }, perM2: 0.93, unit: 'm2', waste: 5 },
       { key: 'muro', name: 'Parete esistente', cm: 12, lambda: 0.80, rho: '>1000', mu: '7/11', mat: 'muro', existing: true },
     ],
@@ -8238,7 +8243,7 @@ const SYSTEMS = [
       { key: 'ras_int', name: 'Rasatura Ecotex Raso (interno)', cm: 0.2, lambda: 0.76, rho: '>1000', mu: 10, mat: 'intonaco' },
       { key: 'int_int', name: 'Intonaco Ecotex NHL5 (interno)', cm: 2, lambda: 0.61, rho: '>1000', mu: 12, mat: 'intonaco' },
       { key: 'rinz_int', name: 'Rinzaffo Ecotex (interno)', cm: 0.5, lambda: 0.76, rho: '>1000', mu: 10, mat: 'intonaco' },
-      { key: 'blocco', name: 'Blocco Thermopor SL 08 Plan', cm: 49, lambda: 0.08, rho: 600, mu: '-', mat: 'laterizio',
+      { key: 'blocco', name: 'Blocco Thermopor SL 08 Plan {mm}', cm: 49, edit: true, lambda: 0.08, rho: 600, mu: '-', mat: 'laterizio',
         product: { all: { sub: 'Thermopor SL 08 - Plan 0,08' } }, perM2: 16, unit: 'pz', note: 'collante incluso; vendita a bancali completi' },
       { key: 'rinz_est', name: 'Rinzaffo Ecotex (esterno)', cm: 0.5, lambda: 0.76, rho: '>1000', mu: 10, mat: 'intonaco' },
       { key: 'int_est', name: 'Intonaco Ecotex NHL5 (esterno)', cm: 2, lambda: 0.61, rho: '>1000', mu: 12, mat: 'intonaco' },
@@ -8265,9 +8270,9 @@ const SYSTEMS = [
       { key: 'tavolato', name: 'Tavolato in legno su travi', cm: 2.5, lambda: 0.13, rho: 450, mu: '50', mat: 'legno', existing: true },
       { key: 'freno', name: 'Freno vapore Foliarex Budfol Antidrop S160', cm: 0.05, lambda: null, mat: 'membrana', thin: true,
         product: { all: { sub: 'Foliarex Budfol Antidrop S160' } }, perM2: 1.1, unit: 'm2', pack: 75 },
-      { key: 'isolante', name: { STEICO: 'NORDTEX therm (STEICO), 2 strati incrociati', NATURHELD: 'Naturtex 160 (NATURHELD), 2 strati incrociati' }, cm: 20, lambda: { STEICO: 0.038, NATURHELD: 0.041 }, rho: { STEICO: 160, NATURHELD: 155 }, mu: 5, mat: 'fibraRigida',
+      { key: 'isolante', name: { STEICO: 'NORDTEX therm (STEICO) {mm}, strati incrociati', NATURHELD: 'Naturtex 160 (NATURHELD) {mm}, strati incrociati' }, cm: 20, stack: true, lambda: { STEICO: 0.038, NATURHELD: 0.041 }, rho: { STEICO: 160, NATURHELD: 155 }, mu: 5, mat: 'fibraRigida',
         plies: 2, product: { STEICO: { sub: 'therm' }, NATURHELD: { sub: 'Naturtex 160' } }, perM2: 2, unit: 'm2', waste: 5 },
-      { key: 'sottotegola', name: { STEICO: 'NORDTEX universal (STEICO) 22 mm, sottotegola a incastro', NATURHELD: 'Naturtex 220 (NATURHELD) 22 mm, sottotegola' }, cm: 2.2, lambda: { STEICO: 0.048, NATURHELD: 0.047 }, rho: { STEICO: 270, NATURHELD: 220 }, mu: 5, mat: 'fibraRigida',
+      { key: 'sottotegola', name: { STEICO: 'NORDTEX universal (STEICO) {mm}, sottotegola a incastro', NATURHELD: 'Naturtex 220 (NATURHELD) {mm}, sottotegola' }, cm: 2.2, edit: true, lambda: { STEICO: 0.048, NATURHELD: 0.047 }, rho: { STEICO: 270, NATURHELD: 220 }, mu: 5, mat: 'fibraRigida',
         product: { STEICO: { sub: 'universal', thick: 22 }, NATURHELD: { sub: 'Naturtex 220', thick: 22 } }, perM2: 1, unit: 'm2', waste: 5,
         check: { NATURHELD: 'Naturtex 220 al posto del pannello Universal del catalogo: verificare bordo a incastro e uso sottotegola — da confermare' } },
       { key: 'telo', name: 'Telo traspirante Foliarex Strotex Q Supreme', cm: 0.05, lambda: null, mat: 'membrana', thin: true,
@@ -8287,13 +8292,43 @@ const RSI = 0.13, RSE = 0.04;   // pareti, flusso orizzontale
 const VKEYS = ['STEICO', 'NATURHELD', 'Catalogo', 'all'];
 const pickV = (v, variant) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).some(k => VKEYS.includes(k)) ? (v[variant] ?? v.all ?? null) : v;
 
-// Strati risolti per una variante e uno spessore dello strato principale (mm)
-function resolveLayers(sys, variant, mainMm) {
+// Strati risolti per una variante. cfg (06/11, Tommaso: "possibilità di variare gli spessori"):
+//   { [key]: { parts: [mm strato 1, mm strato 2] } } per gli strati a listino; { [key]: { cm } } per gli strati esistenti.
+// mainMm resta per compatibilità: spessore totale dello strato principale, diviso in parti uguali (plies).
+const isEditable = l => !l.thin && !!(l.edit || l.stack);
+const compo = parts => !parts.length ? '' : parts.every(x => x === parts[0]) ? (parts.length > 1 ? `${parts.length} × ${fmtMm(parts[0])} mm` : `${fmtMm(parts[0])} mm`) : parts.map(fmtMm).join(' + ') + ' mm';
+const fmtMm = x => String(Math.round(x * 10) / 10).replace('.', ',');
+function layerParts(sys, l, mainMm, cfg) {
+  const c = cfg?.[l.key];
+  if (c?.parts?.length) return c.parts.map(Number).filter(x => x > 0);
+  const k = l.plies || 1, tot = l.key === sys.main && mainMm ? mainMm : Math.round(l.cm * 10);
+  return Array(k).fill(tot / k);
+}
+function resolveLayers(sys, variant, mainMm, cfg) {
   return sys.layers.map(l => {
-    const cm = l.key === sys.main && mainMm ? mainMm / 10 : l.cm;
-    return { ...l, name: pickV(l.name, variant), lambda: pickV(l.lambda, variant), rho: pickV(l.rho, variant), product: pickV(l.product, variant), check: pickV(l.check, variant), cm };
+    const r = { ...l, name: pickV(l.name, variant), lambda: pickV(l.lambda, variant), rho: pickV(l.rho, variant), product: pickV(l.product, variant), check: pickV(l.check, variant) };
+    if (isEditable(l)) { r.parts = layerParts(sys, l, mainMm, cfg); r.cm = Math.round(r.parts.reduce((s, x) => s + x, 0)) / 10; }
+    else if (l.existing && cfg?.[l.key]?.cm > 0) r.cm = Number(cfg[l.key].cm);
+    else if (l.key === sys.main && mainMm) r.cm = mainMm / 10;
+    r.tpl = String(r.name); r.name = r.tpl.replace('{mm}', r.parts ? compo(r.parts) : `${fmtMm(r.cm * 10)} mm`);
+    return r;
   });
 }
+// spessori a listino (mm) del prodotto di uno strato, per i selettori "strato 1 / strato 2"
+function layerThicknesses(l, variant, products) {
+  const spec = pickV(l.product, variant); if (!spec?.sub) return [];
+  return [...new Set(products.filter(p => p.subfamily === spec.sub && p.thickness && p.price != null).map(p => Number(p.thickness)))].sort((a, b) => a - b);
+}
+// 06/11 (Tommaso): tra i montanti lo spessore lo decide l'altezza del Joist (un solo Joist, mai sovrapposto); l'isolante la riempie
+// con un pannello unico o, se a listino non c'è, con due pannelli (il più spesso possibile + il complemento)
+function fillParts(mm, av) {
+  if (av.includes(mm)) return [mm];
+  for (const a of [...av].sort((x, y) => y - x)) if (a < mm && av.includes(mm - a)) return [a, mm - a];
+  return null;
+}
+// altezze Joist a listino (mm): lo strato tra i montanti deve avere uno spessore totale uguale a un'altezza disponibile
+const joistHeights = products => [...new Set(products.filter(p => p.subfamily === 'NORDTEX JOIST coibentato' && p.price != null)
+  .map(p => Number((String(p.description).match(/SJ 45 — H (\d+) mm/) || [])[1])).filter(Boolean))].sort((a, b) => a - b);
 
 // U = 1 / R_T; con strati non omogenei R_T = (R_upper + R_lower) / 2 (ISO 6946 §6.7)
 function uValue(layers, { rsi = RSI, rse = RSE } = {}) {
@@ -8339,8 +8374,8 @@ function mainThicknesses(sys, variant, products) {
 }
 
 // Computo: per m² teorico (consumo × prezzo) e per la superficie del cliente arrotondata a confezioni intere
-function systemQuote(sys, variant, products, { mainMm, m2 = 100, discount = 0 } = {}) {
-  const layers = resolveLayers(sys, variant, mainMm);
+function systemQuote(sys, variant, products, { mainMm, m2 = 100, discount = 0, cfg = null } = {}) {
+  const layers = resolveLayers(sys, variant, mainMm, cfg);
   const mm = Math.round((layers.find(l => l.key === sys.main)?.cm || 0) * 10);
   const rows = [], missing = [];
   const add = (label, spec, perM2Base, unit, { waste = 0, pack = null, note = '', sizeMm = null } = {}) => {
@@ -8360,14 +8395,25 @@ function systemQuote(sys, variant, products, { mainMm, m2 = 100, discount = 0 } 
     rows.push({ label, product: p, code: p.listCode || p.radixCode || '', perM2, unit, unitPrice, perM2Price: perM2 * unitPrice, qty, sell, sellUnit, packs, pack, total, note, priceUnit,
       packLabel: priceUnit === 'SACCO' ? `${packs} sacchi da ${pack || 25} kg` : pack ? `${packs} rotoli/confezioni` : unit === 'pz' && p.palletQuantity ? `${packs} bancali da ${p.palletQuantity} pz` : unit === 'm2' && packs ? `${packs} pannelli` : '' });
   };
-  for (const l of layers) if (l.product) add(l.name, l.product, l.perM2, l.unit, { waste: l.waste, pack: l.pack, note: l.note || l.check || '', sizeMm: l.thin ? null : Math.round(l.cm * 10 / (l.plies || 1)) });
+  for (const l of layers) {
+    if (!l.product) continue;
+    const opt = { waste: l.waste, pack: l.pack, note: l.note || l.check || '' };
+    if (!l.parts) { add(l.name, l.product, l.perM2, l.unit, { ...opt, sizeMm: l.thin ? null : Math.round(l.cm * 10) }); continue; }
+    // una riga per spessore: strato 1 e strato 2 uguali = una riga con consumo doppio
+    const perPly = l.perM2 / (l.plies || 1), groups = new Map();
+    for (const mm of l.parts) groups.set(mm, (groups.get(mm) || 0) + 1);
+    for (const [mm, n] of groups) add(groups.size > 1 ? (l.tpl.includes('{mm}') ? l.tpl.replace('{mm}', `${fmtMm(mm)} mm`) : `${l.name} — ${fmtMm(mm)} mm`) : l.name, { ...l.product, thick: mm }, perPly * n, l.unit, { ...opt, sizeMm: mm });
+  }
   for (const x of sys.extras) add(x.label, x.product, x.perM2, x.unit, { pack: x.pack, note: x.note || '', sizeMm: x.product.heightFrom ? Math.round((layers.find(l => l.key === x.product.heightFrom)?.cm || 0) * 10) : null });
   const perM2List = rows.reduce((s, r) => s + r.perM2Price, 0), totalList = rows.reduce((s, r) => s + r.total, 0);
   const k = 1 - (Number(discount) || 0) / 100;
   const u = uValue(layers, { rsi: sys.rsi ?? RSI, rse: sys.rse ?? RSE });
+  const jh = joistHeights(products), extraChecks = [];
+  for (const l of layers) if (l.frame && jh.length && !jh.includes(Math.round(l.cm * 10)))
+    extraChecks.push(`Spessore tra i montanti ${fmtMm(l.cm * 10)} mm: Joist di questa altezza non a listino (disponibili ${jh.join(', ')} mm)`);
   return { layers, rows, missing, mainMm: mm, m2, discount: Number(discount) || 0, u, thickness: totalCm(layers),
     perM2List: round2(perM2List), perM2Net: round2(perM2List * k), totalList: round2(totalList), totalNet: round2(totalList * k),
-    checks: [...new Set(layers.filter(l => l.check).map(l => l.check).concat(rows.filter(r => /confermare/.test(r.note) && !layers.some(l => l.check === r.note)).map(r => `${r.label}: ${r.note}`)))] };
+    checks: [...new Set(extraChecks.concat(layers.filter(l => l.check).map(l => l.check)).concat(rows.filter(r => /confermare/.test(r.note) && !layers.some(l => l.check === r.note)).map(r => `${r.label}: ${r.note}`)))] };
 }
 const round2 = x => Math.round(x * 100) / 100;
 const systemByCode = code => SYSTEMS.find(s => s.code === code) || null;
@@ -8378,7 +8424,7 @@ function canSeeSystems(session) {
   return /tommaso/i.test(`${session.name || ''} ${session.email || ''}`);
 }
 
-return { RSI, resolveLayers, uValue, totalCm, verdict, findProduct, mainThicknesses, systemQuote, systemByCode, canSeeSystems };
+return { RSI, isEditable, layerParts, resolveLayers, layerThicknesses, fillParts, joistHeights, uValue, totalCm, verdict, findProduct, mainThicknesses, systemQuote, systemByCode, canSeeSystems };
 })();
 __m["js/core/pdf-text.js"] = (function () {
 // Estrazione minima del testo da un PDF nel browser, senza librerie esterne (02/11/2026, giacenze RADIX del venerdì).
@@ -9057,13 +9103,13 @@ __m["js/views/systems.js"] = (function () {
 // trasmittanza U, prezzo €/m² e per i m² del cliente, scheda per il cliente, "Crea offerta" con i materiali (trasporto nell'offerta).
 const { h, eur, num, dateIt, today, toast, emptyState } = __m["js/ui.js"];
 const { SYSTEMS, MAT, WALL_LIMITS, ZONES } = __m["js/data/systems-data.js"];
-const { systemQuote, mainThicknesses, verdict, systemByCode, canSeeSystems, resolveLayers, uValue } = __m["js/core/systems.js"];
+const { systemQuote, verdict, systemByCode, canSeeSystems, resolveLayers, uValue, isEditable, layerParts, layerThicknesses, fillParts, joistHeights } = __m["js/core/systems.js"];
 const { pickCustomer } = __m["js/views/quotes.js"];
 const { OFFER_HEADER, OFFER_FOOTER } = __m["js/brand-assets.js"];
 const n2 = x => num(x, 2), n3 = x => Number(x).toLocaleString('it-IT', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const state = app => (app.cache.systems ||= {});
-const stOf = (app, sys) => (state(app)[sys.code] ||= { variant: sys.variants.includes('NATURHELD') ? 'NATURHELD' : sys.variants[0], mm: null, m2: 100, discount: 0, zone: 'E' });
+const stOf = (app, sys) => (state(app)[sys.code] ||= { variant: sys.variants.includes('NATURHELD') ? 'NATURHELD' : sys.variants[0], cfg: {}, m2: 100, discount: 0, zone: 'E' });
 
 function denied() { return h('div', { class: 'page' }, emptyState('Sezione in prova: non disponibile per questo profilo.')); }
 
@@ -9086,6 +9132,8 @@ function stratSvg(layers, { width = 640, height = 250 } = {}) {
   drawn.forEach((l, i) => {
     const w = raw[i] * k;
     body += `<rect x="${x.toFixed(1)}" y="${top}" width="${w.toFixed(1)}" height="${H}" fill="${fillOf(l)}" stroke="#4b4a4d" stroke-width=".6"/>`;
+    if (l.parts?.length > 1) { let xx = x; for (const mm of l.parts.slice(0, -1)) { xx += w * mm / (l.cm * 10);   // divisione tra strato 1 e strato 2
+      body += `<line x1="${xx.toFixed(1)}" y1="${top}" x2="${xx.toFixed(1)}" y2="${top + H}" stroke="#4b4a4d" stroke-width="1" stroke-dasharray="4 3"/>`; } }
     if (l.frame) for (const yy of [top + H * 0.18, top + H * 0.68]) {   // montanti Joist a doppia T
       const fw = Math.min(10, w * 0.22), fh = H * 0.14;
       body += `<rect x="${x.toFixed(1)}" y="${yy}" width="${fw}" height="${fh}" fill="#8a6a3c"/><rect x="${(x + w - fw).toFixed(1)}" y="${yy}" width="${fw}" height="${fh}" fill="#8a6a3c"/><rect x="${x.toFixed(1)}" y="${yy + fh / 2 - 1}" width="${w.toFixed(1)}" height="2" fill="#5d4523"/>`;
@@ -9120,18 +9168,28 @@ async function viewSystem(app, code) {
   if (!canSeeSystems(app.session)) return denied();
   const sys = systemByCode(code); if (!sys) return h('div', { class: 'page' }, emptyState('Sistema non trovato.'));
   const products = await app.products(), st = stOf(app, sys);
-  const thick = mainThicknesses(sys, st.variant, products);
-  if (!st.mm || !thick.includes(st.mm)) st.mm = thick.includes(sys.layers.find(l => l.key === sys.main).cm * 10) ? sys.layers.find(l => l.key === sys.main).cm * 10 : thick[thick.length - 1];
-  const q = systemQuote(sys, st.variant, products, { mainMm: st.mm, m2: st.m2, discount: st.discount });
+  // spessori per strato (06/11): solo spessori a listino, eventualmente in due strati; cambiando variante si riallinea al più vicino
+  const opts = {};
+  for (const l of sys.layers) if (isEditable(l)) {
+    const av = layerThicknesses(l, st.variant, products); opts[l.key] = av; if (!av.length) continue;
+    const near = x => av.reduce((b, t) => Math.abs(t - x) < Math.abs(b - x) ? t : b, av[0]);
+    if (l.frame) {   // strato tra i montanti: si sceglie l'altezza del Joist, l'isolante la riempie
+      const hs = joistHeights(products).filter(x => fillParts(x, av)); opts[l.key] = { joist: hs }; if (!hs.length) continue;
+      const tot = layerParts(sys, l, null, st.cfg).reduce((a, b) => a + b, 0);
+      const hj = hs.reduce((b, t) => Math.abs(t - tot) < Math.abs(b - tot) ? t : b, hs[0]);
+      st.cfg[l.key] = { parts: fillParts(hj, av) }; continue;
+    }
+    const cur = layerParts(sys, l, null, st.cfg).map(near);
+    st.cfg[l.key] = { parts: l.stack ? cur.slice(0, 2) : [cur.reduce((a, b) => a + b, 0)].map(near) };
+  }
+  const q = systemQuote(sys, st.variant, products, { cfg: st.cfg, m2: st.m2, discount: st.discount });
   const v = verdict(sys, q.u.u, st.zone);
   const redraw = () => app.go('sistema/' + code);
   const seg = sys.variants.length > 1 ? h('div', { class: 'seg', role: 'tablist' }, sys.variants.map(x => h('button', { type: 'button', class: 'seg-b' + (x === st.variant ? ' on' : ''), onclick: () => { st.variant = x; redraw(); } }, x))) : h('span', { class: 'badge muted' }, 'Versione di catalogo');
   const sel = (val, opts, on, lab) => h('select', { 'aria-label': lab, onchange: e => on(e.target.value) }, opts.map(([k, t]) => h('option', { value: k, selected: String(k) === String(val) }, t)));
   const numIn = (val, on, lab, attrs = {}) => h('input', { type: 'number', inputmode: 'decimal', value: val, 'aria-label': lab, ...attrs, onchange: e => on(Number(String(e.target.value).replace(',', '.')) || 0) });
-  const mainLabel = sys.main === 'blocco' ? 'Spessore blocco' : 'Spessore isolante principale';
   const controls = h('div', { class: 'card sys-controls' },
     h('div', { class: 'field' }, h('span', {}, 'Variante'), seg),
-    h('label', { class: 'field' }, h('span', {}, mainLabel), sel(st.mm, thick.map(t => [t, `${t} mm`]), x => { st.mm = Number(x); redraw(); }, mainLabel)),
     h('label', { class: 'field' }, h('span', {}, 'Superficie del cliente (m²)'), numIn(st.m2, x => { st.m2 = Math.max(1, x); redraw(); }, 'Superficie', { min: 1, step: 1 })),
     h('label', { class: 'field' }, h('span', {}, 'Sconto sul listino (%)'), numIn(st.discount, x => { st.discount = Math.min(70, Math.max(0, x)); redraw(); }, 'Sconto', { min: 0, max: 70, step: 0.5 })),
     h('label', { class: 'field' }, h('span', {}, 'Zona climatica'), sel(st.zone, ZONES.map(z => [z, z]), x => { st.zone = x; redraw(); }, 'Zona climatica')));
@@ -9141,8 +9199,23 @@ async function viewSystem(app, code) {
     kpi('Spessore totale', `${String(q.thickness).replace('.', ',')} cm`),
     kpi('Materiali al m²', eur(q.perM2Net), st.discount ? `listino ${eur(q.perM2List)} − ${num(st.discount, 1)}%` : 'prezzo di listino'),
     kpi(`Totale ${num(st.m2, 0)} m²`, eur(q.totalNet), 'confezioni intere · trasporto a parte'));
+  // selettori spessore nella tabella: strato 1 (+ strato 2 per gli isolanti), oppure cm liberi per la parete esistente
+  const mmSel = (val, list, on, lab, none) => sel(val ?? '', [...(none ? [['', '—']] : []), ...list.map(t => [t, `${num(t, 0)} mm`])], x => on(x === '' ? null : Number(x)), lab);
+  const thickEdit = (l, i) => {
+    if (l.existing && !l.thin) return h('div', { class: 'sys-thick' }, h('label', {}, h('span', {}, 'Spessore'),
+      numIn(l.cm, x => { if (x > 0) { st.cfg[l.key] = { cm: x }; redraw(); } }, `Spessore strato ${i + 1} (cm)`, { min: 1, step: 0.5, class: 'sys-cm' }), h('span', {}, 'cm')));
+    if (opts[l.key]?.joist) { const hs = opts[l.key].joist, parts = st.cfg[l.key]?.parts || [], tot = parts.reduce((a, b) => a + b, 0);
+      return h('div', { class: 'sys-thick' }, h('label', {}, h('span', {}, 'Altezza Joist SJ 45'), mmSel(tot, hs, x => { st.cfg[l.key] = { parts: fillParts(x, layerThicknesses(l, st.variant, products)) }; redraw(); }, `Altezza Joist strato ${i + 1}`)),
+        parts.length > 1 ? h('small', { class: 'muted' }, `isolante in due pannelli: ${parts.map(x => num(x, 0)).join(' + ')} mm`) : null); }
+    const av = opts[l.key]; if (!av?.length) return null;
+    const parts = st.cfg[l.key].parts, set = arr => { st.cfg[l.key] = { parts: arr.filter(Boolean) }; redraw(); };
+    if (!l.stack) return h('div', { class: 'sys-thick' }, h('label', {}, h('span', {}, 'Spessore'), mmSel(parts[0], av, x => set([x]), `Spessore strato ${i + 1}`)));
+    return h('div', { class: 'sys-thick' },
+      h('label', {}, h('span', {}, 'Strato 1'), mmSel(parts[0], av, x => set([x, parts[1]]), `Strato ${i + 1}, primo pannello`)),
+      h('label', {}, h('span', {}, 'Strato 2'), mmSel(parts[1], av, x => set([parts[0], x]), `Strato ${i + 1}, secondo pannello`, true)));
+  };
   const layersTable = h('table', { class: 'sys-table' }, h('thead', {}, h('tr', {}, ['#', 'Strato', 'cm', 'λ W/mK', 'R m²K/W'].map(t => h('th', {}, t)))),
-    h('tbody', {}, q.layers.map((l, i) => h('tr', {}, h('td', {}, String(i + 1)), h('td', {}, l.name, l.frame ? h('small', { class: 'muted' }, ` · ${l.frame.label}`) : null, l.existing ? h('small', { class: 'muted' }, ' · esistente') : null),
+    h('tbody', {}, q.layers.map((l, i) => h('tr', {}, h('td', {}, String(i + 1)), h('td', {}, l.name, l.frame ? h('small', { class: 'muted' }, ` · ${l.frame.label}`) : null, l.existing ? h('small', { class: 'muted' }, ' · esistente') : null, thickEdit(l, i)),
       h('td', { class: 'num' }, l.thin ? '—' : String(l.cm).replace('.', ',')), h('td', { class: 'num' }, l.lambda ? n3(l.lambda) : '—'), h('td', { class: 'num' }, l.lambda ? n3(l.cm / 100 / l.lambda) : '—')))));
   const matTable = h('table', { class: 'sys-table mat' }, h('thead', {}, h('tr', {}, ['Materiale', 'Codice', 'Consumo/m²', '€/m²', `Per ${num(st.m2, 0)} m²`, 'Importo'].map(t => h('th', {}, t)))),
     h('tbody', {}, q.rows.map(r => h('tr', {}, h('td', {}, r.label, r.note ? h('small', { class: /confermare/.test(r.note) ? 'warn-text' : 'muted' }, ' · ' + r.note) : null), h('td', {}, h('small', {}, r.code)),
