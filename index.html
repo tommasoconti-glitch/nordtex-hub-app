@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="f08689251b45">
+<meta name="ntx-build" content="c82a2d296fbb">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -804,7 +804,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .offers-list .of-valid{display:block}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f08689251b45"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"c82a2d296fbb"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4103,26 +4103,49 @@ function destinationLines(q) {
   return [d.street, [d.cap, d.city, d.prov ? `(${d.prov})` : ''].filter(Boolean).join(' ')].filter(Boolean);
 }
 // riga del trasporto per il cliente: niente note interne ("inserito manualmente", dettagli di calcolo)
-function freightLabel(q) {
-  const v = Object.keys(q.logistics?.km || {}).length ? q.logistics?.vehicleType : null;   // solo trasporti a km (laterizi, vetro cellulare)
-  const mezzo = { centinato: 'con bilico centinato', walkingfloor: 'con walking floor' }[v] || '';
-  const dest = destinationLines(q); const city = dest.length ? dest[dest.length - 1].replace(/^\d{5}\s+/, '') : [q.customer?.city, q.customer?.prov ? `(${q.customer.prov})` : ''].filter(Boolean).join(' ');
-  return ['Servizio di trasporto', mezzo, city ? `- consegna a ${city}` : ''].filter(Boolean).join(' ');
+const MEZZO = { centinato: 'con bilico centinato', walkingfloor: 'con walking floor', groupage: 'groupage con corriere' };
+function destCity(q) {
+  const dest = destinationLines(q);
+  return dest.length ? dest[dest.length - 1].replace(/^\d{5}\s+/, '') : [q.customer?.city, q.customer?.prov ? `(${q.customer.prov})` : ''].filter(Boolean).join(' ');
+}
+function freightLabel(q, part = null) {
+  const v = part ? (part.kind === 'pallet' ? 'groupage' : part.vehicle) : Object.keys(q.logistics?.km || {}).length ? q.logistics?.vehicleType : null;   // solo trasporti a km (laterizi, vetro cellulare)
+  const city = destCity(q);
+  return ['Servizio di trasporto', MEZZO[v] || '', part?.label ? `(${part.label})` : '', city ? `- consegna a ${city}` : ''].filter(Boolean).join(' ');
 }
 // 06/11 (segnalazione Tommaso, offerta laterizi su 3 bilici): la riga trasporto riportava "1,00 × 4.334,40" come se fosse un solo carico.
-// Trasporto calcolato dall'app a km (un luogo di carico): quantità = mezzi, prezzo = costo di un mezzo.
-// Codici RADIX (confermati da Tommaso 06/11): mezzi pieni N88079 «carico completo», mezzo non pieno N14126 «carico diretto parziale»
-// (3 pieni + 1 parziale = due righe). Importo scritto a mano, stima diversa o costo non divisibile al centesimo: 1 × importo con N14126.
+// Trasporto calcolato dall'app: una riga per ogni trasporto (luogo di carico); a km quantità = mezzi e prezzo = costo di un mezzo;
+// groupage V600 quantità = bancali × prezzo a bancale. Codici RADIX (confermati da Tommaso 06/11): mezzi pieni N88079 «carico completo»,
+// mezzo non pieno e groupage N14126 «carico diretto parziale». Importo scritto a mano, stima diversa o conti che non tornano al centesimo:
+// una sola riga 1 × importo con N14126.
 const FREIGHT_FULL = 'N88079', FREIGHT_PARTIAL = 'N14126';
+const c2 = x => Math.round(x * 100) / 100;
+function kmRows(cost, k, fullVehicles) {
+  const each = c2(cost / k);
+  if (Math.abs(each * k - cost) >= 0.005) return null;
+  const full = Math.max(0, Math.min(k, fullVehicles ?? 0)), rest = k - full;
+  return [full && { code: FREIGHT_FULL, qty: full, price: each, amount: c2(each * full) },
+    rest && { code: FREIGHT_PARTIAL, qty: rest, price: each, amount: c2(cost - each * full) }].filter(Boolean);
+}
 function freightRows(q, freight) {
-  const one = [{ code: FREIGHT_PARTIAL, qty: 1, price: freight, amount: freight }];
-  const e = q.transportEstimate, k = e?.vehicles;
-  if (!(freight > 0) || !(k >= 1) || !q.freightAuto || !(Math.abs((e.amount ?? NaN) - freight) < 0.005)) return one;
-  const each = Math.round(freight / k * 100) / 100;
-  if (Math.abs(each * k - freight) >= 0.005) return one;
-  const full = Math.max(0, Math.min(k, e.fullVehicles ?? 0)), rest = k - full;
-  return [full && { code: FREIGHT_FULL, qty: full, price: each, amount: Math.round(each * full * 100) / 100 },
-    rest && { code: FREIGHT_PARTIAL, qty: rest, price: each, amount: Math.round((freight - each * full) * 100) / 100 }].filter(Boolean);
+  const one = [{ code: FREIGHT_PARTIAL, qty: 1, price: freight, amount: freight, label: freightLabel(q) }];
+  const e = q.transportEstimate;
+  if (!(freight > 0) || !q.freightAuto || !e || !(Math.abs((e.amount ?? NaN) - freight) < 0.005)) return one;
+  if (Array.isArray(e.parts) && e.parts.length) {
+    const rows = [];
+    for (const p of e.parts) {
+      let r = null;
+      if (p.kind === 'km' && p.vehicles >= 1) r = kmRows(p.cost, p.vehicles, p.fullVehicles);
+      else if (p.kind === 'pallet' && p.pallets > 0 && Math.abs(p.pallets * p.perPallet - p.cost) < 0.005) r = [{ code: FREIGHT_PARTIAL, qty: p.pallets, price: p.perPallet, amount: c2(p.cost) }];
+      if (!r) r = [{ code: FREIGHT_PARTIAL, qty: 1, price: p.cost, amount: c2(p.cost) }];
+      const label = freightLabel(q, e.parts.length > 1 ? p : { ...p, label: '' });
+      rows.push(...r.map(x => ({ ...x, label })));
+    }
+    return Math.abs(rows.reduce((s, x) => s + x.amount, 0) - freight) < 0.005 ? rows : one;
+  }
+  if (!(e.vehicles >= 1)) return one;   // offerte salvate prima delle righe per trasporto: un solo luogo di carico a km
+  const r = kmRows(freight, e.vehicles, e.fullVehicles);
+  return r ? r.map(x => ({ ...x, label: freightLabel(q) })) : one;
 }
 const customerLines = c => [c.name, c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' '), c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean);
 
@@ -4155,7 +4178,7 @@ function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
     l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), n(docPrice(q, l), 3), hideDiscounts(q) ? null : discText(l.discounts), n(lineAmount(l), 2)));
   if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), hideDiscounts(q) ? null : '', n(t.extras, 2)));
   if (t.euroPallets) rows.push(row(esc(EURO_PALLET.label), EURO_PALLET.code, 'NR', n(t.euroPalletCount, 2), n(EURO_PALLET.price, 3), hideDiscounts(q) ? null : '', n(t.euroPallets, 2)));
-  if (t.freight) for (const f of freightRows(q, t.freight)) rows.push(row(esc(freightLabel(q)), f.code, 'NR', n(f.qty, 2), n(f.price, 3), hideDiscounts(q) ? null : '', n(f.amount, 2)));
+  if (t.freight) for (const f of freightRows(q, t.freight)) rows.push(row(esc(f.label), f.code, 'NR', n(f.qty, 2), n(f.price, 3), hideDiscounts(q) ? null : '', n(f.amount, 2)));
   const notes = [];
   const pickup = isPickup(q);
   if (pickup) notes.push(`Materiale disponibile per il ritiro presso:<br><b>${depot.pickup.map(esc).join('<br>')}</b><br><b>Prezzo franco partenza</b> dal deposito`);
@@ -4279,7 +4302,7 @@ function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
     { code: l.radixCode || l.listCode || '', um: UM[l.unit] || l.unit, qty: l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), price: hideDiscounts(q) ? '' : n(l.listPrice, 3), disc: hideDiscounts(q) ? n(docPrice(q, l), 3) : discText(l.discounts), amount: n(lineAmount(l), 2) });
   if (t.extras) row(wrap(q.extrasLabel || 'Altri addebiti'), { code: '', um: 'NR', qty: '1,00', price: hideDiscounts(q) ? '' : n(t.extras, 3), disc: hideDiscounts(q) ? n(t.extras, 3) : '', amount: n(t.extras, 2) });
   if (t.euroPallets) row(wrap(EURO_PALLET.label), { code: EURO_PALLET.code, um: 'NR', qty: n(t.euroPalletCount, 2), price: hideDiscounts(q) ? '' : n(EURO_PALLET.price, 3), disc: hideDiscounts(q) ? n(EURO_PALLET.price, 3) : '', amount: n(t.euroPallets, 2) });
-  if (t.freight) for (const f of freightRows(q, t.freight)) row(wrap(freightLabel(q)), { code: f.code, um: 'NR', qty: n(f.qty, 2), price: hideDiscounts(q) ? '' : n(f.price, 3), disc: hideDiscounts(q) ? n(f.price, 3) : '', amount: n(f.amount, 2) });
+  if (t.freight) for (const f of freightRows(q, t.freight)) row(wrap(f.label), { code: f.code, um: 'NR', qty: n(f.qty, 2), price: hideDiscounts(q) ? '' : n(f.price, 3), disc: hideDiscounts(q) ? n(f.price, 3) : '', amount: n(f.amount, 2) });
   const pickup = isPickup(q);
   if (pickup) row(['Materiale disponibile per il ritiro presso:', ...depot.pickup, 'Prezzo franco partenza dal deposito']);
   if (t.freightPending && !pickup) row(['Trasporto: da definire.']);
@@ -4865,11 +4888,17 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
     if (!auto) return;
     if ((v.level === 'green' || v.level === 'yellow') && v.amount !== null) {
       const note = 'Trasporto da listino n.05: ' + plan.groups.map(g => `${g.regime.label.split(' · ')[0]} ${g.detail}`).join('; ') + (v.level === 'yellow' ? ' — stima da confermare' : '');
-      // 06/11: numero di mezzi (solo un luogo di carico a tariffa km) per la riga trasporto "N mezzi × costo di un mezzo"
-      // 06/11 (Tommaso): mezzi pieni in RADIX con N88079 «carico completo», l'ultimo non pieno con N14126 «carico diretto parziale»
-      const g1 = plan.groups.length === 1 && plan.groups[0].regime.kind === 'km' ? plan.groups[0] : null, vehicles = g1 ? g1.vehicles : null;
-      const fs1 = g1 ? fillSummary(g1) : null, fullVehicles = fs1 ? (fs1.allFull || fs1.missingPallets === 0 ? fs1.vehicles : fs1.full) : null;
-      if (q.freight !== v.amount || q.freightNote !== note || (q.transportEstimate?.vehicles ?? null) !== vehicles || (q.transportEstimate?.fullVehicles ?? null) !== fullVehicles) { q.freight = v.amount; q.freightAuto = true; q.freightNote = note; q.transportEstimate = { amount: v.amount, source: plan.source, at: new Date().toISOString(), level: v.level, vehicles, fullVehicles }; mark(); onApply('freight'); }
+      // 06/11 (Tommaso): righe trasporto nel documento = una per ogni trasporto (luogo di carico), con i mezzi:
+      // mezzi pieni N88079 «carico completo», mezzo non pieno N14126 «carico diretto parziale», groupage V600 a bancale
+      const parts = plan.groups.filter(g => g.cost > 0).map(g => {
+        const fs = g.regime.kind === 'km' ? fillSummary(g) : null;
+        return { label: g.regime.label.split(' · ')[0], kind: g.regime.kind, cost: g.cost,
+          vehicles: g.regime.kind === 'km' ? g.vehicles : null, fullVehicles: fs ? (fs.allFull || fs.missingPallets === 0 ? fs.vehicles : fs.full) : null,
+          vehicle: g.regime.kind === 'km' ? (g.regime.fixedVehicle || q.logistics.vehicleType || 'centinato') : null,
+          pallets: g.regime.kind === 'pallet' ? g.occupancy.pallets : null, perPallet: g.regime.perPallet ?? null };
+      });
+      const one = parts.length === 1 && parts[0].kind === 'km' ? parts[0] : null, vehicles = one ? one.vehicles : null, fullVehicles = one ? one.fullVehicles : null;
+      if (q.freight !== v.amount || q.freightNote !== note || JSON.stringify(q.transportEstimate?.parts ?? null) !== JSON.stringify(parts)) { q.freight = v.amount; q.freightAuto = true; q.freightNote = note; q.transportEstimate = { amount: v.amount, source: plan.source, at: new Date().toISOString(), level: v.level, vehicles, fullVehicles, parts }; mark(); onApply('freight'); }
     } else if (q.freightAuto && q.freight !== null) { q.freight = null; q.freightNote = ''; q.transportEstimate = null; mark(); onApply('freight'); }
   }
   const unitLbl = u => ({ M2: 'm²', M3: 'm³', ML: 'ml' }[u] || String(u || '').toLowerCase());
