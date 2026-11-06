@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="d6553adb52da">
+<meta name="ntx-build" content="6f2412e5df0b">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -814,7 +814,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .sys-thick input.sys-cm { min-width: 0; width: 72px; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"d6553adb52da"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"6f2412e5df0b"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -8257,6 +8257,42 @@ const SYSTEMS = [
       { label: 'NORDTEX Calce Fine (finitura, 2 facce)', product: { sub: 'NORDTEX Calce Fine' }, perM2: 6, unit: 'kg', pack: 25, note: 'il listino dice "finitura da definire": proposta — da confermare' },
     ],
     excluded: 'Architravi, pezzi speciali, cordoli, malta di livellamento e partenza in vetro cellulare, posa.',
+  },
+  {
+    // 06/11/2026: parete esterna a secco per nuove costruzioni (catalogo Isolanti e Sistemi a secco, tavola C1 p. 32-33, U PHPP 0,123).
+    // Gessofibra di controvento e pannello DWD protect N+F non sono a listino: contano nella U ma non nel prezzo (da quotare a parte).
+    code: 'C1', name: 'Parete esterna a secco su telaio Joist', short: 'Parete esterna · nuova costruzione',
+    source: 'Catalogo Isolanti e Sistemi a secco, tavola C1 (p. 32-33)', limits: 'nuovo', catalogU: 0.123,
+    description: 'Parete portante a secco per edifici nuovi: telaio in montanti Joist isolati riempito di fibra di legno, lastra in gessofibra di controvento e freno vapore igrovariabile, vano impianti isolato con lastra Gessoforte all\'interno; all\'esterno pannello DWD, pannello portaintonaco in fibra di legno e ciclo a calce naturale.',
+    variants: ['STEICO', 'NATURHELD'],
+    main: 'isolante',
+    layers: [
+      { key: 'finitura', name: 'Intonaco e finitura di sola calce (interno)', cm: 0.2, lambda: 0.76, rho: 1600, mu: 10, mat: 'finitura' },
+      { key: 'gesso', name: 'Lastra NORDTEX Gessoforte 25 mm', cm: 2.5, lambda: 0.35, rho: 900, mu: 4.5, mat: 'gesso',
+        product: { all: { sub: 'NORDTEX Gessoforte', thick: 25 } }, perM2: 1, unit: 'm2', waste: 5 },
+      { key: 'impianti', name: { STEICO: 'NORDTEX flex 036 (STEICO) {mm}, vano impianti con montanti in alluminio', NATURHELD: 'Naturtex flex (NATURHELD) {mm}, vano impianti con montanti in alluminio' }, cm: 5, edit: true, lambda: 0.038, rho: 50, mu: '1/2', mat: 'fibra',
+        product: { STEICO: { sub: 'flex 036', thick: 50 }, NATURHELD: { sub: 'Naturtex flex', thick: 50 } }, perM2: 0.95, unit: 'm2', waste: 5 },
+      { key: 'freno', name: 'Freno vapore Ampatex Variano 3', cm: 0.05, lambda: null, mat: 'membrana', thin: true,
+        product: { all: { sub: 'Ampatex Variano 3' } }, perM2: 1.1, unit: 'm2', pack: 75 },
+      { key: 'gessofibra', name: 'Lastra in gessofibra 12,5 mm (controvento)', cm: 1.3, lambda: 0.32, rho: 1150, mu: 13, mat: 'gesso',
+        check: 'Lastra in gessofibra 12,5 mm di controvento: non a listino, da quotare a parte — da confermare' },
+      { key: 'isolante', name: { STEICO: 'NORDTEX flex 036 (STEICO) {mm} tra montanti Joist', NATURHELD: 'Naturtex flex (NATURHELD) {mm} tra montanti Joist' }, cm: 20, lambda: 0.038, rho: 50, mu: '1/2', mat: 'fibra', frame: JOIST, edit: true,
+        product: { STEICO: { sub: 'flex 036' }, NATURHELD: { sub: 'Naturtex flex' } }, perM2: 0.93, unit: 'm2', waste: 5 },
+      { key: 'dwd', name: 'Pannello rigido DWD protect N+F 16 mm', cm: 1.6, lambda: 0.09, rho: 565, mu: 11, mat: 'fibraRigida',
+        check: 'Pannello DWD protect N+F 16 mm: non a listino, da quotare a parte — da confermare' },
+      { key: 'portaintonaco', name: { STEICO: 'NORDTEX protect H 270 (STEICO) {mm}', NATURHELD: 'Naturtex 180 (NATURHELD) {mm}' }, cm: 6, edit: true, lambda: { STEICO: 0.048, NATURHELD: 0.043 }, rho: { STEICO: 270, NATURHELD: 180 }, mu: 3, mat: 'fibraRigida',
+        product: { STEICO: { sub: 'protect H 270', thick: 60 }, NATURHELD: { sub: 'Naturtex 180', thick: 60 } }, perM2: 1, unit: 'm2', waste: 5,
+        check: { STEICO: 'Il catalogo usa "Duo Dry", che non è a listino: proposto protect H 270 (λ 0,048) — da confermare' } },
+      { key: 'rasatura', name: 'NORDTEX Pura Calce + rete di armatura', cm: 1, lambda: 0.82, rho: 1700, mu: 12, mat: 'intonaco' },
+      { key: 'finitura_est', name: 'NORDTEX Calce Fine', cm: 0.2, lambda: 0.61, rho: '>1000', mu: 10, mat: 'finitura' },
+    ],
+    extras: [
+      { label: 'NORDTEX JOIST coibentato SJ 45', product: { sub: 'NORDTEX JOIST coibentato', heightFrom: 'isolante' }, perM2: 1.6, unit: 'ml', note: 'interasse 62,5 cm — da confermare' },
+      { label: 'NORDTEX Pura Calce (rasatura 10 mm)', product: { sub: 'NORDTEX Pura Calce' }, perM2: 10, unit: 'kg', pack: 25 },
+      { label: 'Rete di armatura in vetro', product: { sub: 'Rete di armatura' }, perM2: 1.1, unit: 'm2', pack: 50 },
+      { label: 'NORDTEX Calce Fine (finitura, 2 facce)', product: { sub: 'NORDTEX Calce Fine' }, perM2: 6, unit: 'kg', pack: 25, note: 'finitura proposta anche all\'interno — da confermare' },
+    ],
+    excluded: 'Lastra in gessofibra di controvento e pannello DWD (non a listino), tavole LVL, montanti in alluminio del vano impianti, nastro punto chiodo, partenza in vetro cellulare V600 con BL DICK 1K, viteria, posa.',
   },
   {
     // 06/11/2026: primo sistema di copertura (Tommaso: "andiamo avanti con i sistemi"). Tetto in legno con doppio strato di fibra
