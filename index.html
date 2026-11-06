@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="bff6f94b75b2">
+<meta name="ntx-build" content="41b1b1bcf828">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -809,7 +809,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .heat-bar { display: inline-block; width: 90px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, #3168ff, #00c8c8, #50c83c, #ffd200, #dc1e1e); }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"bff6f94b75b2"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"41b1b1bcf828"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -6270,6 +6270,11 @@ async function viewQuoteEditor(app, id, customerId) {
       q.outcome ? h('p', { class: 'muted' }, `Esito: ${q.outcome.status}${q.outcome.reason ? ' – ' + q.outcome.reason : ''}${q.outcome.note ? ' (' + q.outcome.note + ')' : ''} · ${q.outcome.by || ''}`) : null,
       directChannel ? h('p', { class: 'info-text' }, `Canale alternativo (${directChannel}): la vendita diretta a imprese o privati va condivisa con la Direzione e le condizioni autorizzate prima dell'invio (Condizioni agenti 2026).`) : null),
     h('div', { class: 'actions' }, statusSel, saveBtn,
+      // 06/11 (Tommaso): accanto a Salva. Offerta nuova non salvata → «Annulla» (esce senza salvare); bozza salvata → «Elimina»
+      !q.id ? h('button', { class: 'btn ghost', onclick: async () => {
+        if ((dirty || q.lines.length) && !await modal('Annullare l\'offerta?', h('p', {}, 'L\'offerta non è stata salvata: uscendo si perdono i prodotti inseriti.'), [{ label: 'Resta', value: false }, { label: 'Esci senza salvare', primary: true, value: true }])) return;
+        dirty = false; app.go(q.customerId ? 'agenda/' + encodeURIComponent(q.customerId) : 'preventivi'); } }, 'Annulla') : null,
+      q.id && q.status === 'Bozza' && isOwner ? h('button', { class: 'btn ghost', onclick: async () => { if (await modal('Eliminare la bozza?', h('p', {}, 'L\'operazione non si può annullare.'), [{ label: 'Annulla', value: false }, { label: 'Elimina', primary: true, value: true }])) { await app.store.deleteQuote(q.id); dirty = false; toast('Bozza eliminata'); app.go('preventivi'); } } }, 'Elimina') : null,
       q.id && isOwner && ['Bozza', 'Inviata'].includes(q.status) ? h('button', { class: 'btn primary', onclick: () => sendDialog().catch(e => toast(e.message, 'error')) }, 'Invia per email') : null,
       q.id && isDir ? h('button', { class: 'btn', onclick: () => printQuote(q) }, 'Stampa') : null,
       h('button', { class: 'btn', onclick: () => previewPdf() }, 'Anteprima PDF'),
@@ -6280,7 +6285,7 @@ async function viewQuoteEditor(app, id, customerId) {
           try { await app.store.deleteTestQuote(q.id); toast('Offerta di prova eliminata'); app.go('preventivi'); } catch (e) { toast(e.message, 'error'); } } } }, 'Elimina prova') : null,
       // 03/11: un'offerta inviata non si cancella (numero già comunicato al cliente): si annulla e sparisce da aperte, promemoria e statistiche
       q.id && (isOwner || isDir) && ['Inviata', 'Persa'].includes(q.status) ? h('button', { class: 'btn ghost', onclick: () => cancelDialog(app, q).then(ok => { if (ok) app.go('offerta/' + q.id); }).catch(e => toast(e.message, 'error')) }, 'Annulla offerta') : null,
-      q.id && q.status === 'Bozza' && isOwner ? h('button', { class: 'btn ghost', onclick: async () => { if (await modal('Eliminare la bozza?', h('p', {}, 'L\'operazione non si può annullare.'), [{ label: 'Annulla', value: false }, { label: 'Elimina', primary: true, value: true }])) { await app.store.deleteQuote(q.id); toast('Bozza eliminata'); app.go('preventivi'); } } }, 'Elimina') : null));
+      null));
   tp = transportPanel(app, q, byId, { locked, mark, onApply: what => { if (what === 'qty') drawLines(); else { freightIn.value = q.freight ?? ''; freightNote.textContent = q.freightNote; drawTotals(); } } });
   let head = header();
   drawLines();
