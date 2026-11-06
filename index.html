@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="41b1b1bcf828">
+<meta name="ntx-build" content="6fb8064dc11d">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -809,7 +809,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .heat-bar { display: inline-block; width: 90px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, #3168ff, #00c8c8, #50c83c, #ffd200, #dc1e1e); }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"41b1b1bcf828"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"6fb8064dc11d"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -8163,6 +8163,8 @@ const WALL_LIMITS = {          // D.M. 26/06/2015 - pareti verticali opache vers
   nuovo: { label: 'Nuova costruzione (edificio di riferimento, App. A)', zones: { 'A-B': 0.43, C: 0.34, D: 0.29, E: 0.26, F: 0.24 } },
   riqualificazione: { label: 'Riqualificazione (App. B, tab. 1)', zones: { 'A-B': 0.40, C: 0.36, D: 0.32, E: 0.28, F: 0.26 } },
   interno: { label: 'Riqualificazione con isolamento dall\'interno (App. B, +30%)', zones: { 'A-B': 0.52, C: 0.468, D: 0.416, E: 0.364, F: 0.338 } },
+  // 06/11: coperture (strutture opache orizzontali o inclinate verso l'esterno), stessi valori dal 2021 del D.M. 26/06/2015
+  copertura: { label: 'Copertura, nuova costruzione (App. A) — valori della tavola E1', zones: { 'A-B': 0.35, C: 0.33, D: 0.26, E: 0.22, F: 0.20 } },
 };
 const ZONES = ['A-B', 'C', 'D', 'E', 'F'];
 
@@ -8171,7 +8173,7 @@ const MAT = {
   muro: { color: '#c9b8a6', pattern: 'brick' }, laterizio: { color: '#d9825b', pattern: 'block' },
   fibra: { color: '#d6ad6b', pattern: 'fibre' }, fibraRigida: { color: '#b98a4a', pattern: 'fibre' },
   gesso: { color: '#e4e2dc', pattern: 'none' }, intonaco: { color: '#efe9dc', pattern: 'dots' }, finitura: { color: '#f7f4ec', pattern: 'none' },
-  membrana: { color: '#4d87c7', pattern: 'none' },
+  membrana: { color: '#4d87c7', pattern: 'none' }, legno: { color: '#a8794a', pattern: 'none' },
 };
 
 const JOIST = { fraction: 0.072, lambda: 0.13, label: 'montanti Joist (interasse 62,5 cm)' };
@@ -8251,6 +8253,29 @@ const SYSTEMS = [
     ],
     excluded: 'Architravi, pezzi speciali, cordoli, malta di livellamento e partenza in vetro cellulare, posa.',
   },
+  {
+    // 06/11/2026: primo sistema di copertura (Tommaso: "andiamo avanti con i sistemi"). Tetto in legno con doppio strato di fibra
+    // di legno sopra il tavolato. U di collaudo: catalogo 0,166, calcolo con tavolato 25 mm (λ 0,13) e Rsi 0,10 (flusso ascendente).
+    code: 'E1', name: 'Copertura in legno con fibra di legno doppio strato', short: 'Tetto · nuova costruzione e ristrutturazione',
+    source: 'Catalogo Fibra di legno, tavola E1 (p. 14-15)', limits: 'copertura', catalogU: 0.166, rsi: 0.10,
+    description: 'Tetto ventilato su travi e tavolato in legno: freno vapore, due strati incrociati di pannelli isolanti in fibra di legno, pannello sottotegola a incastro e telo traspirante; listelli di ventilazione e manto di copertura a parte.',
+    variants: ['STEICO', 'NATURHELD'],
+    main: 'isolante',
+    layers: [
+      { key: 'tavolato', name: 'Tavolato in legno su travi', cm: 2.5, lambda: 0.13, rho: 450, mu: '50', mat: 'legno', existing: true },
+      { key: 'freno', name: 'Freno vapore Foliarex Budfol Antidrop S160', cm: 0.05, lambda: null, mat: 'membrana', thin: true,
+        product: { all: { sub: 'Foliarex Budfol Antidrop S160' } }, perM2: 1.1, unit: 'm2', pack: 75 },
+      { key: 'isolante', name: { STEICO: 'NORDTEX therm (STEICO), 2 strati incrociati', NATURHELD: 'Naturtex 160 (NATURHELD), 2 strati incrociati' }, cm: 20, lambda: { STEICO: 0.038, NATURHELD: 0.041 }, rho: { STEICO: 160, NATURHELD: 155 }, mu: 5, mat: 'fibraRigida',
+        plies: 2, product: { STEICO: { sub: 'therm' }, NATURHELD: { sub: 'Naturtex 160' } }, perM2: 2, unit: 'm2', waste: 5 },
+      { key: 'sottotegola', name: { STEICO: 'NORDTEX universal (STEICO) 22 mm, sottotegola a incastro', NATURHELD: 'Naturtex 220 (NATURHELD) 22 mm, sottotegola' }, cm: 2.2, lambda: { STEICO: 0.048, NATURHELD: 0.047 }, rho: { STEICO: 270, NATURHELD: 220 }, mu: 5, mat: 'fibraRigida',
+        product: { STEICO: { sub: 'universal', thick: 22 }, NATURHELD: { sub: 'Naturtex 220', thick: 22 } }, perM2: 1, unit: 'm2', waste: 5,
+        check: { NATURHELD: 'Naturtex 220 al posto del pannello Universal del catalogo: verificare bordo a incastro e uso sottotegola — da confermare' } },
+      { key: 'telo', name: 'Telo traspirante Foliarex Strotex Q Supreme', cm: 0.05, lambda: null, mat: 'membrana', thin: true,
+        product: { all: { sub: 'Foliarex Strotex Q Supreme' } }, perM2: 1.1, unit: 'm2', pack: 75 },
+    ],
+    extras: [],
+    excluded: 'Travi e tavolato, nastro sigillante punto chiodo (non a listino), listelli di ventilazione, manto di copertura, lattonerie, viteria, posa.',
+  },
 ];
 
 return { WALL_LIMITS, ZONES, MAT, SYSTEMS };
@@ -8271,17 +8296,17 @@ function resolveLayers(sys, variant, mainMm) {
 }
 
 // U = 1 / R_T; con strati non omogenei R_T = (R_upper + R_lower) / 2 (ISO 6946 §6.7)
-function uValue(layers) {
+function uValue(layers, { rsi = RSI, rse = RSE } = {}) {
   const th = layers.filter(l => l.lambda && l.cm > 0);
   const framed = th.filter(l => l.frame);
   const r = (l, lam) => (l.cm / 100) / lam;
   // limite inferiore: λ equivalente nello strato con montanti
-  const lower = RSI + RSE + th.reduce((s, l) => s + (l.frame ? r(l, (1 - l.frame.fraction) * l.lambda + l.frame.fraction * l.frame.lambda) : r(l, l.lambda)), 0);
+  const lower = rsi + rse + th.reduce((s, l) => s + (l.frame ? r(l, (1 - l.frame.fraction) * l.lambda + l.frame.fraction * l.frame.lambda) : r(l, l.lambda)), 0);
   if (!framed.length) return { u: round3(1 / lower), r: lower, lower, upper: lower };
   // limite superiore: percorsi paralleli (tutte le combinazioni isolante/montante)
   let uSum = 0;
   for (let mask = 0; mask < 1 << framed.length; mask++) {
-    let f = 1, R = RSI + RSE;
+    let f = 1, R = rsi + rse;
     for (const l of th) { const i = framed.indexOf(l);
       if (i < 0) { R += r(l, l.lambda); continue; }
       const wood = mask & (1 << i); f *= wood ? l.frame.fraction : 1 - l.frame.fraction; R += r(l, wood ? l.frame.lambda : l.lambda); }
@@ -8308,8 +8333,9 @@ function findProduct(products, spec, mm) {
 }
 // spessori disponibili per lo strato principale (per il selettore)
 function mainThicknesses(sys, variant, products) {
-  const l = sys.layers.find(x => x.key === sys.main); const spec = pickV(l.product, variant);
-  return [...new Set(products.filter(p => p.subfamily === spec.sub && p.thickness && p.price != null).map(p => p.thickness))].sort((a, b) => a - b);
+  const l = sys.layers.find(x => x.key === sys.main); const spec = pickV(l.product, variant), k = l.plies || 1;
+  // 06/11: strato in più pannelli uguali (es. tetto E1, 2 × 100 mm): spessore totale = pannello × strati
+  return [...new Set(products.filter(p => p.subfamily === spec.sub && p.thickness && p.price != null).map(p => p.thickness * k))].sort((a, b) => a - b);
 }
 
 // Computo: per m² teorico (consumo × prezzo) e per la superficie del cliente arrotondata a confezioni intere
@@ -8334,14 +8360,14 @@ function systemQuote(sys, variant, products, { mainMm, m2 = 100, discount = 0 } 
     rows.push({ label, product: p, code: p.listCode || p.radixCode || '', perM2, unit, unitPrice, perM2Price: perM2 * unitPrice, qty, sell, sellUnit, packs, pack, total, note, priceUnit,
       packLabel: priceUnit === 'SACCO' ? `${packs} sacchi da ${pack || 25} kg` : pack ? `${packs} rotoli/confezioni` : unit === 'pz' && p.palletQuantity ? `${packs} bancali da ${p.palletQuantity} pz` : unit === 'm2' && packs ? `${packs} pannelli` : '' });
   };
-  for (const l of layers) if (l.product) add(l.name, l.product, l.perM2, l.unit, { waste: l.waste, pack: l.pack, note: l.note || l.check || '', sizeMm: l.thin ? null : Math.round(l.cm * 10) });
+  for (const l of layers) if (l.product) add(l.name, l.product, l.perM2, l.unit, { waste: l.waste, pack: l.pack, note: l.note || l.check || '', sizeMm: l.thin ? null : Math.round(l.cm * 10 / (l.plies || 1)) });
   for (const x of sys.extras) add(x.label, x.product, x.perM2, x.unit, { pack: x.pack, note: x.note || '', sizeMm: x.product.heightFrom ? Math.round((layers.find(l => l.key === x.product.heightFrom)?.cm || 0) * 10) : null });
   const perM2List = rows.reduce((s, r) => s + r.perM2Price, 0), totalList = rows.reduce((s, r) => s + r.total, 0);
   const k = 1 - (Number(discount) || 0) / 100;
-  const u = uValue(layers);
+  const u = uValue(layers, { rsi: sys.rsi ?? RSI, rse: sys.rse ?? RSE });
   return { layers, rows, missing, mainMm: mm, m2, discount: Number(discount) || 0, u, thickness: totalCm(layers),
     perM2List: round2(perM2List), perM2Net: round2(perM2List * k), totalList: round2(totalList), totalNet: round2(totalList * k),
-    checks: layers.filter(l => l.check).map(l => l.check).concat(rows.filter(r => /confermare/.test(r.note)).map(r => `${r.label}: ${r.note}`)) };
+    checks: [...new Set(layers.filter(l => l.check).map(l => l.check).concat(rows.filter(r => /confermare/.test(r.note) && !layers.some(l => l.check === r.note)).map(r => `${r.label}: ${r.note}`)))] };
 }
 const round2 = x => Math.round(x * 100) / 100;
 const systemByCode = code => SYSTEMS.find(s => s.code === code) || null;
@@ -9085,7 +9111,7 @@ async function viewSystems(app) {
       return h('a', { class: 'card sys-card plain', href: '#/sistema/' + s.code },
         h('div', { class: 'sys-card-head' }, h('span', { class: 'sys-code' }, s.code), h('div', {}, h('strong', {}, s.name), h('small', { class: 'muted' }, s.short))),
         svgEl(lay, { width: 520, height: 170 }),
-        h('small', { class: 'muted' }, `U ≈ ${n3(uValue(lay).u)} W/m²K · ${s.variants.join(' / ')}`));
+        h('small', { class: 'muted' }, `U ≈ ${n3(uValue(lay, { rsi: s.rsi ?? 0.13 }).u)} W/m²K · ${s.variants.join(' / ')}`));
     })));
 }
 
@@ -9134,7 +9160,7 @@ async function viewSystem(app, code) {
       h('button', { class: 'act', type: 'button', onclick: () => toOffer(app, sys, q, st) }, h('span', { class: 'act-ico' }, '€'), h('span', {}, 'Crea offerta'))),
     controls, kpis,
     h('section', { class: 'card' }, h('h2', {}, 'Stratigrafia'), svgEl(q.layers), h('div', { class: 'tbl-wrap' }, layersTable),
-      h('p', { class: 'fine' }, `Calcolo UNI EN ISO 6946 (Rsi 0,13 · Rse 0,04; strati con montanti: metodo combinato, prudente). Valore della tavola di catalogo (PHPP, prodotti originali): ${n3(sys.catalogU)} W/m²K. Calcolo indicativo: non sostituisce la relazione tecnica.`)),
+      h('p', { class: 'fine' }, `Calcolo UNI EN ISO 6946 (Rsi ${(sys.rsi ?? 0.13).toFixed(2).replace('.', ',')}${sys.rsi === 0.10 ? ' flusso ascendente' : ''} · Rse 0,04; strati con montanti: metodo combinato, prudente). Valore della tavola di catalogo (PHPP, prodotti originali): ${n3(sys.catalogU)} W/m²K. Calcolo indicativo: non sostituisce la relazione tecnica.`)),
     h('section', { class: 'card' }, h('h2', {}, 'Limiti di legge'), h('div', { class: 'tbl-wrap' }, zonesTable), h('p', { class: 'fine' }, 'D.M. 26/06/2015 "requisiti minimi", valori in vigore dal 2021.')),
     checks,
     h('section', { class: 'card' }, h('h2', {}, 'Materiali e prezzo'), h('div', { class: 'tbl-wrap' }, matTable),
