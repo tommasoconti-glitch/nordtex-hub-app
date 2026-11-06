@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="3ffee693e0b7">
+<meta name="ntx-build" content="8267aba86a95">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -804,7 +804,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .offers-list .of-valid{display:block}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"3ffee693e0b7"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8267aba86a95"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4097,13 +4097,19 @@ function freightLabel(q) {
   return ['Servizio di trasporto', mezzo, city ? `- consegna a ${city}` : ''].filter(Boolean).join(' ');
 }
 // 06/11 (segnalazione Tommaso, offerta laterizi su 3 bilici): la riga trasporto riportava "1,00 × 4.334,40" come se fosse un solo carico.
-// Se il trasporto è quello calcolato dall'app con tariffa a km su più mezzi uguali: quantità = numero di mezzi, prezzo = costo di un mezzo.
-// Importo scritto a mano, stima diversa o costo non divisibile al centesimo: resta 1 × importo.
-function freightQty(q, freight) {
+// Trasporto calcolato dall'app a km (un luogo di carico): quantità = mezzi, prezzo = costo di un mezzo.
+// Codici RADIX (confermati da Tommaso 06/11): mezzi pieni N88079 «carico completo», mezzo non pieno N14126 «carico diretto parziale»
+// (3 pieni + 1 parziale = due righe). Importo scritto a mano, stima diversa o costo non divisibile al centesimo: 1 × importo con N14126.
+const FREIGHT_FULL = 'N88079', FREIGHT_PARTIAL = 'N14126';
+function freightRows(q, freight) {
+  const one = [{ code: FREIGHT_PARTIAL, qty: 1, price: freight, amount: freight }];
   const e = q.transportEstimate, k = e?.vehicles;
-  if (!(k > 1) || !q.freightAuto || !(Math.abs((e.amount ?? NaN) - freight) < 0.005)) return { qty: 1, price: freight };
+  if (!(freight > 0) || !(k >= 1) || !q.freightAuto || !(Math.abs((e.amount ?? NaN) - freight) < 0.005)) return one;
   const each = Math.round(freight / k * 100) / 100;
-  return Math.abs(each * k - freight) < 0.005 ? { qty: k, price: each } : { qty: 1, price: freight };
+  if (Math.abs(each * k - freight) >= 0.005) return one;
+  const full = Math.max(0, Math.min(k, e.fullVehicles ?? 0)), rest = k - full;
+  return [full && { code: FREIGHT_FULL, qty: full, price: each, amount: Math.round(each * full * 100) / 100 },
+    rest && { code: FREIGHT_PARTIAL, qty: rest, price: each, amount: Math.round((freight - each * full) * 100) / 100 }].filter(Boolean);
 }
 const customerLines = c => [c.name, c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' '), c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean);
 
@@ -4135,8 +4141,7 @@ function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
   const rows = q.lines.map(l => row([esc(l.description), ...lineExtra(l).map(esc)].join('<br>'), l.radixCode || l.listCode || '', UM[l.unit] || l.unit,
     l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), n(docPrice(q, l), 3), hideDiscounts(q) ? null : discText(l.discounts), n(lineAmount(l), 2)));
   if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), hideDiscounts(q) ? null : '', n(t.extras, 2)));
-  const fq = freightQty(q, t.freight);
-  if (t.freight) rows.push(row(esc(freightLabel(q)), 'N14126', 'NR', n(fq.qty, 2), n(fq.price, 3), hideDiscounts(q) ? null : '', n(t.freight, 2)));
+  if (t.freight) for (const f of freightRows(q, t.freight)) rows.push(row(esc(freightLabel(q)), f.code, 'NR', n(f.qty, 2), n(f.price, 3), hideDiscounts(q) ? null : '', n(f.amount, 2)));
   const notes = [];
   const pickup = isPickup(q);
   if (pickup) notes.push(`Materiale disponibile per il ritiro presso:<br><b>${depot.pickup.map(esc).join('<br>')}</b><br><b>Prezzo franco partenza</b> dal deposito`);
@@ -4196,14 +4201,14 @@ function pickupStockIssues(q, stock) {
   return { depotDate: dep?.date || null, issues: out };
 }
 
-return { DEPOTS, RADIX_DEPOTS, stockDepot, TRANSPORT_BY, isPickup, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, freightQty, customerLines, lineExtra, quoteDocHtml, quoteFileName, pickupStockIssues };
+return { DEPOTS, RADIX_DEPOTS, stockDepot, TRANSPORT_BY, isPickup, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, FREIGHT_FULL, freightRows, customerLines, lineExtra, quoteDocHtml, quoteFileName, pickupStockIssues };
 })();
 __m["js/core/quote-pdf.js"] = (function () {
 // PDF dell'offerta nel formato NORDTEX/RADIX, generato nell'app (nessun servizio esterno): lo stesso contenuto di quote-doc.js.
 // Serve all'invio dalla casella personale di chi fa l'offerta (decisione Direzione 31/10/2026).
 const { PdfDoc, wrapText, textWidth } = __m["js/core/pdf-writer.js"];
 const { totals, lineAmount } = __m["js/core/pricing.js"];
-const { DEPOTS, CLAUSES, customerCode, lineExtra, fmtN: n, dotDate, UM, discText, quoteFileName, hideDiscounts, docPrice, destinationLines, freightLabel, freightQty, customerLines, isPickup } = __m["js/core/quote-doc.js"];
+const { DEPOTS, CLAUSES, customerCode, lineExtra, fmtN: n, dotDate, UM, discText, quoteFileName, hideDiscounts, docPrice, destinationLines, freightLabel, freightRows, customerLines, isPickup } = __m["js/core/quote-doc.js"];
 const MM = 72 / 25.4;
 function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
   const t = totals(q);
@@ -4259,8 +4264,7 @@ function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
   for (const l of q.lines) row([...wrap(l.description), ...lineExtra(l).flatMap(wrap)],
     { code: l.radixCode || l.listCode || '', um: UM[l.unit] || l.unit, qty: l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), price: hideDiscounts(q) ? '' : n(l.listPrice, 3), disc: hideDiscounts(q) ? n(docPrice(q, l), 3) : discText(l.discounts), amount: n(lineAmount(l), 2) });
   if (t.extras) row(wrap(q.extrasLabel || 'Altri addebiti'), { code: '', um: 'NR', qty: '1,00', price: hideDiscounts(q) ? '' : n(t.extras, 3), disc: hideDiscounts(q) ? n(t.extras, 3) : '', amount: n(t.extras, 2) });
-  const fq = freightQty(q, t.freight);
-  if (t.freight) row(wrap(freightLabel(q)), { code: 'N14126', um: 'NR', qty: n(fq.qty, 2), price: hideDiscounts(q) ? '' : n(fq.price, 3), disc: hideDiscounts(q) ? n(fq.price, 3) : '', amount: n(t.freight, 2) });
+  if (t.freight) for (const f of freightRows(q, t.freight)) row(wrap(freightLabel(q)), { code: f.code, um: 'NR', qty: n(f.qty, 2), price: hideDiscounts(q) ? '' : n(f.price, 3), disc: hideDiscounts(q) ? n(f.price, 3) : '', amount: n(f.amount, 2) });
   const pickup = isPickup(q);
   if (pickup) row(['Materiale disponibile per il ritiro presso:', ...depot.pickup, 'Prezzo franco partenza dal deposito']);
   if (t.freightPending && !pickup) row(['Trasporto: da definire.']);
@@ -4832,8 +4836,10 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
     if ((v.level === 'green' || v.level === 'yellow') && v.amount !== null) {
       const note = 'Trasporto da listino n.05: ' + plan.groups.map(g => `${g.regime.label.split(' · ')[0]} ${g.detail}`).join('; ') + (v.level === 'yellow' ? ' — stima da confermare' : '');
       // 06/11: numero di mezzi (solo un luogo di carico a tariffa km) per la riga trasporto "N mezzi × costo di un mezzo"
+      // 06/11 (Tommaso): mezzi pieni in RADIX con N88079 «carico completo», l'ultimo non pieno con N14126 «carico diretto parziale»
       const g1 = plan.groups.length === 1 && plan.groups[0].regime.kind === 'km' ? plan.groups[0] : null, vehicles = g1 ? g1.vehicles : null;
-      if (q.freight !== v.amount || q.freightNote !== note || (q.transportEstimate?.vehicles ?? null) !== vehicles) { q.freight = v.amount; q.freightAuto = true; q.freightNote = note; q.transportEstimate = { amount: v.amount, source: plan.source, at: new Date().toISOString(), level: v.level, vehicles }; mark(); onApply('freight'); }
+      const fs1 = g1 ? fillSummary(g1) : null, fullVehicles = fs1 ? (fs1.allFull || fs1.missingPallets === 0 ? fs1.vehicles : fs1.full) : null;
+      if (q.freight !== v.amount || q.freightNote !== note || (q.transportEstimate?.vehicles ?? null) !== vehicles || (q.transportEstimate?.fullVehicles ?? null) !== fullVehicles) { q.freight = v.amount; q.freightAuto = true; q.freightNote = note; q.transportEstimate = { amount: v.amount, source: plan.source, at: new Date().toISOString(), level: v.level, vehicles, fullVehicles }; mark(); onApply('freight'); }
     } else if (q.freightAuto && q.freight !== null) { q.freight = null; q.freightNote = ''; q.transportEstimate = null; mark(); onApply('freight'); }
   }
   const unitLbl = u => ({ M2: 'm²', M3: 'm³', ML: 'ml' }[u] || String(u || '').toLowerCase());
