@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="c82a2d296fbb">
+<meta name="ntx-build" content="bff6f94b75b2">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -803,8 +803,13 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .offers-list .of-call{display:inline-block;margin:2px 0;font-weight:600} .offers-list .of-state{display:block;font-weight:600;margin:2px 0}
 .offers-list .of-valid{display:block}
 
+/* 06/11 mappa di calore */
+.heat-canvas { pointer-events: none; }
+.heat-legend { display: inline-flex; align-items: center; gap: 6px; }
+.heat-bar { display: inline-block; width: 90px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, #3168ff, #00c8c8, #50c83c, #ffd200, #dc1e1e); }
+
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"c82a2d296fbb"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"bff6f94b75b2"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -7315,6 +7320,79 @@ async function viewPlan(app, id) {
 
 return { newPlanDialog, viewPlans, viewPlan };
 })();
+__m["js/core/heat-layer.js"] = (function () {
+// Mappa di calore sui clienti (06/11, idea Meridian ripresa da Tommaso): una sfumatura di colore sopra la mappa
+// che mostra dove i clienti sono più concentrati, per pianificare i giri. Disegnata su canvas, senza librerie esterne
+// e senza servizi a pagamento (base OpenStreetMap già usata dall'HUB).
+// Ogni punto lascia un'ombra sfumata; le ombre si sommano; la somma diventa colore (blu → verde → giallo → rosso).
+
+const STOPS = [[0.0, [49, 104, 255]], [0.35, [0, 200, 200]], [0.55, [80, 200, 60]], [0.75, [255, 210, 0]], [1.0, [220, 30, 30]]];
+function palette() {
+  const out = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255; let k = 1; while (k < STOPS.length - 1 && t > STOPS[k][0]) k++;
+    const [t0, c0] = STOPS[k - 1], [t1, c1] = STOPS[k], f = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
+    for (let j = 0; j < 3; j++) out[i * 3 + j] = Math.round(c0[j] + (c1[j] - c0[j]) * f);
+  }
+  return out;
+}
+
+// Raggio in pixel secondo lo zoom: a zoom basso le zone sono larghe (province), a zoom alto restringe (comuni)
+const heatRadius = zoom => Math.round(Math.max(14, Math.min(48, 10 + (zoom - 5) * 6)));
+
+// Intensità di colore (0-255) a partire dall'ombra accumulata: serve una decina di clienti vicini per arrivare al rosso
+// curva a radice (esponente 0,6): le zone medie restano visibili anche quando una zona è molto più densa delle altre
+const heatLevel = (alpha, strength = 1) => Math.min(255, Math.round(255 * Math.pow(Math.min(1, alpha * strength / 255), 0.6)));
+
+// Moltiplicatore che porta al rosso la zona più densa visibile, ma mai con meno di 3 clienti sovrapposti
+const heatStrength = (maxAlpha, pointAlpha) => 255 / Math.max(maxAlpha, pointAlpha * 255 * 3);
+
+function heatLayer(L, { pane = 'heat', opacity = 0.6, pointAlpha = 0.09 } = {}) {
+  const Heat = L.Layer.extend({
+    initialize() { this._pts = []; this._pal = palette(); },
+    setPoints(pts) { this._pts = pts || []; if (this._map) this._draw(); return this; },
+    onAdd(map) {
+      if (!map.getPane(pane)) { map.createPane(pane); map.getPane(pane).style.zIndex = 390; map.getPane(pane).style.pointerEvents = 'none'; }
+      this._canvas = L.DomUtil.create('canvas', 'heat-canvas');
+      this._canvas.style.opacity = String(opacity);
+      map.getPane(pane).appendChild(this._canvas);
+      map.on('moveend zoomend resize viewreset', this._draw, this);
+      this._draw();
+    },
+    onRemove(map) { map.off('moveend zoomend resize viewreset', this._draw, this); this._canvas.remove(); this._canvas = null; },
+    _draw() {
+      const map = this._map, cv = this._canvas; if (!map || !cv) return;
+      const size = map.getSize(); cv.width = size.x; cv.height = size.y;
+      L.DomUtil.setPosition(cv, map.containerPointToLayerPoint([0, 0]));
+      const ctx = cv.getContext('2d'); ctx.clearRect(0, 0, size.x, size.y);
+      if (!this._pts.length) return;
+      const r = heatRadius(map.getZoom()), b = map.getBounds().pad(0.2);
+      // ombra di un punto, preparata una volta e ripetuta
+      const dot = document.createElement('canvas'); dot.width = dot.height = r * 2;
+      const dctx = dot.getContext('2d'), grad = dctx.createRadialGradient(r, r, 0, r, r, r);
+      grad.addColorStop(0, `rgba(0,0,0,${pointAlpha})`); grad.addColorStop(1, 'rgba(0,0,0,0)');
+      dctx.fillStyle = grad; dctx.fillRect(0, 0, r * 2, r * 2);
+      for (const [lat, lng] of this._pts) {
+        if (!b.contains([lat, lng])) continue;
+        const p = map.latLngToContainerPoint([lat, lng]); ctx.drawImage(dot, p.x - r, p.y - r);
+      }
+      const img = ctx.getImageData(0, 0, size.x, size.y), d = img.data, pal = this._pal;
+      // scala relativa a ciò che si vede: la zona più densa è rossa (servono almeno 3 clienti sovrapposti)
+      let maxA = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > maxA) maxA = d[i];
+      const strength = heatStrength(maxA, pointAlpha);
+      for (let i = 0; i < d.length; i += 4) {
+        const a = d[i + 3]; if (!a) continue;
+        const lv = heatLevel(a, strength), j = lv * 3;
+        d[i] = pal[j]; d[i + 1] = pal[j + 1]; d[i + 2] = pal[j + 2]; d[i + 3] = Math.min(230, Math.round(lv * 1.1));   // un cliente isolato resta appena visibile
+      }
+      ctx.putImageData(img, 0, 0);
+    },
+  });
+  return new Heat();
+}
+
+return { heatRadius, heatLevel, heatStrength, heatLayer };
+})();
 __m["js/views/maps.js"] = (function () {
 const { h, fill, eur, statusBadge, toast } = __m["js/ui.js"];
 const { regionOf } = __m["js/core/geo.js"];
@@ -7326,6 +7404,7 @@ const { PROVINCE_SHAPES } = __m["js/data/province-shapes.js"];
 const { coverageOf } = __m["js/core/territory.js"];
 const { noteDialog } = __m["js/views/agenda.js"];
 const { newPlanDialog } = __m["js/views/plans.js"];
+const { heatLayer } = __m["js/core/heat-layer.js"];
 // Mappa dei clienti (posizione per comune, dati ISTAT) + giro visite + presidio per provincia.
 const COLORS = { 'Attivo': '#1f8a4c', 'Da recuperare': '#f0a500', 'Perso': '#98a2b3', 'Mai fatturato': '#5b8def', 'Potenziale': '#7a5af8' };
 const colorOf = s => COLORS[s] || '#98a2b3';
@@ -7341,7 +7420,7 @@ function ensureCss() {
 // verde visitato da poco), filtri rapidi, finestrella con ultima visita e offerte, giro visite ordinato per motivo di visita.
 const DO = { rosso: ['#d40e41', 'Da sentire subito'], arancio: ['#e09a00', 'Da recuperare o non visitato da 90 gg'], verde: ['#2e9e5b', 'Visitato da poco'], grigio: ['#98a2b3', 'Persi e mai fatturati'] };
 const daysSince = d => d ? Math.floor((Date.now() - new Date(d + 'T12:00:00').getTime()) / 864e5) : null;
-const mapState = { mode: 'clienti', colors: 'fare', notVisited: false, withOffers: false, areas: true };
+const mapState = { mode: 'clienti', colors: 'fare', notVisited: false, withOffers: false, areas: true, heat: false };
 
 async function viewMaps(app) {
   ensureCss();
@@ -7386,10 +7465,13 @@ async function viewMaps(app) {
 
   const quick = h('div', { class: 'chips' },
     [['notVisited', 'Non visitati da 90 gg'], ['withOffers', 'Con offerte aperte']].map(([k, l]) => { const b = h('button', { type: 'button', class: 'chip' + (mapState[k] ? ' on' : ''), onclick: () => { mapState[k] = !mapState[k]; b.classList.toggle('on'); redraw(); } }, l); return b; }),
+    // 06/11: mappa di calore (dove sono concentrati i clienti filtrati), per pianificare i giri
+    (() => { const b = h('button', { type: 'button', class: 'chip' + (mapState.heat ? ' on' : ''), onclick: () => { mapState.heat = !mapState.heat; b.classList.toggle('on'); mapState.heat ? heat.addTo(map) : heat.remove(); redraw(); drawLegend(); } }, '🔥 Mappa di calore'); return b; })(),
     isDir ? (() => { const b = h('button', { type: 'button', class: 'chip' + (mapState.areas ? ' on' : ''), onclick: () => { mapState.areas = !mapState.areas; b.classList.toggle('on'); mapState.areas ? areaLayer.addTo(map) : areaLayer.remove(); drawAreaLegend(); } }, 'Areali agenti'); return b; })() : null,
     h('select', { 'aria-label': 'Colori', onchange: e => { mapState.colors = e.target.value; redraw(); drawLegend(); } }, [['fare', 'Colori: cosa fare'], ['stato', 'Colori: stato cliente']].map(([v, l]) => h('option', { value: v, selected: v === mapState.colors }, l))));
   const legend = h('div', { class: 'map-legend' });
-  const drawLegend = () => fill(legend, mapState.colors === 'fare' ? Object.values(DO).map(([col, l]) => h('span', {}, h('span', { class: 'swatch', style: { background: col } }), l)) : null);
+  const drawLegend = () => fill(legend, mapState.colors === 'fare' ? Object.values(DO).map(([col, l]) => h('span', {}, h('span', { class: 'swatch', style: { background: col } }), l)) : null,
+    mapState.heat ? h('span', { class: 'heat-legend' }, 'Concentrazione clienti: pochi ', h('span', { class: 'heat-bar' }), ' molti') : null);
   drawLegend();
   const areaLegend = h('div', { class: 'area-legend' });
   function drawAreaLegend() {
@@ -7419,6 +7501,8 @@ async function viewMaps(app) {
     if (mapState.areas) areaLayer.addTo(map);
   }
   drawAreaLegend();
+  const heat = heatLayer(L);
+  if (mapState.heat) heat.addTo(map);
   const layer = L.layerGroup().addTo(map);
   const renderer = L.canvas({ padding: 0.3 });
 
@@ -7441,10 +7525,11 @@ async function viewMaps(app) {
     layer.clearLayers();
     const v = visible();
     for (const x of v) {
-      L.circleMarker([x.lat, x.lng], { renderer, radius: 7, weight: 1, color: '#fff', fillColor: fillOf(x.c), fillOpacity: .92 })
+      L.circleMarker([x.lat, x.lng], { renderer, radius: mapState.heat ? 4 : 7, weight: 1, color: '#fff', fillColor: fillOf(x.c), fillOpacity: .92 })
         .bindPopup(() => popup(x)).addTo(layer);
     }
     counter.textContent = `${v.length} clienti sulla mappa`;
+    heat.setPoints(mapState.heat ? v.map(x => [x.lat, x.lng]) : []);
   }
 
   // --- giro visite
