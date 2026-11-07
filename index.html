@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="dac17315507d">
+<meta name="ntx-build" content="6b8a40e4f72e">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -870,9 +870,13 @@ h2.fold-head::after,.fold-head h2::after{content:' ▾';color:var(--muted,#888);
 .match-box.possibile{border-color:#e09a00;background:rgba(224,154,0,.07)}
 .match-box ul{margin:0;padding-left:1.1rem}
 .ord-watch{border-left:4px solid #e0a000;padding-left:12px;margin:.6rem 0 1.2rem}
+/* 07/11 A4: storico modifiche */
+.log-card summary{cursor:pointer;list-style:none} .log-card summary h2{display:inline}
+.log-list{list-style:none;padding:0;margin:.5rem 0 0;display:grid;gap:8px} .log-list > li{border-top:1px solid var(--line);padding-top:6px}
+.log-list ul{margin:2px 0 0;padding-left:1.1rem}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"dac17315507d"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"6b8a40e4f72e"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1771,6 +1775,7 @@ function createLocalStore({ data, kv }) {
       const rec = { id: uid(), customerId, status, reason: reason.trim(), by: s.userId, byName: s.name, at: nowIso() };
       (await col('statusChanges')).push(rec); await save('statusChanges'); applyStatus(byId.get(customerId), rec); return rec;
     },
+    async changeLog() { return []; },   // 07/11 A4: lo storico lo scrive il database online
     async statusChanges() { mustSession(); return (await col('statusChanges')).filter(x => canSeeCustomer(x.customerId)); },
     async quoteSends(quoteId) { mustSession(); const ids = new Set((await this.quotes()).map(q => q.id)); return (await col('quoteSends')).filter(x => ids.has(x.quoteId) && (!quoteId || x.quoteId === quoteId)).slice().reverse(); },
     // invio dalla casella personale: chi invia conferma e l'invio si registra
@@ -2117,6 +2122,14 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       statusRows.push(rec); applyStatus(this.customer(customerId), rec); return rec;
     },
     async statusChanges() { return statusRows.slice(); },
+    // 07/11 A4: storico delle modifiche (migrazione 20261107200000), solo Direzione; senza tabella → vuoto
+    async changeLog({ customerId, entity, rowId } = {}) {
+      const q = ['select=*', 'order=at.desc', 'limit=200'];
+      if (customerId) { let u = null; try { u = custUuid(customerId); } catch { return []; } q.push('customer_id=eq.' + u); }
+      if (entity) q.push('entity=eq.' + encodeURIComponent(entity));
+      if (rowId) q.push('row_id=eq.' + encodeURIComponent(rowId));
+      return (await api('/rest/v1/hub_change_log?' + q.join('&')).catch(() => [])).map(r => ({ id: r.id, at: r.at, entity: r.entity, rowId: r.row_id, field: r.field, old: r.old_value, new: r.new_value, by: r.actor_name || '' }));
+    },
     async quoteSends(quoteId) {
       const nm = await names();
       return (await api('/rest/v1/hub_quote_sends?select=*&order=sent_at.desc' + (quoteId ? '&quote_id=eq.' + quoteId : '&limit=500')).catch(() => []))
@@ -2731,6 +2744,35 @@ async function openActions(app) {
 }
 
 return { openActions };
+})();
+__m["js/views/change-log-ui.js"] = (function () {
+// A4 (07/11/2026): "Storico modifiche" in fondo a scheda cliente, offerta dell'app e offerta RADIX. Solo Direzione.
+// Lo scrive il database (migrazione 20261107200000): agente assegnato, Segue, stato e sconti delle offerte, esito e previsione RADIX.
+const { h } = __m["js/ui.js"];
+const when = iso => { const d = new Date(iso); return d.toLocaleDateString('it-IT') + ' ' + d.toTimeString().slice(0, 5); };
+// sconti: solo le righe cambiate ("Thermopor SL 08: 50+5% → 50+10%"), le righe nuove o tolte
+function discountDiff(oldTxt, newTxt) {
+  const parse = t => new Map(String(t || '').split('; ').filter(Boolean).map(x => { const i = x.lastIndexOf(': '); return [x.slice(0, i), x.slice(i + 2)]; }));
+  const a = parse(oldTxt), b = parse(newTxt), out = [];
+  for (const [k, v] of b) if (!a.has(k)) out.push(`${k}: aggiunta (${v})`); else if (a.get(k) !== v) out.push(`${k}: ${a.get(k)} → ${v}`);
+  for (const k of a.keys()) if (!b.has(k)) out.push(`${k}: tolta`);
+  return out;
+}
+const MONTHS = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+const pretty = (field, v) => (v == null || v === '' ? '—' : field === 'Previsione' ? String(v).replace(/(\d{4})-(\d{2})/, (_, y, m) => MONTHS[+m - 1] + ' ' + y) : v);
+
+async function changeLogCard(app, filter, { title = 'Storico modifiche', showWhat = false } = {}) {
+  if (app.session.role !== 'direzione' || !app.store.changeLog) return null;
+  const rows = await app.store.changeLog(filter).catch(() => []);
+  const body = rows.length ? h('ul', { class: 'log-list' }, rows.map(r => {
+    const detail = r.field === 'Sconti' ? discountDiff(r.old, r.new) : [`${pretty(r.field, r.old)} → ${pretty(r.field, r.new)}`];
+    return h('li', {}, h('small', { class: 'muted' }, `${when(r.at)} · ${r.by}`),
+      h('div', {}, h('strong', {}, (showWhat ? `${r.entity} ${r.rowId} · ` : '') + r.field + ': '), detail.length > 1 ? h('ul', {}, detail.map(d => h('li', {}, d))) : (detail[0] || 'nessuna differenza visibile')));
+  })) : h('p', { class: 'muted' }, 'Nessuna modifica registrata. Lo storico parte dal 7 novembre 2026: agente assegnato, Segue, stato e sconti delle offerte, esito e previsione RADIX.');
+  return h('details', { class: 'card log-card' }, h('summary', {}, h('h2', {}, `${title} (${rows.length})`)), body);
+}
+
+return { discountDiff, changeLogCard };
 })();
 __m["js/core/order-match.js"] = (function () {
 // Offerta RADIX → ordine RADIX (07/11/2026, Tommaso). In RADIX il legame non viene registrato (verificato con lui e con l'AI di Meridian),
@@ -3358,6 +3400,7 @@ return { OFFER_COLUMNS, normName, headIt, parseRadixOffers, offersPreview, ORDER
 __m["js/views/radix-offers.js"] = (function () {
 // Offerte aperte importate da RADIX (richiesta Tommaso 01/11/2026): l'app le mostra a chi segue il cliente
 // (senza cliente HUB solo alla Direzione) e permette di segnare l'esito. Le offerte restano in RADIX: qui si seguono.
+const { changeLogCard } = __m["js/views/change-log-ui.js"];
 const { loadMatches, matchBadge, matchBox } = __m["js/views/order-match-ui.js"];
 const { FORECAST_LEVELS, forecastLabel } = __m["js/core/forecast.js"];
 const { h, fill, eur, dateIt, today, toast, modal, field, emptyState } = __m["js/ui.js"];
@@ -3587,7 +3630,8 @@ async function viewRadixOffer(app, id) {
       kv('Agente in RADIX', o.radixAgent ? o.radixAgent.toLowerCase() : ''), kv('Cliente seguito da', c?.assignee || ''),
       c && app.session.role === 'direzione' && !app.session.preview && app.store.linkRadixOffer ? h('p', { class: 'fine' }, 'Cliente sbagliato? ',
         h('button', { class: 'link', type: 'button', onclick: async () => { try { await app.store.linkRadixOffer(o.id, null); toast('Offerta scollegata'); refresh(); } catch (e) { toast(e.message, 'error'); } } }, 'Scollega e scegli di nuovo')) : null,
-      o.linesAt ? h('p', { class: 'fine' }, 'Righe aggiornate il ' + dateIt(o.linesAt)) : null));
+      o.linesAt ? h('p', { class: 'fine' }, 'Righe aggiornate il ' + dateIt(o.linesAt)) : null),
+    await changeLogCard(app, { entity: 'offerta RADIX', rowId: o.id }));   // 07/11 A4
 }
 
 // 07/11 sera (Tommaso): la previsione si segna direttamente sull'offerta RADIX, senza dover registrare un contatto. Si salva da sola.
@@ -3922,6 +3966,7 @@ async function radixOrdersSection(app) {
 return { isBlocked, radixOrderRow, STALE_DAYS, staleReasons, radixOrdersSection };
 })();
 __m["js/views/agenda.js"] = (function () {
+const { changeLogCard } = __m["js/views/change-log-ui.js"];
 const { followerSelect } = __m["js/views/dir-follower-ui.js"];
 const { h, fill, eur, dateIt, dateTimeIt, statusBadge, toast, modal, field, emptyState, debounce, telLinks, today } = __m["js/ui.js"];
 const { dictationAvailable, startDictation } = __m["js/core/dictation.js"];
@@ -4236,7 +4281,8 @@ async function customerCard(app, c) {
       h('div', { class: 'card-head' }, h('h3', {}, 'Referenti'), h('button', { class: 'btn small', onclick: () => contactDialog(app, c).then(ok => ok && refresh()) }, '+ Referente')),
       contacts.length ? h('ul', { class: 'list' }, contacts.map(p => h('li', {}, h('div', {}, h('strong', {}, p.name), p.role ? h('small', { class: 'muted' }, ' · ' + p.role) : null),
         h('div', { class: 'muted' }, p.phone ? h('a', { href: 'tel:' + p.phone.replace(/[^\d+]/g, '') }, p.phone) : null, p.phone && p.email ? ' · ' : '', p.email ? h('a', { href: 'mailto:' + p.email }, p.email) : null),
-        h('button', { class: 'link', onclick: () => contactDialog(app, c, p).then(ok => ok && refresh()) }, 'Modifica')))) : h('p', { class: 'muted' }, 'Nessun referente registrato.')));
+        h('button', { class: 'link', onclick: () => contactDialog(app, c, p).then(ok => ok && refresh()) }, 'Modifica')))) : h('p', { class: 'muted' }, 'Nessun referente registrato.')),
+    await changeLogCard(app, { customerId: c.id }, { showWhat: true }));   // 07/11 A4: solo Direzione
 }
 
 // Numeri del cliente (anagrafica RADIX + referenti), con l'etichetta scritta accanto quando c'è
@@ -6283,6 +6329,7 @@ async function directionMessages(app) {
 return { threadView, threadRow, rxRef, assistDialog, assistUnread, askOfficeCard, staffPanel, directionMessages };
 })();
 __m["js/views/quotes.js"] = (function () {
+const { changeLogCard } = __m["js/views/change-log-ui.js"];
 const { forecastSelect, forecastMonthInput } = __m["js/views/radix-offers.js"];
 const { h, fill, eur, num, dateIt, toast, modal, field, emptyState, debounce } = __m["js/ui.js"];
 const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions, normPayment, LOST_REASONS, QUOTE_SNOOZE_DAYS, quoteReminders, missingForOrder } = __m["js/data/model.js"];
@@ -6920,6 +6967,7 @@ async function viewQuoteEditor(app, id, customerId) {
         cond('Cantiere (facoltativo)', h('textarea', { rows: 2, disabled: locked, placeholder: 'es. EDILIZIA VIGONOVO\nVia La Croce 16, 33074 Vigonovo (PN)', onchange: e => { q.site = e.target.value; mark(); } }, q.site || '')),
         cond('Note', notesIn)),
       h('section', { class: 'card' }, h('h2', {}, 'Riepilogo'), totBox)), dock);
+  if (q.number) changeLogCard(app, { entity: 'offerta', rowId: q.number }).then(c => { if (c) root.insertBefore(c, dock); }).catch(() => {});   // 07/11 A4
   return root;
 }
 
