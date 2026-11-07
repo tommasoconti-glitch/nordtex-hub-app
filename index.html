@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="c6de48481820">
+<meta name="ntx-build" content="548b1ae25098">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -831,7 +831,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .radix-link .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"c6de48481820"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"548b1ae25098"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1781,6 +1781,14 @@ function createLocalStore({ data, kv }) {
     async importRadixOrders() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
     async importStock() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
     async importLog() { return []; },
+    // 07/11: come hub_customer_lookup (versione locale: tutta l'anagrafica del file)
+    async customerLookup(name, vat) {
+      const norm = x => String(x || '').toUpperCase().replace(/\b(S\.?R\.?L\.?S?|S\.?N\.?C\.?|S\.?P\.?A\.?|S\.?A\.?S\.?|S\.?S\.?)(\s|$)/g, ' ').replace(/[^A-Z0-9]/g, '');
+      const core = norm(name), v = String(vat || '').replace(/\D/g, '');
+      if (core.length < 5 && v.length < 8) return [];
+      return data.customers.concat(await col("prospects")).filter(c => (v.length >= 8 && String(c.vat || '').replace(/\D/g, '').includes(v)) || (core.length >= 5 && String(c.name || '').toUpperCase().replace(/[^A-Z0-9]/g, '').includes(core)))
+        .slice(0, 6).map(c => ({ code: c.id, name: c.name, city: c.city, prov: c.prov, followedBy: c.assignee || 'Direzionale', origin: c.origin || 'RADIX' }));
+    },
     async setRadixOfferOutcome(id, fields) {
       const s = mustSession(); const f = checkRadixOutcome(fields);
       if (!(await this.radixOffers()).some(x => x.id === id)) throw new Error('Offerta non trovata');
@@ -2058,6 +2066,11 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       const [orders, rows] = await Promise.all([this.orders(), api('/rest/v1/hub_customers?select=*&origin=eq.HUB&order=created_at').catch(() => [])]);
       const nm = await names().catch(() => new Map());
       return { orders, customers: (rows || []).map(r => ({ ...fromDb(r), createdByName: nm.get(r.created_by) || '' })).filter(c => !c.isTest) };
+    },
+    // 07/11: controllo doppioni su tutta l'anagrafica (migrazione 20261107080000); se la funzione non c'è ancora, null (nessun controllo)
+    async customerLookup(name, vat) {
+      const r = await api('/rest/v1/rpc/hub_customer_lookup', { method: 'POST', body: { p_name: name || '', p_vat: vat || '' } }).catch(() => null);
+      return r ? r.map(x => ({ code: x.code, name: x.name, city: x.city, prov: x.prov, followedBy: x.followed_by, origin: x.origin })) : null;
     },
     // 02/11 Ufficio: cliente aperto in RADIX → N° cliente RADIX (stesso cliente, o unito a quello già presente)
     async linkRadix(id, code) {
@@ -3986,7 +3999,22 @@ async function newCustomerDialog(app, preset = '', { thenQuote = false, onCreate
   const asg = isDir ? h('select', {}, h('option', { value: '' }, 'Assegnatario: automatico (provincia)'), assignees.map(a => h('option', {}, a))) : null;
   const asgHint = h('small', { class: 'muted' });
   const similar = h('div', { class: 'similar' });
+  // 07/11 (Tommaso): controllo su TUTTA l'anagrafica (anche clienti di altri commerciali o direzionali, che l'agente non vede)
+  const elsewhere = h('div', { class: 'similar elsewhere' });
+  let hidden = [], seq = 0;
+  const checkServer = debounce(async () => {
+    const my = ++seq, nm = name.value.trim(), v = vat.value.replace(/\D/g, '');
+    if (!app.store.customerLookup || (nm.length < 5 && v.length < 8)) { hidden = []; fill(elsewhere); return; }
+    const rows = await app.store.customerLookup(nm, v).catch(() => null);
+    if (my !== seq || !rows) return;
+    const visible = new Set(all.map(c => String(c.id)));
+    hidden = rows.filter(r => !visible.has(String(r.code)));
+    fill(elsewhere, hidden.length ? [h('strong', {}, '⚠ Esiste già in anagrafica, seguito da un altro commerciale o dalla Direzione:'),
+      h('ul', {}, hidden.map(r => h('li', {}, `N° ${r.code} · ${r.name} · ${[r.city, r.prov].filter(Boolean).join(' ')} · seguito da ${r.followedBy}`))),
+      h('small', {}, 'Se è lo stesso cliente non crearlo: scrivi all\'ufficio con "💬 Assistenza" e ti verrà passato o seguito insieme.')] : []);
+  }, 400);
   const check = () => {
+    checkServer();
     const q = [name.value, vat.value].filter(x => x.trim().length >= 3).join(' ');
     const found = name.value.trim().length >= 3 || vat.value.trim().length >= 6 ? searchCustomers(indexCache.ix, vat.value.replace(/\D/g, '').length >= 6 ? vat.value : name.value).filter(r => !r.fuzzy || r.score > 20).slice(0, 4) : [];
     fill(similar, found.length ? [h('small', {}, 'Già presenti, verifica che non sia lo stesso:'), found.map(r => h('a', { href: '#/agenda/' + r.c.id, onclick: () => document.querySelector('.modal-back')?.remove() }, h('span', { class: 'dot ' + (STATUS_INFO[r.c.status]?.cls || 'muted') }), ` ${r.c.name} · ${[r.c.city, r.c.prov].filter(Boolean).join(' ')}`))] : null);
@@ -3998,6 +4026,8 @@ async function newCustomerDialog(app, preset = '', { thenQuote = false, onCreate
   check();
   const fx = fiscalFields(app, {}, { withVat: false });
   const save = async goQuote => {
+    if (hidden.length && (await modal('Cliente già in anagrafica?', h('p', {}, `Esiste già ${hidden[0].name} (N° ${hidden[0].code}, ${hidden[0].city || ''}) seguito da ${hidden[0].followedBy}. Se è lo stesso cliente, creandone uno nuovo nasce un doppione.`),
+      [{ label: 'Non crearlo', value: false }, { label: 'È un altro cliente: crea', primary: true, value: true }])) !== true) return false;
     try {
       const c = await app.store.addCustomer({ name: name.value, vat: vat.value, street: street.value, cap: cap.value, city: city.value, prov: prov.value, phone: phone.value, email: email.value, typology: typ.value, notes: notes.value, assignee: asg?.value || '', ...fx.values() });
       app.invalidate(); toast('Cliente creato: ' + c.name);
@@ -4008,7 +4038,7 @@ async function newCustomerDialog(app, preset = '', { thenQuote = false, onCreate
       throw e;
     }
   };
-  return modal('Nuovo cliente', h('div', { class: 'form' }, field('Ragione sociale', name), similar,
+  return modal('Nuovo cliente', h('div', { class: 'form' }, field('Ragione sociale', name), similar, elsewhere,
     h('div', { class: 'form two' }, field('P.IVA', vat), field('Tipologia', typ)),
     field('Indirizzo', street), h('div', { class: 'form three' }, field('CAP', cap), field('Località', city), field('Prov.', prov)),
     h('div', { class: 'form two' }, field('Telefono', phone), field('Email', email)),
