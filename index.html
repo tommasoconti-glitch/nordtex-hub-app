@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="37d450aaa81f">
+<meta name="ntx-build" content="524f9bd32f3d">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -862,9 +862,10 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 h2.fold-head::after,.fold-head h2::after{content:' ▾';color:var(--muted,#888);font-weight:400;font-size:.8em}
 .card.folded h2.fold-head::after,.card.folded .fold-head h2::after{content:' ▸'}
 .card.folded > :not(.fold-head){display:none}
+.week-card tr.wk-sep td{background:var(--soft, rgba(0,0,0,.035));font-weight:600;font-size:.85em;text-transform:uppercase;letter-spacing:.04em;color:var(--muted,#666)}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"37d450aaa81f"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"524f9bd32f3d"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -7539,6 +7540,13 @@ async function weekCard(app, data) {
     : (app.store.assignees || []).filter(a => a.name && a.name !== 'Direzionale' && !/^EX_/.test(a.name)).map(a => ({ name: a.name }));
   if (!agents.length) return null;
   const rows = weekSummary(agents, data, new Date());
+  // 07/11 sera (Tommaso): anche Irina, Christian, Marco e gli altri accessi Direzione, in una parte a sé (senza "note mancanti" in arancione)
+  const staffRows = acc ? weekSummary(acc.filter(r => r.role === 'direzione' && r.active && r.userId !== app.session.userId), data, new Date()) : [];
+  const line = (r, agent) => {
+    const last = acc ? r.lastOpen : r.lastActivity, stale = !last || Date.now() - new Date(last) > 7 * 864e5;
+    return h('tr', {}, h('td', {}, h('strong', {}, r.name)), h('td', {}, stale ? h('span', { class: 'wk-bad' }, ago(last)) : ago(last)), acc ? n(r.opens7 ?? 0, !r.opens7) : null,
+      n(r.notes7, agent && !r.notes7), n(r.quotes7), n(r.sent7), n(r.lateFollow, r.lateFollow > 0), n(r.newCust7));
+  };
   const ago = iso => { if (!iso) return 'mai'; const d = Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(iso).setHours(0, 0, 0, 0)) / 864e5); return d <= 0 ? 'oggi' : d === 1 ? 'ieri' : d + ' giorni fa'; };
   const n = (v, bad) => h('td', { class: 'num' }, bad ? h('span', { class: 'wk-bad' }, String(v)) : String(v));
   const th = (t, num) => h('th', { class: num ? 'num' : '' }, t);
@@ -7546,11 +7554,8 @@ async function weekCard(app, data) {
     h('p', { class: 'muted' }, 'Ultimi 7 giorni, da quello che passa dall\'HUB: uno spunto per le telefonate del lunedì, non un voto (le offerte fatte in RADIX tramite l\'ufficio qui non si vedono). In cima chi ha più follow-up scaduti.'),
     h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
       h('thead', {}, h('tr', {}, th('Agente'), th(acc ? 'Ultima apertura' : 'Ultima attività'), acc ? th('Aperture', 1) : null, th('Note e visite', 1), th('Offerte fatte', 1), th('Offerte inviate', 1), th('Follow-up scaduti', 1), th('Clienti nuovi', 1))),
-      h('tbody', {}, rows.map(r => {
-        const last = acc ? r.lastOpen : r.lastActivity, stale = !last || Date.now() - new Date(last) > 7 * 864e5;
-        return h('tr', {}, h('td', {}, h('strong', {}, r.name)), h('td', {}, stale ? h('span', { class: 'wk-bad' }, ago(last)) : ago(last)), acc ? n(r.opens7 ?? 0, !r.opens7) : null,
-          n(r.notes7, !r.notes7), n(r.quotes7), n(r.sent7), n(r.lateFollow, r.lateFollow > 0), n(r.newCust7));
-      })))));
+      h('tbody', {}, rows.map(r => line(r, true))),
+      staffRows.length ? h('tbody', { class: 'wk-staff' }, h('tr', { class: 'wk-sep' }, h('td', { colspan: acc ? 8 : 7 }, 'Direzione e ufficio')), staffRows.map(r => line(r, false))) : null)));
 }
 
 // 07/11 sera (Tommaso: "tutte le finestre in Area manager devono potersi aprire e chiudere"): tocchi il titolo e il riquadro si chiude;
