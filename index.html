@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="a8d2391eff4d">
+<meta name="ntx-build" content="c6de48481820">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -825,9 +825,13 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .ds-warn small{color:#8a5200} .ds-missing small{color:#c62828}
 @media (max-width:640px){.ds-list li{grid-template-columns:26px 1fr}.ds-list li small{grid-column:2}}
 .ds-actions{display:flex;gap:8px;flex-wrap:wrap}
+/* 07/11: con la ricerca attiva i filtri sono sospesi */
+.chips.chips-off .chip,.filters.filters-off select:not([aria-label="Ordina"]){opacity:.45}
+.chips.chips-off .chip{pointer-events:none}
+.radix-link .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a8d2391eff4d"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"c6de48481820"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3551,7 +3555,11 @@ async function viewAgenda(app, a1, a2) {
   const chipsBox = h('div', { class: 'chips', role: 'group', 'aria-label': 'Filtra per stato' });
   let shown = [];
 
-  function base() { return searchCustomers(indexCache.ix, state.q).filter(r => (!state.prov || r.c.prov === state.prov) && (!state.assignee || r.c.assignee === state.assignee)); }
+  // 07/11 (Tommaso): la ricerca è sempre su tutti i clienti visibili, senza filtri. Con un filtro attivo dimenticato l'agente pensava
+  // che il cliente non ci fosse e creava il doppione. I filtri valgono solo per scorrere l'elenco senza ricerca.
+  const searching = () => !!state.q.trim();
+  const filtersOn = () => !!(state.prov || state.assignee || (state.status && state.status !== 'lavoro' && state.status !== 'tutti'));
+  function base() { return searchCustomers(indexCache.ix, state.q).filter(r => searching() || ((!state.prov || r.c.prov === state.prov) && (!state.assignee || r.c.assignee === state.assignee))); }
   function sorted(rows) {
     const by = { nome: (a, b) => a.c.name.localeCompare(b.c.name, 'it'),
       visita: (a, b) => (sig.visits?.get(a.c.id) || '0000').localeCompare(sig.visits?.get(b.c.id) || '0000') || (b.c.rev2026 || 0) - (a.c.rev2026 || 0) || a.c.name.localeCompare(b.c.name, 'it'),
@@ -3566,7 +3574,8 @@ async function viewAgenda(app, a1, a2) {
   function drawChips(rows) {
     const n = Object.fromEntries(STATUS_ORDER.map(s => [s, 0])); for (const r of rows) n[r.c.status] = (n[r.c.status] || 0) + 1;
     const work = rows.filter(r => WORK.includes(r.c.status)).length;
-    const chip = (key, label, count, dot, title) => h('button', { class: 'chip' + (state.status === key ? ' on' : ''), 'aria-pressed': String(state.status === key), title: title || '',
+    const on = key => !searching() && state.status === key;
+    const chip = (key, label, count, dot, title) => h('button', { class: 'chip' + (on(key) ? ' on' : ''), 'aria-pressed': String(on(key)), title: title || '', disabled: searching(),
       onclick: () => { state.status = key; state.limit = 200; drawList(); } }, dot ? h('span', { class: 'dot ' + dot }) : null, label, h('b', {}, count.toLocaleString('it-IT')));
     fill(chipsBox, chip('lavoro', 'Da lavorare', work, null, 'Attivi, da recuperare e potenziali'),
       STATUS_ORDER.filter(s => n[s] || state.status === s).map(s => chip(s, s, n[s], STATUS_INFO[s].cls, STATUS_INFO[s].rule)),
@@ -3574,10 +3583,11 @@ async function viewAgenda(app, a1, a2) {
   }
   function drawList() {
     const b = base(); drawChips(b);
-    const rows = sorted(b.filter(r => matchStatus(r.c, state.status, !!state.q.trim())));
+    const rows = sorted(searching() ? b : b.filter(r => matchStatus(r.c, state.status, false)));
+    chipsBox.classList.toggle('chips-off', searching()); filtersBox.classList.toggle('filters-off', searching());
     shown = rows;
     const fuzzy = rows[0]?.fuzzy;
-    counter.textContent = `${rows.length.toLocaleString('it-IT')} clienti` + (fuzzy ? ' · nessun risultato esatto, mostro i più simili' : '');
+    counter.textContent = `${rows.length.toLocaleString('it-IT')} clienti` + (searching() ? ' · ricerca su tutti i tuoi clienti' + (filtersOn() ? ', filtri sospesi' : '') : '') + (fuzzy ? ' · nessun risultato esatto, mostro i più simili' : '');
     fill(listBox, ...rows.slice(0, state.limit).map(({ c }) => {
       const info = STATUS_INFO[c.status] || STATUS_INFO['Mai fatturato'];
       return h('a', { href: '#/agenda/' + c.id, role: 'option', 'aria-selected': String(selected?.id === c.id), class: 'citem' + (selected?.id === c.id ? ' sel' : '') },
@@ -3595,6 +3605,8 @@ async function viewAgenda(app, a1, a2) {
   const sel = (value, opts, key, label) => h('select', { 'aria-label': label, onchange: e => { state[key] = e.target.value; state.limit = 200; drawList(); } },
     h('option', { value: '' }, label), opts.map(o => h('option', { value: o, selected: o === value }, o)));
   const sortSel = h('select', { 'aria-label': 'Ordina', onchange: e => { state.sort = e.target.value; drawList(); } }, Object.entries(SORTS).map(([v, l]) => h('option', { value: v, selected: v === state.sort }, l)));
+  const filtersBox = h('div', { class: 'filters' }, sel(state.prov, provs, 'prov', 'Provincia'),
+    isDir ? sel(state.assignee, [...new Set(all.map(c => c.assignee))].sort(), 'assignee', 'Assegnatario') : null, sortSel);
   const search = h('input', { type: 'search', enterkeyhint: 'search', autocomplete: 'off', placeholder: 'Cerca: nome, città, P.IVA, telefono, n° cliente…', value: state.q, 'aria-label': 'Cerca cliente',
     oninput: debounce(e => { state.q = e.target.value; state.limit = 200; drawList(); }, 120),
     onkeydown: e => {
@@ -3612,8 +3624,7 @@ async function viewAgenda(app, a1, a2) {
 
   const newBtn = h('button', { class: 'btn primary small', onclick: () => newCustomerDialog(app, search.value) }, '+ Nuovo cliente');
   const left = h('section', { class: 'pane-list' }, h('div', { class: 'list-tools' }, h('div', { class: 'search-row' }, search, newBtn), chipsBox,
-    h('div', { class: 'filters' }, sel(state.prov, provs, 'prov', 'Provincia'),
-      isDir ? sel(state.assignee, [...new Set(all.map(c => c.assignee))].sort(), 'assignee', 'Assegnatario') : null, sortSel), counter), listBox);
+    filtersBox, counter), listBox);
   const right = h('section', { class: 'pane-detail' }, selected ? await customerCard(app, selected) : emptyState('Seleziona un cliente dall\'elenco.'));
   if (!selected && matchMedia('(min-width: 761px) and (hover: hover)').matches) setTimeout(() => search.focus(), 0);
   return h('div', { class: 'split' + (selected ? ' has-sel' : '') }, left, right);
@@ -3773,7 +3784,7 @@ async function customerCard(app, c) {
     blocked ? h('p', { class: 'alert bad' }, 'Attenzione: blocco presente in RADIX. Verificare con l\'amministrazione prima di proporre forniture.') : null,
     c.review ? h('p', { class: 'alert warn' }, 'Da verificare: ' + c.review) : null,
     c.annotation ? h('p', { class: 'alert info' }, h('strong', {}, 'Annotazione RADIX: '), c.annotation) : null,
-    c.origin === 'HUB' ? h('p', { class: 'alert info' }, 'Cliente non ancora presente in RADIX: al primo ordine va aperta l\'anagrafica in RADIX (con P.IVA), poi l\'aggiornamento settimanale lo collegherà.') : null,
+    c.origin === 'HUB' ? radixLinkBox(app, c) : null,
     glance(app, c, notes, quotes, rxOpen, lastVisit),
     // In corso: offerte (app e RADIX insieme) e follow-up aperti, cioè quello su cui agire
     h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'In corso')),
@@ -4017,6 +4028,28 @@ async function statusDialog(app, c) {
     h('p', { class: 'fine' }, 'Lo stato scelto resta finché RADIX non registra un acquisto successivo: in quel caso torna lo stato calcolato dalle fatture.'),
     history.length ? h('div', {}, h('small', { class: 'muted' }, 'Storico'), h('ul', { class: 'list' }, history.map(x => h('li', {}, h('strong', {}, x.status), h('small', { class: 'muted' }, ` · ${dateIt(x.at)} · ${x.byName || ''}`), h('div', {}, x.reason))))) : null),
   [{ label: 'Annulla', value: false }, { label: 'Salva stato', primary: true, run: async () => { await app.store.setStatus({ customerId: c.id, status: sel.value, reason: reason.value }); app.invalidate(); toast('Stato aggiornato: ' + sel.value); return true; } }]);
+}
+
+// 07/11 (Tommaso, caso Venuti): nella scheda di un cliente creato nell'HUB, Direzione e Ufficio lo collegano al N° cliente RADIX
+// (stessa funzione della pagina Ufficio: se il cliente RADIX è già nell'app, offerte, note e visite passano su quello).
+function radixLinkBox(app, c) {
+  const s = app.session, can = s.role === 'direzione' && !s.preview && !s.readOnly && !!app.store.linkRadix;
+  if (!can) return h('p', { class: 'alert info' }, 'Cliente nuovo, non ancora in RADIX: al primo ordine l\'ufficio apre l\'anagrafica in RADIX (con P.IVA) e lo collega.');
+  const code = h('input', { inputmode: 'numeric', placeholder: 'N° cliente RADIX', 'aria-label': 'N° cliente RADIX', style: { maxWidth: '170px' } });
+  const go = async e => {
+    if (!/^\d{1,10}$/.test(code.value.trim())) { toast('Scrivi il N° cliente RADIX: solo cifre', 'error'); return; }
+    e.target.disabled = true;
+    try {
+      const r = await app.store.linkRadix(c.id, code.value);
+      app.invalidate?.();
+      toast(r?.merged ? `Unito al cliente RADIX ${code.value.trim()} già presente nell'app: offerte e note spostate` : `Cliente collegato al N° RADIX ${code.value.trim()}`);
+      app.go('agenda');
+    } catch (err) { e.target.disabled = false; toast(err.message, 'error'); }
+  };
+  return h('div', { class: 'alert info radix-link' },
+    h('p', {}, h('strong', {}, 'Cliente creato nell\'HUB, non ancora collegato a RADIX. '),
+      'Quando è aperto in RADIX (o se c\'è già), scrivi qui il suo N° cliente: se quel cliente è già nell\'app, offerte, note e visite passano su di lui e questo doppione sparisce.'),
+    h('div', { class: 'row' }, code, h('button', { class: 'btn small primary', type: 'button', onclick: go }, 'Collega a RADIX')));
 }
 
 return { listSignals, viewAgenda, phoneList, quoteCls, noteDialog, noteVoice, dictateButton, newCustomerDialog };
