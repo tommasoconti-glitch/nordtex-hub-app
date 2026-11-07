@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="28a5c80f8ff3">
+<meta name="ntx-build" content="a8d2391eff4d">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -814,9 +814,20 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .sys-thick input.sys-cm { min-width: 0; width: 72px; }
 /* Sistemi: varianti su una riga (07/11, nomi lunghi come CANNATHERM / NATURHELD andavano a capo) */
 .sys-controls .seg{flex-wrap:nowrap;gap:0;max-width:100%} .sys-controls .seg-b{white-space:nowrap;padding:9px 10px;font-size:.8rem}
+/* Semaforo "Dati RADIX di oggi" (07/11) */
+.ds-card .ds-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.ds-title{font-size:1rem;margin:0} .ds-title.ds-ok{color:#2e7d32} .ds-title.ds-warn{color:#b26a00} .ds-title.ds-missing{color:#c62828}
+.ds-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.ds-list li{display:grid;grid-template-columns:26px minmax(150px,230px) 1fr;align-items:center;gap:8px;font-size:.9rem}
+.ds-list small{color:var(--muted,#676568)}
+.ds-dot{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;color:#fff;background:#9e9e9e}
+.ds-ok .ds-dot{background:#2e7d32} .ds-warn .ds-dot{background:#e69500} .ds-missing .ds-dot{background:#c62828}
+.ds-warn small{color:#8a5200} .ds-missing small{color:#c62828}
+@media (max-width:640px){.ds-list li{grid-template-columns:26px 1fr}.ds-list li small{grid-column:2}}
+.ds-actions{display:flex;gap:8px;flex-wrap:wrap}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"28a5c80f8ff3"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a8d2391eff4d"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2404,6 +2415,86 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
 }
 
 return { audioMime, audioView, createSupabaseStore };
+})();
+__m["js/core/data-status.js"] = (function () {
+// Semaforo "Dati RADIX di oggi" (07/11/2026, richiesta Tommaso: rafforzare i caricamenti a mano di Irina).
+// Caso del 06/11: mancava l'Excel delle offerte aperte e 6 PDF su 7 sono rimasti fuori senza che nessuno se ne accorgesse.
+// Routine (05/11): ogni giorno lavorativo la mattina Excel offerte aperte + ordini aperti, la sera i PDF delle offerte;
+// ogni lunedì giacenze + fatturato. Qui si confronta il registro dei caricamenti (hub_imports) con la routine.
+
+const pad = n => String(n).padStart(2, '0');
+const localDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+// lunedì della settimana di d (data locale)
+function mondayOf(d) { const m = new Date(d); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return localDate(m); }
+
+/**
+ * @param log righe del registro: { kind, at (ISO), summary }
+ * @param now Date (ora locale del dispositivo)
+ * @returns { workday, items: [{ key, label, state: 'ok'|'warn'|'missing'|'later', detail }], level }
+ */
+function dataStatus(log = [], now = new Date()) {
+  const day = localDate(now), hour = now.getHours() + now.getMinutes() / 60, dow = now.getDay();
+  const workday = dow >= 1 && dow <= 5, monday = mondayOf(now);
+  const last = kind => log.filter(r => r.kind === kind && r.at).sort((a, b) => String(b.at).localeCompare(String(a.at)))[0] || null;
+  const dayOf = r => (r ? localDate(new Date(r.at)) : '');
+  const items = [];
+  const daily = (key, label, kind, by) => {
+    const r = last(kind), done = dayOf(r) === day;
+    items.push({ key, label, state: done ? 'ok' : !workday ? 'later' : hour >= by ? 'missing' : 'later',
+      detail: done ? 'caricato alle ' + new Date(r.at).toTimeString().slice(0, 5) : !workday ? 'non serve nel fine settimana' : hour >= by ? 'manca il caricamento di oggi' : 'da caricare in mattinata', at: r?.at || null });
+  };
+  daily('offerte', 'Offerte aperte (Excel)', 'offerte', 11);
+  daily('ordini', 'Ordini aperti (Excel)', 'ordini', 11);
+  // PDF delle offerte: la sera; se alcuni PDF erano di offerte non ancora nell'app, va ricaricato dopo l'Excel
+  {
+    const r = last('righe offerte'), done = dayOf(r) === day, off = last('offerte');
+    const missingOffers = done ? Number(r.summary?.notInApp || 0) : 0;
+    const noExcel = done && workday && dayOf(off) !== day;
+    let state = 'later', detail = !workday ? 'non serve nel fine settimana' : 'da caricare in serata';
+    if (done && missingOffers) { state = 'warn'; detail = `${missingOffers} PDF di offerte non ancora nell'app: carica l'Excel delle offerte aperte e ricarica i PDF`; }
+    else if (done && noExcel) { state = 'warn'; detail = 'caricati, ma l\'Excel delle offerte aperte di oggi manca: le offerte nuove restano senza righe'; }
+    else if (done) { state = 'ok'; detail = `caricati alle ${new Date(r.at).toTimeString().slice(0, 5)} · righe su ${r.summary?.offers ?? 0} offerte`; }
+    else if (workday && hour >= 18) { state = 'missing'; detail = 'mancano i PDF delle offerte di oggi'; }
+    else if (workday && hour >= 16) { state = 'warn'; detail = 'da caricare stasera'; }
+    items.push({ key: 'pdf', label: 'PDF delle offerte (sera)', state, detail, at: r?.at || null });
+  }
+  // settimanali: giacenze e fatturato dal lunedì della settimana
+  for (const [key, label, kind] of [['giacenze', 'Giacenze (lunedì)', 'giacenze'], ['fatturato', 'Fatturato per cliente (lunedì)', 'fatturato']]) {
+    const r = last(kind), done = r && dayOf(r) >= monday;
+    items.push({ key, label, state: done ? 'ok' : dow === 1 && hour < 12 ? 'later' : 'warn',
+      detail: done ? 'caricato ' + (dayOf(r) === day ? 'oggi' : 'il ' + dayOf(r).split('-').reverse().join('/')) : r ? 'ultimo il ' + dayOf(r).split('-').reverse().join('/') + ': da caricare questa settimana' : 'mai caricato dall\'app', at: r?.at || null });
+  }
+  const level = items.some(i => i.state === 'missing') ? 'missing' : items.some(i => i.state === 'warn') ? 'warn' : 'ok';
+  return { workday, items, level };
+}
+
+return { dataStatus };
+})();
+__m["js/views/data-status-card.js"] = (function () {
+// Riquadro "Dati RADIX di oggi" (07/11/2026): semaforo dei caricamenti per chi carica i dati (Tommaso, Irina).
+const { h, fill } = __m["js/ui.js"];
+const { dataStatus } = __m["js/core/data-status.js"];
+const canUpdateData = s => !!s?.canImport && !s.preview;   // come in data-update.js (qui senza import, per non creare un giro di moduli)
+
+const ICON = { ok: '✓', warn: '!', missing: '✕', later: '…' };
+const TITLE = { ok: 'Dati RADIX di oggi: tutto caricato', warn: 'Dati RADIX di oggi: c\'è qualcosa da sistemare', missing: 'Dati RADIX di oggi: manca un caricamento' };
+
+function dataStatusCard(app, { link = true } = {}) {
+  if (!canUpdateData(app.session) || !app.store.importLog) return null;
+  const box = h('section', { class: 'card ds-card', 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Controllo i caricamenti di oggi…'));
+  app.store.importLog().then(log => {
+    const st = dataStatus(log, new Date());
+    fill(box,
+      h('div', { class: 'ds-head' }, h('h2', { class: 'ds-title ds-' + st.level }, TITLE[st.level]),
+        h('div', { class: 'ds-actions' }, h('button', { type: 'button', class: 'btn', onclick: () => app.help?.('datioggi') }, 'Istruzioni'),
+          link ? h('a', { class: 'btn', href: '#/dati' }, 'Aggiorna dati') : null)),
+      h('ul', { class: 'ds-list' }, st.items.map(i => h('li', { class: 'ds-' + i.state },
+        h('span', { class: 'ds-dot', 'aria-hidden': 'true' }, ICON[i.state]), h('strong', {}, i.label), h('small', {}, i.detail)))));
+  }).catch(() => fill(box, h('p', { class: 'muted' }, 'Registro dei caricamenti non disponibile.')));
+  return box;
+}
+
+return { dataStatusCard };
 })();
 __m["js/views/actions.js"] = (function () {
 const { dueState, quoteReminders } = __m["js/data/model.js"];
@@ -6410,6 +6501,7 @@ async function pickCustomer(app, { title, recentIds = [], recentLabel = 'Clienti
 return { viewQuotes, outcomeDialog, resolveOutcome, orderDialog, viewQuoteEditor, printQuote, startNewQuote, pickCustomer };
 })();
 __m["js/views/home.js"] = (function () {
+const { dataStatusCard } = __m["js/views/data-status-card.js"];
 const { h, fill, eur, dateIt, today, telLinks } = __m["js/ui.js"];
 const { openActions } = __m["js/views/actions.js"];
 const { startNewQuote, pickCustomer } = __m["js/views/quotes.js"];
@@ -6552,7 +6644,7 @@ async function homeDirection(app, { head, foot, customers, quotes, actions, note
 
   // 03/11: messaggi (Assistenza dei commerciali e domande all'ufficio) sotto l'Andamento, solo per chi risponde all'assistenza (Tommaso)
   const msgs = isAssistDesk(app.session) && app.store.threads ? [h('h2', { class: 'section-title' }, 'Messaggi'), await directionMessages(app)] : null;
-  return h('div', { class: 'page home-dir' }, head, todayCard, h('h2', { class: 'section-title' }, 'Andamento'), trendCard, msgs, foot);
+  return h('div', { class: 'page home-dir' }, head, dataStatusCard(app), todayCard, h('h2', { class: 'section-title' }, 'Andamento'), trendCard, msgs, foot);
 }
 
 // Andamento (Direzione: tutta la rete; agente: il suo portafoglio, perché i dati arrivano già filtrati)
@@ -7750,6 +7842,7 @@ __m["js/views/office.js"] = (function () {
 //  4. Note della settimana (03/11 sera, richiesta Tommaso: sotto le offerte di oggi): visite, telefonate e note dei commerciali da lunedì,
 //     con "Copia per RADIX". Il formato definitivo per RADIX si decide con Christian e Irina.
 // Avvisi: la pagina si ricontrolla ogni minuto; titolo della scheda "(3) Ufficio" e notifica del PC quando arriva qualcosa di nuovo.
+const { dataStatusCard } = __m["js/views/data-status-card.js"];
 const { h, fill, eur, dateIt, toast } = __m["js/ui.js"];
 const { ORDER_STATES, missingForOrder } = __m["js/data/model.js"];
 const { staffPanel } = __m["js/views/messages.js"];
@@ -7974,7 +8067,7 @@ async function viewOfficeHome(app) {
   const timer = setInterval(() => { if (!box.isConnected) { clearInterval(timer); setTitle(0); return; } load().catch(() => {}); }, POLL_MS);
   return h('div', { class: 'page office' },
     h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Ufficio'), h('p', { class: 'muted' }, 'Il ponte tra HUB e RADIX: quello che nasce nell\'app e va portato in RADIX. Si aggiorna da solo ogni minuto e suona quando arriva qualcosa.')), bell),
-    tiles, box);
+    dataStatusCard(app), tiles, box);
 }
 
 return { isOffice, canSeeOfficeDesk, radixCustomerText, waitText, chime, weekNotes, NOTES_FROM, notesToReport, noteRadixText, todaysQuotes, viewOfficeHome };
@@ -7992,6 +8085,20 @@ __m["js/core/help.js"] = (function () {
 const APP_VERSION = { label: 'Beta', since: '03/11/2026' };
 
 const HELP = {
+  // 07/11: istruzioni del semaforo "Dati RADIX di oggi" (solo per chi carica i dati: nessuna chiave comune, così gli agenti non lo vedono)
+  'datioggi@ufficio': {
+    title: 'Dati RADIX di oggi',
+    intro: 'Il semaforo controlla che i dati RADIX dell\'app siano aggiornati. Verde = caricato, arancione = da sistemare, rosso = manca. Si aggiorna da solo dopo ogni caricamento.',
+    steps: [
+      'Ogni mattina, entro le 11: in RADIX esporta l\'Excel delle offerte aperte e quello degli ordini clienti aperti (destinazione File, mai Email).',
+      'Caricali in "Aggiorna dati": prima "Offerte aperte RADIX", poi "Ordini aperti".',
+      'Ogni sera, dalle 16: esporta i PDF delle offerte del giorno e caricali in "Righe delle offerte RADIX" (anche tutti insieme o in uno zip).',
+      'Conta l\'ordine: prima l\'Excel delle offerte, poi i PDF. Il PDF di un\'offerta che l\'app non conosce ancora viene scartato.',
+      'Se il pallino dei PDF è arancione con "PDF di offerte non ancora nell\'app": carica l\'Excel delle offerte aperte di oggi e ricarica gli stessi PDF. Non si crea nessun doppione.',
+    ],
+    notes: ['Giacenze e fatturato del lunedì li carica Tommaso.', 'In RADIX non usare "Emissione multipla": stampa e manda email ai clienti. Prima di stampare controlla la stampante.', 'Nel fine settimana il semaforo non chiede nulla.'],
+  },
+  'datioggi@direzione': { ref: 'datioggi@ufficio' },
   assistenza: {
     title: 'Assistenza e domande',
     intro: 'Due modi per chiedere aiuto senza telefonare.',
@@ -8932,6 +9039,7 @@ const { parseOfferPdf } = __m["js/core/offer-pdf.js"];
 const { parseRadixOffers, offersPreview, parseRadixSales, salesPreview, decodeText, parseRadixOrders, ordersPreview, parseRadixOfferLines, matchOfferLines } = __m["js/core/radix-import.js"];
 const { parseStockPdf, stockPreview } = __m["js/core/stock-import.js"];
 const { stockDepot } = __m["js/core/quote-doc.js"];
+const { dataStatusCard } = __m["js/views/data-status-card.js"];
 const canUpdateData = s => !!s?.canImport && !s.preview;
 
 async function sha256(buf) {
@@ -8950,7 +9058,9 @@ async function viewDataUpdate(app) {
     return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('h1', {}, 'Aggiorna dati')), h('div', { class: 'card' }, h('p', {}, 'Non sei abilitato ad aggiornare i dati.')));
   }
   const logBox = h('div', {});
+  let dsBox = h('div', {});   // 07/11: semaforo in cima, si ricalcola dopo ogni caricamento
   const loadLog = async () => {
+    { const c = dataStatusCard(app, { link: false }); if (c) { dsBox.replaceWith(c); dsBox = c; } }
     const rows = await app.store.importLog().catch(() => []);
     fill(logBox, rows.length ? h('ul', { class: 'du-log' }, rows.map(r => h('li', {},
       h('span', { class: 'badge ' + (r.kind === 'offerte' || r.kind === 'righe offerte' ? 'info' : r.kind === 'giacenze' ? 'warn' : 'ok') }, { offerte: 'Offerte', giacenze: 'Giacenze', ordini: 'Ordini', 'righe offerte': 'Righe offerte' }[r.kind] || 'Fatturato'),
@@ -8961,14 +9071,14 @@ async function viewDataUpdate(app) {
   return h('div', { class: 'page du-page' },
     h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Aggiorna dati'),
       h('p', { class: 'muted' }, 'Carichi le esportazioni di RADIX: l\'app ti mostra cosa cambia e aggiorna solo quando confermi. Nessun dato si cancella.'))),
-    offersCard(app, loadLog), offerLinesCard(app, loadLog), radixOrdersCard(app, loadLog), stockCard(app, loadLog), salesCard(app, loadLog),
+    dsBox, offersCard(app, loadLog), offerLinesCard(app, loadLog), radixOrdersCard(app, loadLog), stockCard(app, loadLog), salesCard(app, loadLog),
     h('section', { class: 'card' }, h('h2', {}, 'Ultimi caricamenti'), logBox),
     h('p', { class: 'fine muted' }, 'Note clienti RADIX (file PDF): per ora si aggiornano ancora con Claude. Anagrafica clienti nuovi: si creano dall\'app o con l\'aggiornamento completo.'));
 }
 
 function logText(r) {
   const s = r.summary || {};
-  if (r.kind === 'righe offerte') return `righe su ${s.offers} offerte` + (s.pdf ? ` (${s.pdf} dai PDF)` : '') + (s.noTotal ? ` · ${s.noTotal} con totale 0 in RADIX` : '') + (s.notFound ? ` · ${s.notFound} senza righe` : '');
+  if (r.kind === 'righe offerte') return `righe caricate su ${s.offers} ${s.offers === 1 ? 'offerta' : 'offerte'}` + (s.pdf ? ` (${s.pdf} dai PDF)` : '') + (s.notInApp ? ` · ⚠ ${s.notInApp} PDF di offerte non ancora nell'app: carica l'Excel delle offerte aperte e ricarica i PDF` : '') + (s.noTotal ? ` · ${s.noTotal} con totale 0 in RADIX` : '') + (s.notFound ? ` · ${s.notFound} senza righe` : '');
   if (r.kind === 'ordini') return `${s.orders} ordini aperti: ${s.new} nuovi, ${s.updated} aggiornati, ${s.closed} evasi o chiusi`;
   if (r.kind === 'giacenze') return (s.depots || []).map(d => `${depotLabel(d.code)} al ${dateIt(d.date)}: ${d.items} articoli`).join(' · ');
   if (r.kind === 'offerte') return `${s.offers} offerte dal ${dateIt(s.from)} al ${dateIt(s.to)}: ${s.new} nuove, ${s.updated} aggiornate, ${s.closed} chiuse`;
@@ -9050,7 +9160,7 @@ function offerLinesCard(app, done) {
         lines[r.id] = r.lines.map(x => ({ ...x, d: x.d || prod.get(x.c) || '' })).map(x => (r.alternatives ? { ...x, alt: true } : x)); okPdf.push(r.id); pdfFiles.set(r.id, p.buf);
       }
       const noTotLeft = noTot.filter(id => !lines[id]), notFoundLeft = notFound.filter(id => !lines[id]);
-      Object.assign(stats, { pdf: okPdf.length, noTotal: noTotLeft.length, notFound: notFoundLeft.length });
+      Object.assign(stats, { pdf: okPdf.length, noTotal: noTotLeft.length, notFound: notFoundLeft.length, notInApp: notInApp.length });
       const n = Object.keys(lines).length;
       const lbl = id => { const o = known.get(id); return `${id} · ${o?.customerLabel || ''}${o?.subject ? ' · ' + o.subject : ''}`; };
       const fold = (title, ids) => ids.length ? h('details', { class: 'fold-in' }, h('summary', {}, title), h('ul', { class: 'du-list' }, ids.map(id => h('li', {}, known.has(id) ? lbl(id) : id)))) : null;
@@ -9564,6 +9674,7 @@ const NAV = [
 const initials = name => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '•';
 
 const app = {
+  help: key => helpDialog(key),
   store: null, session: null, cache: {},
   async customers() { return this.cache.customers ||= await this.store.customers(); },
   async products() { return this.cache.products ||= await this.store.products(); },
@@ -9681,7 +9792,7 @@ function loginView() {
 function localStorageGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
 function localStorageSet(k, v) { try { localStorage.setItem(k, v); } catch { /* facoltativo */ } }
 
-// 03/11: istruzioni della pagina (pulsante "?" in alto a destra)
+// 03/11: istruzioni della pagina (pulsante "?" in alto a destra); 07/11: anche da un pulsante dentro la pagina (app.help)
 function helpDialog(key) {
   const e = helpFor(key, app.session);
   const list = (title, items, tag = 'ol') => items?.length ? [h('h4', { class: 'help-h' }, title), h(tag, { class: 'help-list' }, items.map(x => h('li', {}, x)))] : null;
