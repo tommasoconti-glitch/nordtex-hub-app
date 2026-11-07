@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="710cf1be9e2b">
+<meta name="ntx-build" content="b97a8b97c7d4">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -871,7 +871,7 @@ h2.fold-head::after,.fold-head h2::after{content:' ▾';color:var(--muted,#888);
 .match-box ul{margin:0;padding-left:1.1rem}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"710cf1be9e2b"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"b97a8b97c7d4"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3528,9 +3528,10 @@ async function linkOffer(app, o, refresh) {
   try { await app.store.linkRadixOffer(o.id, c.id); app.invalidate?.(); toast('Offerta collegata a ' + c.name); refresh(); } catch (e) { toast(e.message, 'error'); }
 }
 async function viewRadixOffer(app, id) {
-  const all = app.store.radixOffers ? await app.store.radixOffers().catch(() => []) : [];
+  // 07/11 sera: anche le offerte non più aperte in RADIX (scadute o diventate ordine) si aprono, come dall'elenco Offerte
+  const all = app.store.radixOffers ? await app.store.radixOffers({ withClosed: true }).catch(() => []) : [];
   const o = all.find(x => x.id === id);
-  await loadMatches(app).catch(() => null);
+  await loadMatches(app, all).catch(() => null);
   if (!o) return h('div', { class: 'page' }, h('a', { class: 'back', href: '#/preventivi' }, '← Offerte'), emptyState('Offerta non trovata o non visibile con il tuo accesso.'));
   const c = o.customerId ? app.store.customer(o.customerId) : null;
   const notes = c ? await app.store.notes(c.id).catch(() => []) : [];
