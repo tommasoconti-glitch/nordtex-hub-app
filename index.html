@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="a0a9e7ffa292">
+<meta name="ntx-build" content="8d6b94c59c32">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -856,9 +856,10 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .badges .fol-sel{margin-left:0}
 .card.my-dir{border-left:4px solid var(--accent,#c8c400)}
 .h1-link{color:inherit;text-decoration:none} .h1-link:hover{text-decoration:underline} .h1-go{color:var(--muted,#888);font-weight:400}
+.stages-card td.num small{white-space:nowrap} .stages-card tr.stages-tot td{background:var(--soft, rgba(0,0,0,.035));font-weight:600}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a0a9e7ffa292"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8d6b94c59c32"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -7276,6 +7277,38 @@ async function doneDialog(a) {
 
 return { viewBoard, boardSection };
 })();
+__m["js/core/pipeline.js"] = (function () {
+// A3 ridotto (07/11/2026): "Offerte per fase" in Area manager. Il tasso di conversione offerta→ordine arriva da Meridian (decisione Tommaso).
+// Fasi: da sentire (RADIX "Da seguire", offerte dell'app inviate), sentite (RADIX "Sentito"), bozze dell'app;
+// tra le aperte quante hanno la previsione; accettate e perse negli ultimi 90 giorni (esiti segnati nell'app).
+const STAGES = [['tosee', 'Da sentire'], ['heard', 'Sentite'], ['draft', 'Bozze app'], ['fc', 'Con previsione'], ['won', 'Accettate 90 gg'], ['lost', 'Perse 90 gg']];
+const blank = name => ({ name, ...Object.fromEntries(STAGES.flatMap(([k]) => [[k, 0], [k + 'V', 0]])) });
+
+/**
+ * @param items [{ agent, kind: 'app'|'radix', state, total, forecast: bool, closedAt: 'AAAA-MM-GG'|null }]
+ *   state app: Bozza|Inviata|Accettata|Persa; state radix: Da seguire|Sentito|Accettata|Persa
+ * @returns { total, rows } rows ordinate per valore aperto
+ */
+function pipeline(items, today) {
+  const d90 = new Date(new Date(today + 'T12:00:00').getTime() - 90 * 864e5).toISOString().slice(0, 10);
+  const total = blank('Tutta la rete'), by = new Map();
+  for (const it of items) {
+    const st = it.kind === 'app' ? { Bozza: 'draft', Inviata: 'tosee', Accettata: 'won', Persa: 'lost' }[it.state] : { 'Da seguire': 'tosee', Sentito: 'heard', Accettata: 'won', Persa: 'lost' }[it.state];
+    if (!st) continue;
+    if ((st === 'won' || st === 'lost') && !(it.closedAt && it.closedAt >= d90)) continue;
+    if (!by.has(it.agent)) by.set(it.agent, blank(it.agent));
+    const v = Number(it.total) || 0;
+    for (const r of [total, by.get(it.agent)]) {
+      r[st]++; r[st + 'V'] += v;
+      if (it.forecast && (st === 'tosee' || st === 'heard' || st === 'draft')) { r.fc++; r.fcV += v; }
+    }
+  }
+  const open = r => r.toseeV + r.heardV + r.draftV;
+  return { total, rows: [...by.values()].sort((a, b) => open(b) - open(a) || a.name.localeCompare(b.name)) };
+}
+
+return { STAGES, pipeline };
+})();
 __m["js/core/week-summary.js"] = (function () {
 // Settimana degli agenti (07/11/2026, Tommaso: telefonate di allineamento del lunedì). Una riga per agente con i numeri
 // degli ultimi 7 giorni, calcolati da quello che passa dall'HUB: va letto come spunto per la telefonata, non come un voto.
@@ -7309,6 +7342,8 @@ function weekSummary(agents, { notes = [], quotes = [], sends = [], customers = 
 return { weekSummary };
 })();
 __m["js/views/direction.js"] = (function () {
+const { pipeline, STAGES } = __m["js/core/pipeline.js"];
+const { ownerLabel } = __m["js/core/dir-follower.js"];
 const { h, fill, eur, dateIt, dateTimeIt, emptyState, toast, modal } = __m["js/ui.js"];
 const { quoteCls } = __m["js/views/agenda.js"];
 const { validateBands, effectiveRules } = __m["js/core/margins.js"];
@@ -7478,7 +7513,8 @@ async function managerSection(app) {
   }).sort((a, b) => b.active + b.recover - (a.active + a.recover));
   const sum = k => rows.reduce((t, r) => t + r[k], 0);
   const commissions = await commissionCard(app);
-  return h('div', { class: 'section-body' }, forecastCard(app, customers, quotes, rxOffers),
+  const rxAll = app.store.radixOffers ? await app.store.radixOffers({ withClosed: true }).catch(() => rxOffers) : rxOffers;
+  return h('div', { class: 'section-body' }, stagesCard(app, quotes, rxAll), forecastCard(app, customers, quotes, rxOffers),
     h('section', { class: 'card' }, h('h2', {}, 'Portafoglio per assegnatario'),
       h('p', { class: 'muted' }, 'Clienti, stato e attività di ciascun agente e consulente (comprese note e offerte aperte importate da RADIX, contate sul cliente). Tocca un nome per vedere i numeri.'),
       h('div', { class: 'pf-list' }, rows.map(r => h('details', {},
@@ -7510,6 +7546,24 @@ async function weekCard(app, data) {
         return h('tr', {}, h('td', {}, h('strong', {}, r.name)), h('td', {}, stale ? h('span', { class: 'wk-bad' }, ago(last)) : ago(last)), acc ? n(r.opens7 ?? 0, !r.opens7) : null,
           n(r.notes7, !r.notes7), n(r.quotes7), n(r.sent7), n(r.lateFollow, r.lateFollow > 0), n(r.newCust7));
       })))));
+}
+
+// 07/11 sera (A3 ridotto, Tommaso): offerte per fase, rete e agenti. La conversione offerta→ordine arriverà da Meridian.
+function stagesCard(app, quotes, rxAll) {
+  const who = (customerId, fallback) => (customerId && ownerLabel(app.store.customer(customerId))) || fallback || 'Senza cliente collegato';
+  const day = v => (v ? String(v).slice(0, 10) : null);
+  const items = [
+    ...quotes.filter(q => !app.store.customer(q.customerId)?.isTest).map(q => ({ agent: who(q.customerId, q.ownerName), kind: 'app', state: q.status, total: q.total, forecast: !!(q.forecast?.p && q.forecast?.month), closedAt: day(q.updatedAt) })),
+    ...rxAll.filter(o => o.open !== false || ['Accettata', 'Persa'].includes(o.outcome))
+      .map(o => ({ agent: who(o.customerId), kind: 'radix', state: o.outcome, total: o.total, forecast: !!(o.forecastP && o.forecastMonth), closedAt: day(o.outcomeAt) }))];
+  const { total, rows } = pipeline(items, new Date().toISOString().slice(0, 10));
+  const cell = (r, k) => h('td', { class: 'num' }, r[k] ? [String(r[k]), r[k + 'V'] ? h('small', { class: 'muted' }, ' · ' + eur(r[k + 'V'])) : null] : h('span', { class: 'muted' }, '–'));
+  const tr = (r, cls) => h('tr', { class: cls || '' }, h('td', {}, h('strong', {}, r.name)), STAGES.map(([k]) => cell(r, k)));
+  return h('section', { class: 'card stages-card' }, h('h2', {}, 'Offerte per fase'),
+    h('p', { class: 'muted' }, 'Offerte RADIX e dell\'app insieme: dove si ferma il lavoro. "Con previsione" sono le aperte con probabilità e mese segnati. Accettate e perse: esiti segnati nell\'app negli ultimi 90 giorni. Il tasso di conversione offerta→ordine arriverà da Meridian.'),
+    h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
+      h('thead', {}, h('tr', {}, h('th', {}, ''), STAGES.map(([, l]) => h('th', { class: 'num' }, l)))),
+      h('tbody', {}, tr(total, 'stages-tot'), rows.map(r => tr(r))))));
 }
 
 // 07/11 (piano "stile Salesforce" A1): fatturato atteso dalle offerte aperte = importo × peso della probabilità, per mese e agente
