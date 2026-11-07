@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="044e9285741a">
+<meta name="ntx-build" content="07f94aecfa98">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -814,7 +814,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .sys-thick input.sys-cm { min-width: 0; width: 72px; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"044e9285741a"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"07f94aecfa98"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -8186,7 +8186,7 @@ const WALL_LIMITS = {          // D.M. 26/06/2015 - pareti verticali opache vers
   interno: { label: 'Riqualificazione con isolamento dall\'interno (App. B, +30%)', zones: { 'A-B': 0.52, C: 0.468, D: 0.416, E: 0.364, F: 0.338 } },
   // 06/11: coperture (strutture opache orizzontali o inclinate verso l'esterno), stessi valori dal 2021 del D.M. 26/06/2015
   // 06/11: pavimenti verso terreno o vani non riscaldati, nuova costruzione (valori della tavola A1)
-  pavimento: { label: 'Pavimento verso terreno, nuova costruzione (App. A) — valori della tavola A1', zones: { 'A-B': 0.44, C: 0.38, D: 0.29, E: 0.26, F: 0.24 } },
+  pavimento: { label: 'Pavimento verso terreno, nuova costruzione (App. A)', zones: { 'A-B': 0.44, C: 0.38, D: 0.29, E: 0.26, F: 0.24 } },
   copertura: { label: 'Copertura, nuova costruzione (App. A) — valori della tavola E1', zones: { 'A-B': 0.35, C: 0.33, D: 0.26, E: 0.22, F: 0.20 } },
 };
 const ZONES = ['A-B', 'C', 'D', 'E', 'F'];
@@ -8312,6 +8312,34 @@ const SYSTEMS = [
     excluded: 'Pavimento, solaio in calcestruzzo e armature, scavo e terreno, nastri e raccordi del telo anti radon, colla e viti delle lastre, posa. Ghiaia: prezzo sfusa (in BigBag Policell 186-196 €/m³, Policell Hard 220 €/m³).',
   },
   {
+    // 06/11/2026: pavimentazione a secco su solaio esistente o nuovo (catalogo Isolanti e Sistemi a secco, tavola A2 p. 12-13,
+    // U PHPP 0,135 con Foamglas T3+ 2 × 100 mm). Variante NORDTEX V600 (λ 0,054) proposta in alternativa: più economica, isola meno.
+    code: 'A2', name: 'Pavimentazione a secco con vetro cellulare doppio strato', short: 'Pavimento su solaio · nuova costruzione e ristrutturazione',
+    source: 'Catalogo Isolanti e Sistemi a secco, tavola A2 (p. 12-13)', limits: 'pavimento', catalogU: 0.135, rsi: 0.17, rse: 0,
+    description: 'Pavimento a secco senza ponti termici e protetto dal radon: telo anti radon sul solaio, doppio strato di pannelli in vetro cellulare a giunti sfalsati, carta ermetica, sottofondo a secco in granulato di argilla, lastre in gessofibra battentate e fascia acustica perimetrale.',
+    variants: ['V600', 'FOAMGLAS T3+'],   // 06/11 Tommaso: "usa V600" (prodotto NORDTEX) come variante iniziale
+    main: 'isolante',
+    layers: [
+      { key: 'pavimento', name: 'Pavimento in legno (a parte)', cm: 0.7, lambda: 0.14, rho: '-', mu: '-', mat: 'legno' },
+      { key: 'gessofibra', name: 'Lastra in gessofibra battentata {mm}', cm: 2.5, edit: true, lambda: 0.32, rho: 1150, mu: 13, mat: 'gesso',
+        product: { all: { sub: 'Lastra in gessofibra battentata', thick: 25 } }, perM2: 1, unit: 'm2', waste: 5 },
+      { key: 'ts14', name: 'Sottofondo a secco in argilla Nordtex TS 14', cm: 14, free: true, lambda: 0.09, rho: 400, mu: 2, mat: 'argilla',
+        product: { all: { sub: 'Nordtex TS 14' } }, perCm: 10, unit: 'lt', pack: 50, note: 'consumo di listino 10 lt/m² per cm' },
+      { key: 'carta', name: 'Carta freno vapore Ampack Sisalex 303', cm: 0.05, lambda: null, mat: 'membrana', thin: true,
+        product: { all: { sub: 'Ampack Sisalex 303' } }, perM2: 1.1, unit: 'm2', pack: 75 },
+      { key: 'isolante', name: { 'FOAMGLAS T3+': 'Vetro cellulare Foamglas T3+ {mm}', V600: 'Vetro cellulare Nordtex V600 {mm}' }, cm: 20, plies: 2, stack: true,
+        lambda: { 'FOAMGLAS T3+': 0.036, V600: 0.054 }, rho: { 'FOAMGLAS T3+': 100, V600: 130 }, mu: '∞', mat: 'vetro',
+        product: { 'FOAMGLAS T3+': { sub: 'Foamglas T3+' }, V600: { sub: 'NORDTEX V600' } }, perM2: 2, unit: 'm2', waste: 3 },
+      { key: 'radon', name: 'Telo impermeabile anti radon Ampack Sisalex 871', cm: 0.05, lambda: null, mat: 'membrana', thin: true,
+        product: { all: { sub: 'Ampack Sisalex 871' } }, perM2: 1.1, unit: 'm2', pack: 100 },
+      { key: 'solaio', name: 'Solaio in calcestruzzo (a parte)', cm: 20, free: true, lambda: 2.3, rho: 2400, mu: 80, mat: 'cls' },
+    ],
+    extras: [
+      { label: 'NORDTEX soundstrip (fascia acustica perimetrale)', product: { sub: 'soundstrip' }, perM2: 0.8, unit: 'ml', pack: 10, note: 'stima 0,8 ml/m² di perimetro dei locali — da confermare' },
+    ],
+    excluded: 'Pavimento, solaio in calcestruzzo, nastri e raccordi del telo anti radon, colla e viti delle lastre, eventuale incollaggio dei pannelli, posa.',
+  },
+  {
     // 06/11/2026: parete esterna a secco per nuove costruzioni (catalogo Isolanti e Sistemi a secco, tavola C1 p. 32-33, U PHPP 0,123).
     // Gessofibra di controvento e pannello DWD protect N+F non sono a listino: contano nella U ma non nel prezzo (da quotare a parte).
     code: 'C1', name: 'Parete esterna a secco su telaio Joist', short: 'Parete esterna · nuova costruzione',
@@ -8378,7 +8406,7 @@ __m["js/core/systems.js"] = (function () {
 // Calcoli dei Sistemi: trasmittanza U (UNI EN ISO 6946, metodo combinato per gli strati con montanti) e computo materiali/prezzi.
 const { SYSTEMS, WALL_LIMITS } = __m["js/data/systems-data.js"];
 const RSI = 0.13, RSE = 0.04;   // pareti, flusso orizzontale
-const VKEYS = ['STEICO', 'NATURHELD', 'Catalogo', 'POLICELL', 'POLICELL HARD', 'all'];
+const VKEYS = ['STEICO', 'NATURHELD', 'Catalogo', 'POLICELL', 'POLICELL HARD', 'FOAMGLAS T3+', 'V600', 'all'];
 const pickV = (v, variant) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).some(k => VKEYS.includes(k)) ? (v[variant] ?? v.all ?? null) : v;
 
 // Strati risolti per una variante. cfg (06/11, Tommaso: "possibilità di variare gli spessori"):
@@ -9205,7 +9233,8 @@ function denied() { return h('div', { class: 'page' }, emptyState('Sezione in pr
 
 // ---- disegno della stratigrafia (sezione orizzontale, interno a sinistra) ----
 let svgSeq = 0;
-function stratSvg(layers, { width = 640, height = 250 } = {}) {
+function stratSvg(layers, { width = 640, height = 250, floor = false } = {}) {
+  if (floor) return floorSvg(layers, { width, height });
   const id = 's' + (++svgSeq) + '-';
   const drawn = layers, x0 = 40, W = width - 80, top = 46, H = height - 86;
   const minW = 7, tot = drawn.reduce((s, l) => s + (l.thin ? 0 : l.cm), 0);
@@ -9236,6 +9265,37 @@ function stratSvg(layers, { width = 640, height = 250 } = {}) {
   const sides = `<text x="${x0}" y="${height - 8}" font-size="10" fill="#676568" font-family="Inter,Arial" letter-spacing="1">INTERNO</text><text x="${x0 + W}" y="${height - 8}" font-size="10" fill="#676568" text-anchor="end" font-family="Inter,Arial" letter-spacing="1">ESTERNO</text>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Stratigrafia" class="strat">${pats}${body}${labels}${sides}</svg>`;
 }
+// 06/11 (Tommaso): pavimenti e solai disegnati in orizzontale, come si vedono in sezione (pavimento in alto, terreno in basso)
+function floorSvg(layers, { width = 640, height = 250 } = {}) {
+  const id = 'f' + (++svgSeq) + '-';
+  const x0 = 70, W = width - 130, top = 22, H = Math.max(height, 230) - 52;
+  const minH = 6, tot = layers.reduce((s, l) => s + (l.thin ? 0 : l.cm), 0);
+  const raw = layers.map(l => l.thin ? 3 : Math.max(minH, l.cm / tot * H));
+  const k = H / raw.reduce((s, v) => s + v, 0); let y = top;
+  const pats = `<defs>
+    <pattern id="${id}p-fibre" width="16" height="8" patternUnits="userSpaceOnUse"><rect width="16" height="8" fill="${MAT.fibra.color}"/><path d="M0 4Q4 0 8 4T16 4" fill="none" stroke="#a87c3d" stroke-width=".8"/></pattern>
+    <pattern id="${id}p-fibreR" width="16" height="8" patternUnits="userSpaceOnUse"><rect width="16" height="8" fill="${MAT.fibraRigida.color}"/><path d="M0 4Q4 1 8 4T16 4" fill="none" stroke="#7d5a2c" stroke-width=".8"/></pattern>
+    <pattern id="${id}p-gravel" width="14" height="10" patternUnits="userSpaceOnUse"><rect width="14" height="10" fill="${MAT.ghiaia.color}"/><circle cx="3" cy="3" r="2" fill="#8b8b86"/><circle cx="10" cy="7" r="2.4" fill="#93938e"/><circle cx="11" cy="2" r="1.2" fill="#7f7f7a"/></pattern>
+    <pattern id="${id}p-clay" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="${MAT.argilla.color}"/><circle cx="2" cy="2" r="1" fill="#7d5235"/><circle cx="6" cy="5" r="1.2" fill="#b07c55"/></pattern>
+    <pattern id="${id}p-cls" width="10" height="10" patternUnits="userSpaceOnUse"><rect width="10" height="10" fill="${MAT.cls.color}"/><path d="M0 10L10 0" stroke="#a9a9a4" stroke-width=".8"/></pattern>
+    <pattern id="${id}p-soil" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="#b49a78"/><path d="M0 12L12 0M-3 3L3 -3M9 15L15 9" stroke="#8e7454" stroke-width=".9"/></pattern></defs>`;
+  const fillOf = l => ({ fibra: `url(#${id}p-fibre)`, fibraRigida: `url(#${id}p-fibreR)`, ghiaia: `url(#${id}p-gravel)`, argilla: `url(#${id}p-clay)`, cls: `url(#${id}p-cls)` }[l.mat] || MAT[l.mat]?.color || '#ddd');
+  let body = '', labels = '';
+  layers.forEach((l, i) => {
+    const hh = raw[i] * k;
+    body += `<rect x="${x0}" y="${y.toFixed(1)}" width="${W}" height="${hh.toFixed(1)}" fill="${fillOf(l)}" stroke="#4b4a4d" stroke-width=".6"/>`;
+    if (l.parts?.length > 1) { let yy = y; for (const mm of l.parts.slice(0, -1)) { yy += hh * mm / (l.cm * 10);   // strato 1 / strato 2
+      body += `<line x1="${x0}" y1="${yy.toFixed(1)}" x2="${x0 + W}" y2="${yy.toFixed(1)}" stroke="#d8d8d8" stroke-width="1" stroke-dasharray="5 4"/>`; } }
+    const cy = y + hh / 2, lx = x0 + W + 18 + (i % 2) * 22;
+    labels += `<line x1="${x0 + W}" y1="${cy.toFixed(1)}" x2="${lx - 8}" y2="${cy.toFixed(1)}" stroke="#676568" stroke-width=".6"/><circle cx="${lx}" cy="${cy.toFixed(1)}" r="7.5" fill="#BCBF00"/><text x="${lx}" y="${(cy + 3).toFixed(1)}" font-size="9" font-weight="700" text-anchor="middle" fill="#2b2a2c" font-family="Inter,Arial">${i + 1}</text>`;
+    if (!l.thin && hh > 11) labels += `<text x="${x0 - 8}" y="${(cy + 3).toFixed(1)}" font-size="9" text-anchor="end" fill="#4b4a4d" font-family="Inter,Arial">${String(l.cm).replace('.', ',')} cm</text>`;
+    y += hh;
+  });
+  body += `<rect x="${x0}" y="${y.toFixed(1)}" width="${W}" height="14" fill="url(#${id}p-soil)"/>`;
+  const sides = `<text x="${x0}" y="${top - 8}" font-size="10" fill="#676568" font-family="Inter,Arial" letter-spacing="1">INTERNO</text><text x="${x0}" y="${(y + 26).toFixed(1)}" font-size="10" fill="#676568" font-family="Inter,Arial" letter-spacing="1">TERRENO</text>`;
+  const hTot = y + 32;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${hTot.toFixed(0)}" role="img" aria-label="Stratigrafia" class="strat">${pats}${body}${labels}${sides}</svg>`;
+}
 const svgEl = (layers, opt) => { const d = h('div', { class: 'strat-box' }); d.innerHTML = stratSvg(layers, opt); return d; };
 
 // ---- elenco ----
@@ -9248,7 +9308,7 @@ async function viewSystems(app) {
       const lay = resolveLayers(s, s.variants.includes('NATURHELD') ? 'NATURHELD' : s.variants[0]);
       return h('a', { class: 'card sys-card plain', href: '#/sistema/' + s.code },
         h('div', { class: 'sys-card-head' }, h('span', { class: 'sys-code' }, s.code), h('div', {}, h('strong', {}, s.name), h('small', { class: 'muted' }, s.short))),
-        svgEl(lay, { width: 520, height: 170 }),
+        svgEl(lay, { width: 520, height: 170, floor: s.limits === 'pavimento' }),
         h('small', { class: 'muted' }, `U ≈ ${n3(uValue(lay, { rsi: s.rsi ?? 0.13, rse: s.rse ?? 0.04 }).u)} W/m²K · ${s.variants.join(' / ')}`));
     })));
 }
@@ -9322,7 +9382,7 @@ async function viewSystem(app, code) {
       h('button', { class: 'act primary', type: 'button', onclick: () => printSheet(app, sys, q, st) }, h('span', { class: 'act-ico' }, '⎙'), h('span', {}, 'Scheda cliente')),
       h('button', { class: 'act', type: 'button', onclick: () => toOffer(app, sys, q, st) }, h('span', { class: 'act-ico' }, '€'), h('span', {}, 'Crea offerta'))),
     controls, kpis,
-    h('section', { class: 'card' }, h('h2', {}, 'Stratigrafia'), svgEl(q.layers), h('div', { class: 'tbl-wrap' }, layersTable),
+    h('section', { class: 'card' }, h('h2', {}, 'Stratigrafia'), svgEl(q.layers, { floor: sys.limits === 'pavimento', height: 300 }), h('div', { class: 'tbl-wrap' }, layersTable),
       h('p', { class: 'fine' }, `Calcolo UNI EN ISO 6946 (Rsi ${(sys.rsi ?? 0.13).toFixed(2).replace('.', ',')}${sys.rsi === 0.10 ? ' flusso ascendente' : sys.rsi === 0.17 ? ' flusso discendente' : ''} · Rse ${(sys.rse ?? 0.04).toFixed(2).replace('.', ',')}${sys.rse === 0 ? ' contro terreno' : ''}${sys.layers.some(l => l.frame) ? '; strati con montanti: metodo combinato, prudente' : ''}). Valore della tavola di catalogo (PHPP, prodotti originali): ${n3(sys.catalogU)} W/m²K. Calcolo indicativo: non sostituisce la relazione tecnica.`)),
     h('section', { class: 'card' }, h('h2', {}, 'Limiti di legge'), h('div', { class: 'tbl-wrap' }, zonesTable), h('p', { class: 'fine' }, 'D.M. 26/06/2015 "requisiti minimi", valori in vigore dal 2021.')),
     checks,
@@ -9348,7 +9408,7 @@ async function printSheet(app, sys, q, st) {
   el.innerHTML = `<img class="ss-head" src="${OFFER_HEADER}" alt="NORDTEX">
   <div class="ss-title"><div><div class="ss-kicker">Sistema NORDTEX ${esc(sys.code)}${sys.variants.length > 1 ? ' · versione ' + esc(st.variant) : ''}</div><h1>${esc(sys.name)}</h1><p>${esc(sys.short)}</p></div>
     <div class="ss-facts">${customer ? `<div><small>Cliente</small><strong>${esc(customer.name)}</strong></div>` : ''}<div><small>Data</small><strong>${dateIt(today())}</strong></div></div></div>
-  <div class="ss-cols"><div class="ss-draw">${stratSvg(q.layers, { width: 640, height: 230 })}</div>
+  <div class="ss-cols"><div class="ss-draw">${stratSvg(q.layers, { width: 640, height: 230, floor: sys.limits === 'pavimento' })}</div>
     <div class="ss-perf"><div class="ss-u ${v.ok ? 'ok' : 'bad'}"><small>Trasmittanza U</small><strong>${n3(q.u.u)}</strong><small>W/m²K</small></div>
       <div class="ss-mini"><small>Spessore</small><strong>${String(q.thickness).replace('.', ',')} cm</strong></div>
       <div class="ss-mini"><small>Limite zona ${esc(st.zone)}</small><strong>${n3(v.max)} ${v.ok ? '✓' : '✕'}</strong></div></div></div>
