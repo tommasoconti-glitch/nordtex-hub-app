@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="b97a8b97c7d4">
+<meta name="ntx-build" content="dac17315507d">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -869,9 +869,10 @@ h2.fold-head::after,.fold-head h2::after{content:' ▾';color:var(--muted,#888);
 .match-box{border:1px dashed #2e9e5b;background:rgba(46,158,91,.06);border-radius:10px;padding:10px 12px;margin:.6rem 0;display:grid;gap:6px}
 .match-box.possibile{border-color:#e09a00;background:rgba(224,154,0,.07)}
 .match-box ul{margin:0;padding-left:1.1rem}
+.ord-watch{border-left:4px solid #e0a000;padding-left:12px;margin:.6rem 0 1.2rem}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"b97a8b97c7d4"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"dac17315507d"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3881,16 +3882,44 @@ function radixOrderRow(app, o, { showCustomer = true } = {}) {
     isDir && o.notes ? h('div', { class: 'fine' }, 'Avvisi ufficio: ' + o.notes) : null);
 }
 
+// 07/11 sera (Tommaso, caso S.I.L.L.A. Imola: ordini di luglio fermi con carichi da richiamare): in cima "Da guardare",
+// cioè consegna prevista superata o ordine aperto da più di 30 giorni, dal più grande; filtro per agente.
+const STALE_DAYS = 30;
+function staleReasons(o, t = today()) {
+  const r = [];
+  if (o.deliveryBy && o.deliveryBy < t) r.push('consegna superata');
+  const lim = new Date(new Date(t + 'T12:00:00').getTime() - STALE_DAYS * 864e5).toISOString().slice(0, 10);
+  if (o.date && o.date < lim) r.push('aperto da più di ' + STALE_DAYS + ' giorni');
+  return r;
+}
+
 // Elenco completo (pagina Ordini, Direzione/Ufficio)
 async function radixOrdersSection(app) {
   const list = app.store.radixOrders ? await app.store.radixOrders().catch(() => []) : [];
-  const blocked = list.filter(isBlocked).length;
+  const agentOf = o => (o.customerId && app.store.customer(o.customerId)?.assignee) || o.radixAgent || 'Senza cliente collegato';
+  const agents = [...new Set(list.map(agentOf))].sort((a, b) => a.localeCompare(b, 'it'));
+  const sel = h('select', { 'aria-label': 'Agente' }, h('option', { value: '' }, 'Tutti gli agenti'), agents.map(a => h('option', { value: a }, a)));
+  const body = h('div', {});
+  const draw = () => {
+    const rows = list.filter(o => !sel.value || agentOf(o) === sel.value);
+    const stale = rows.map(o => ({ o, why: staleReasons(o) })).filter(x => x.why.length).sort((a, b) => (b.o.total || 0) - (a.o.total || 0));
+    const sum = xs => eur(xs.reduce((t, o) => t + (o.total || 0), 0));
+    body.replaceChildren(
+      h('div', { class: 'ord-watch' }, h('h3', {}, `Da guardare (${stale.length})`),
+        stale.length ? [h('p', { class: 'fine' }, `Consegna superata o aperti da più di ${STALE_DAYS} giorni: ${sum(stale.map(x => x.o))}. Prima i più grandi: spesso sono carichi da richiamare o ordini da sbloccare.`),
+          h('ul', { class: 'rx-list' }, stale.map(({ o, why }) => { const li = radixOrderRow(app, o); li.querySelector('.rx-head')?.append(h('span', { class: 'badge bad' }, why.join(' · '))); return li; }))]
+          : h('p', { class: 'muted' }, 'Nessun ordine fermo.')),
+      h('h3', {}, `Tutti gli ordini aperti (${rows.length})`),
+      h('p', { class: 'muted' }, `${rows.filter(isBlocked).length} bloccati · totale ${sum(rows)}`),
+      rows.length ? h('ul', { class: 'rx-list' }, rows.map(o => radixOrderRow(app, o))) : emptyState('Nessun ordine per questo agente.'));
+  };
+  sel.onchange = draw; draw();
   return h('section', { class: 'card' }, h('h2', {}, `Ordini aperti in RADIX (${list.length})`),
-    h('p', { class: 'muted' }, list.length ? `Fotografia dell'ultimo caricamento da RADIX · ${blocked} bloccati · totale ${eur(list.reduce((t, o) => t + (o.total || 0), 0))}` : ''),
-    list.length ? h('ul', { class: 'rx-list' }, list.map(o => radixOrderRow(app, o))) : emptyState('Nessun ordine RADIX caricato: si aggiornano da "Aggiorna dati" con il file giornaliero.'));
+    list.length ? [h('p', { class: 'muted' }, 'Fotografia dell\'ultimo caricamento da RADIX.'), h('div', { class: 'row' }, sel), body]
+      : emptyState('Nessun ordine RADIX caricato: si aggiornano da "Aggiorna dati" con il file giornaliero.'));
 }
 
-return { isBlocked, radixOrderRow, radixOrdersSection };
+return { isBlocked, radixOrderRow, STALE_DAYS, staleReasons, radixOrdersSection };
 })();
 __m["js/views/agenda.js"] = (function () {
 const { followerSelect } = __m["js/views/dir-follower-ui.js"];
