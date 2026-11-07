@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="949ad4c51759">
+<meta name="ntx-build" content="28a5c80f8ff3">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -812,9 +812,11 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .sys-thick label { display: inline-flex; align-items: center; gap: 6px; font-size: .82rem; color: var(--muted, #676568); }
 .sys-thick select, .sys-thick input { padding: 4px 6px; font-size: .88rem; min-width: 92px; width: auto; }
 .sys-thick input.sys-cm { min-width: 0; width: 72px; }
+/* Sistemi: varianti su una riga (07/11, nomi lunghi come CANNATHERM / NATURHELD andavano a capo) */
+.sys-controls .seg{flex-wrap:nowrap;gap:0;max-width:100%} .sys-controls .seg-b{white-space:nowrap;padding:9px 10px;font-size:.8rem}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"949ad4c51759"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"28a5c80f8ff3"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -8250,7 +8252,38 @@ const SYSTEMS = [
       { label: 'NORDTEX Calce Fine (finitura)', product: { sub: 'NORDTEX Calce Fine' }, perM2: 3, unit: 'kg', pack: 25, note: 'finitura proposta — da confermare' },
     ],
     excluded: 'Montanti in alluminio del vano impianti, viti, nastri sigillanti, telo Foliarex lato muro, partenza a pavimento in vetro cellulare con BL DICK, posa.',
+  },  {
+    // 07/11/2026: controparete interna con canapa e finiture in argilla (catalogo Isolanti e Sistemi a secco, tavola D2 p. 56-57, U PHPP 0,147).
+    // Come D1 con lastra in terra cruda Conluto al posto del Gessoforte; isolante Cannatherm (catalogo, a listino λ 0,040) o NATURHELD.
+    code: 'D2', name: 'Isolamento interno con canapa e finiture in argilla', short: 'Parete interna · ristrutturazione',
+    source: 'Catalogo Isolanti e Sistemi a secco, tavola D2 (p. 56-57)', limits: 'interno', catalogU: 0.147,
+    description: 'Controparete interna su muratura esistente con finiture naturali: isolante tra montanti Joist, freno vapore igrovariabile, vano impianti isolato, lastre in terra cruda Conluto rasate e rifinite in argilla, che regolano l\'umidità degli ambienti.',
+    variants: ['CANNATHERM', 'NATURHELD'],
+    main: 'isolante',
+    layers: [
+      { key: 'finitura', name: 'Finitura in argilla', cm: 0.1, lambda: 0.76, rho: 1600, mu: '5/10', mat: 'finitura' },
+      { key: 'rasatura_int', name: 'Rasatura in argilla Conluto con rete di armatura', cm: 0.4, lambda: 0.76, rho: 1600, mu: '5/10', mat: 'intonaco' },
+      { key: 'lastra', name: 'Lastra in terra cruda Conluto {mm}', cm: 2.2, edit: true, lambda: 0.35, rho: 1000, mu: '5/10', mat: 'argilla',
+        product: { all: { sub: 'Conluto Lastra in argilla', thick: 22 } }, perM2: 1, unit: 'm2', waste: 5 },
+      { key: 'impianti', name: { CANNATHERM: 'Cannatherm 35 {mm}, vano impianti', NATURHELD: 'Naturtex flex (NATURHELD) {mm}, vano impianti' }, cm: 5, edit: true,
+        lambda: { CANNATHERM: 0.040, NATURHELD: 0.038 }, rho: 50, mu: '1/2', mat: 'fibra',
+        product: { CANNATHERM: { sub: 'Cannatherm 35', thick: 50 }, NATURHELD: { sub: 'Naturtex flex', thick: 50 } }, perM2: 0.95, unit: 'm2', waste: 5 },
+      { key: 'freno', name: 'Freno vapore Ampatex Variano 3', cm: 0.05, lambda: null, mat: 'membrana', thin: true,
+        product: { all: { sub: 'Ampatex Variano 3' } }, perM2: 1.1, unit: 'm2', pack: 75 },
+      { key: 'isolante', name: { CANNATHERM: 'Cannatherm 35 {mm} tra montanti Joist', NATURHELD: 'Naturtex flex (NATURHELD) {mm} tra montanti Joist' }, cm: 20, frame: JOIST, edit: true,
+        lambda: { CANNATHERM: 0.040, NATURHELD: 0.038 }, rho: 50, mu: '1/2', mat: 'fibra',
+        product: { CANNATHERM: { sub: 'Cannatherm 35' }, NATURHELD: { sub: 'Naturtex flex' } }, perM2: 0.93, unit: 'm2', waste: 5,
+        check: { CANNATHERM: 'Cannatherm: il catalogo calcola λ 0,038, a listino è 0,040 (usato qui, più prudente)' } },
+      { key: 'muro', name: 'Parete esistente', cm: 12, lambda: 0.80, rho: '>1000', mu: '7/11', mat: 'muro', existing: true },
+    ],
+    extras: [
+      { label: 'NORDTEX JOIST coibentato SJ 45', product: { sub: 'NORDTEX JOIST coibentato', heightFrom: 'isolante' }, perM2: 1.6, unit: 'ml', note: 'interasse 62,5 cm — da confermare' },
+      { label: 'Conluto Collante/rasante adesivo in argilla (rasatura 4 mm)', product: { sub: 'Conluto Collante/rasante adesivo in argilla', perPack: true }, perM2: 5, unit: 'kg', pack: 25, note: 'stima 5 kg/m² per 4 mm — da confermare' },
+      { label: 'Conluto Rete di armatura in fibra di vetro', product: { sub: 'Conluto Rete di armatura in fibra di vetro', perPack: true, packWord: 'rotoli' }, perM2: 1.1, unit: 'm2', pack: 50 },
+    ],
+    excluded: 'Finitura in argilla (prodotto da scegliere), montanti in alluminio del vano impianti, viti e rondelle delle lastre in argilla, nastri sigillanti, telo Foliarex lato muro, partenza a pavimento in vetro cellulare con BL DICK, posa.',
   },
+
   {
     code: 'B1', name: 'Parete in laterizio rettificato Thermopor con intonaci NHL', short: 'Parete esterna · nuova costruzione',
     source: 'Catalogo Blocchi Laterizio, tavola B1 (p. 8-9) e ciclo 2 NHL (Listino p. 101)', limits: 'nuovo', catalogU: 0.157,
