@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="06e900bc6c48">
+<meta name="ntx-build" content="710cf1be9e2b">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -871,7 +871,7 @@ h2.fold-head::after,.fold-head h2::after{content:' ▾';color:var(--muted,#888);
 .match-box ul{margin:0;padding-left:1.1rem}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"06e900bc6c48"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"710cf1be9e2b"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -5979,7 +5979,7 @@ __m["js/views/offers-list.js"] = (function () {
 // Offerte (01/11 sera, Tommaso): un solo elenco con le offerte dell'app e quelle RADIX.
 // 05/11: quattro schede (Da richiamare, Aperte, Scadute, Chiuse), righe in parole semplici; la Direzione vede la stessa pagina degli agenti.
 const { acceptedWithOrder, orderRefOf } = __m["js/core/order-match.js"];
-const { loadMatches, matchBadge } = __m["js/views/order-match-ui.js"];
+const { loadMatches, matchBadge, cachedMatch } = __m["js/views/order-match-ui.js"];
 const { h, fill, eur, dateIt, today, toast, emptyState, debounce } = __m["js/ui.js"];
 const { unifiedOffers, quoteReminders, isExpiring } = __m["js/data/model.js"];
 const { radixOfferDialog, linesSummary } = __m["js/views/radix-offers.js"];
@@ -6029,10 +6029,13 @@ async function offersList(app, { onNew }) {
   // 05/11 (Tommaso: "così non si capisce nulla, mi chiamano i commerciali"): tre schede semplici in alto, gli altri filtri in "Altri filtri"
   const live = x => x.state === 'aperta' && !x.expired;
   const toCall = x => live(x) && urgency(x, t) === 'subito';
-  const TABS = [['chiamare', 'Da richiamare', toCall], ['aperte', 'Aperte', live], ['scadute', 'Scadute', x => !!x.expired], ['chiuse', 'Chiuse', x => ['accettata', 'persa'].includes(x.state)]];
+  // 07/11 sera (Tommaso: "le trovo qui quelle con corrispondenza?"): scheda "Con ordine?" per Direzione e Ufficio, solo se ce ne sono
+  const withOrder = x => x.origin === 'radix' && x.state === 'aperta' && !!cachedMatch(app, x.id);
+  const TABS = [['chiamare', 'Da richiamare', toCall], ['aperte', 'Aperte', live], ...(all.some(withOrder) ? [['ordine', 'Con ordine?', withOrder]] : []), ['scadute', 'Scadute', x => !!x.expired], ['chiuse', 'Chiuse', x => ['accettata', 'persa'].includes(x.state)]];
   const FILTERS = [...TABS, ['recenti', 'Ultimi 7 giorni', x => !!x.date && x.date >= since7], ['sentire', 'Da sentire', x => live(x) && late(x)], ['scadenza', 'In scadenza', x => live(x) && isExpiring(x.validity)],
     ['accettate', 'Accettate', x => x.state === 'accettata'], ['perse', 'Perse', x => x.state === 'persa'], ['annullate', 'Annullate', x => x.state === 'annullata'], ['tutte', 'Tutte', x => x.state !== 'annullata']];
   const sorters = { chiamare: (a, b) => (a.due || '').localeCompare(b.due || '') || (b.total || 0) - (a.total || 0), sentire: (a, b) => (a.due || '').localeCompare(b.due || '') || (b.total || 0) - (a.total || 0), aperte: (a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.number || '').localeCompare(String(a.number || '')),   // 05/11 (Tommaso): Aperte dalla più recente
+    ordine: (a, b) => (cachedMatch(app, a.id)?.level === 'probabile' ? 0 : 1) - (cachedMatch(app, b.id)?.level === 'probabile' ? 0 : 1) || String(b.date).localeCompare(String(a.date)),
     scadenza: (a, b) => a.validity.days - b.validity.days || (b.total || 0) - (a.total || 0), scadute: (a, b) => String(b.raw.validUntil || b.date).localeCompare(String(a.raw.validUntil || a.date)) || (b.total || 0) - (a.total || 0) };
 
   const chips = h('div', { class: 'chips' });
@@ -6080,7 +6083,7 @@ async function offersList(app, { onNew }) {
     counter.textContent = `${rows.length} ${rows.length === 1 ? 'offerta' : 'offerte'} · ${eur(sum(rows))}`;
     // con le offerte aperte l'elenco è diviso per urgenza, ogni gruppo con colore, numero e valore
     const grouped = ['sentire', 'scadenza', 'chiamare'].includes(st.filter);   // Aperte: elenco semplice per data, non per urgenza
-    const hint = { chiamare: 'Clienti da richiamare oggi o già in ritardo, e offerte con i prezzi in scadenza. Dopo la telefonata tocca «Com\'è andata?».', aperte: 'Tutte le offerte ancora aperte, dalla più recente.', scadute: 'Offerte con i prezzi scaduti o non più aperte in RADIX, senza un esito registrato: da recuperare o da chiudere.', chiuse: 'Offerte accettate o perse.' }[st.filter];
+    const hint = { ordine: 'Offerte aperte con un ordine RADIX dello stesso cliente entro 30 giorni: aprile e conferma «Sì, accettata» o «No, non è questo». Prima le probabili.', chiamare: 'Clienti da richiamare oggi o già in ritardo, e offerte con i prezzi in scadenza. Dopo la telefonata tocca «Com\'è andata?».', aperte: 'Tutte le offerte ancora aperte, dalla più recente.', scadute: 'Offerte con i prezzi scaduti o non più aperte in RADIX, senza un esito registrato: da recuperare o da chiudere.', chiuse: 'Offerte accettate o perse.' }[st.filter];
     fill(tabHint, hint || '');
     const body = !rows.length ? [h('li', {}, emptyState(all.length ? 'Nessuna offerta con questi filtri.' : 'Nessuna offerta. Tocca “+ Nuova offerta” e scegli il cliente.'))]
       : grouped ? URG.flatMap(([k, l]) => { const g = rows.filter(o => urgency(o, t) === k); return g.length ? [h('li', { class: 'urg-head ' + k }, h('span', { class: 'urg-dot ' + k }), h('strong', {}, l), h('small', {}, `${g.length} · ${eur(sum(g))}`)), ...g.slice(0, 200).map(row)] : []; })
