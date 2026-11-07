@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="a0b65fecb922">
+<meta name="ntx-build" content="bf1e470ef5bc">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -851,9 +851,13 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .rx-sum .fc-line{display:flex;margin:.6rem 0 .2rem}
 .fc-lab{font-weight:600;font-size:.9em}
 .fc-msg{color:var(--muted,#777)} .fc-msg.warn-text{color:#b26a00;display:inline}
+/* 07/11 sera: chi segue i direzionali */
+.fol-sel{width:auto;min-width:0;font-size:.82em;padding:2px 6px;margin-left:8px;height:auto}
+.badges .fol-sel{margin-left:0}
+.card.my-dir{border-left:4px solid var(--accent,#c8c400)}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a0b65fecb922"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"bf1e470ef5bc"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1565,7 +1569,7 @@ function indexedDbKv(dbName = 'nordtex-hub') {
   return { get: k => tx('readonly', s => s.get(k)), set: (k, v) => tx('readwrite', s => s.put(v, k)) };
 }
 
-const COLLECTIONS = ['notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio', 'postReads', 'plans', 'stops', 'radixLinks', 'threads', 'radixLines'];
+const COLLECTIONS = ['dirFollowers', 'notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio', 'postReads', 'plans', 'stops', 'radixLinks', 'threads', 'radixLines'];
 
 function createLocalStore({ data, kv }) {
   if (data?.schema !== 'nordtex-hub-data-v1') throw new Error('Dati HUB non compatibili');
@@ -1602,6 +1606,7 @@ function createLocalStore({ data, kv }) {
       session = { userId: p.id, name: p.name, role: p.role, assignee: p.assignee, canCommunicate: p.role === 'direzione' && !!p.commEmail, commEmail: p.commEmail || null,
         canImport: p.role === 'direzione' && /tommaso/i.test(p.name || ''), office: !!p.office, readOnly: !!p.readOnly };
       for (const c of await col('prospects')) byId.set(c.id, c);
+      for (const x of await col('dirFollowers')) { const c = byId.get(x.id); if (c) c.dirFollower = x.f; }
       await applyAllStatus();
       return session;
     },
@@ -1618,6 +1623,13 @@ function createLocalStore({ data, kv }) {
       list.push(rec); byId.set(rec.id, rec); await save('prospects'); return rec;
     },
     customer(id) { return canSeeCustomer(id) ? byId.get(id) : null; },
+    async setDirFollower(ids, follower) {
+      if (!isDir()) throw new Error('Solo la Direzione');
+      const list = await col('dirFollowers'); let n = 0;
+      for (const id of ids) { const c = byId.get(id); if (!c || !(c.assignee === 'Direzionale' || c.attribution === 'Direzionale')) continue;
+        c.dirFollower = follower || null; const i = list.findIndex(x => x.id === id); if (i >= 0) list.splice(i, 1); if (follower) list.push({ id, f: follower }); n++; }
+      await save('dirFollowers'); return n;
+    },
     async updateCustomerFiscal(id, fields) {
       const s = mustSession(); const f = checkFiscal(fields); const c = byId.get(id);
       if (!c || c.origin !== 'HUB' || (!isDir() && c.createdBy !== s.userId)) throw new Error('Non puoi modificare questo cliente');
@@ -2010,7 +2022,7 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     }
   }
   const fromDb = c => ({ uuid: c.id, id: c.code, number: c.code, name: c.name, extra: c.extra, street: c.street, cap: c.cap, city: c.city, prov: c.prov, phone: c.phone, email: c.email, vat: c.vat, cf: c.cf,
-    typology: c.typology, assignee: c.assignee_label, attribution: c.attribution, radixAgent: c.radix_agent, radixOwner: c.radix_owner, changedVsRadix: c.changed_vs_radix,
+    typology: c.typology, assignee: c.assignee_label, attribution: c.attribution, dirFollower: c.dir_follower || null, radixAgent: c.radix_agent, radixOwner: c.radix_owner, changedVsRadix: c.changed_vs_radix,
     lastYear: c.last_year, lastInvoice: c.last_invoice, status: c.status, monthsSince: c.months_since, inv2024: c.inv_2024, inv2025: c.inv_2025, inv2026: c.inv_2026, invTotal: c.inv_total,
     firstInvoice: c.first_invoice, dataAsOf: c.origin === 'HUB' ? null : c.updated_at, createdAt: c.created_at, origin: c.origin || 'RADIX', createdBy: c.created_by, annotation: c.annotation, blockedSince: c.blocked_since, salesBlockedSince: c.sales_blocked_since, review: c.review,
     rev2024: c.sales?.rev?.['2024'], rev2025: c.sales?.rev?.['2025'], rev2026: c.sales?.rev?.['2026'], salesAsOf: c.sales?.asOf || null,
@@ -2130,6 +2142,13 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       const c = fromDb(row); customers.push(c); return c;
     },
     // 02/11: dati fiscali del cliente nuovo (l'agente sui propri clienti HUB, la Direzione/Ufficio su tutti)
+    // 07/11 sera: chi segue i clienti direzionali (Tommaso, Marco, Ufficio); null = Tommaso. Migrazione 20261107120000
+    async setDirFollower(ids, follower) {
+      const list = ids.map(id => customers?.find(c => c.id === id)).filter(Boolean);
+      const n = await api('/rest/v1/rpc/hub_set_dir_follower', { method: 'POST', body: { p_ids: list.map(c => c.uuid), p_follower: follower || null } });
+      for (const c of list) c.dirFollower = follower || null;
+      return n;
+    },
     async updateCustomerFiscal(id, fields) {
       const f = checkFiscal(fields);
       const c = customers.find(x => x.id === id); if (!c) throw fail('CUSTOMER', 'Cliente non trovato');
@@ -2610,8 +2629,68 @@ function dataStatusCard(app, { link = true } = {}) {
 
 return { dataStatusCard };
 })();
+__m["js/core/dir-follower.js"] = (function () {
+// Clienti direzionali: chi li segue davvero (07/11/2026, Tommaso). Ci sono direzionali che segue lui, altri che segue Marco
+// (rapporti di molti anni) e altri dell'ufficio (clienti altoatesini storici). Finché finivano tutti nella Bacheca di Tommaso,
+// i loro follow-up non li faceva nessuno. Qui: chi segue il cliente (predefinito Tommaso, come prima) e chi è l'utente collegato.
+const DIR_FOLLOWERS = ['Tommaso', 'Marco', 'Ufficio'];
+const isDirCustomer = c => !!c && (c.assignee === 'Direzionale' || c.attribution === 'Direzionale');
+const followerOf = c => (isDirCustomer(c) ? (DIR_FOLLOWERS.includes(c.dirFollower) ? c.dirFollower : 'Tommaso') : null);
+// etichetta per raggruppare: agente, oppure "Direzionale · Marco"
+const ownerLabel = c => (isDirCustomer(c) ? 'Direzionale · ' + followerOf(c) : c?.assignee || '');
+// l'utente collegato, tra quelli che seguono i direzionali (null per gli agenti e per Meridian)
+function myFollower(s) {
+  if (!s || s.role !== 'direzione' || s.readOnly) return null;
+  if (s.office || /^(commerciale|logistica)@/i.test(s.email || '')) return 'Ufficio';
+  if (/ferrari/i.test(s.name || '') || /^marco\.ferrari@/i.test(s.email || '')) return 'Marco';
+  if (/tommaso/i.test(s.name || '')) return 'Tommaso';
+  return null;
+}
+
+return { DIR_FOLLOWERS, isDirCustomer, followerOf, ownerLabel, myFollower };
+})();
+__m["js/core/recover-reminders.js"] = (function () {
+const { ownerLabel } = __m["js/core/dir-follower.js"];
+// A2 "follow-up automatici" (07/11/2026, decisione Tommaso: "3 a settimana").
+// Clienti "Da recuperare" non sentiti da 60 giorni (nessuna nota nell'app né in RADIX): per ogni agente i 3 con più fatturato passato.
+// Direzionali: 3 per chi li segue (Tommaso, Marco, Ufficio: core/dir-follower.js).
+// Quando l'agente registra una nota il cliente esce per 60 giorni ed entra il successivo. Nessun dato salvato: si calcola ogni volta.
+const RECOVER_DAYS = 60, RECOVER_PER_AGENT = 3;
+
+const iso = d => d.toISOString().slice(0, 10);
+// scadenza: il venerdì di questa settimana (sabato e domenica → venerdì successivo)
+function weekFriday(today) {
+  const d = new Date(today + 'T12:00:00'), dow = d.getDay();
+  d.setDate(d.getDate() + (dow === 6 ? 6 : dow === 0 ? 5 : 5 - dow));
+  return iso(d);
+}
+
+/**
+ * @param customers clienti visibili { id, name, status, assignee, rev2024, rev2025, rev2026 }
+ * @param lastContact Map id cliente → 'AAAA-MM-GG' dell'ultima nota (app o RADIX)
+ * @returns [{ customer, due, last, title }]
+ */
+function recoverReminders(customers, lastContact, today, { days = RECOVER_DAYS, perAgent = RECOVER_PER_AGENT } = {}) {
+  const lim = iso(new Date(new Date(today + 'T12:00:00').getTime() - days * 864e5)), due = weekFriday(today);
+  const rev = c => (c.rev2025 || 0) * 1e6 + (c.rev2024 || 0);   // prima l'acquistato 2025 (l'anno in cui comprava), poi il 2024
+  const by = new Map();
+  for (const c of customers) {
+    if (c.status !== 'Da recuperare' || c.isTest || /^EX_/.test(c.assignee || '')) continue;   // aree scoperte: nessuno a cui darli
+    const last = lastContact.get(c.id) || '';
+    if (last >= lim) continue;
+    const k = ownerLabel(c) || 'Direzionale · Tommaso'; if (!by.has(k)) by.set(k, []); by.get(k).push({ c, last });
+  }
+  const out = [];
+  for (const list of by.values()) for (const { c, last } of list.sort((a, b) => rev(b.c) - rev(a.c) || a.c.name.localeCompare(b.c.name)).slice(0, perAgent))
+    out.push({ customer: c, due, last: last || null, title: `Da recuperare, nessuna nota da ${days} giorni:` });
+  return out;
+}
+
+return { RECOVER_DAYS, weekFriday, recoverReminders };
+})();
 __m["js/views/actions.js"] = (function () {
 const { dueState, quoteReminders } = __m["js/data/model.js"];
+const { recoverReminders, RECOVER_DAYS } = __m["js/core/recover-reminders.js"];
 // Follow-up aperti visibili all'utente, ordinati per scadenza:
 // note cliente + follow-up assegnati dalla Direzione + promemoria automatici delle offerte inviate (richiamo 7 gg, esito 30 gg)
 async function openActions(app) {
@@ -2625,7 +2704,15 @@ async function openActions(app) {
   const myQuotes = isDir || app.session.preview ? quotes : quotes.filter(q => q.ownerId === app.session.userId);
   const fromQuotes = quoteReminders(myQuotes, notes, sends).map(r => ({ id: 'q:' + r.quote.id + ':' + r.kind, title: r.title, due: r.due, quoteReminder: r,
     state: r.kind === 'esito' ? 'scaduto' : dueState({ due: r.due }), note: { id: null, customerId: r.quote.customerId, authorName: r.quote.ownerName || '' } }));
-  return fromNotes.concat(assigned, fromQuotes).sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
+  // 07/11 A2 (Tommaso: "3 a settimana"): clienti da recuperare non sentiti da 60 giorni, 3 per agente, contano anche le note RADIX
+  const t = new Date().toISOString().slice(0, 10), lim = new Date(Date.now() - RECOVER_DAYS * 864e5).toISOString().slice(0, 10);
+  const [customers, rxNotes] = await Promise.all([app.customers ? app.customers().catch(() => []) : [], app.store.radixNotes ? app.store.radixNotes({ since: lim }).catch(() => []) : []]);
+  const last = new Map(), seen = (id, d) => { if (id && d && !(last.get(id) >= d)) last.set(id, d); };
+  for (const n of notes) seen(n.customerId, String(n.createdAt || '').slice(0, 10));
+  for (const n of rxNotes) seen(n.customerId, n.date);
+  const fromRecover = recoverReminders(customers, last, t).map(r => ({ id: 'r:' + r.customer.id, title: r.title, due: r.due, recover: r, state: dueState({ due: r.due }),
+    note: { id: null, customerId: r.customer.id, authorName: r.customer.assignee || '' } }));
+  return fromNotes.concat(assigned, fromQuotes, fromRecover).sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
 }
 
 return { openActions };
@@ -3454,6 +3541,25 @@ const REGION_NAMES = Object.keys(REGIONI);
 
 return { regionOf, REGION_NAMES };
 })();
+__m["js/views/dir-follower-ui.js"] = (function () {
+const { h, toast } = __m["js/ui.js"];
+const { DIR_FOLLOWERS, isDirCustomer } = __m["js/core/dir-follower.js"];
+// 07/11 sera (Tommaso): sui direzionali, accanto all'offerta, "Segue: Tommaso / Marco / Ufficio" per passarli a chi li segue davvero
+function followerSelect(app, customerId, onDone) {
+  const c = app.store.customer(customerId), s = app.session;
+  if (!isDirCustomer(c) || s.role !== 'direzione' || s.preview || s.readOnly || !app.store.setDirFollower) return null;
+  const sel = h('select', { class: 'fol-sel', 'aria-label': 'Chi segue il cliente', title: 'Chi segue questo cliente direzionale' },
+    DIR_FOLLOWERS.map(f => h('option', { value: f, selected: f === (c.dirFollower || 'Tommaso') }, 'Segue ' + f)));
+  sel.onclick = e => e.stopPropagation();
+  sel.onchange = async () => {
+    try { await app.store.setDirFollower([c.id], sel.value === 'Tommaso' ? null : sel.value); app.invalidate?.(); toast(`${c.name}: lo segue ${sel.value === 'Ufficio' ? "l'Ufficio" : sel.value}`); onDone?.(); }
+    catch (e) { toast(e.message, 'error'); }
+  };
+  return sel;
+}
+
+return { followerSelect };
+})();
 __m["js/core/dictation.js"] = (function () {
 // Dettatura gratuita (richiesta Tommaso 01/11/2026): il riconoscimento vocale del browser/telefono scrive nel campo di testo.
 // Nessun audio salvato e nessun costo. Dove non è disponibile (es. alcune app aggiunte alla schermata Home) si usa
@@ -3653,6 +3759,7 @@ async function radixOrdersSection(app) {
 return { isBlocked, radixOrderRow, radixOrdersSection };
 })();
 __m["js/views/agenda.js"] = (function () {
+const { followerSelect } = __m["js/views/dir-follower-ui.js"];
 const { h, fill, eur, dateIt, dateTimeIt, statusBadge, toast, modal, field, emptyState, debounce, telLinks, today } = __m["js/ui.js"];
 const { dictationAvailable, startDictation } = __m["js/core/dictation.js"];
 const { recordingAvailable, startRecording, mmss } = __m["js/core/recorder.js"];
@@ -3679,7 +3786,7 @@ async function listSignals(app) {
     app.store.quotes().catch(() => []), app.store.notes().catch(() => []), app.store.radixNotes ? app.store.radixNotes({ since: d60.slice(0, 10) }).catch(() => []) : [],
     app.store.lastVisits ? app.store.lastVisits().catch(() => new Map()) : new Map()]);
   const sig = new Map(); const get = id => { if (!sig.has(id)) sig.set(id, { late: 0, rxDue: 0, open: 0, contact: false }); return sig.get(id); };
-  for (const a of actions) if (a.note?.customerId && (a.state === 'scaduto' || a.state === 'oggi')) get(a.note.customerId).late++;
+  for (const a of actions) if (!a.recover && a.note?.customerId && (a.state === 'scaduto' || a.state === 'oggi')) get(a.note.customerId).late++;
   for (const o of rx) if (o.customerId && radixOfferOpen(o)) { const g = get(o.customerId); g.open++; if (rxDueState(o)) g.rxDue++; }
   for (const q of quotes) if (q.status === 'Bozza' || q.status === 'Inviata') get(q.customerId).open++;
   for (const n of notes) if (n.createdAt >= d60) get(n.customerId).contact = true;
@@ -3925,6 +4032,7 @@ async function customerCard(app, c) {
       h('div', {}, h('h1', {}, c.name), c.extra ? h('p', { class: 'muted' }, c.extra) : null,
         h('div', { class: 'badges' }, h('span', { class: 'badge ' + (STATUS_INFO[c.status]?.cls || 'muted'), title: STATUS_INFO[c.status]?.rule }, h('span', { class: 'dot ' + (STATUS_INFO[c.status]?.cls || 'muted') }), ' ', c.status), blocked ? h('span', { class: 'badge bad' }, c.salesBlockedSince ? 'Vendita bloccata dal ' + dateIt(c.salesBlockedSince) : 'Cliente bloccato dal ' + dateIt(c.blockedSince)) : null,
           h('span', { class: 'badge muted' }, (c.attribution === 'Direzionale' ? 'Direzionale' : c.assignee) + (provisional ? ' · area in valutazione' : '')),
+          followerSelect(app, c.id, refresh),   // 07/11 sera: chi segue il direzionale (Tommaso, Marco, Ufficio)
           c.city ? h('span', { class: 'badge muted' }, [c.city, c.prov].filter(Boolean).join(' ')) : null))),
     // azioni in una riga (telefono: icone con etichetta). "Chiama" con più numeri apre la scelta.
     h('nav', { class: 'cactions', 'aria-label': 'Azioni sul cliente' },
@@ -6747,7 +6855,7 @@ async function viewHome(app) {
   if (isDir) return homeDirection(app, { head, foot, customers, quotes, actions, notes, orders, rxOpen, rxFollow });
 
   // Agente: la Home è "cosa fare oggi" (01/11): follow-up e promemoria offerte scaduti o di oggi, poi clienti da recuperare da sentire
-  const urgent = actions.filter(a => a.state === 'scaduto' || a.state === 'oggi');
+  const urgent = actions.filter(a => !a.recover && (a.state === 'scaduto' || a.state === 'oggi'));
   const ordered = new Set(orders.map(o => o.quoteId));
   const toOrder = quotes.filter(q => q.status === 'Accettata' && !ordered.has(q.id) && (s.preview || q.ownerId === s.userId));
   const rxDue = rxAll.filter(o => ['scaduto', 'oggi'].includes(dueState(o))).sort((a, b) => radixOfferDue(a).localeCompare(radixOfferDue(b)));
@@ -6756,11 +6864,9 @@ async function viewHome(app) {
       h('span', { class: 'due ' + (d < today() ? 'scaduto' : 'oggi') }, d < today() ? dateIt(d) : 'oggi'),
       h('span', { class: 'todo-text' }, h('strong', {}, c?.name || o.customerLabel), h('small', { class: 'muted' }, [o.total ? eur(o.total) : '', o.subject, 'offerta ' + o.id].filter(Boolean).join(' · ')))),
       c?.phone ? h('span', { class: 'todo-tel' }, telLinks(c.phone.split(';')[0])) : null); };
-  const upcoming = actions.filter(a => a.state !== 'scaduto' && a.state !== 'oggi').slice(0, 5);
-  const d60 = new Date(Date.now() - 60 * 864e5).toISOString();
-  const heard = new Set(notes.filter(n => n.createdAt >= d60).map(n => n.customerId));
-  const toCall = customers.filter(c => c.status === 'Da recuperare' && !heard.has(c.id))
-    .sort((a, b) => (b.rev2025 || 0) - (a.rev2025 || 0) || a.name.localeCompare(b.name, 'it')).slice(0, 5);
+  const upcoming = actions.filter(a => !a.recover && a.state !== 'scaduto' && a.state !== 'oggi').slice(0, 5);
+  // 07/11 A2: stessa regola della Bacheca (3 per agente, contano anche le note RADIX)
+  const toCall = actions.filter(a => a.recover).map(a => a.recover.customer);
   const custOf = a => app.store.customer(a.note.customerId);
   const actionItem = a => { const c = custOf(a); return h('li', { class: 'todo' },
     h('a', { href: actionHref(a), class: 'todo-main' }, h('span', { class: 'due ' + a.state.replace(' ', '-') }, a.state === 'oggi' ? 'oggi' : a.due ? dateIt(a.due) : 'subito'),
@@ -6780,7 +6886,7 @@ async function viewHome(app) {
       rxDue.length ? [h('h3', { class: 'todo-sub' }, 'Offerte RADIX da sentire'), h('ul', { class: 'todo-list' }, rxDue.slice(0, 8).map(rxItem)),
         rxDue.length > 8 ? h('a', { class: 'more', href: '#/preventivi/radix' }, `Tutte le ${rxDue.length} offerte da sentire →`) : null] : null,
       toCall.length ? [h('h3', { class: 'todo-sub' }, 'Clienti da recuperare da sentire'),
-        h('p', { class: 'fine' }, 'Hanno comprato nel 2025 ma non nel 2026 e non hanno note negli ultimi 60 giorni; prima i più importanti.'),
+        h('p', { class: 'fine' }, 'Nessuna nota negli ultimi 60 giorni, né nell\'app né in RADIX: ogni settimana i 3 più importanti. Quando registri una nota il cliente esce ed entra il successivo.'),
         h('ul', { class: 'todo-list' }, toCall.map(callItem)),
         h('a', { class: 'more', href: '#/agenda/stato/Da recuperare' }, 'Tutti i clienti da recuperare →')] : null),
     h('h2', { class: 'section-title' }, 'Il mio andamento'), await trendSection(app, { customers, quotes, notes, rxOpen }),
@@ -6835,7 +6941,7 @@ async function homeDirection(app, { head, foot, customers, quotes, actions, note
 
   // --- OGGI
   const openOrders = orders.filter(o => o.status === 'Da inserire' || o.status === 'In lavorazione');
-  const late = actions.filter(a => a.state === 'scaduto' || a.state === 'oggi');
+  const late = actions.filter(a => !a.recover && (a.state === 'scaduto' || a.state === 'oggi'));
   const byAgent = {}; for (const a of late) { const k = a.assigned ? a.assigned.audience[0] : a.note?.authorName || ''; if (k) byAgent[k] = (byAgent[k] || 0) + 1; }
   const topAgents = Object.entries(byAgent).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} ${v}`).join(' · ');
   const noOutcome = quotes.filter(q => q.status === 'Inviata' && (q.sentAt || q.updatedAt || '') < d30);
@@ -6931,6 +7037,8 @@ const { noteDialog } = __m["js/views/agenda.js"];
 const { radixFollowupBlock, radixFuLine, radixOfferOpen } = __m["js/views/radix-offers.js"];
 const { radixOfferDue } = __m["js/data/model.js"];
 const { boardSummary } = __m["js/core/board-summary.js"];
+const { ownerLabel, myFollower } = __m["js/core/dir-follower.js"];
+const { followerSelect } = __m["js/views/dir-follower-ui.js"];
 // Bacheca: comunicazioni della Direzione (in app + email dalla casella di chi scrive) e follow-up.
 // Scrivono solo gli accessi Direzione con servizio comunicazioni (Tommaso, Marco); Christian legge soltanto.
 async function viewBoard(app) {
@@ -6979,10 +7087,11 @@ async function boardSection(app, refresh) {
   const editor = (kind, p) => postDialog(app, kind, p).then(ok => ok && refresh());
   const rxBlock = isDir ? null : await radixFollowupBlock(app, refresh);
   const netCard = isDir ? await networkCard(app, actions, posts, readBy, recipients, refresh) : null;
+  const myCard = isDir ? await myDirCard(app, actions, refresh) : null;
   const rxTodo = await radixTodoBlock(app, refresh);
   // 01/11 sera: la Bacheca fa due cose, prima le comunicazioni (a tutta larghezza), poi i follow-up
   return h('div', { class: 'section-body board' },
-    h('div', { class: 'board-stack' }, netCard,
+    h('div', { class: 'board-stack' }, myCard, netCard,
       h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, 'Comunicazioni'),
           canWrite ? h('button', { class: 'btn small primary', onclick: () => editor('comunicazione') }, '+ Comunicazione') : null),
         posts.length ? posts.map(commItem)
@@ -6994,7 +7103,8 @@ async function boardSection(app, refresh) {
           const rows = actions.filter(a => a.state === k); if (!rows.length) return null;
           const fold = isDir && (k === 'in programma' || k === 'senza data');   // 07/11: la Direzione vede aperti solo scaduti e oggi
           return h(fold ? 'details' : 'div', { class: 'group' + (fold ? ' fold-in' : '') }, h(fold ? 'summary' : 'h3', {}, `${label} (${rows.length})`), h('ul', { class: 'checks' }, rows.map(a => h('li', {},
-            a.quoteReminder ? h('a', { href: '#/offerta/' + a.quoteReminder.quote.id, class: 'qrem ' + a.quoteReminder.kind }, a.quoteReminder.kind === 'esito' ? '⚠ ' : '☎ ', a.title)
+            a.recover ? h('a', { href: '#/agenda/' + a.recover.customer.id, class: 'qrem richiamo' }, '☎ ', a.title)
+            : a.quoteReminder ? h('a', { href: '#/offerta/' + a.quoteReminder.quote.id, class: 'qrem ' + a.quoteReminder.kind }, a.quoteReminder.kind === 'esito' ? '⚠ ' : '☎ ', a.title)
               : h('label', {}, h('input', { type: 'checkbox', onchange: () => toggle(a) }), h('span', {}, a.title)),
             a.note.customerId ? h('a', { href: '#/agenda/' + a.note.customerId, class: 'muted' }, ` ${app.store.customer(a.note.customerId)?.name || ''}`) : null,
             a.due ? h('span', { class: 'due ' + k.replace(' ', '-') }, dateIt(a.due)) : null,
@@ -7009,15 +7119,38 @@ async function boardSection(app, refresh) {
     h('p', { class: 'fine' }, 'Le note scritte in RADIX si leggono nella scheda di ogni cliente e in Attività rete.'));
 }
 
+function withFollower(app, li, customerId, refresh) { const sel = followerSelect(app, customerId, refresh); if (sel) li.append(sel); return li; }
+
+// 07/11 sera: in cima alla Bacheca di chi segue direzionali (Tommaso, Marco, Ufficio) le offerte RADIX da sentire e i clienti da recuperare SUOI
+async function myDirCard(app, actions, refresh) {
+  const me = myFollower(app.session); if (!me) return null;
+  const t = today(), in7 = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10), label = 'Direzionale · ' + me;
+  const all = app.store.radixOffers ? await app.store.radixOffers().catch(() => []) : [];
+  const rx = all.filter(radixOfferOpen).filter(o => o.customerId && ownerLabel(app.store.customer(o.customerId)) === label && radixOfferDue(o) && radixOfferDue(o) <= in7)
+    .sort((a, b) => radixOfferDue(a).localeCompare(radixOfferDue(b)) || (b.total || 0) - (a.total || 0));
+  const rec = actions.filter(a => a.recover && ownerLabel(a.recover.customer) === label);
+  const late = rx.filter(o => radixOfferDue(o) < t).length;
+  return h('section', { class: 'card my-dir' },
+    h('div', { class: 'card-head' }, h('h2', {}, me === 'Ufficio' ? 'Clienti direzionali seguiti dall\'ufficio' : 'I tuoi clienti direzionali')),
+    rx.length || rec.length ? null : emptyState('Niente da sentire sui tuoi clienti direzionali nei prossimi 7 giorni.'),
+    rx.length ? [h('h3', {}, `Offerte RADIX da sentire (${rx.length})`), late ? h('small', { class: 'muted' }, `${late} in ritardo`) : null,
+      h('ul', { class: 'checks' }, rx.slice(0, 30).map(o => withFollower(app, radixFuLine(app, o, refresh), o.customerId, refresh))),
+      rx.length > 30 ? h('small', { class: 'muted' }, `… e altre ${rx.length - 30}`) : null] : null,
+    rec.length ? [h('h3', {}, 'Da recuperare questa settimana'), h('ul', { class: 'checks' }, rec.map(a => h('li', { class: 'rx-fu' },
+      h('a', { href: '#/agenda/' + a.recover.customer.id, class: 'rx-fu-main' }, h('strong', {}, a.recover.customer.name), h('small', { class: 'muted' }, ` ${a.recover.customer.city || ''} · nessuna nota da 60 giorni`)),
+      followerSelect(app, a.recover.customer.id, refresh))))] : null,
+    me === 'Tommaso' ? h('p', { class: 'fine' }, 'Un cliente che segue Marco o l\'ufficio? Cambia "Segue" accanto all\'offerta: passa nella loro Bacheca.') : null);
+}
+
 // 07/11 (Tommaso: "il punto dolente, per la visione direzionale, è la bacheca"): in cima, per la Direzione, una riga per agente
 // con offerte RADIX da sentire, follow-up e comunicazioni non lette. Tocchi l'agente e vedi le sue offerte più urgenti.
 async function networkCard(app, actions, posts, readBy, recipients, refresh) {
   const t = today(), in7 = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
-  const assigneeOf = (customerId, fallback) => (customerId && app.store.customer(customerId)?.assignee) || fallback || '';
+  const assigneeOf = (customerId, fallback) => (customerId && ownerLabel(app.store.customer(customerId))) || fallback || '';
   const all = app.store.radixOffers ? await app.store.radixOffers().catch(() => []) : [];
-  const rx = all.filter(radixOfferOpen).map(o => ({ o, due: radixOfferDue(o), total: o.total, agent: o.customerId ? assigneeOf(o.customerId) || 'Direzionale' : 'Senza cliente collegato' }));
+  const rx = all.filter(radixOfferOpen).map(o => ({ o, due: radixOfferDue(o), total: o.total, agent: o.customerId ? assigneeOf(o.customerId) || 'Direzionale · Tommaso' : 'Senza cliente collegato' }));
   const acts = actions.map(a => ({ state: a.state, agent: a.assigned ? a.assigned.audience?.[0]
-    : a.quoteReminder ? assigneeOf(a.quoteReminder.quote.customerId, a.quoteReminder.quote.ownerName) : assigneeOf(a.note.customerId, a.note.authorName) }));
+    : a.quoteReminder ? assigneeOf(a.quoteReminder.quote.customerId, a.quoteReminder.quote.ownerName) : a.recover ? ownerLabel(a.recover.customer) : assigneeOf(a.note.customerId, a.note.authorName) }));
   const unread = new Map();
   for (const r of recipients) unread.set(r.label, posts.filter(p => (!(p.audience?.length) || p.audience.includes(r.label)) && !readBy.get(p.id)?.has(r.id)).length);
   const rows = boardSummary({ agents: agentNames(app), rx, actions: acts, unread, today: t, in7 });
@@ -7028,7 +7161,7 @@ async function networkCard(app, actions, posts, readBy, recipients, refresh) {
   for (const r of rows) {
     const mine = rx.filter(x => x.agent === r.name && x.due && x.due <= in7).sort((a, b) => a.due.localeCompare(b.due) || (b.total || 0) - (a.total || 0));
     const detail = h('tr', { class: 'net-detail', hidden: true }, h('td', { colspan: 7 }, mine.length
-      ? [h('ul', { class: 'checks' }, mine.slice(0, 8).map(x => radixFuLine(app, x.o, refresh))), mine.length > 8 ? h('small', { class: 'muted' }, `… e altre ${mine.length - 8}: le trovi in Offerte › Da RADIX`) : null]
+      ? [h('ul', { class: 'checks' }, mine.slice(0, 8).map(x => withFollower(app, radixFuLine(app, x.o, refresh), x.o.customerId, refresh))), mine.length > 8 ? h('small', { class: 'muted' }, `… e altre ${mine.length - 8}: le trovi in Offerte › Da RADIX`) : null]
       : h('small', { class: 'muted' }, 'Nessuna offerta RADIX da sentire nei prossimi 7 giorni.')));
     const row = h('tr', { class: 'net-row', onclick: () => { detail.hidden = !detail.hidden; row.classList.toggle('open', !detail.hidden); } },
       h('td', {}, h('strong', {}, r.name.replace(/^EX_/, '')), /^EX_/.test(r.name) ? h('small', { class: 'wk-bad' }, ' area scoperta') : null), n(r.rxLate, 'wk-bad'), h('td', { class: 'num' }, r.rxValue ? eur(r.rxValue) : h('span', { class: 'muted' }, '–')), n(r.rxToday + r.rxSoon),
