@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="07f94aecfa98">
+<meta name="ntx-build" content="949ad4c51759">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -814,7 +814,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .sys-thick input.sys-cm { min-width: 0; width: 72px; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"07f94aecfa98"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"949ad4c51759"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -8376,6 +8376,50 @@ const SYSTEMS = [
     excluded: 'Lastra in gessofibra di controvento e pannello DWD (non a listino), tavole LVL, montanti in alluminio del vano impianti, nastro punto chiodo, partenza in vetro cellulare V600 con BL DICK 1K, viteria, posa.',
   },
   {
+    // 07/11/2026: parete esterna a secco con finiture in argilla (catalogo Isolanti e Sistemi a secco, tavola C2 p. 54-55, U PHPP 0,126).
+    // Isolante in canapa Cannatherm (catalogo; a listino λ 0,040) o in fibra di legno NATURHELD. Duo Dry e DOMUS PAN non sono a listino:
+    // proposti Naturtex 180 e ciclo Pura Calce come in B2/C1. Gessofibra e DWD fuori listino come in C1.
+    code: 'C2', name: 'Parete esterna a secco con canapa e finiture in argilla', short: 'Parete esterna · nuova costruzione',
+    source: 'Catalogo Isolanti e Sistemi a secco, tavola C2 (p. 54-55)', limits: 'nuovo', catalogU: 0.126,
+    description: 'Parete portante a secco per edifici nuovi con finiture naturali: telaio in montanti Joist isolati riempito di canapa o fibra di legno, gessofibra di controvento e freno vapore igrovariabile, vano impianti isolato chiuso da lastre in terra cruda Conluto rasate in argilla; all\'esterno pannello DWD, pannello portaintonaco in fibra di legno e ciclo a calce naturale.',
+    variants: ['CANNATHERM', 'NATURHELD'],
+    main: 'isolante',
+    layers: [
+      { key: 'finitura', name: 'Finitura in argilla (interno)', cm: 0.1, lambda: 0.91, rho: 1800, mu: '5/10', mat: 'finitura' },
+      { key: 'rasatura_int', name: 'Rasatura in argilla Conluto con rete di armatura', cm: 0.4, lambda: 0.91, rho: 1800, mu: '5/10', mat: 'intonaco' },
+      { key: 'lastra', name: 'Lastra in terra cruda Conluto {mm}', cm: 2.2, edit: true, lambda: 0.35, rho: 1000, mu: '5/10', mat: 'argilla',
+        product: { all: { sub: 'Conluto Lastra in argilla', thick: 22 } }, perM2: 1, unit: 'm2', waste: 5 },
+      { key: 'impianti', name: { CANNATHERM: 'Cannatherm 35 {mm}, vano impianti con montanti in legno', NATURHELD: 'Naturtex flex (NATURHELD) {mm}, vano impianti con montanti in legno' }, cm: 5, edit: true,
+        lambda: { CANNATHERM: 0.040, NATURHELD: 0.038 }, rho: 50, mu: '1/2', mat: 'fibra',
+        product: { CANNATHERM: { sub: 'Cannatherm 35', thick: 50 }, NATURHELD: { sub: 'Naturtex flex', thick: 50 } }, perM2: 0.92, unit: 'm2', waste: 5 },
+      { key: 'freno', name: 'Freno vapore Ampatex Variano 3', cm: 0.05, lambda: null, mat: 'membrana', thin: true,
+        product: { all: { sub: 'Ampatex Variano 3' } }, perM2: 1.1, unit: 'm2', pack: 75 },
+      { key: 'gessofibra', name: 'Lastra in gessofibra 12,5 mm (controvento)', cm: 1.3, lambda: 0.32, rho: 1150, mu: 13, mat: 'gesso',
+        check: 'Lastra in gessofibra 12,5 mm di controvento: non a listino, da quotare a parte — da confermare' },
+      { key: 'isolante', name: { CANNATHERM: 'Cannatherm 35 {mm} tra montanti Joist', NATURHELD: 'Naturtex flex (NATURHELD) {mm} tra montanti Joist' }, cm: 20, frame: JOIST, edit: true,
+        lambda: { CANNATHERM: 0.040, NATURHELD: 0.038 }, rho: 50, mu: '1/2', mat: 'fibra',
+        product: { CANNATHERM: { sub: 'Cannatherm 35' }, NATURHELD: { sub: 'Naturtex flex' } }, perM2: 0.93, unit: 'm2', waste: 5,
+        check: { CANNATHERM: 'Cannatherm: il catalogo calcola λ 0,038, a listino è 0,040 (usato qui, più prudente)' } },
+      { key: 'dwd', name: 'Pannello rigido DWD protect N+F 16 mm', cm: 1.6, lambda: 0.09, rho: 565, mu: 11, mat: 'fibraRigida',
+        check: 'Pannello DWD protect N+F 16 mm: non a listino, da quotare a parte — da confermare' },
+      { key: 'portaintonaco', name: 'Naturtex 180 (NATURHELD) {mm}', cm: 6, edit: true, lambda: 0.043, rho: 180, mu: 3, mat: 'fibraRigida',
+        product: { all: { sub: 'Naturtex 180', thick: 60 } }, perM2: 1, unit: 'm2', waste: 5,
+        check: 'Il catalogo usa "Duo Dry", che non è a listino: proposto Naturtex 180 (stessa λ 0,043) — da confermare' },
+      { key: 'rasatura', name: 'NORDTEX Pura Calce + rete di armatura', cm: 1, lambda: 0.82, rho: 1700, mu: 12, mat: 'intonaco',
+        check: 'Il catalogo usa DOMUS PAN, che non è a listino: proposto il ciclo NORDTEX Pura Calce come in B2 e C1 — da confermare' },
+      { key: 'finitura_est', name: 'NORDTEX Calce Fine', cm: 0.2, lambda: 0.61, rho: '>1000', mu: 10, mat: 'finitura' },
+    ],
+    extras: [
+      { label: 'NORDTEX JOIST coibentato SJ 45', product: { sub: 'NORDTEX JOIST coibentato', heightFrom: 'isolante' }, perM2: 1.6, unit: 'ml', note: 'interasse 62,5 cm — da confermare' },
+      { label: 'Conluto Collante/rasante adesivo in argilla (rasatura interna 4 mm)', product: { sub: 'Conluto Collante/rasante adesivo in argilla', perPack: true }, perM2: 5, unit: 'kg', pack: 25, note: 'stima 5 kg/m² per 4 mm — da confermare' },
+      { label: 'Conluto Rete di armatura in fibra di vetro (interno)', product: { sub: 'Conluto Rete di armatura in fibra di vetro', perPack: true, packWord: 'rotoli' }, perM2: 1.1, unit: 'm2', pack: 50 },
+      { label: 'NORDTEX Pura Calce (rasatura 10 mm)', product: { sub: 'NORDTEX Pura Calce' }, perM2: 10, unit: 'kg', pack: 25 },
+      { label: 'Rete di armatura in vetro (esterno)', product: { sub: 'Rete di armatura' }, perM2: 1.1, unit: 'm2', pack: 50 },
+      { label: 'NORDTEX Calce Fine (finitura esterna)', product: { sub: 'NORDTEX Calce Fine' }, perM2: 3, unit: 'kg', pack: 25 },
+    ],
+    excluded: 'Lastra in gessofibra di controvento e pannello DWD (non a listino), montanti in legno del vano impianti, finitura interna in argilla (prodotto da scegliere), viti e rondelle delle lastre in argilla, nastro punto chiodo, partenza in vetro cellulare, viteria, posa.',
+  },
+  {
     // 06/11/2026: primo sistema di copertura (Tommaso: "andiamo avanti con i sistemi"). Tetto in legno con doppio strato di fibra
     // di legno sopra il tavolato. U di collaudo: catalogo 0,166, calcolo con tavolato 25 mm (λ 0,13) e Rsi 0,10 (flusso ascendente).
     code: 'E1', name: 'Copertura in legno con fibra di legno doppio strato', short: 'Tetto · nuova costruzione e ristrutturazione',
@@ -8406,7 +8450,7 @@ __m["js/core/systems.js"] = (function () {
 // Calcoli dei Sistemi: trasmittanza U (UNI EN ISO 6946, metodo combinato per gli strati con montanti) e computo materiali/prezzi.
 const { SYSTEMS, WALL_LIMITS } = __m["js/data/systems-data.js"];
 const RSI = 0.13, RSE = 0.04;   // pareti, flusso orizzontale
-const VKEYS = ['STEICO', 'NATURHELD', 'Catalogo', 'POLICELL', 'POLICELL HARD', 'FOAMGLAS T3+', 'V600', 'all'];
+const VKEYS = ['STEICO', 'NATURHELD', 'Catalogo', 'POLICELL', 'POLICELL HARD', 'FOAMGLAS T3+', 'V600', 'CANNATHERM', 'all'];
 const pickV = (v, variant) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).some(k => VKEYS.includes(k)) ? (v[variant] ?? v.all ?? null) : v;
 
 // Strati risolti per una variante. cfg (06/11, Tommaso: "possibilità di variare gli spessori"):
@@ -8499,18 +8543,19 @@ function systemQuote(sys, variant, products, { mainMm, m2 = 100, discount = 0, c
     const p = findProduct(products, spec, sizeMm);
     if (!p) { missing.push(label); return; }
     const perM2 = perM2Base * (1 + waste / 100);
-    const priceUnit = String(p.priceUnit || '').toUpperCase();
+    // perPack (07/11): prezzo a listino per confezione (sacco o rotolo venduti a PZ, es. Conluto) → come SACCO
+    const priceUnit = spec.perPack ? 'SACCO' : String(p.priceUnit || '').toUpperCase();
     // prezzo per unità di consumo: SACCO = 25 kg
     const unitPrice = priceUnit === 'SACCO' ? p.price / (pack || 25) : p.price;
     let qty = perM2 * m2, packs = null, sell = qty, sellUnit = unit;
-    if (priceUnit === 'SACCO') { packs = Math.ceil(qty / (pack || 25) - 1e-9); sell = packs; sellUnit = 'sacchi'; }
+    if (priceUnit === 'SACCO') { packs = Math.ceil(qty / (pack || 25) - 1e-9); sell = packs; sellUnit = spec.packWord || 'sacchi'; }
     else if (pack) { packs = Math.ceil(qty / pack - 1e-9); sell = packs * pack; }
     else if (unit === 'pz') { sell = Math.ceil(qty - 1e-9); if (p.palletQuantity) { packs = Math.ceil(sell / p.palletQuantity - 1e-9); sell = packs * p.palletQuantity; } }
     else if (unit === 'm2' && p.length && p.width) { const panel = (p.length * p.width) / 1e6; packs = Math.ceil(qty / panel - 1e-9); sell = Math.round(packs * panel * 100) / 100; }
     else sell = Math.ceil(qty * 10 - 1e-9) / 10;
     const total = priceUnit === 'SACCO' ? sell * p.price : sell * p.price;
     rows.push({ label, product: p, code: p.listCode || p.radixCode || '', perM2, unit, unitPrice, perM2Price: perM2 * unitPrice, qty, sell, sellUnit, packs, pack, total, note, priceUnit,
-      packLabel: priceUnit === 'SACCO' ? `${packs} sacchi da ${pack || 25} ${unit === 'lt' ? 'lt' : 'kg'}` : pack ? `${packs} rotoli/confezioni` : unit === 'pz' && p.palletQuantity ? `${packs} bancali da ${p.palletQuantity} pz` : unit === 'm2' && packs ? `${packs} pannelli` : '' });
+      packLabel: priceUnit === 'SACCO' ? `${packs} ${spec.packWord || 'sacchi'} da ${pack || 25} ${unit === 'lt' ? 'lt' : unit === 'm2' ? 'm²' : 'kg'}` : pack ? `${packs} rotoli/confezioni` : unit === 'pz' && p.palletQuantity ? `${packs} bancali da ${p.palletQuantity} pz` : unit === 'm2' && packs ? `${packs} pannelli` : '' });
   };
   for (const l of layers) {
     if (!l.product) continue;
