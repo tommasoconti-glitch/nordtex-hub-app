@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="a193b6b3bb54">
+<meta name="ntx-build" content="80ec5a9a9d46">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -829,9 +829,18 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .chips.chips-off .chip,.filters.filters-off select:not([aria-label="Ordina"]){opacity:.45}
 .chips.chips-off .chip{pointer-events:none}
 .radix-link .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.week-card .wk-bad{color:#b26a00;font-weight:600}
+/* Primi passi (07/11) */
+.fs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+.fs-card{display:flex;flex-direction:column;gap:8px}
+.fs-head{display:flex;align-items:center;gap:10px} .fs-head h2{margin:0;font-size:1.05rem}
+.fs-n{width:30px;height:30px;border-radius:50%;background:#BCBF00;color:#2b2a2c;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.fs-list{margin:0;padding-left:18px;display:grid;gap:6px;font-size:.92rem;flex:1;align-content:start}
+.fs-card .btn{align-self:flex-start}
+.fs-foot{display:flex;justify-content:center;margin:18px 0 8px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a193b6b3bb54"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"80ec5a9a9d46"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -6936,10 +6945,43 @@ async function doneDialog(a) {
 
 return { viewBoard, boardSection };
 })();
+__m["js/core/week-summary.js"] = (function () {
+// Settimana degli agenti (07/11/2026, Tommaso: telefonate di allineamento del lunedì). Una riga per agente con i numeri
+// degli ultimi 7 giorni, calcolati da quello che passa dall'HUB: va letto come spunto per la telefonata, non come un voto.
+const norm = s => String(s || '').trim().toLowerCase();
+
+/**
+ * @param agents   [{ name, lastOpen?, opens7? }]  (agenti attivi; lastOpen/opens7 dal registro aperture se c'è)
+ * @param data     { notes, quotes, sends, customers }  come negli store
+ * @param now      Date
+ */
+function weekSummary(agents, { notes = [], quotes = [], sends = [], customers = [] }, now = new Date()) {
+  const since = new Date(now.getTime() - 7 * 864e5).toISOString(), today = now.toISOString().slice(0, 10);
+  const rows = agents.map(a => {
+    const me = x => norm(x) === norm(a.name);
+    const myNotes = notes.filter(n => me(n.authorName));
+    const lastAct = [...myNotes.map(n => n.createdAt), ...quotes.filter(q => me(q.ownerName)).map(q => q.updatedAt || q.createdAt), ...sends.filter(s => me(s.byName)).map(s => s.at)]
+      .filter(Boolean).sort().pop() || null;
+    return {
+      name: a.name, lastOpen: a.lastOpen ?? null, opens7: a.opens7 ?? null, lastActivity: lastAct,
+      notes7: myNotes.filter(n => n.createdAt >= since).length,
+      quotes7: quotes.filter(q => me(q.ownerName) && (q.createdAt || '') >= since).length,
+      sent7: sends.filter(s => me(s.byName) && (s.at || '') >= since).length,
+      lateFollow: myNotes.flatMap(n => n.actions || []).filter(x => !x.done && x.due && x.due < today).length,
+      newCust7: customers.filter(c => c.origin === 'HUB' && me(c.createdByName) && (c.createdAt || '') >= since).length,
+    };
+  });
+  // in cima chi ha più motivi per una telefonata: follow-up scaduti, poi meno attività
+  return rows.sort((x, y) => y.lateFollow - x.lateFollow || (x.notes7 + x.quotes7) - (y.notes7 + y.quotes7) || x.name.localeCompare(y.name, 'it'));
+}
+
+return { weekSummary };
+})();
 __m["js/views/direction.js"] = (function () {
 const { h, fill, eur, dateIt, dateTimeIt, emptyState, toast, modal } = __m["js/ui.js"];
 const { quoteCls } = __m["js/views/agenda.js"];
 const { validateBands, effectiveRules } = __m["js/core/margins.js"];
+const { weekSummary } = __m["js/core/week-summary.js"];
 const feedState = { assignee: '', days: 30, type: '' };
 
 async function viewNetwork(app) {
@@ -6968,7 +7010,8 @@ async function networkSection(app, refresh) {
     ...customers.filter(c => c.origin === 'HUB' && c.createdAt).map(c => ({ type: 'cliente', at: c.createdAt, who: c.createdByName || '', cust: c, kind: 'Nuovo cliente', text: [c.city, c.prov].filter(Boolean).join(' '), href: '#/agenda/' + c.id })),
   ].filter(e => e.at >= since && (!feedState.assignee || e.cust?.assignee === feedState.assignee) && (!feedState.type || e.type === feedState.type)).sort((a, b) => b.at.localeCompare(a.at));
   const assignees = [...new Set(customers.map(c => c.assignee))].sort();
-  return h('div', { class: 'section-body' },
+  const week = await weekCard(app, { notes, quotes, sends, customers });
+  return h('div', { class: 'section-body' }, week,
     h('div', { class: 'list-tools row' },
       h('select', { 'aria-label': 'Assegnatario', onchange: e => { feedState.assignee = e.target.value; refresh(); } }, h('option', { value: '' }, 'Tutta la rete'), assignees.map(a => h('option', { selected: a === feedState.assignee }, a))),
       h('select', { 'aria-label': 'Tipo', onchange: e => { feedState.type = e.target.value; refresh(); } }, TYPES.map(([v, l]) => h('option', { value: v, selected: v === feedState.type }, l))),
@@ -7113,6 +7156,27 @@ async function managerSection(app) {
           ['Offerte aperte', `${r.openQ} · ${eur(r.openValue)}` + (r.openRx ? ` (${r.openRx} RADIX)` : '')], ['Offerte accettate', eur(r.won)]]
           .map(([l, v, cls]) => h('div', {}, h('dt', {}, l), h('dd', { class: cls || '' }, typeof v === 'number' ? v.toLocaleString('it-IT') : v)))))))),
     rows.length ? null : emptyState('Nessun dato.'), commissions, accessCard(app), backupCard(app));
+}
+
+// 07/11 (Tommaso): "La settimana degli agenti" in cima ad Attività rete, per le telefonate del lunedì. Solo Direzione.
+async function weekCard(app, data) {
+  const acc = app.store.accessSummary ? await app.store.accessSummary().catch(() => null) : null;
+  const agents = acc ? acc.filter(r => r.role !== 'direzione' && r.active)
+    : (app.store.assignees || []).filter(a => a.name && a.name !== 'Direzionale' && !/^EX_/.test(a.name)).map(a => ({ name: a.name }));
+  if (!agents.length) return null;
+  const rows = weekSummary(agents, data, new Date());
+  const ago = iso => { if (!iso) return 'mai'; const d = Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(iso).setHours(0, 0, 0, 0)) / 864e5); return d <= 0 ? 'oggi' : d === 1 ? 'ieri' : d + ' giorni fa'; };
+  const n = (v, bad) => h('td', { class: 'num' }, bad ? h('span', { class: 'wk-bad' }, String(v)) : String(v));
+  const th = (t, num) => h('th', { class: num ? 'num' : '' }, t);
+  return h('section', { class: 'card week-card' }, h('h2', {}, 'La settimana degli agenti'),
+    h('p', { class: 'muted' }, 'Ultimi 7 giorni, da quello che passa dall\'HUB: uno spunto per le telefonate del lunedì, non un voto (le offerte fatte in RADIX tramite l\'ufficio qui non si vedono). In cima chi ha più follow-up scaduti.'),
+    h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
+      h('thead', {}, h('tr', {}, th('Agente'), th(acc ? 'Ultima apertura' : 'Ultima attività'), acc ? th('Aperture', 1) : null, th('Note e visite', 1), th('Offerte fatte', 1), th('Offerte inviate', 1), th('Follow-up scaduti', 1), th('Clienti nuovi', 1))),
+      h('tbody', {}, rows.map(r => {
+        const last = acc ? r.lastOpen : r.lastActivity, stale = !last || Date.now() - new Date(last) > 7 * 864e5;
+        return h('tr', {}, h('td', {}, h('strong', {}, r.name)), h('td', {}, stale ? h('span', { class: 'wk-bad' }, ago(last)) : ago(last)), acc ? n(r.opens7 ?? 0, !r.opens7) : null,
+          n(r.notes7, !r.notes7), n(r.quotes7), n(r.sent7), n(r.lateFollow, r.lateFollow > 0), n(r.newCust7));
+      })))));
 }
 
 return { viewNetwork, networkSection, viewManager, managerSection };
@@ -8153,6 +8217,45 @@ async function viewOfficeHome(app) {
 }
 
 return { isOffice, canSeeOfficeDesk, radixCustomerText, waitText, chime, weekNotes, NOTES_FROM, notesToReport, noteRadixText, todaysQuotes, viewOfficeHome };
+})();
+__m["js/views/first-steps.js"] = (function () {
+// "Primi passi" (07/11/2026, Tommaso): una pagina breve per l'agente che inizia. La versione per tutta la rete arriverà
+// con l'integrazione in Meridian: per ora la pagina c'è (dal "?" e da Altro), ma non si apre da sola (PRIMI_PASSI_AUTO).
+const { h } = __m["js/ui.js"];
+const PRIMI_PASSI_AUTO = false;   // true = si apre da sola al primo accesso di ogni agente (da attivare con la 1.0)
+const FIRST_KEY = 'ntx-primi-passi-ok';
+const firstStepsDone = () => { try { return !!localStorage.getItem(FIRST_KEY); } catch { return true; } };
+
+const STEPS = [
+  { n: 1, title: 'Entra e trova un cliente', href: '#/agenda', go: 'Apri Clienti', items: [
+    'Sul telefono apri il link dell\'HUB in Safari, poi Condividi › "Aggiungi alla schermata Home": diventa un\'icona come un\'app.',
+    'Entra con l\'email e la password che ti ha dato la Direzione.',
+    'In Clienti scrivi una parte del nome, la città, la P.IVA o il numero cliente: la ricerca guarda sempre tutti i tuoi clienti.'] },
+  { n: 2, title: 'Fai un\'offerta', href: '#/preventivi', go: 'Apri Offerte', items: [
+    '"+ Nuova offerta", scegli il cliente, cerca i prodotti per nome o codice e scrivi le quantità.',
+    'Il trasporto si calcola da solo dall\'indirizzo del cliente. Controlla le righe e lo sconto: oltre 50+5 serve la Direzione.',
+    'Salva, poi "Anteprima PDF" o "Invia per email". Quando il cliente accetta, segnala Accettata e passa l\'ordine all\'ufficio.'] },
+  { n: 3, title: 'Lascia una nota o una visita', href: '#/agenda', go: 'Apri Clienti', items: [
+    'Dalla scheda del cliente premi "Nota": tipo (visita, telefonata, email) e cosa è successo, anche a voce.',
+    'Aggiungi il prossimo passo con una data: diventa un follow-up e la Home te lo ricorda.'] },
+  { n: 4, title: 'Ogni giorno', href: '#/home', go: 'Apri la Home', items: [
+    'La Home ti dice cosa fare oggi: follow-up scaduti, offerte da sentire, clienti da richiamare.',
+    'Dubbi sull\'app: "💬 Assistenza", in basso a destra. Trasporti e prezzi di un\'offerta: "Chiedi all\'ufficio", dentro l\'offerta.',
+    'In ogni pagina il pulsante "?" in alto a destra spiega come funziona.'] },
+];
+
+async function viewFirstSteps(app) {
+  const done = () => { try { localStorage.setItem(FIRST_KEY, new Date().toISOString()); } catch { /* facoltativo */ } app.go('home'); };
+  return h('div', { class: 'page first-steps' },
+    h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Primi passi'), h('p', { class: 'muted' }, 'Quattro cose per partire. Il resto lo scopri usandola: in ogni pagina c\'è il "?".'))),
+    h('div', { class: 'fs-grid' }, STEPS.map(s => h('section', { class: 'card fs-card' },
+      h('div', { class: 'fs-head' }, h('span', { class: 'fs-n' }, String(s.n)), h('h2', {}, s.title)),
+      h('ol', { class: 'fs-list' }, s.items.map(t => h('li', {}, t))),
+      h('a', { class: 'btn small', href: s.href }, s.go + ' ›')))),
+    h('div', { class: 'fs-foot' }, h('button', { type: 'button', class: 'btn primary', onclick: done }, 'Ho capito, inizio')));
+}
+
+return { PRIMI_PASSI_AUTO, FIRST_KEY, firstStepsDone, viewFirstSteps };
 })();
 __m["js/core/help.js"] = (function () {
 // Istruzioni dentro l'app (03/11/2026, idea di Tommaso): pulsante "?" in alto a destra, spiega la pagina in cui ci si trova.
@@ -9587,6 +9690,7 @@ async function viewMore(app) {
       canSeeSystems(app.session) ? item('#/sistemi', '▥', 'Sistemi', 'Pacchetti, trasmittanza, scheda cliente (prova)') : null,
       canUpdateData(app.session) ? item('#/dati', '⟳', 'Aggiorna dati', 'Offerte e fatturato da RADIX') : null,
       item('#/giri', '🗓', 'Giri visite', 'Prepara il giro, telefonate, foglio da stampare'),
+      item('#/primi', '★', 'Primi passi', 'La pagina di partenza per gli agenti (con la 1.0)'),
       item('#/profilo', '◔', 'Profilo', 'Password, anteprima agente, esci')));
 }
 
@@ -9830,6 +9934,7 @@ const { viewNetwork, viewManager } = __m["js/views/direction.js"];
 const { viewMaps } = __m["js/views/maps.js"];
 const { viewStock } = __m["js/views/stock.js"];
 const { viewOfficeHome, isOffice, canSeeOfficeDesk } = __m["js/views/office.js"];
+const { viewFirstSteps, PRIMI_PASSI_AUTO, firstStepsDone } = __m["js/views/first-steps.js"];
 const { HELP, helpFor, APP_VERSION } = __m["js/core/help.js"];
 const { canUseAssist, showsAssist } = __m["js/core/messages.js"];
 const { assistDialog, assistUnread } = __m["js/views/messages.js"];
@@ -9987,7 +10092,8 @@ function helpDialog(key) {
   const others = h('details', { class: 'fold-in' }, h('summary', {}, 'Istruzioni delle altre pagine'),
     h('div', { class: 'help-others' }, [...new Set(Object.keys(HELP).map(k => k.split('@')[0]))].filter(k => !HELP[k]?.ref && k !== key && HELP[k] && !(isOffice(app.session) ? ['mappe', 'rete', 'manager', 'sistemi'] : app.session.role === 'direzione' ? [] : ['rete', 'manager', 'dati', 'ordini', 'sistemi']).includes(k))
       .map(k => h('button', { class: 'chip', type: 'button', onclick: () => { document.querySelector('.modal-back')?.remove(); helpDialog(k); } }, helpFor(k, app.session).title))));
-  return modal('Come si usa: ' + e.title, h('div', { class: 'help' }, h('p', { class: 'help-intro' }, e.intro), list('Cosa fare', e.steps), list('Attenzione', e.notes, 'ul'), others, h('p', { class: 'help-ver' }, `NORDTEX HUB · versione ${APP_VERSION.label}`)), [{ label: 'Chiudi', primary: true, value: true }]);
+  const first = h('p', {}, h('a', { href: '#/primi', class: 'btn small', onclick: () => document.querySelector('.modal-back')?.remove() }, '★ Primi passi: le 4 cose per partire'));
+  return modal('Come si usa: ' + e.title, h('div', { class: 'help' }, first, h('p', { class: 'help-intro' }, e.intro), list('Cosa fare', e.steps), list('Attenzione', e.notes, 'ul'), others, h('p', { class: 'help-ver' }, `NORDTEX HUB · versione ${APP_VERSION.label}`)), [{ label: 'Chiudi', primary: true, value: true }]);
 }
 
 function shell(active, content, key = active) {
@@ -10085,9 +10191,11 @@ async function render() {
   const [route, ...args] = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
   if (!app.session) { root.replaceChildren(loginView()); return; }
   const seq = ++renderSeq;
-  const views = { home: viewHome, agenda: viewAgenda, preventivi: viewQuotes, offerta: viewQuoteEditor, bacheca: viewBoard, rete: viewNetwork, manager: viewManager, mappe: viewMaps, giacenze: viewStock, ufficio: viewOfficeHome, profilo: viewAccount, ordini: viewOrders, altro: viewMore, rxofferta: viewRadixOffer, giri: viewPlans, giro: viewPlan, sistemi: viewSystems, sistema: viewSystem, dati: viewDataUpdate };
+  const views = { home: viewHome, agenda: viewAgenda, preventivi: viewQuotes, offerta: viewQuoteEditor, bacheca: viewBoard, rete: viewNetwork, manager: viewManager, mappe: viewMaps, giacenze: viewStock, ufficio: viewOfficeHome, profilo: viewAccount, ordini: viewOrders, altro: viewMore, rxofferta: viewRadixOffer, giri: viewPlans, giro: viewPlan, sistemi: viewSystems, sistema: viewSystem, dati: viewDataUpdate, primi: viewFirstSteps };
   const key = views[route] ? route : 'home';
   if (['rete', 'manager', 'ordini', 'altro'].includes(key) && app.session.role !== 'direzione') { app.go('home'); return; }
+  // 07/11: Primi passi al primo accesso dell'agente (spento finché la 1.0 non va a tutta la rete, con Meridian)
+  if (key === 'home' && PRIMI_PASSI_AUTO && app.session.role !== 'direzione' && !app.session.office && !app.session.preview && !firstStepsDone()) { app.go('primi'); return; }
   if (key === 'ufficio' && !canSeeOfficeDesk(app.session)) { app.go('home'); return; }
   if (isOffice(app.session) && ['ufficio', 'rete', 'manager', 'mappe', 'giri', 'giro', 'sistemi', 'sistema', 'altro'].includes(key)) { app.go('home'); return; }
   // vecchi collegamenti alle schede della Home (prima del 01/11 sera)
