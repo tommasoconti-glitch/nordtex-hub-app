@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="ce78aaceee61">
+<meta name="ntx-build" content="4f4656c57979">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -876,7 +876,7 @@ h2.fold-head::after,.fold-head h2::after{content:' ▾';color:var(--muted,#888);
 .log-list ul{margin:2px 0 0;padding-left:1.1rem}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ce78aaceee61"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"4f4656c57979"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2615,7 +2615,7 @@ function dataStatus(log = [], now = new Date()) {
   for (const [key, label, kind] of [['giacenze', 'Giacenze (lunedì)', 'giacenze'], ['fatturato', 'Fatturato per cliente (lunedì)', 'fatturato']]) {
     const r = last(kind), done = r && dayOf(r) >= monday;
     items.push({ key, label, state: done ? 'ok' : dow === 1 && hour < 12 ? 'later' : 'warn',
-      detail: done ? 'caricato ' + (dayOf(r) === day ? 'oggi' : 'il ' + dayOf(r).split('-').reverse().join('/')) : r ? 'ultimo il ' + dayOf(r).split('-').reverse().join('/') + ': da caricare questa settimana' : 'mai caricato dall\'app', at: r?.at || null });
+      detail: done ? 'caricato ' + (dayOf(r) === day ? 'oggi' : 'il ' + dayOf(r).split('-').reverse().join('/')) : r ? 'ultimo il ' + dayOf(r).split('-').reverse().join('/') + ': da caricare questa settimana' : 'mai caricato dall\'app: si usano ancora i dati del caricamento iniziale (01/11)', at: r?.at || null });
   }
   const level = items.some(i => i.state === 'missing') ? 'missing' : items.some(i => i.state === 'warn') ? 'warn' : 'ok';
   return { workday, items, level };
@@ -3292,19 +3292,24 @@ function parseRadixSales(text, products = [], { asOf, years = SALES_YEARS } = {}
   const prod = new Map(products.filter(p => p.radixCode).map(p => [p.radixCode, p]));
   const cust = new Map(), errors = [];
   const rows = parseTsv(text);
+  // 07/11/2026: il raggruppamento 2 può essere «Data documento Anno» (2025) o «Data documento» (31.10.2025): col secondo
+  // si ricava anche la data vera dell'ultima fattura di ogni cliente. I totali si controllano per gruppo (anno o giorno).
   rows.forEach((r, k) => {
     const i = k + 1;
     if (r.length <= C_ITEM_VAL) { if (r.length > 1 || (r[0] || '').trim()) errors.push(`riga ${i}: colonne insufficienti (${r.length})`); return; }
     const m = r[C_CUST].match(/^\s*(\d+)\s+-\s+([\s\S]*)$/);
-    const year = r[C_YEAR].trim();
-    if (!m || !years.includes(year)) { errors.push(`riga ${i}: cliente o anno non leggibile (${r[C_CUST]}, ${year})`); return; }
+    const grp = r[C_YEAR].trim(), dm = grp.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    const year = dm ? dm[3] : grp, day = dm ? `${dm[3]}-${dm[2]}-${dm[1]}` : null;
+    if (!m || !years.includes(year)) { errors.push(`riga ${i}: cliente o anno non leggibile (${r[C_CUST]}, ${grp})`); return; }
     const im = r[C_ITEM].trim().match(/^(\S+)\s+-\s+([\s\S]*)$/);
     const [code, desc] = im ? [im[1], im[2].trim()] : ['', r[C_ITEM].trim() || '(nessun articolo)'];
-    if (!cust.has(m[1])) cust.set(m[1], { name: m[2].trim(), rev: {}, yearTot: {}, fam: new Map(), items: new Map() });
+    if (!cust.has(m[1])) cust.set(m[1], { name: m[2].trim(), rev: {}, grpTot: {}, grpRev: {}, fam: new Map(), items: new Map(), last: null });
     const c = cust.get(m[1]);
     const v = num(r[C_ITEM_VAL]);
     c.rev[year] = (c.rev[year] || 0) + v;
-    c.yearTot[year] = num(r[C_YEAR_VAL]);
+    c.grpRev[grp] = (c.grpRev[grp] || 0) + v;
+    c.grpTot[grp] = num(r[C_YEAR_VAL]);
+    if (day && c.grpTot[grp] > 0 && (!c.last || day > c.last)) c.last = day;
     const f = family(code, desc, prod);
     if (!c.fam.has(f)) c.fam.set(f, {});
     const fy = c.fam.get(f); fy[year] = (fy[year] || 0) + v;
@@ -3312,8 +3317,8 @@ function parseRadixSales(text, products = [], { asOf, years = SALES_YEARS } = {}
     if (!c.items.has(key)) c.items.set(key, { c: code, d: desc.slice(0, 90), v: 0, q: 0, y: year });
     const it = c.items.get(key); it.v += v; it.q += num(r[C_ITEM_QTY]); if (year > it.y) it.y = year;
   });
-  for (const [k, c] of cust) for (const [y, tot] of Object.entries(c.yearTot))
-    if (Math.abs((c.rev[y] || 0) - tot) > 0.05) errors.push(`cliente ${k} anno ${y}: somma articoli ${(c.rev[y] || 0).toFixed(2)} diversa dal totale RADIX ${tot.toFixed(2)}`);
+  for (const [k, c] of cust) for (const [g, tot] of Object.entries(c.grpTot))
+    if (Math.abs((c.grpRev[g] || 0) - tot) > 0.05) errors.push(`cliente ${k} ${/\./.test(g) ? 'giorno' : 'anno'} ${g}: somma articoli ${(c.grpRev[g] || 0).toFixed(2)} diversa dal totale RADIX ${tot.toFixed(2)}`);
   if (!cust.size && !errors.length) errors.push('Nessuna riga di fatturato nel file');
   if (errors.length) throw Object.assign(new Error('File non importabile:\n' + errors.slice(0, 20).join('\n')), { errors });
   const out = {};
@@ -3322,10 +3327,10 @@ function parseRadixSales(text, products = [], { asOf, years = SALES_YEARS } = {}
       .sort((a, b) => b.t - a.t).filter(x => Math.abs(x.t) >= 0.005);
     const items = [...c.items.values()].sort((a, b) => b.v - a.v).slice(0, TOP_ITEMS).filter(x => x.v > 0)
       .map(x => ({ c: x.c, d: x.d, v: r2(x.v), q: r3(x.q), y: x.y }));
-    out[k] = { name: c.name, sales: { asOf, rev: Object.fromEntries(years.map(y => [y, r2(c.rev[y] || 0)])), families: fams, top: items } };
+    out[k] = { name: c.name, sales: { asOf, rev: Object.fromEntries(years.map(y => [y, r2(c.rev[y] || 0)])), families: fams, top: items, ...(c.last ? { lastInvoice: c.last } : {}) } };
   }
   const totals = Object.fromEntries(years.map(y => [y, r2([...cust.values()].reduce((s, c) => s + (c.rev[y] || 0), 0))]));
-  return { asOf, years, totals, customers: out };
+  return { asOf, years, totals, customers: out, byDay: [...cust.values()].some(c => c.last) };
 }
 
 // Confronto con l'anagrafica dell'app: clienti collegati, clienti del file non presenti (es. privati), fatturato per anno prima/dopo
@@ -10139,6 +10144,7 @@ function salesCard(app, done) {
       const payload = Object.fromEntries(pv.linked.map(c => [c.code, parsed.customers[c.code].sales]));
       fill(out, h('div', { class: 'du-preview' },
         h('p', {}, h('strong', {}, file.name), ` · dati al ${dateIt(parsed.asOf)} · ${Object.keys(parsed.customers).length} clienti con fatture`),
+        parsed.byDay ? h('p', { class: 'fine' }, '✓ File per giorno: per ogni cliente si aggiorna anche la data vera dell\'ultima fattura.') : h('p', { class: 'fine muted' }, 'File per anno: la data dell\'ultimo acquisto si stima (data del file se il 2026 cresce). Con «Data documento» al posto di «Data documento Anno» si ottiene quella vera.'),
         h('div', { class: 'du-stats' }, stat(pv.linked.length, 'clienti dell\'app aggiornati'), stat(pv.missing.length, 'non nell\'anagrafica (es. privati)', pv.missing.length ? 'warn' : ''),
           stat(pv.zeroed, 'clienti senza fatture nel periodo')),
         h('div', { class: 'tbl-wrap' }, h('table', { class: 'table du-years' }, h('thead', {}, h('tr', {}, h('th', {}, 'Anno'), h('th', { class: 'num' }, 'Oggi nell\'app'), h('th', { class: 'num' }, 'Dopo l\'aggiornamento'))),
@@ -10164,7 +10170,7 @@ function salesCard(app, done) {
     h('details', { class: 'fold-in' }, h('summary', {}, 'Come esportarlo da RADIX'),
       steps(['Fatturazione › Liste & statistiche › Statistica fatturato per movimenti.',
         'Fatture ✓ (registri vuoti = tutti); Data documento dal 01.01.2024 a oggi; Anno contabile «Anno attuale»; Calcolo «Imponibile IVA»; Unità di misura principale.',
-        'Lista «Quantità + valore (Std)»; Raggrup. 1 Cliente / Numero; Raggrup. 2 Data documento Anno; Riepilogo Articolo (Codice).',
+        'Lista «Quantità + valore (Std)»; Raggrup. 1 Cliente / Numero; Raggrup. 2 Data documento (giorno: dà anche la data dell\'ultima fattura; va bene anche «Data documento Anno»); Riepilogo Articolo (Codice).',
         'Esporta › Testo separato con TAB.'])),
     h('div', { class: 'du-row' }, field('Data dei dati', asOf, 'Di solito oggi: è la data che vedono gli agenti nella scheda cliente.')),
     out);
