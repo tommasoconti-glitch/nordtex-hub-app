@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="80ec5a9a9d46">
+<meta name="ntx-build" content="c10afbe509fc">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -838,9 +838,10 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .fs-list{margin:0;padding-left:18px;display:grid;gap:6px;font-size:.92rem;flex:1;align-content:start}
 .fs-card .btn{align-self:flex-start}
 .fs-foot{display:flex;justify-content:center;margin:18px 0 8px}
+.fc-row{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap} .fc-row select,.fc-row input{width:auto;min-width:0}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"80ec5a9a9d46"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"c10afbe509fc"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1447,6 +1448,46 @@ function previewChoices(customers, assignees = []) {
 
 return { READ_ONLY_TEXT, ReadOnlyError, readOnlyStore, PreviewError, previewStore, previewChoices };
 })();
+__m["js/core/forecast.js"] = (function () {
+// Previsione di chiusura delle offerte (07/11/2026, piano "stile Salesforce", punto A1).
+// L'agente segna su ogni offerta aperta la probabilità (bassa / media / alta) e il mese previsto; il fatturato atteso
+// è la somma di importo × peso. PESI PROVVISORI (convenzione, non statistica NORDTEX): da tarare con il tasso storico
+// offerta → ordine di RADIX (richiesta a Meridian) e poi, dopo qualche mese, per agente confrontando previsione e risultato.
+const FORECAST_LEVELS = ['bassa', 'media', 'alta'];
+const FORECAST_WEIGHTS = Object.freeze({ bassa: 0.2, media: 0.5, alta: 0.8 });
+const FORECAST_PROVISIONAL = true;
+const forecastLabel = p => ({ bassa: 'Bassa (20%)', media: 'Media (50%)', alta: 'Alta (80%)' }[p] || 'Non indicata');
+
+function checkForecast({ p = null, month = null } = {}) {
+  if (p && !FORECAST_LEVELS.includes(p)) throw new Error('Probabilità non valida');
+  if (month && !/^\d{4}-\d{2}$/.test(month)) throw new Error('Mese previsto non valido');
+  return { p: p || null, month: month || null };
+}
+
+/**
+ * items: [{ agent, total, p, month }] (offerte APERTE dell'app e di RADIX, già normalizzate)
+ * → { months: ['2026-11', …], rows: [{ agent, byMonth: {m: €}, later, total, count }], missing: { count, total }, overdue: { count, total } }
+ */
+function forecastTable(items, now = new Date(), horizon = 4) {
+  const ym = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const months = Array.from({ length: horizon }, (_, i) => ym(new Date(now.getFullYear(), now.getMonth() + i, 1)));
+  const cur = months[0], by = new Map(), missing = { count: 0, total: 0 }, overdue = { count: 0, total: 0 };
+  for (const it of items) {
+    const tot = Number(it.total) || 0;
+    if (!it.p || !it.month) { missing.count++; missing.total += tot; continue; }
+    const exp = tot * FORECAST_WEIGHTS[it.p];
+    const r = by.get(it.agent) || { agent: it.agent, byMonth: {}, later: 0, total: 0, count: 0 };
+    // mese già passato e offerta ancora aperta: conta nel mese corrente ma si segnala (va aggiornata)
+    let m = it.month; if (m < cur) { overdue.count++; overdue.total += tot; m = cur; }
+    if (months.includes(m)) r.byMonth[m] = (r.byMonth[m] || 0) + exp; else r.later += exp;
+    r.total += exp; r.count++; by.set(it.agent, r);
+  }
+  const rows = [...by.values()].sort((a, b) => b.total - a.total);
+  return { months, rows, missing, overdue };
+}
+
+return { FORECAST_LEVELS, FORECAST_WEIGHTS, FORECAST_PROVISIONAL, forecastLabel, checkForecast, forecastTable };
+})();
 __m["js/core/messages.js"] = (function () {
 // Messaggi (03/11/2026, richiesta Tommaso per la Beta): logica senza interfaccia, condivisa da archivio locale, online e test.
 //  - canale 'direzione' = pulsante "Assistenza" (scrive a Tommaso), su ogni pagina tranne la costruzione dell'offerta;
@@ -1493,6 +1534,7 @@ __m["js/data/local-store.js"] = (function () {
 // Archivio locale: dati di riferimento (clienti, prodotti) da hub-data.json,
 // attività (note, follow-up, referenti, offerte, bacheca) salvate nel browser (IndexedDB).
 // Pensato per anteprima e uso su un singolo dispositivo; la versione condivisa usa Supabase.
+const { checkForecast } = __m["js/core/forecast.js"];
 const { seesThread, isStaffOf, checkMessage, statusAfter } = __m["js/core/messages.js"];
 const { normTerms, uid, nowIso, visibleTo, nextQuoteNumber, DIREZIONE, CONTACT_KINDS, NOTE_OUTCOMES, makeProspect, applyStatus, checkStatusChange, radixNoteView, radixVisible, checkOrderRequest, ORDER_STATES, checkRadixOutcome, radixOfferForAgent, checkStop, checkFiscal } = __m["js/data/model.js"];
 function memoryKv(initial = {}) {
@@ -1762,12 +1804,14 @@ function createLocalStore({ data, kv }) {
       mustSession(); const myRole = data.assignees.find(a => a.name === session.assignee)?.role || '';
       const ok = o => o.customer ? canSeeCustomer(o.customer) && (isDir() || radixOfferForAgent(o, myRole)) : isDir();
       const out = new Map((await col('radixOutcomes')).map(x => [x.id, x]));
+      const fcs = new Map((await col('radixForecasts')).map(x => [x.id, x]));
       const links = new Map((await col('radixLinks')).map(x => [x.id, x.customer]));
       const lines = new Map((await col('radixLines')).map(x => [x.id, x.lines]));
       return (data.radixOffers || []).map(o => links.has(o.id) ? { ...o, customer: links.get(o.id) } : o).filter(o => (customerId ? o.customer === customerId : true) && ok(o))
         .map(o => { const x = out.get(o.id) || {}; return { id: o.id, customerId: o.customer || null, customerLabel: o.customerLabel, date: o.date, validUntil: o.validUntil, subject: o.subject || '',
           contact: o.contact || '', total: o.total ?? null, radixAgent: o.radixAgent || '', followup: o.followup || null, open: true,
           outcome: x.outcome || 'Da seguire', outcomeNote: x.note || '', nextFollowup: x.next || null, outcomeByName: x.byName || '', outcomeAt: x.at || null,
+          forecastP: fcs.get(o.id)?.p || null, forecastMonth: fcs.get(o.id)?.month || null,
           lines: lines.get(o.id) || o.lines || [], linesAt: null }; })
         .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
     },
@@ -1803,6 +1847,11 @@ function createLocalStore({ data, kv }) {
       if (core.length < 5 && v.length < 8) return [];
       return data.customers.concat(await col("prospects")).filter(c => (v.length >= 8 && String(c.vat || '').replace(/\D/g, '').includes(v)) || (core.length >= 5 && String(c.name || '').toUpperCase().replace(/[^A-Z0-9]/g, '').includes(core)))
         .slice(0, 6).map(c => ({ code: c.id, name: c.name, city: c.city, prov: c.prov, followedBy: c.assignee || 'Direzionale', origin: c.origin || 'RADIX' }));
+    },
+    async setRadixOfferForecast(id, fc) {
+      mustSession(); const f = checkForecast(fc);
+      const list = await col('radixForecasts'); const i = list.findIndex(x => x.id === id);
+      if (i >= 0) list[i] = { id, ...f }; else list.push({ id, ...f }); await save('radixForecasts'); return f;
     },
     async setRadixOfferOutcome(id, fields) {
       const s = mustSession(); const f = checkRadixOutcome(fields);
@@ -1900,6 +1949,7 @@ __m["js/data/supabase-store.js"] = (function () {
 // Archivio condiviso su Supabase (stesso interfaccia dell'archivio locale).
 // Login ordinario email/password; i permessi sono applicati dal database (RLS),
 // l'app non usa mai chiavi privilegiate. Richiede la migrazione supabase/migrations/20261031120000_hub_v1.sql.
+const { checkForecast } = __m["js/core/forecast.js"];
 const { normTerms, nowIso, makeProspect, applyStatus, checkStatusChange, radixNoteView, checkOrderRequest, checkRadixOutcome, checkStop, checkFiscal } = __m["js/data/model.js"];
 const AUDIO_MAX = 10 * 1024 * 1024;
 const AUDIO_EXT = { 'audio/mp4': 'mp4', 'audio/webm': 'webm', 'audio/ogg': 'ogg' };
@@ -2349,7 +2399,7 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       const nm = await names();
       return rows.map(r => ({ id: r.id, customerId: r.customer_id ? custCode(r.customer_id) || null : null, customerLabel: r.customer_label, date: r.offer_date, validUntil: r.valid_until,
         subject: r.subject || '', contact: r.contact || '', total: r.total == null ? null : Number(r.total), radixAgent: r.radix_agent || '', followup: r.followup, open: r.open,
-        outcome: r.outcome, outcomeNote: r.outcome_note || '', nextFollowup: r.next_followup, outcomeByName: nm.get(r.outcome_by) || '', outcomeAt: r.outcome_at,
+        outcome: r.outcome, outcomeNote: r.outcome_note || '', nextFollowup: r.next_followup, forecastP: r.forecast_p || null, forecastMonth: r.forecast_month || null, outcomeByName: nm.get(r.outcome_by) || '', outcomeAt: r.outcome_at,
         lines: Array.isArray(r.lines) ? r.lines : [], linesAt: r.lines_at || null, pdfAt: r.pdf_at || null }));
     },
     // 03/11: righe delle offerte RADIX (abbinate nell'app, funzione hub_import_radix_offer_lines)
@@ -2394,6 +2444,13 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       const rows = (await api('/rest/v1/hub_imports?select=*&order=imported_at.desc&limit=20').catch(() => [])) || [];
       const nm = await names().catch(() => new Map());
       return rows.map(r => ({ kind: r.kind, file: r.file_name, summary: r.summary || {}, at: r.imported_at, byName: nm.get(r.imported_by) || '' }));
+    },
+    // 07/11: previsione di chiusura sull'offerta RADIX (migrazione 20261107100000)
+    async setRadixOfferForecast(id, fc) {
+      const f = checkForecast(fc);
+      const r = await api('/rest/v1/hub_radix_offers?id=eq.' + encodeURIComponent(id), { method: 'PATCH', prefer: 'return=representation', body: { forecast_p: f.p, forecast_month: f.month } });
+      if (!r?.length) throw new Error('Offerta non trovata o non modificabile');
+      return f;
     },
     async setRadixOfferOutcome(id, fields) {
       const f = checkRadixOutcome(fields);
@@ -2560,139 +2617,6 @@ async function openActions(app) {
 }
 
 return { openActions };
-})();
-__m["js/views/fiscal.js"] = (function () {
-// 02/11 (versione Ufficio): campi "dati per l'ordine" del cliente nuovo — P.IVA, SDI/PEC, pagamento, banca.
-// Facoltativi quando l'agente crea il cliente; obbligatori quando l'offerta diventa ordine (missingForOrder).
-const { h, field } = __m["js/ui.js"];
-const { paymentOptions } = __m["js/data/model.js"];
-function fiscalFields(app, c = {}, { withVat = true, payment = '' } = {}) {
-  const isDir = app.session.role === 'direzione';
-  const vat = withVat ? h('input', { placeholder: 'P.IVA (11 cifre)', inputmode: 'numeric', value: c.vat || '' }) : null;
-  const sdi = h('input', { placeholder: 'es. M5UXCR1 (0000000 se c\'è la PEC)', maxlength: 7, value: c.sdi || '', style: { textTransform: 'uppercase' } });
-  const pec = h('input', { type: 'email', placeholder: 'es. amministrazione@pec.it', value: c.pec || '' });
-  const { options } = paymentOptions({ isDir, customerTerms: c.paymentTerms });
-  const cur = c.paymentTerms || payment || '';
-  const pay = h('select', {}, h('option', { value: '' }, 'Pagamento…'),
-    [...new Set([...(cur && !options.includes(cur) ? [cur] : []), ...options])].filter(o => !/^da concordare$/i.test(o)).map(o => h('option', { value: o, selected: o === cur }, o)));
-  const bank = h('input', { placeholder: 'Banca e IBAN (es. Cassa Rurale … IT60X0542811101000000123456)', value: c.bank || '' });
-  const el = h('div', { class: 'form' },
-    withVat ? field('P.IVA', vat) : null,
-    h('div', { class: 'form two' }, field('Codice SDI', sdi), field('PEC', pec)),
-    h('div', { class: 'form two' }, field('Pagamento', pay), field('Banca / IBAN', bank)));
-  return { el, values: () => ({ ...(withVat ? { vat: vat.value } : {}), sdi: sdi.value, pec: pec.value, paymentTerms: pay.value, bank: bank.value }) };
-}
-
-return { fiscalFields };
-})();
-__m["js/core/geo.js"] = (function () {
-// Sigla provincia -> regione (nomi come nelle tabelle trasporto del listino n.05)
-const REGIONI = {
-  'Piemonte': 'TO VC NO CN AT AL BI VB',
-  "Valle d'Aosta": 'AO',
-  'Lombardia': 'VA CO SO MI BG BS PV CR MN LC LO MB',
-  'Trentino-Alto Adige': 'BZ TN',
-  'Veneto': 'VR VI BL TV VE PD RO',
-  'Friuli-Venezia Giulia': 'UD GO TS PN',
-  'Liguria': 'IM SV GE SP',
-  'Emilia-Romagna': 'PC PR RE MO BO FE RA FC RN',
-  'Toscana': 'MS LU PT FI LI PI AR SI GR PO',
-  'Umbria': 'PG TR',
-  'Marche': 'PU AN MC AP FM',
-  'Lazio': 'VT RI RM LT FR',
-  'Abruzzo': 'AQ TE PE CH',
-  'Molise': 'CB IS',
-  'Campania': 'CE BN NA AV SA',
-  'Puglia': 'FG BA TA BR LE BT',
-  'Basilicata': 'PZ MT',
-  'Calabria': 'CS CZ RC KR VV',
-  'Sicilia': 'TP PA ME AG CL EN CT RG SR',
-  'Sardegna': 'SS NU CA OR SU',
-};
-const P2R = {};
-for (const [r, ps] of Object.entries(REGIONI)) for (const p of ps.split(' ')) P2R[p] = r;
-function regionOf(prov) { return P2R[String(prov || '').toUpperCase()] || (String(prov).toUpperCase() === 'EE' ? 'Estero' : ''); }
-const REGION_NAMES = Object.keys(REGIONI);
-
-return { regionOf, REGION_NAMES };
-})();
-__m["js/core/dictation.js"] = (function () {
-// Dettatura gratuita (richiesta Tommaso 01/11/2026): il riconoscimento vocale del browser/telefono scrive nel campo di testo.
-// Nessun audio salvato e nessun costo. Dove non è disponibile (es. alcune app aggiunte alla schermata Home) si usa
-// il microfono della tastiera dell'iPhone, che fa la stessa cosa.
-const dictationAvailable = () => typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-
-// Unisce il testo dettato a quello già scritto, con lo spazio giusto e la maiuscola a inizio frase
-function appendDictated(current, said) {
-  const t = String(said || '').trim(); if (!t) return current;
-  const base = String(current || '').replace(/\s+$/, '');
-  if (!base) return t.charAt(0).toUpperCase() + t.slice(1);
-  const newSentence = /[.!?]$/.test(base);
-  return base + ' ' + (newSentence ? t.charAt(0).toUpperCase() + t.slice(1) : t);
-}
-
-// Avvia la dettatura su una textarea. Ritorna { stop }. onState('ascolto' | 'fermo' | 'errore', messaggio)
-function startDictation(textarea, { onState = () => {}, onInterim = () => {} } = {}) {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { onState('errore', 'unsupported'); return { stop() {} }; }
-  const r = new SR();
-  r.lang = 'it-IT'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
-  let stopped = false;
-  r.onresult = e => {
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const res = e.results[i];
-      if (res.isFinal) { textarea.value = appendDictated(textarea.value, res[0].transcript); textarea.dispatchEvent(new Event('input', { bubbles: true })); }
-      else interim += res[0].transcript;
-    }
-    onInterim(interim);
-  };
-  r.onerror = e => { stopped = true; onState('errore', e.error || 'errore'); };
-  r.onend = () => { onInterim(''); if (!stopped) onState('fermo'); stopped = true; };
-  try { r.start(); onState('ascolto'); } catch (e) { onState('errore', e.message); }
-  return { stop() { if (!stopped) { try { r.stop(); } catch { /* già fermo */ } } } };
-}
-
-return { dictationAvailable, appendDictated, startDictation };
-})();
-__m["js/core/recorder.js"] = (function () {
-// Registrazione della nota vocale (01/11/2026): microfono del telefono/PC, formato audio/mp4 su iPhone, webm altrove.
-// Qualità voce (32 kbit/s): 10 minuti ≈ 2,4 MB, sotto il limite di 10 MB del contenitore.
-const RECORD_MAX_SECONDS = 10 * 60;
-const recordingAvailable = () => typeof window !== 'undefined' && !!(window.MediaRecorder && navigator.mediaDevices?.getUserMedia);
-
-function pickMime(isSupported = t => window.MediaRecorder?.isTypeSupported?.(t)) {
-  for (const t of ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']) if (isSupported(t)) return t;
-  return '';
-}
-const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-
-// Avvia la registrazione. onTick(secondi), onStop(blob) a fine registrazione (anche automatica a 10 minuti).
-async function startRecording({ onTick = () => {}, onStop = () => {} } = {}) {
-  // se il permesso del microfono non risponde entro 15 secondi, si esce con un messaggio invece di restare bloccati
-  const stream = await Promise.race([navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }),
-    new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error('il microfono non risponde: chiudi e riapri l\'app e riprova'), { name: 'Timeout' })), 15000))]);
-  const mimeType = pickMime();
-  const rec = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 32000 });
-  const chunks = []; const t0 = Date.now();
-  const tick = setInterval(() => { const s = (Date.now() - t0) / 1000; onTick(s); if (s >= RECORD_MAX_SECONDS) stop(); }, 250);
-  rec.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
-  // 05/11 (Tommaso su iPad: "si blocca tutto"): su Safari l'evento di fine registrazione a volte non arriva. Si chiude comunque
-  // una sola volta, con l'audio raccolto fin lì, dopo 3 secondi; il microfono si spegne sempre.
-  let ended = false, guard = null;
-  const finish = () => { if (ended) return; ended = true; clearTimeout(guard); clearInterval(tick); stream.getTracks().forEach(t => t.stop()); onStop(new Blob(chunks, { type: (rec.mimeType || mimeType || 'audio/mp4').split(';')[0] })); };
-  rec.onstop = finish;
-  rec.onerror = finish;
-  rec.start(1000);
-  function stop() {
-    if (ended) return;
-    try { if (rec.state !== 'inactive') { rec.requestData?.(); rec.stop(); } else finish(); } catch { finish(); }
-    clearTimeout(guard); guard = setTimeout(finish, 3000);
-  }
-  return { stop, cancel() { ended = true; clearTimeout(guard); clearInterval(tick); try { if (rec.state !== 'inactive') rec.stop(); } catch { /* */ } stream.getTracks().forEach(t => t.stop()); } };
-}
-
-return { RECORD_MAX_SECONDS, recordingAvailable, pickMime, mmss, startRecording };
 })();
 __m["js/views/note-offers.js"] = (function () {
 // Note collegate alle offerte (03/11/2026, richiesta Tommaso): una nota può riferirsi a un'offerta dello stesso cliente,
@@ -3205,6 +3129,7 @@ return { OFFER_COLUMNS, normName, headIt, parseRadixOffers, offersPreview, ORDER
 __m["js/views/radix-offers.js"] = (function () {
 // Offerte aperte importate da RADIX (richiesta Tommaso 01/11/2026): l'app le mostra a chi segue il cliente
 // (senza cliente HUB solo alla Direzione) e permette di segnare l'esito. Le offerte restano in RADIX: qui si seguono.
+const { FORECAST_LEVELS, forecastLabel } = __m["js/core/forecast.js"];
 const { h, fill, eur, dateIt, today, toast, modal, field, emptyState } = __m["js/ui.js"];
 const { RADIX_OFFER_OUTCOMES, radixOfferDue, validityInfo, isExpiring, NOTE_OUTCOMES } = __m["js/data/model.js"];
 const { pickNoteForOffer } = __m["js/views/note-offers.js"];
@@ -3218,9 +3143,13 @@ async function radixOfferDialog(app, o) {
   const note = h('textarea', { rows: 3, placeholder: 'es. il cliente decide la prossima settimana; prezzo concorrente; quantità cambiate…' }, o.outcomeNote || '');
   const next = h('input', { type: 'date', value: o.nextFollowup || '', min: today() });
   const nextField = field('Prossimo contatto', next, 'Lo trovi in "Da fare oggi" quel giorno.');
+  // 07/11: previsione di chiusura (solo se l'offerta resta aperta)
+  const fcP = forecastSelect(o.forecastP), fcM = forecastMonthInput(o.forecastMonth);
+  const fcField = h('div', { class: 'field' }, h('span', {}, 'Previsione di chiusura'), h('div', { class: 'row fc-row' }, fcP, fcM),
+    h('small', { class: 'muted' }, 'Quanto è probabile che diventi ordine e in che mese. Serve alla Direzione per il fatturato atteso.'));
   const btns = h('div', { class: 'seg' });
   const draw = () => { fill(btns, RADIX_OFFER_OUTCOMES.filter(x => x !== 'Da seguire').map(x => h('button', { type: 'button', class: 'btn small' + (x === outcome ? ' primary' : ''), onclick: () => { outcome = x; draw(); } }, x)));
-    nextField.hidden = outcome !== 'Sentito'; };
+    nextField.hidden = outcome !== 'Sentito'; if (typeof fcField !== 'undefined') fcField.hidden = outcome !== 'Sentito'; };
   draw();
   const c = o.customerId ? app.store.customer(o.customerId) : null;
   // come è avvenuto il contatto: diventa anche una nota nella storia del cliente (02/11, Tommaso: "sapere quante volte ho chiamato e cosa mi ha detto")
@@ -3230,10 +3159,12 @@ async function radixOfferDialog(app, o) {
   drawHow();
   const res = await modal(`Offerta RADIX ${o.id}`, h('div', { class: 'form' },
     h('p', {}, h('strong', {}, c?.name || o.customerLabel), h('br'), [o.subject, o.total ? eur(o.total) : 'importo non indicato', 'del ' + dateIt(o.date)].filter(Boolean).join(' · ')),
-    h('div', { class: 'field' }, h('span', {}, 'Esito'), btns), c ? h('div', { class: 'field' }, h('span', {}, 'Come l\'hai sentito'), howBox) : null, field('Nota', note), nextField,
+    h('div', { class: 'field' }, h('span', {}, 'Esito'), btns), c ? h('div', { class: 'field' }, h('span', {}, 'Come l\'hai sentito'), howBox) : null, field('Nota', note), nextField, fcField,
     h('p', { class: 'fine' }, 'Accettata: ricordati che l\'ordine va inserito in RADIX dall\'ufficio (offerta già presente in RADIX).')),
     [{ label: 'Annulla', value: false }, { label: 'Salva', primary: true, run: async () => {
       await app.store.setRadixOfferOutcome(o.id, { outcome, note: note.value, next: next.value || null });
+      if (outcome === 'Sentito' && app.store.setRadixOfferForecast && (fcP.value !== (o.forecastP || '') || fcM.value !== (o.forecastMonth || '')))
+        await app.store.setRadixOfferForecast(o.id, { p: fcP.value || null, month: fcM.value || null }).catch(e => toast('Previsione non salvata: ' + e.message, 'error'));
       if (c && app.store.addNote) await app.store.addNote({ customerId: c.id, kind: how, outcome: NOTE_OUTCOMES.includes('Preventivo specifico') ? 'Preventivo specifico' : NOTE_OUTCOMES[0],
         body: offerNoteText(o, outcome, note.value, next.value) }).catch(() => null);
       return true; } }]);
@@ -3419,7 +3350,153 @@ async function viewRadixOffer(app, id) {
       o.linesAt ? h('p', { class: 'fine' }, 'Righe aggiornate il ' + dateIt(o.linesAt)) : null));
 }
 
-return { radixOfferOpen, dueState, radixOfferDialog, offerNoteText, mentionsOffer, linesSummary, radixOfferRow, radixOffersPanel, radixOffersCard, radixFollowupBlock, viewRadixOffer };
+// 07/11: campi della previsione di chiusura (usati anche nell'offerta dell'app)
+function forecastSelect(val) {
+  return h('select', { 'aria-label': 'Probabilità di chiusura' }, h('option', { value: '' }, 'Probabilità…'),
+    FORECAST_LEVELS.map(p => h('option', { value: p, selected: p === val }, forecastLabel(p))));
+}
+// menu dei prossimi 12 mesi (l'input "month" non funziona su Safari per Mac e Firefox); un mese già passato resta visibile
+function forecastMonthInput(val) {
+  const now = new Date(), ms = Array.from({ length: 12 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() + i, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
+  if (val && !ms.includes(val)) ms.unshift(val);
+  const lab = m => new Date(m + '-01T12:00:00').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+  return h('select', { 'aria-label': 'Mese previsto' }, h('option', { value: '' }, 'Mese previsto…'), ms.map(m => h('option', { value: m, selected: m === val }, lab(m))));
+}
+
+return { radixOfferOpen, dueState, radixOfferDialog, offerNoteText, mentionsOffer, linesSummary, radixOfferRow, radixOffersPanel, radixOffersCard, radixFollowupBlock, viewRadixOffer, forecastSelect, forecastMonthInput };
+})();
+__m["js/views/fiscal.js"] = (function () {
+// 02/11 (versione Ufficio): campi "dati per l'ordine" del cliente nuovo — P.IVA, SDI/PEC, pagamento, banca.
+// Facoltativi quando l'agente crea il cliente; obbligatori quando l'offerta diventa ordine (missingForOrder).
+const { h, field } = __m["js/ui.js"];
+const { paymentOptions } = __m["js/data/model.js"];
+function fiscalFields(app, c = {}, { withVat = true, payment = '' } = {}) {
+  const isDir = app.session.role === 'direzione';
+  const vat = withVat ? h('input', { placeholder: 'P.IVA (11 cifre)', inputmode: 'numeric', value: c.vat || '' }) : null;
+  const sdi = h('input', { placeholder: 'es. M5UXCR1 (0000000 se c\'è la PEC)', maxlength: 7, value: c.sdi || '', style: { textTransform: 'uppercase' } });
+  const pec = h('input', { type: 'email', placeholder: 'es. amministrazione@pec.it', value: c.pec || '' });
+  const { options } = paymentOptions({ isDir, customerTerms: c.paymentTerms });
+  const cur = c.paymentTerms || payment || '';
+  const pay = h('select', {}, h('option', { value: '' }, 'Pagamento…'),
+    [...new Set([...(cur && !options.includes(cur) ? [cur] : []), ...options])].filter(o => !/^da concordare$/i.test(o)).map(o => h('option', { value: o, selected: o === cur }, o)));
+  const bank = h('input', { placeholder: 'Banca e IBAN (es. Cassa Rurale … IT60X0542811101000000123456)', value: c.bank || '' });
+  const el = h('div', { class: 'form' },
+    withVat ? field('P.IVA', vat) : null,
+    h('div', { class: 'form two' }, field('Codice SDI', sdi), field('PEC', pec)),
+    h('div', { class: 'form two' }, field('Pagamento', pay), field('Banca / IBAN', bank)));
+  return { el, values: () => ({ ...(withVat ? { vat: vat.value } : {}), sdi: sdi.value, pec: pec.value, paymentTerms: pay.value, bank: bank.value }) };
+}
+
+return { fiscalFields };
+})();
+__m["js/core/geo.js"] = (function () {
+// Sigla provincia -> regione (nomi come nelle tabelle trasporto del listino n.05)
+const REGIONI = {
+  'Piemonte': 'TO VC NO CN AT AL BI VB',
+  "Valle d'Aosta": 'AO',
+  'Lombardia': 'VA CO SO MI BG BS PV CR MN LC LO MB',
+  'Trentino-Alto Adige': 'BZ TN',
+  'Veneto': 'VR VI BL TV VE PD RO',
+  'Friuli-Venezia Giulia': 'UD GO TS PN',
+  'Liguria': 'IM SV GE SP',
+  'Emilia-Romagna': 'PC PR RE MO BO FE RA FC RN',
+  'Toscana': 'MS LU PT FI LI PI AR SI GR PO',
+  'Umbria': 'PG TR',
+  'Marche': 'PU AN MC AP FM',
+  'Lazio': 'VT RI RM LT FR',
+  'Abruzzo': 'AQ TE PE CH',
+  'Molise': 'CB IS',
+  'Campania': 'CE BN NA AV SA',
+  'Puglia': 'FG BA TA BR LE BT',
+  'Basilicata': 'PZ MT',
+  'Calabria': 'CS CZ RC KR VV',
+  'Sicilia': 'TP PA ME AG CL EN CT RG SR',
+  'Sardegna': 'SS NU CA OR SU',
+};
+const P2R = {};
+for (const [r, ps] of Object.entries(REGIONI)) for (const p of ps.split(' ')) P2R[p] = r;
+function regionOf(prov) { return P2R[String(prov || '').toUpperCase()] || (String(prov).toUpperCase() === 'EE' ? 'Estero' : ''); }
+const REGION_NAMES = Object.keys(REGIONI);
+
+return { regionOf, REGION_NAMES };
+})();
+__m["js/core/dictation.js"] = (function () {
+// Dettatura gratuita (richiesta Tommaso 01/11/2026): il riconoscimento vocale del browser/telefono scrive nel campo di testo.
+// Nessun audio salvato e nessun costo. Dove non è disponibile (es. alcune app aggiunte alla schermata Home) si usa
+// il microfono della tastiera dell'iPhone, che fa la stessa cosa.
+const dictationAvailable = () => typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+// Unisce il testo dettato a quello già scritto, con lo spazio giusto e la maiuscola a inizio frase
+function appendDictated(current, said) {
+  const t = String(said || '').trim(); if (!t) return current;
+  const base = String(current || '').replace(/\s+$/, '');
+  if (!base) return t.charAt(0).toUpperCase() + t.slice(1);
+  const newSentence = /[.!?]$/.test(base);
+  return base + ' ' + (newSentence ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+}
+
+// Avvia la dettatura su una textarea. Ritorna { stop }. onState('ascolto' | 'fermo' | 'errore', messaggio)
+function startDictation(textarea, { onState = () => {}, onInterim = () => {} } = {}) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { onState('errore', 'unsupported'); return { stop() {} }; }
+  const r = new SR();
+  r.lang = 'it-IT'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
+  let stopped = false;
+  r.onresult = e => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const res = e.results[i];
+      if (res.isFinal) { textarea.value = appendDictated(textarea.value, res[0].transcript); textarea.dispatchEvent(new Event('input', { bubbles: true })); }
+      else interim += res[0].transcript;
+    }
+    onInterim(interim);
+  };
+  r.onerror = e => { stopped = true; onState('errore', e.error || 'errore'); };
+  r.onend = () => { onInterim(''); if (!stopped) onState('fermo'); stopped = true; };
+  try { r.start(); onState('ascolto'); } catch (e) { onState('errore', e.message); }
+  return { stop() { if (!stopped) { try { r.stop(); } catch { /* già fermo */ } } } };
+}
+
+return { dictationAvailable, appendDictated, startDictation };
+})();
+__m["js/core/recorder.js"] = (function () {
+// Registrazione della nota vocale (01/11/2026): microfono del telefono/PC, formato audio/mp4 su iPhone, webm altrove.
+// Qualità voce (32 kbit/s): 10 minuti ≈ 2,4 MB, sotto il limite di 10 MB del contenitore.
+const RECORD_MAX_SECONDS = 10 * 60;
+const recordingAvailable = () => typeof window !== 'undefined' && !!(window.MediaRecorder && navigator.mediaDevices?.getUserMedia);
+
+function pickMime(isSupported = t => window.MediaRecorder?.isTypeSupported?.(t)) {
+  for (const t of ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']) if (isSupported(t)) return t;
+  return '';
+}
+const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+// Avvia la registrazione. onTick(secondi), onStop(blob) a fine registrazione (anche automatica a 10 minuti).
+async function startRecording({ onTick = () => {}, onStop = () => {} } = {}) {
+  // se il permesso del microfono non risponde entro 15 secondi, si esce con un messaggio invece di restare bloccati
+  const stream = await Promise.race([navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }),
+    new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error('il microfono non risponde: chiudi e riapri l\'app e riprova'), { name: 'Timeout' })), 15000))]);
+  const mimeType = pickMime();
+  const rec = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 32000 });
+  const chunks = []; const t0 = Date.now();
+  const tick = setInterval(() => { const s = (Date.now() - t0) / 1000; onTick(s); if (s >= RECORD_MAX_SECONDS) stop(); }, 250);
+  rec.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
+  // 05/11 (Tommaso su iPad: "si blocca tutto"): su Safari l'evento di fine registrazione a volte non arriva. Si chiude comunque
+  // una sola volta, con l'audio raccolto fin lì, dopo 3 secondi; il microfono si spegne sempre.
+  let ended = false, guard = null;
+  const finish = () => { if (ended) return; ended = true; clearTimeout(guard); clearInterval(tick); stream.getTracks().forEach(t => t.stop()); onStop(new Blob(chunks, { type: (rec.mimeType || mimeType || 'audio/mp4').split(';')[0] })); };
+  rec.onstop = finish;
+  rec.onerror = finish;
+  rec.start(1000);
+  function stop() {
+    if (ended) return;
+    try { if (rec.state !== 'inactive') { rec.requestData?.(); rec.stop(); } else finish(); } catch { finish(); }
+    clearTimeout(guard); guard = setTimeout(finish, 3000);
+  }
+  return { stop, cancel() { ended = true; clearTimeout(guard); clearInterval(tick); try { if (rec.state !== 'inactive') rec.stop(); } catch { /* */ } stream.getTracks().forEach(t => t.stop()); } };
+}
+
+return { RECORD_MAX_SECONDS, recordingAvailable, pickMime, mmss, startRecording };
 })();
 __m["js/core/search.js"] = (function () {
 // Ricerca clienti: tollerante ad accenti, punteggiatura, forme societarie e piccoli errori di battitura.
@@ -5895,6 +5972,7 @@ async function directionMessages(app) {
 return { threadView, threadRow, rxRef, assistDialog, assistUnread, askOfficeCard, staffPanel, directionMessages };
 })();
 __m["js/views/quotes.js"] = (function () {
+const { forecastSelect, forecastMonthInput } = __m["js/views/radix-offers.js"];
 const { h, fill, eur, num, dateIt, toast, modal, field, emptyState, debounce } = __m["js/ui.js"];
 const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions, normPayment, LOST_REASONS, QUOTE_SNOOZE_DAYS, quoteReminders, missingForOrder } = __m["js/data/model.js"];
 const { fiscalFields } = __m["js/views/fiscal.js"];
@@ -6301,6 +6379,14 @@ async function viewQuoteEditor(app, id, customerId) {
     q.status = v; mark(); toast('Stato cambiato: ricordati di salvare');
   } }, statusOpts.map(s => h('option', { selected: s === q.status }, s)));
 
+  // 07/11: previsione di chiusura (offerta aperta): probabilità e mese previsto, salvati con l'offerta
+  function forecastBox() {
+    if (!['Bozza', 'Inviata'].includes(q.status) || !isOwner) return null;
+    const p = forecastSelect(q.forecast?.p), m = forecastMonthInput(q.forecast?.month);
+    const upd = () => { q.forecast = p.value || m.value ? { p: p.value || null, month: m.value || null } : null; mark(); };
+    p.addEventListener('change', upd); m.addEventListener('change', upd);
+    return h('span', { class: 'fc-row', title: 'Previsione di chiusura: quanto è probabile che diventi ordine e in che mese' }, p, m);
+  }
   // ---- salvataggio, stampa
   const saveBtn = h('button', { class: 'btn primary', disabled: !isOwner, onclick: save }, 'Salva');
   async function save() {
@@ -6473,7 +6559,7 @@ async function viewQuoteEditor(app, id, customerId) {
       outcomeBanner(), orderBox(),
       q.outcome ? h('p', { class: 'muted' }, `Esito: ${q.outcome.status}${q.outcome.reason ? ' – ' + q.outcome.reason : ''}${q.outcome.note ? ' (' + q.outcome.note + ')' : ''} · ${q.outcome.by || ''}`) : null,
       directChannel ? h('p', { class: 'info-text' }, `Canale alternativo (${directChannel}): la vendita diretta a imprese o privati va condivisa con la Direzione e le condizioni autorizzate prima dell'invio (Condizioni agenti 2026).`) : null),
-    h('div', { class: 'actions' }, statusSel, saveBtn,
+    h('div', { class: 'actions' }, statusSel, forecastBox(), saveBtn,
       // 06/11 (Tommaso): accanto a Salva. Offerta nuova non salvata → «Annulla» (esce senza salvare); bozza salvata → «Elimina»
       !q.id ? h('button', { class: 'btn ghost', onclick: async () => {
         if ((dirty || q.lines.length) && !await modal('Annullare l\'offerta?', h('p', {}, 'L\'offerta non è stata salvata: uscendo si perdono i prodotti inseriti.'), [{ label: 'Resta', value: false }, { label: 'Esci senza salvare', primary: true, value: true }])) return;
@@ -6982,6 +7068,8 @@ const { h, fill, eur, dateIt, dateTimeIt, emptyState, toast, modal } = __m["js/u
 const { quoteCls } = __m["js/views/agenda.js"];
 const { validateBands, effectiveRules } = __m["js/core/margins.js"];
 const { weekSummary } = __m["js/core/week-summary.js"];
+const { forecastTable, FORECAST_PROVISIONAL } = __m["js/core/forecast.js"];
+const { radixOfferOpen } = __m["js/views/radix-offers.js"];
 const feedState = { assignee: '', days: 30, type: '' };
 
 async function viewNetwork(app) {
@@ -7145,7 +7233,7 @@ async function managerSection(app) {
   }).sort((a, b) => b.active + b.recover - (a.active + a.recover));
   const sum = k => rows.reduce((t, r) => t + r[k], 0);
   const commissions = await commissionCard(app);
-  return h('div', { class: 'section-body' },
+  return h('div', { class: 'section-body' }, forecastCard(app, customers, quotes, rxOffers),
     h('section', { class: 'card' }, h('h2', {}, 'Portafoglio per assegnatario'),
       h('p', { class: 'muted' }, 'Clienti, stato e attività di ciascun agente e consulente (comprese note e offerte aperte importate da RADIX, contate sul cliente). Tocca un nome per vedere i numeri.'),
       h('div', { class: 'pf-list' }, rows.map(r => h('details', {},
@@ -7177,6 +7265,32 @@ async function weekCard(app, data) {
         return h('tr', {}, h('td', {}, h('strong', {}, r.name)), h('td', {}, stale ? h('span', { class: 'wk-bad' }, ago(last)) : ago(last)), acc ? n(r.opens7 ?? 0, !r.opens7) : null,
           n(r.notes7, !r.notes7), n(r.quotes7), n(r.sent7), n(r.lateFollow, r.lateFollow > 0), n(r.newCust7));
       })))));
+}
+
+// 07/11 (piano "stile Salesforce" A1): fatturato atteso dalle offerte aperte = importo × peso della probabilità, per mese e agente
+function forecastCard(app, customers, quotes, rxOffers) {
+  const assigneeOf = (customerId, fallback) => (customerId && app.store.customer(customerId)?.assignee) || fallback || 'Senza cliente';
+  const items = [
+    ...quotes.filter(q => ['Bozza', 'Inviata'].includes(q.status)).map(q => ({ agent: assigneeOf(q.customerId, q.ownerName), total: q.total, p: q.forecast?.p, month: q.forecast?.month })),
+    ...rxOffers.filter(radixOfferOpen).map(o => ({ agent: assigneeOf(o.customerId, o.radixAgent), total: o.total, p: o.forecastP, month: o.forecastMonth })),
+  ];
+  if (!items.length) return null;
+  const t = forecastTable(items, new Date());
+  const mName = m => new Date(m + '-01T12:00:00').toLocaleDateString('it-IT', { month: 'short', year: '2-digit' });
+  const sumCol = m => t.rows.reduce((s, r) => s + (r.byMonth[m] || 0), 0);
+  const money = v => v ? eur(Math.round(v)) : '—';
+  return h('section', { class: 'card fc-card' }, h('h2', {}, 'Previsione di chiusura'),
+    h('p', { class: 'muted' }, 'Fatturato atteso dalle offerte aperte (dell\'app e di RADIX): importo × probabilità segnata dall\'agente (bassa 20%, media 50%, alta 80%)'
+      + (FORECAST_PROVISIONAL ? '. Pesi provvisori: si tarano con il tasso storico offerta → ordine di RADIX (Meridian).' : '.')),
+    t.rows.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
+      h('thead', {}, h('tr', {}, h('th', {}, 'Agente'), t.months.map(m => h('th', { class: 'num' }, mName(m))), h('th', { class: 'num' }, 'Oltre'), h('th', { class: 'num' }, 'Totale atteso'), h('th', { class: 'num' }, 'Offerte'))),
+      h('tbody', {}, t.rows.map(r => h('tr', {}, h('td', {}, h('strong', {}, r.agent)), t.months.map(m => h('td', { class: 'num' }, money(r.byMonth[m]))),
+        h('td', { class: 'num' }, money(r.later)), h('td', { class: 'num' }, h('strong', {}, money(r.total))), h('td', { class: 'num' }, String(r.count))))),
+      h('tfoot', {}, h('tr', {}, h('td', {}, h('strong', {}, 'Rete')), t.months.map(m => h('td', { class: 'num' }, h('strong', {}, money(sumCol(m))))),
+        h('td', { class: 'num' }, money(t.rows.reduce((s, r) => s + r.later, 0))), h('td', { class: 'num' }, h('strong', {}, money(t.rows.reduce((s, r) => s + r.total, 0)))),
+        h('td', { class: 'num' }, String(t.rows.reduce((s, r) => s + r.count, 0))))))) : h('p', {}, 'Nessuna offerta aperta ha ancora una previsione.'),
+    t.missing.count ? h('p', { class: 'warn-text' }, `${t.missing.count} offerte aperte per ${eur(Math.round(t.missing.total))} senza previsione: la segna l'agente nell'offerta (o nell'esito dell'offerta RADIX).`) : null,
+    t.overdue.count ? h('p', { class: 'warn-text' }, `${t.overdue.count} offerte con il mese previsto già passato (${eur(Math.round(t.overdue.total))}): contate nel mese corrente, vanno aggiornate.`) : null);
 }
 
 return { viewNetwork, networkSection, viewManager, managerSection };
