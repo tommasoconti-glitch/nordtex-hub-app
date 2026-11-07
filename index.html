@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="548b1ae25098">
+<meta name="ntx-build" content="a193b6b3bb54">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -831,7 +831,7 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .radix-link .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"548b1ae25098"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a193b6b3bb54"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1780,6 +1780,12 @@ function createLocalStore({ data, kv }) {
     async radixOrders() { return []; },
     async importRadixOrders() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
     async importStock() { throw new Error('Nella versione dimostrativa i dati non si aggiornano: usa la versione online'); },
+    // 07/11: backup (versione locale: solo quello che il file contiene)
+    async backupTable(table) {
+      if (table === 'hub_customers') return data.customers.concat(await col('prospects'));
+      if (table === 'hub_quotes') return col('quotes'); if (table === 'hub_notes') return col('notes');
+      return [];
+    },
     async importLog() { return []; },
     // 07/11: come hub_customer_lookup (versione locale: tutta l'anagrafica del file)
     async customerLookup(name, vat) {
@@ -2066,6 +2072,11 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       const [orders, rows] = await Promise.all([this.orders(), api('/rest/v1/hub_customers?select=*&origin=eq.HUB&order=created_at').catch(() => [])]);
       const nm = await names().catch(() => new Map());
       return { orders, customers: (rows || []).map(r => ({ ...fromDb(r), createdByName: nm.get(r.created_by) || '' })).filter(c => !c.isTest) };
+    },
+    // 07/11: backup — tutte le righe di una tabella leggibile dall'utente (RLS: la Direzione vede tutto)
+    async backupTable(table) {
+      if (!/^hub_[a-z_]+$/.test(table)) throw fail('TABLE', 'Tabella non valida');
+      return pageAll(`/rest/v1/${table}?select=*`);
     },
     // 07/11: controllo doppioni su tutta l'anagrafica (migrazione 20261107080000); se la funzione non c'è ancora, null (nessun controllo)
     async customerLookup(name, vat) {
@@ -2501,6 +2512,14 @@ function dataStatusCard(app, { link = true } = {}) {
   const box = h('section', { class: 'card ds-card', 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Controllo i caricamenti di oggi…'));
   app.store.importLog().then(log => {
     const st = dataStatus(log, new Date());
+    // 07/11: per Tommaso anche il backup settimanale (ricordato su questo computer)
+    if (app.session.role === 'direzione' && !app.session.office) {
+      let d = ''; try { d = localStorage.getItem('ntx-last-backup') || ''; } catch { /* facoltativo */ }
+      const days = d ? Math.floor((Date.now() - new Date(d)) / 864e5) : null;
+      st.items.push({ key: 'backup', label: 'Backup dei dati (settimanale)', state: d && days < 7 ? 'ok' : 'warn',
+        detail: d ? (days < 7 ? `fatto ${days === 0 ? 'oggi' : days === 1 ? 'ieri' : days + ' giorni fa'}` : `ultimo ${days} giorni fa: scaricalo da Aggiorna dati`) : 'mai fatto da questo computer: scaricalo da Aggiorna dati' });
+      if (st.level === 'ok' && !(d && days < 7)) st.level = 'warn';
+    }
     fill(box,
       h('div', { class: 'ds-head' }, h('h2', { class: 'ds-title ds-' + st.level }, TITLE[st.level]),
         h('div', { class: 'ds-actions' }, h('button', { type: 'button', class: 'btn', onclick: () => app.help?.('datioggi') }, 'Istruzioni'),
@@ -9092,6 +9111,84 @@ function stockPreview(depots, current) {
 
 return { parseStockLines, parseStockPdf, stockPreview };
 })();
+__m["js/core/zip-write.js"] = (function () {
+// ZIP minimale (senza compressione, "store") per il backup dei dati (07/11/2026): nessuna libreria esterna.
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(bytes) { let c = 0xFFFFFFFF; for (let i = 0; i < bytes.length; i++) c = CRC[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+
+/** files: [{ name, data: string | Uint8Array }] → Uint8Array del file .zip */
+function zipStore(files, date = new Date()) {
+  const enc = new TextEncoder(), parts = [], central = [];
+  const dosTime = (date.getHours() << 11) | (date.getMinutes() << 5) | (date.getSeconds() >> 1);
+  const dosDate = ((date.getFullYear() - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+  let offset = 0;
+  for (const f of files) {
+    const name = enc.encode(f.name), data = typeof f.data === 'string' ? enc.encode(f.data) : f.data, crc = crc32(data);
+    const head = new DataView(new ArrayBuffer(30));
+    [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, dosTime, 2], [12, dosDate, 2], [14, crc, 4], [18, data.length, 4], [22, data.length, 4], [26, name.length, 2], [28, 0, 2]]
+      .forEach(([o, v, n]) => (n === 4 ? head.setUint32(o, v, true) : head.setUint16(o, v, true)));
+    parts.push(new Uint8Array(head.buffer), name, data);
+    const cd = new DataView(new ArrayBuffer(46));
+    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, 0, 2], [12, dosTime, 2], [14, dosDate, 2], [16, crc, 4], [20, data.length, 4], [24, data.length, 4], [28, name.length, 2], [30, 0, 2], [32, 0, 2], [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, offset, 4]]
+      .forEach(([o, v, n]) => (n === 4 ? cd.setUint32(o, v, true) : cd.setUint16(o, v, true)));
+    central.push(new Uint8Array(cd.buffer), name);
+    offset += 30 + name.length + data.length;
+  }
+  const cdSize = central.reduce((s, p) => s + p.length, 0), end = new DataView(new ArrayBuffer(22));
+  [[0, 0x06054b50, 4], [4, 0, 2], [6, 0, 2], [8, files.length, 2], [10, files.length, 2], [12, cdSize, 4], [16, offset, 4], [20, 0, 2]]
+    .forEach(([o, v, n]) => (n === 4 ? end.setUint32(o, v, true) : end.setUint16(o, v, true)));
+  const all = [...parts, ...central, new Uint8Array(end.buffer)], out = new Uint8Array(all.reduce((s, p) => s + p.length, 0));
+  let p = 0; for (const a of all) { out.set(a, p); p += a.length; }
+  return out;
+}
+
+return { crc32, zipStore };
+})();
+__m["js/core/backup.js"] = (function () {
+// Backup dei dati dell'app (07/11/2026, piano di rafforzamento punto 5): una copia che resta a NORDTEX, gratis.
+// Per ogni tabella: un CSV per Excel (separatore ; e BOM, così si apre con un doppio clic) e un JSON completo per un eventuale ripristino.
+const { zipStore } = __m["js/core/zip-write.js"];
+// tabelle con i dati nati nell'app (le esportazioni RADIX si possono ricaricare, ma si salvano lo stesso: esiti e collegamenti sono nostri)
+const BACKUP_TABLES = [
+  ['clienti', 'hub_customers'], ['clienti_stato', 'hub_customer_status'], ['contatti', 'hub_contacts'], ['note_visite', 'hub_notes'],
+  ['offerte_app', 'hub_quotes'], ['offerte_app_invii', 'hub_quote_sends'], ['ordini_passati_ufficio', 'hub_order_requests'],
+  ['offerte_radix', 'hub_radix_offers'], ['ordini_radix', 'hub_radix_orders'], ['ordini_radix_avvisi', 'hub_radix_order_notes'],
+  ['note_radix', 'hub_radix_notes'], ['note_radix_riportate', 'hub_note_radix_done'], ['giri_visite', 'hub_visit_plans'], ['giri_tappe', 'hub_visit_stops'],
+  ['bacheca', 'hub_board_posts'], ['conversazioni', 'hub_threads'], ['messaggi', 'hub_messages'], ['utenti', 'hub_profiles'], ['zone_agenti', 'hub_assignees'],
+  ['impostazioni', 'hub_settings'], ['registro_caricamenti', 'hub_imports'],
+];
+
+const cell = v => {
+  if (v === null || v === undefined) return '';
+  const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+  return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
+function toCsv(rows) {
+  if (!rows.length) return '﻿';
+  const cols = [...new Set(rows.flatMap(r => Object.keys(r)))];
+  return '﻿' + [cols.join(';'), ...rows.map(r => cols.map(c => cell(r[c])).join(';'))].join('\r\n');
+}
+
+/** fetchTable(name) → righe (o eccezione se la tabella non è leggibile); restituisce { zip: Uint8Array, name, counts } */
+async function buildBackup(fetchTable, { by = '', now = new Date() } = {}) {
+  const pad = n => String(n).padStart(2, '0');   // ora locale nel nome del file
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+  const files = [], counts = [];
+  for (const [label, table] of BACKUP_TABLES) {
+    let rows; try { rows = await fetchTable(table); } catch (e) { counts.push([label, table, null, e.message]); continue; }
+    counts.push([label, table, rows.length, '']);
+    files.push({ name: `excel/${label}.csv`, data: toCsv(rows) }, { name: `json/${table}.json`, data: JSON.stringify(rows) });
+  }
+  const readme = [`NORDTEX HUB — backup dei dati del ${now.toLocaleString('it-IT')}${by ? ' (scaricato da ' + by + ')' : ''}`, '',
+    'Cartella excel: una tabella per file, si apre con Excel (doppio clic).', 'Cartella json: copia completa per un eventuale ripristino (serve Claude o un tecnico).', '',
+    'Tabelle:', ...counts.map(([l, t, n, err]) => `- ${l} (${t}): ${n === null ? 'NON LETTA — ' + err : n + ' righe'}`), '',
+    'CONTIENE DATI CLIENTI E COMMERCIALI: conservare in un posto sicuro e non inoltrare.'].join('\r\n');
+  files.unshift({ name: 'LEGGIMI.txt', data: '﻿' + readme });
+  return { zip: zipStore(files, now), name: `NORDTEX_HUB_backup_${stamp}.zip`, counts };
+}
+
+return { BACKUP_TABLES, toCsv, buildBackup };
+})();
 __m["js/views/data-update.js"] = (function () {
 // "Aggiorna dati" (richiesta Tommaso 02/11/2026): chi è abilitato carica le esportazioni RADIX direttamente dall'app.
 // Visibile solo agli abilitati (tabella private.hub_data_managers, oggi Tommaso; poi eventualmente Irina).
@@ -9103,6 +9200,7 @@ const { parseRadixOffers, offersPreview, parseRadixSales, salesPreview, decodeTe
 const { parseStockPdf, stockPreview } = __m["js/core/stock-import.js"];
 const { stockDepot } = __m["js/core/quote-doc.js"];
 const { dataStatusCard } = __m["js/views/data-status-card.js"];
+const { buildBackup } = __m["js/core/backup.js"];
 const canUpdateData = s => !!s?.canImport && !s.preview;
 
 async function sha256(buf) {
@@ -9134,7 +9232,7 @@ async function viewDataUpdate(app) {
   return h('div', { class: 'page du-page' },
     h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Aggiorna dati'),
       h('p', { class: 'muted' }, 'Carichi le esportazioni di RADIX: l\'app ti mostra cosa cambia e aggiorna solo quando confermi. Nessun dato si cancella.'))),
-    dsBox, offersCard(app, loadLog), offerLinesCard(app, loadLog), radixOrdersCard(app, loadLog), stockCard(app, loadLog), salesCard(app, loadLog),
+    dsBox, backupCard(app), offersCard(app, loadLog), offerLinesCard(app, loadLog), radixOrdersCard(app, loadLog), stockCard(app, loadLog), salesCard(app, loadLog),
     h('section', { class: 'card' }, h('h2', {}, 'Ultimi caricamenti'), logBox),
     h('p', { class: 'fine muted' }, 'Note clienti RADIX (file PDF): per ora si aggiornano ancora con Claude. Anagrafica clienti nuovi: si creano dall\'app o con l\'aggiornamento completo.'));
 }
@@ -9389,7 +9487,34 @@ function radixOrdersCard(app, done) {
     out);
 }
 
-return { canUpdateData, viewDataUpdate };
+// 07/11 (piano di rafforzamento, punto 5): backup settimanale scaricato sul PC di Tommaso. Gratis, nessun dato su GitHub.
+const BACKUP_KEY = 'ntx-last-backup';
+const lastBackup = () => { try { return localStorage.getItem(BACKUP_KEY) || ''; } catch { return ''; } };
+function backupCard(app) {
+  const s = app.session; if (s.role !== 'direzione' || s.office || !app.store.backupTable) return null;
+  const info = h('p', { class: 'muted' }), out = h('div', { class: 'du-out' });
+  const showLast = () => { const d = lastBackup(); const days = d ? Math.floor((Date.now() - new Date(d)) / 864e5) : null;
+    info.textContent = d ? `Ultimo backup da questo computer: ${dateTimeIt(d)}${days >= 7 ? ' — sono passati ' + days + ' giorni, fanne uno nuovo' : ''}` : 'Nessun backup scaricato da questo computer.';
+    info.className = d && days < 7 ? 'muted' : 'warn-text'; };
+  showLast();
+  const go = async e => {
+    e.target.disabled = true; fill(out, h('p', { class: 'muted' }, 'Preparo il backup: leggo le tabelle…'));
+    try {
+      const b = await buildBackup(t => app.store.backupTable(t), { by: s.name });
+      const a = h('a', { href: URL.createObjectURL(new Blob([b.zip], { type: 'application/zip' })), download: b.name }); document.body.append(a); a.click(); a.remove();
+      try { localStorage.setItem(BACKUP_KEY, new Date().toISOString()); } catch { /* facoltativo */ }
+      const bad = b.counts.filter(c => c[2] === null);
+      fill(out, h('p', { class: 'du-ok' }, `✓ Scaricato ${b.name}: ${b.counts.filter(c => c[2] !== null).reduce((n, c) => n + c[2], 0).toLocaleString('it-IT')} righe in ${b.counts.length - bad.length} tabelle` + (bad.length ? ` · ${bad.length} non lette (vedi LEGGIMI)` : '')));
+      showLast();
+    } catch (err) { fill(out, h('p', { class: 'bad-text' }, 'Backup non riuscito: ' + err.message)); }
+    e.target.disabled = false;
+  };
+  return h('section', { class: 'card' }, h('h2', {}, 'Backup dei dati dell\'app'),
+    h('p', {}, 'Scarica una copia di clienti, offerte, note e visite, giri, ordini e messaggi: un file ZIP con le tabelle per Excel e la copia completa per un eventuale ripristino. Fallo una volta a settimana e salvalo in una cartella sicura (non su Drive condiviso).'),
+    info, h('div', { class: 'du-actions' }, h('button', { type: 'button', class: 'btn primary', onclick: go }, 'Scarica backup')), out);
+}
+
+return { canUpdateData, viewDataUpdate, BACKUP_KEY, lastBackup };
 })();
 __m["js/views/orders.js"] = (function () {
 // Ordini passati all'ufficio (offerte accettate): l'ufficio li segue fino all'inserimento in RADIX. Solo Direzione.
