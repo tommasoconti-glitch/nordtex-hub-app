@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="f2730a7f241d">
+<meta name="ntx-build" content="a0b65fecb922">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -847,9 +847,13 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .net-card .net-row.open td:first-child strong::before{content:'▾ '}
 .net-card .net-detail td{padding-top:0}
 .net-card .net-detail ul{margin:.3rem 0}
+.fc-line{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap}
+.rx-sum .fc-line{display:flex;margin:.6rem 0 .2rem}
+.fc-lab{font-weight:600;font-size:.9em}
+.fc-msg{color:var(--muted,#777)} .fc-msg.warn-text{color:#b26a00;display:inline}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f2730a7f241d"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a0b65fecb922"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3335,6 +3339,7 @@ async function viewRadixOffer(app, id) {
           v && radixOfferOpen(o) ? h('span', { class: 'due ' + (v.cls === 'bad' ? 'scaduto' : v.cls === 'warn' ? 'oggi' : '') }, v.label) : null)),
       h('p', { class: 'rx-story' }, about.length ? `Sentito ${about.length} ${about.length === 1 ? 'volta' : 'volte'} per questa offerta` + (calls || visits ? ` (${[calls ? calls + ' telefonat' + (calls === 1 ? 'a' : 'e') : '', visits ? visits + ' visit' + (visits === 1 ? 'a' : 'e') : ''].filter(Boolean).join(', ')})` : '') + ` · ultimo contatto ${dateIt(about[0].createdAt)}`
         : 'Nessun contatto registrato su questa offerta.'),
+      radixOpenForecast(app, o),
       o.outcomeNote ? h('p', { class: 'rx-note' }, `Ultimo esito: “${o.outcomeNote}” — ${o.outcomeByName || ''} ${o.outcomeAt ? dateIt(o.outcomeAt) : ''}`) : null,
       h('div', { class: 'cactions' },
         !app.session.preview ? h('button', { class: 'act primary', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, h('span', { class: 'act-ico' }, '✓'), h('span', {}, 'Esito')) : null,
@@ -3361,6 +3366,22 @@ async function viewRadixOffer(app, id) {
       c && app.session.role === 'direzione' && !app.session.preview && app.store.linkRadixOffer ? h('p', { class: 'fine' }, 'Cliente sbagliato? ',
         h('button', { class: 'link', type: 'button', onclick: async () => { try { await app.store.linkRadixOffer(o.id, null); toast('Offerta scollegata'); refresh(); } catch (e) { toast(e.message, 'error'); } } }, 'Scollega e scegli di nuovo')) : null,
       o.linesAt ? h('p', { class: 'fine' }, 'Righe aggiornate il ' + dateIt(o.linesAt)) : null));
+}
+
+// 07/11 sera (Tommaso): la previsione si segna direttamente sull'offerta RADIX, senza dover registrare un contatto. Si salva da sola.
+function radixOpenForecast(app, o) {
+  if (!radixOfferOpen(o) || !app.store.setRadixOfferForecast) return null;
+  const p = forecastSelect(o.forecastP), m = forecastMonthInput(o.forecastMonth), msg = h('small', { class: 'fc-msg' });
+  if (app.session.preview) { p.disabled = m.disabled = true; }
+  const save = async () => {
+    msg.className = 'fc-msg'; msg.textContent = p.value && !m.value ? 'manca il mese' : '';
+    if (p.value && !m.value) { msg.classList.add('warn-text'); return; }   // si salva quando ci sono tutte e due (o nessuna)
+    if (!p.value && m.value) { msg.textContent = 'manca la probabilità'; msg.classList.add('warn-text'); return; }
+    try { await app.store.setRadixOfferForecast(o.id, { p: p.value || null, month: m.value || null }); o.forecastP = p.value || null; o.forecastMonth = m.value || null; msg.textContent = '✓ salvata'; }
+    catch (e) { toast('Previsione non salvata: ' + e.message, 'error'); }
+  };
+  p.addEventListener('change', save); m.addEventListener('change', save);
+  return h('div', { class: 'fc-line' }, h('span', { class: 'fc-lab' }, 'Previsione:'), h('span', { class: 'fc-row' }, p, m), msg);
 }
 
 // 07/11: campi della previsione di chiusura (usati anche nell'offerta dell'app)
@@ -6396,9 +6417,12 @@ async function viewQuoteEditor(app, id, customerId) {
   function forecastBox() {
     if (!['Bozza', 'Inviata'].includes(q.status) || !isOwner) return null;
     const p = forecastSelect(q.forecast?.p), m = forecastMonthInput(q.forecast?.month);
-    const upd = () => { q.forecast = p.value || m.value ? { p: p.value || null, month: m.value || null } : null; mark(); };
-    p.addEventListener('change', upd); m.addEventListener('change', upd);
-    return h('span', { class: 'fc-row', title: 'Previsione di chiusura: quanto è probabile che diventi ordine e in che mese' }, p, m);
+    const msg = h('small', { class: 'fc-msg warn-text' });
+    const hint = () => { msg.textContent = p.value && !m.value ? 'manca il mese' : !p.value && m.value ? 'manca la probabilità' : ''; };
+    const upd = () => { q.forecast = p.value || m.value ? { p: p.value || null, month: m.value || null } : null; hint(); mark(); };
+    p.addEventListener('change', upd); m.addEventListener('change', upd); hint();
+    // 07/11 sera (Tommaso): etichetta davanti ai menu, se no non si capisce cosa sono
+    return h('span', { class: 'fc-line', title: 'Previsione di chiusura: quanto è probabile che diventi ordine e in che mese' }, h('span', { class: 'fc-lab' }, 'Previsione:'), h('span', { class: 'fc-row' }, p, m), msg);
   }
   // ---- salvataggio, stampa
   const saveBtn = h('button', { class: 'btn primary', disabled: !isOwner, onclick: save }, 'Salva');
