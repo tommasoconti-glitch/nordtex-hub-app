@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="8d6b94c59c32">
+<meta name="ntx-build" content="37d450aaa81f">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -857,9 +857,14 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .card.my-dir{border-left:4px solid var(--accent,#c8c400)}
 .h1-link{color:inherit;text-decoration:none} .h1-link:hover{text-decoration:underline} .h1-go{color:var(--muted,#888);font-weight:400}
 .stages-card td.num small{white-space:nowrap} .stages-card tr.stages-tot td{background:var(--soft, rgba(0,0,0,.035));font-weight:600}
+/* 07/11 sera: riquadri di Area manager apribili e chiudibili */
+.fold-head{cursor:pointer;user-select:none}
+h2.fold-head::after,.fold-head h2::after{content:' ▾';color:var(--muted,#888);font-weight:400;font-size:.8em}
+.card.folded h2.fold-head::after,.card.folded .fold-head h2::after{content:' ▸'}
+.card.folded > :not(.fold-head){display:none}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8d6b94c59c32"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"37d450aaa81f"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -7514,7 +7519,7 @@ async function managerSection(app) {
   const sum = k => rows.reduce((t, r) => t + r[k], 0);
   const commissions = await commissionCard(app);
   const rxAll = app.store.radixOffers ? await app.store.radixOffers({ withClosed: true }).catch(() => rxOffers) : rxOffers;
-  return h('div', { class: 'section-body' }, stagesCard(app, quotes, rxAll), forecastCard(app, customers, quotes, rxOffers),
+  return foldCards(h('div', { class: 'section-body' }, stagesCard(app, quotes, rxAll), forecastCard(app, customers, quotes, rxOffers),
     h('section', { class: 'card' }, h('h2', {}, 'Portafoglio per assegnatario'),
       h('p', { class: 'muted' }, 'Clienti, stato e attività di ciascun agente e consulente (comprese note e offerte aperte importate da RADIX, contate sul cliente). Tocca un nome per vedere i numeri.'),
       h('div', { class: 'pf-list' }, rows.map(r => h('details', {},
@@ -7524,7 +7529,7 @@ async function managerSection(app) {
           ['Note ultimi 30 gg', r.notesRx ? `${r.notes30} (${r.notesRx} RADIX)` : r.notes30], ['Follow-up scaduti', r.overdue, r.overdue ? 'bad-text' : ''],
           ['Offerte aperte', `${r.openQ} · ${eur(r.openValue)}` + (r.openRx ? ` (${r.openRx} RADIX)` : '')], ['Offerte accettate', eur(r.won)]]
           .map(([l, v, cls]) => h('div', {}, h('dt', {}, l), h('dd', { class: cls || '' }, typeof v === 'number' ? v.toLocaleString('it-IT') : v)))))))),
-    rows.length ? null : emptyState('Nessun dato.'), commissions, accessCard(app), backupCard(app));
+    rows.length ? null : emptyState('Nessun dato.'), commissions, accessCard(app), backupCard(app)), 'ntx-am-closed');
 }
 
 // 07/11 (Tommaso): "La settimana degli agenti" in cima ad Attività rete, per le telefonate del lunedì. Solo Direzione.
@@ -7546,6 +7551,24 @@ async function weekCard(app, data) {
         return h('tr', {}, h('td', {}, h('strong', {}, r.name)), h('td', {}, stale ? h('span', { class: 'wk-bad' }, ago(last)) : ago(last)), acc ? n(r.opens7 ?? 0, !r.opens7) : null,
           n(r.notes7, !r.notes7), n(r.quotes7), n(r.sent7), n(r.lateFollow, r.lateFollow > 0), n(r.newCust7));
       })))));
+}
+
+// 07/11 sera (Tommaso: "tutte le finestre in Area manager devono potersi aprire e chiudere"): tocchi il titolo e il riquadro si chiude;
+// la scelta resta su questo dispositivo.
+function foldCards(root, key) {
+  let closed = []; try { closed = JSON.parse(localStorage.getItem(key) || '[]'); } catch { closed = []; }
+  const save = () => { try { localStorage.setItem(key, JSON.stringify(closed)); } catch { /* niente */ } };
+  for (const card of root.querySelectorAll(':scope > section.card')) {
+    const t = card.querySelector('h2'); if (!t) continue;
+    const name = t.textContent.trim(), head = t.closest('.card-head') || t;
+    head.classList.add('fold-head'); head.setAttribute('role', 'button'); head.tabIndex = 0;
+    const set = c => { card.classList.toggle('folded', c); head.setAttribute('aria-expanded', String(!c)); };
+    set(closed.includes(name));
+    const flip = e => { if (e.target.closest('a,button,select,input') && e.target !== head && !t.contains(e.target)) return;
+      const c = !card.classList.contains('folded'); set(c); closed = closed.filter(x => x !== name); if (c) closed.push(name); save(); };
+    head.addEventListener('click', flip); head.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(e); } });
+  }
+  return root;
 }
 
 // 07/11 sera (A3 ridotto, Tommaso): offerte per fase, rete e agenti. La conversione offerta→ordine arriverà da Meridian.
