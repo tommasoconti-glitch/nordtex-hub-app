@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="ba052e07ac5b">
+<meta name="ntx-build" content="ae9d3abe04f4">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -956,9 +956,10 @@ details[open]>.ss-ssum::before{content:'▾'}
 .ss-strat{padding-left:28px}
 .ss-sval{font-weight:600;text-align:right}
 @media (max-width:700px){.ss-ssum{grid-template-columns:1fr 60px}.ss-ssum .ss-bar{grid-column:1/-1}}
+.ss-glance { display: block; line-height: 1.35; } .ss-glance .ss-votes { display: block; white-space: nowrap; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ba052e07ac5b"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ae9d3abe04f4"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -10629,6 +10630,26 @@ function improvementScore(photo) {
   return k == null ? null : k.length >= 3 ? 3 : k.length >= 1 ? 2 : 1;
 }
 
+// 08/11 (Tommaso: "i voti li userei per popolare in automatico il commento di fianco al nome, per capire a colpo d'occhio
+// come è messo: un dato scientifico"). Le fasce restano una scelta strategica a mano: i voti NON le cambiano.
+const pctS = x => (x >= 0 ? '+' : '−') + Math.abs(Math.round(x * 100)) + '%';
+const SHORT = { 'zona in calo': null, 'molti inattivi': 'inattivi da recuperare', 'offerte che non si chiudono': 'offerte che non chiude', 'mix basso': 'mix basso', 'fibra in calo': 'fibra in calo' };
+/** @returns { stato, text, votes } — votes: { zona, miglioramento, vicinanza, autonomia } già risolti (a mano o automatici) */
+function agentGlance({ photo, votes = {} } = {}) {
+  const parts = [];
+  let stato = 'senza fotografia';
+  if (photo) {
+    const { scores: s, values: v } = areaScores(photoFlat(photo));
+    stato = s.crescita === 1 ? 'in recupero' : s.crescita === 3 ? 'in crescita' : s.crescita === 2 ? 'stabile' : 'fotografia parziale';
+    parts.push(stato + (v.crescita != null ? ' ' + pctS(v.crescita) : ''));
+    for (const x of improvementSignals(photo) || []) if (SHORT[x]) parts.push(SHORT[x]);
+    if (s.mix === 3 && v.mix != null) parts.push('mix ' + Math.round(v.mix * 100) + '%');
+  } else parts.push(stato);
+  if (votes.autonomia === 3) parts.push('autonomo'); else if (votes.autonomia === 1) parts.push('da seguire da vicino');
+  const V = k => votes[k] ?? '–';
+  return { stato, text: parts.join(' · '), code: `Z${V('zona')} M${V('miglioramento')} V${V('vicinanza')} A${V('autonomia')}`, votes };
+}
+
 // 08/11 SS: province di una zona e eccezioni (clienti con fatturato 2024-2026 assegnati diversamente), per le domande a Meridian
 const provincesOf = txt => [...new Set(String(txt || '').match(/\b[A-Z]{2}\b/g) || [])];
 function zoneExceptions(customers, label, provs) {
@@ -10711,14 +10732,14 @@ function progressTo(measure, value, target) {
   return t > 0 ? Math.max(0, Math.min(1, value / t)) : null;
 }
 
-return { FASCE, KINDS, CRITERIA, MANUAL_CRITERIA, proximityScore, OVERNIGHT_KM, tripKind, TRIP_ICON, TRIP_LABEL, medianKm, F2_DAYS, mondayOf, displayName, lastContact, contactDue, openActions, networkRows, thisWeek, AREA_INDICATORS, areaScores, ZONE_RULE, zoneWeightScore, IMPROVE_RULE, improvementSignals, improvementScore, provincesOf, zoneExceptions, photoFlat, STRATEGY_LABEL, tacticState, tacticFor, tacticProgress, MEASURES, computeMeasures, progressTo };
+return { FASCE, KINDS, CRITERIA, MANUAL_CRITERIA, proximityScore, OVERNIGHT_KM, tripKind, TRIP_ICON, TRIP_LABEL, medianKm, F2_DAYS, mondayOf, displayName, lastContact, contactDue, openActions, networkRows, thisWeek, AREA_INDICATORS, areaScores, ZONE_RULE, zoneWeightScore, IMPROVE_RULE, improvementSignals, improvementScore, agentGlance, provincesOf, zoneExceptions, photoFlat, STRATEGY_LABEL, tacticState, tacticFor, tacticProgress, MEASURES, computeMeasures, progressTo };
 })();
 __m["js/views/strategy.js"] = (function () {
 // "Strategia" (08/11/2026, Tommaso): un'unica sezione con il gestionale della Direzione, a finestre che si aprono e si chiudono.
 // Fasce della rete, chi sentire questa settimana, incontri (esito scritto a mano; l'intervista si registra con Plaud) e azioni con scadenza.
 // Solo Tommaso (session.canStrategy, controllo anche nel database). Migrazione 20261108080000.
 const { h, eur, dateIt, today, toast, modal, field, emptyState } = __m["js/ui.js"];
-const { FASCE, KINDS, MANUAL_CRITERIA, networkRows, thisWeek, openActions, displayName, proximityScore, medianKm, tripKind, TRIP_ICON, TRIP_LABEL, AREA_INDICATORS, areaScores, photoFlat, provincesOf, zoneExceptions, STRATEGY_LABEL, tacticState, tacticFor, tacticProgress, MEASURES, computeMeasures, progressTo, zoneWeightScore, improvementScore, improvementSignals, ZONE_RULE, IMPROVE_RULE } = __m["js/core/strategy.js"];
+const { FASCE, KINDS, MANUAL_CRITERIA, networkRows, thisWeek, openActions, displayName, proximityScore, medianKm, tripKind, TRIP_ICON, TRIP_LABEL, AREA_INDICATORS, areaScores, photoFlat, provincesOf, zoneExceptions, STRATEGY_LABEL, tacticState, tacticFor, tacticProgress, MEASURES, computeMeasures, progressTo, zoneWeightScore, improvementScore, improvementSignals, ZONE_RULE, IMPROVE_RULE, agentGlance } = __m["js/core/strategy.js"];
 const { customerPlace, distanceKm } = __m["js/core/places.js"];
 const { COMUNI_GEO } = __m["js/data/comuni-geo-data.js"];
 const { foldCards } = __m["js/views/direction.js"];
@@ -10731,6 +10752,19 @@ const dueBadge = r => r.due.state === 'in ritardo' ? h('span', { class: 'badge b
   : r.due.state === 'da sentire' ? h('span', { class: 'badge warn' }, 'da sentire')
   : r.due.state === 'sentito' ? h('span', { class: 'badge ok' }, 'sentito') : null;
 const fChip = f => h('span', { class: 'chip f' + (f || 0) }, f ? 'F' + f : '—');
+// 08/11 colpo d'occhio di fianco al nome: voti a mano se scelti, altrimenti quelli calcolati
+function glanceOf(d, r) {
+  const n = d.nums.get(r.label) || {}, sc = r.scores || {}, photo = (sc.foto || [])[0] || null;
+  const votes = { zona: sc.zona ?? zoneWeightScore({ best: Math.max(n.rev24 || 0, n.rev25 || 0, n.rev26 || 0), anag: n.anag }),
+    miglioramento: sc.miglioramento ?? improvementScore(photo), vicinanza: n.vic ?? sc.vicinanza ?? null, autonomia: sc.autonomia ?? null };
+  return agentGlance({ photo, votes });
+}
+const GLANCE_CLS = { 'in recupero': 'bad-text', 'in crescita': 'ok-text', stabile: 'muted' };
+function glanceLine(d, r) {
+  const g = glanceOf(d, r);
+  return h('small', { class: 'ss-glance', title: 'Zona strategica · Miglioramento · Vicinanza · Autonomia (1-3). Calcolato dai dati, si aggiorna da solo.' },
+    h('span', { class: GLANCE_CLS[g.stato] || 'muted' }, g.text), h('span', { class: 'muted ss-votes' }, ['Zona', 'Migl.', 'Vic.', 'Aut.'].map((l, i) => `${l} ${g.votes[['zona', 'miglioramento', 'vicinanza', 'autonomia'][i]] ?? '–'}`).join(' · ')));
+}
 const tripOf = (d, r) => r.fascia === 1 || r.fascia === 2 ? tripKind(d.nums.get(r.label)?.km, r.scores?.trasferta) : { kind: null };   // 08/11: affiancamenti solo in fascia 1 e 2
 const tripIcon = t => t.kind ? h('span', { class: 'st-trip', title: 'Affiancamento ' + TRIP_LABEL[t.kind] + (t.auto ? ' (calcolato dai km)' : '') }, TRIP_ICON[t.kind]) : null;
 
@@ -10905,7 +10939,7 @@ async function viewStrategy(app, label) {
       h('div', { class: 'st-main' }, fChip(r.fascia), h('strong', {}, r.name), tripIcon(tripOf(d, r)), dueBadge(r),
         h('small', { class: 'muted' }, r.last ? ' ultimo contatto ' + dateIt(r.last) : ' mai sentito'),
         r.open ? h('small', { class: r.late ? 'bad-text' : 'muted' }, ` · ${r.open} azioni aperte` + (r.late ? `, ${r.late} scadute` : '')) : null),
-      numsLine(r.label),
+      glanceLine(d, r), numsLine(r.label),
       h('div', { class: 'actions' }, h('button', { class: 'btn small primary', onclick: () => meetingDialog(app, d, r, refresh) }, 'Registra incontro'),
         h('a', { class: 'btn small', href: '#/strategia/' + encodeURIComponent(r.label) }, 'Scheda')))))
       : emptyState(d.rows.some(r => r.fascia) ? 'Nessuno da sentire: la rete di questa settimana è coperta.' : 'Assegna le fasce in "Rete e fasce": da lì nasce il calendario.'));
@@ -10925,7 +10959,7 @@ async function viewStrategy(app, label) {
         h('thead', {}, h('tr', {}, h('th', {}, 'Commerciale'), h('th', {}, 'Stato'), h('th', {}, 'Ultimo contatto'), h('th', {}, 'Azioni'), h('th', { class: 'num' }, 'Km · vicin.'), h('th', { class: 'num' }, 'Area'), h('th', { class: 'num' }, 'Fatt. 2026'), h('th', { class: 'num' }, 'Offerte RADIX'))),
         h('tbody', {}, rs.map(r => { const n = d.nums.get(r.label) || {};
           return h('tr', { class: 'net-row', onclick: () => app.go('strategia/' + encodeURIComponent(r.label)) },
-            h('td', {}, h('strong', {}, r.name), ' ', tripIcon(tripOf(d, r)), r.note ? h('small', { class: 'muted' }, ' · ' + r.note.slice(0, 40)) : null),
+            h('td', {}, h('strong', {}, r.name), ' ', tripIcon(tripOf(d, r)), h('br'), glanceLine(d, r)),
             h('td', {}, r.state !== 'attivo' ? h('span', { class: 'badge ' + (r.state === 'scoperta' ? 'bad' : 'warn') }, r.state) : dueBadge(r) || h('span', { class: 'muted' }, '–')),
             h('td', {}, r.last ? dateIt(r.last) : h('span', { class: 'muted' }, 'mai')),
             h('td', {}, r.open ? h('span', { class: r.late ? 'bad-text' : '' }, String(r.open)) : h('span', { class: 'muted' }, '–')),
@@ -11022,7 +11056,7 @@ function headCard(app, d, r, refresh) {
       h('h1', {}, r.name), h('div', { class: 'st-main' }, fChip(r.fascia), tripIcon(t), dueBadge(r),
         r.state !== 'attivo' ? h('span', { class: 'badge ' + (r.state === 'scoperta' ? 'bad' : 'warn') }, r.state) : null,
         h('small', { class: 'muted' }, (n.km != null ? `${n.km} km · ` : '') + (r.last ? 'ultimo contatto ' + dateIt(r.last) : 'mai sentito')),
-        r.note ? h('small', { class: 'muted' }, ' · ' + r.note) : null)),
+        r.note ? h('small', { class: 'muted' }, ' · ' + r.note) : null), glanceLine(d, r)),
     a ? h('div', { class: 'ss-eval' }, h('div', { class: 'ss-score' }, h('strong', {}, a.avg != null ? a.avg.toLocaleString('it-IT') : '–'), h('small', {}, '/ 3 area')),
       h('div', { class: 'ss-ind' }, AREA_INDICATORS.map(([k, l]) => h('span', { class: 'badge ' + tone(a.scores[k]), title: l }, `${l} ${a.values[k] != null ? VALFMT[k](a.values[k]) : '–'}`))))
       : h('p', { class: 'muted' }, 'Nessuna fotografia: inizia da "Domande per Meridian" qui sotto, poi "Nuova fotografia".'),
