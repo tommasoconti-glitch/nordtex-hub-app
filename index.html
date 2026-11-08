@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="f7eb2a382a8b">
+<meta name="ntx-build" content="509ba79bc1dc">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -917,9 +917,18 @@ h2.fold-head::after,.fold-head h2::after{content:' ▾';color:var(--muted,#888);
   .ss-body>section.card:first-child{grid-row:span 3}
   .ss-body>section.card:nth-child(n+5){grid-column:1 / -1}
 }
+/* 08/11 obiettivi del mese (Home e Bacheca dell'agente) */
+.goals-card{border-left:4px solid var(--brand)}
+.goals-list{list-style:none;margin:0 0 6px;padding:0}
+.goals-list li{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--line)}
+.goals-list li:last-child{border-bottom:0}
+.goals-msg{white-space:pre-wrap;background:var(--surface-2,#f6f7f4);padding:8px 10px;border-radius:8px}
+.ss-goals{margin:-4px 0 12px;padding:8px 12px;border-radius:8px;background:var(--surface-2,#f6f7f4)}
+.goals-note{margin:10px 0 6px} .goals-note textarea{width:100%}
+.ss-qtext{width:100%;font-family:ui-monospace,Menlo,monospace;font-size:.82rem;line-height:1.4}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f7eb2a382a8b"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"509ba79bc1dc"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1819,6 +1828,12 @@ function createLocalStore({ data, kv }) {
       (await col('statusChanges')).push(rec); await save('statusChanges'); applyStatus(byId.get(customerId), rec); return rec;
     },
     async changeLog() { return []; },
+    // 08/11 SS → Home dell'agente (in locale resta in questo browser)
+    async agentGoals(label) { return (await col('agentGoals')).find(g => g.label === label) || null; },
+    async saveAgentGoals(g) { const a = await col('agentGoals'); const i = a.findIndex(x => x.label === g.label); const old = a[i];
+      const r = { ...g, status: g.status || 'proposta', updatedAt: new Date().toISOString(), seenAt: old?.seenAt || null, agentNote: old?.agentNote || '', agentNoteAt: old?.agentNoteAt || null }; if (i >= 0) a[i] = r; else a.push(r); await save('agentGoals'); },
+    async goalsComment(note) { const a = await col('agentGoals'); const g = a.find(x => x.label === session?.assignee); if (g) { g.agentNote = String(note || ''); g.agentNoteAt = new Date().toISOString(); await save('agentGoals'); } },
+    async goalsSeen() { const a = await col('agentGoals'); const g = a.find(x => x.label === session?.assignee); if (g) { g.seenAt = new Date().toISOString(); await save('agentGoals'); } },
     // 08/11 Rete 2027 (solo Tommaso): in locale resta in questo browser
     async dirNetwork() {
       if (!session?.canStrategy) return { agents: [], meetings: [], actions: [] };
@@ -2208,6 +2223,20 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       return x.id ? api('/rest/v1/hub_dir_actions?id=eq.' + x.id, { method: 'PATCH', body }) : api('/rest/v1/hub_dir_actions', { method: 'POST', body });
     },
     async removeDirAction(id) { return api('/rest/v1/hub_dir_actions?id=eq.' + id, { method: 'DELETE' }); },
+    // 08/11 SS → Home dell'agente: obiettivi del mese (migrazione 20261108140000; assente = nessun obiettivo)
+    async agentGoals(label) {
+      if (!label) return null;
+      const r = await api('/rest/v1/hub_agent_goals?select=*&agent_label=eq.' + encodeURIComponent(label)).catch(() => null);
+      const g = r?.[0]; if (!g) return null;
+      return { label: g.agent_label, month: g.month, kpi: g.kpi || [], actions: g.actions || [], clients: g.clients || [], message: g.message || '', updatedAt: g.updated_at, seenAt: g.seen_at,
+        status: g.status || 'proposta', agreedAt: g.agreed_at || null, agentNote: g.agent_note || '', agentNoteAt: g.agent_note_at || null };
+    },
+    async saveAgentGoals(g) {
+      return api('/rest/v1/hub_agent_goals?on_conflict=agent_label', { method: 'POST', prefer: 'resolution=merge-duplicates',
+        body: { agent_label: g.label, month: g.month, kpi: g.kpi, actions: g.actions, clients: g.clients, message: g.message || '', status: g.status || 'proposta', agreed_at: g.agreedAt || null, updated_at: new Date().toISOString() } });
+    },
+    async goalsSeen() { return api('/rest/v1/rpc/hub_goals_seen', { method: 'POST', body: {} }).catch(() => null); },
+    async goalsComment(note) { return api('/rest/v1/rpc/hub_goals_comment', { method: 'POST', body: { p_note: note } }); },
     async quoteSends(quoteId) {
       const nm = await names();
       return (await api('/rest/v1/hub_quote_sends?select=*&order=sent_at.desc' + (quoteId ? '&quote_id=eq.' + quoteId : '&limit=500')).catch(() => []))
@@ -2647,6 +2676,56 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
 
 return { audioMime, audioView, createSupabaseStore };
 })();
+__m["js/views/goals-card.js"] = (function () {
+// 08/11/2026 (Tommaso: "lavoro nella pagina SS del commerciale e deve essere subito chiaro sulla sua bacheca").
+// Riquadro "I miei obiettivi del mese" in cima alla Home e alla Bacheca dell'agente: KPI, azioni con scadenza,
+// clienti da intervistare con le domande. Lo scrive la scheda SS (views/strategy.js), qui si legge soltanto.
+const { h, dateIt, today } = __m["js/ui.js"];
+const GOAL_QUESTIONS = ['Quanto prevede di acquistare nel 2027 per famiglia: fibra di legno, laterizio, vetro cellulare?',
+  'Che cantieri e progetti ha in vista nel 2027, e per quali imprese?',
+  'Quali concorrenti usa, a che prezzi e su quali prodotti?',
+  'Cosa servirebbe per comprare da noi laterizio e vetro cellulare (disponibilità, consegne, formazione, campioni)?',
+  'Come giudica il nostro servizio: tempi, depositi, offerte?',
+  'Solo per gli inattivi: perché ha smesso e cosa lo farebbe tornare?'];
+
+const monthName = k => new Date(k + '-01T00:00:00').toLocaleDateString('it-IT', { month: 'long' });
+const ST = { fatto: ['ok', 'fatto'], 'non fatto': ['bad', 'non fatto'], '': ['muted', 'in corso'] };
+
+/** @returns riquadro o null se non ci sono obiettivi per l'agente */
+async function goalsCard(app) {
+  const s = app.session;
+  if (s.role === 'direzione' && !s.preview) return null;
+  const g = app.store.agentGoals ? await app.store.agentGoals(s.assignee).catch(() => null) : null;
+  if (!g || (!g.kpi.length && !g.actions.length && !g.clients.length)) return null;
+  if (!s.preview && app.store.goalsSeen && (!g.seenAt || g.seenAt < g.updatedAt)) app.store.goalsSeen().catch(() => null);
+  const t = today(), todo = g.clients.filter(c => c.st !== 'fatta');
+  return h('section', { class: 'card goals-card' },
+    h('h2', {}, `I miei obiettivi di ${monthName(g.month)}`),
+    g.status === 'concordati'
+      ? h('p', {}, h('span', { class: 'badge ok' }, 'Concordati il ' + dateIt(g.agreedAt)), h('small', { class: 'muted' }, ' · li abbiamo definiti insieme nella telefonata. Segna nelle note dei clienti quello che fai.'))
+      : h('p', {}, h('span', { class: 'badge warn' }, 'Proposta da concordare'), h('small', { class: 'muted' }, ' · è la mia proposta dopo l\'analisi della tua zona: nella telefonata del lunedì la rivediamo e la fissiamo insieme. Scrivimi qui sotto cosa ne pensi.')),
+    g.message ? h('p', { class: 'goals-msg' }, g.message) : null,
+    g.kpi.length ? [h('h3', { class: 'st-h3' }, 'KPI del mese'), h('ul', { class: 'goals-list' }, g.kpi.map(k => { const [cls, lab] = ST[k.st || ''] || ST[''];
+      return h('li', {}, h('span', { class: 'badge ' + cls }, lab), h('strong', {}, k.t), k.target ? h('small', { class: 'muted' }, ' · ' + k.target) : null); }))] : null,
+    g.actions.length ? [h('h3', { class: 'st-h3' }, 'Azioni'), h('ul', { class: 'goals-list' }, g.actions.map(a => h('li', {},
+      a.due ? h('span', { class: 'due ' + (a.due < t ? 'scaduto' : a.due === t ? 'oggi' : '') }, 'entro ' + dateIt(a.due)) : null, h('span', {}, a.title))))] : null,
+    g.clients.length ? [h('h3', { class: 'st-h3' }, `Clienti da intervistare per il budget 2027 · ${todo.length} da fare`),
+      h('ul', { class: 'goals-list' }, g.clients.map(c => h('li', {}, h('span', { class: 'badge ' + (c.st === 'fatta' ? 'ok' : 'warn') }, c.st === 'fatta' ? 'fatta' : 'da fare'), h('strong', {}, c.name), c.why ? h('small', { class: 'muted' }, ' · ' + c.why) : null))),
+      h('details', { class: 'fold-in' }, h('summary', {}, 'Le domande da fare ai clienti'), h('ol', { class: 'help-list' }, GOAL_QUESTIONS.map(q => h('li', {}, q))))] : null,
+    commentBox(app, g),
+    h('small', { class: 'muted' }, 'Aggiornato il ' + dateIt(g.updatedAt)));
+}
+
+// 08/11: osservazioni dell'agente prima della telefonata (non modifica gli obiettivi: li cambiamo insieme)
+function commentBox(app, g) {
+  const ro = !!app.session.preview || !app.store.goalsComment;
+  const ta = h('textarea', { rows: 3, placeholder: 'Le tue osservazioni: cosa ti sembra realistico, cosa cambieresti, clienti che conosci meglio…', disabled: ro }, g.agentNote || '');
+  const btn = h('button', { class: 'btn small', disabled: ro, onclick: async () => { try { await app.store.goalsComment(ta.value.trim()); btn.textContent = 'Inviate ✓'; } catch (e) { btn.textContent = 'Non inviate: riprova'; } } }, 'Invia a Tommaso');
+  return h('div', { class: 'goals-note' }, h('h3', { class: 'st-h3' }, 'Le mie osservazioni per la telefonata'), ta, h('div', { class: 'actions' }, btn, g.agentNoteAt ? h('small', { class: 'muted' }, 'ultime inviate il ' + dateIt(g.agentNoteAt)) : null));
+}
+
+return { GOAL_QUESTIONS, goalsCard };
+})();
 __m["js/core/data-status.js"] = (function () {
 // Semaforo "Dati RADIX di oggi" (07/11/2026, richiesta Tommaso: rafforzare i caricamenti a mano di Irina).
 // Caso del 06/11: mancava l'Excel delle offerte aperte e 6 PDF su 7 sono rimasti fuori senza che nessuno se ne accorgesse.
@@ -2758,7 +2837,7 @@ return { DIR_FOLLOWERS, isDirCustomer, followerOf, ownerLabel, myFollower };
 __m["js/core/recover-reminders.js"] = (function () {
 const { ownerLabel } = __m["js/core/dir-follower.js"];
 // A2 "follow-up automatici" (07/11/2026, decisione Tommaso: "3 a settimana").
-// Clienti "Da recuperare" non sentiti da 60 giorni (nessuna nota nell'app né in RADIX): per ogni agente i 3 con più fatturato passato.
+// Clienti "Da recuperare" (e persi con acquisti 2024) non sentiti da 60 giorni (nessuna nota nell'app né in RADIX): per ogni agente i 3 con più fatturato passato.
 // Direzionali: 3 per chi li segue (Tommaso, Marco, Ufficio: core/dir-follower.js).
 // Quando l'agente registra una nota il cliente esce per 60 giorni ed entra il successivo. Nessun dato salvato: si calcola ogni volta.
 const RECOVER_DAYS = 60, RECOVER_PER_AGENT = 3;
@@ -2778,10 +2857,12 @@ function weekFriday(today) {
  */
 function recoverReminders(customers, lastContact, today, { days = RECOVER_DAYS, perAgent = RECOVER_PER_AGENT } = {}) {
   const lim = iso(new Date(new Date(today + 'T12:00:00').getTime() - days * 864e5)), due = weekFriday(today);
-  const rev = c => (c.rev2025 || 0) * 1e6 + (c.rev2024 || 0);   // prima l'acquistato 2025 (l'anno in cui comprava), poi il 2024
+  // 08/11 (Tommaso, caso Moretti 45.700 € nel 2024 escluso e Rasom 1.200 € dentro): contano anche i persi che compravano nel 2024,
+  // ordinati per fatturato 2024 + 2025
+  const rev = c => (c.rev2025 || 0) + (c.rev2024 || 0);
   const by = new Map();
   for (const c of customers) {
-    if (c.status !== 'Da recuperare' || c.isTest || /^EX_/.test(c.assignee || '')) continue;   // aree scoperte: nessuno a cui darli
+    if (!(c.status === 'Da recuperare' || (c.status === 'Perso' && (c.rev2024 || 0) > 0)) || c.isTest || /^EX_/.test(c.assignee || '')) continue;   // aree scoperte: nessuno a cui darli
     const last = lastContact.get(c.id) || '';
     if (last >= lim) continue;
     const k = ownerLabel(c) || 'Direzionale · Tommaso'; if (!by.has(k)) by.set(k, []); by.get(k).push({ c, last });
@@ -7123,6 +7204,7 @@ async function pickCustomer(app, { title, recentIds = [], recentLabel = 'Clienti
 return { viewQuotes, outcomeDialog, resolveOutcome, orderDialog, viewQuoteEditor, printQuote, startNewQuote, pickCustomer };
 })();
 __m["js/views/home.js"] = (function () {
+const { goalsCard } = __m["js/views/goals-card.js"];
 const { dataStatusCard } = __m["js/views/data-status-card.js"];
 const { h, fill, eur, dateIt, today, telLinks } = __m["js/ui.js"];
 const { openActions } = __m["js/views/actions.js"];
@@ -7177,7 +7259,8 @@ async function viewHome(app) {
       h('span', { class: 'todo-text' }, h('strong', {}, c.name), h('small', { class: 'muted' }, [c.city, c.rev2025 ? 'acquistato 2025 ' + eur(c.rev2025) : ''].filter(Boolean).join(' · ')))),
     c.phone ? h('span', { class: 'todo-tel' }, telLinks(c.phone.split(';')[0])) : null);
 
-  return h('div', { class: 'page' }, head, salesSection(customers),   // 04/11: il fatturato è la prima cosa che vedono (sul telefono si scorre poco)
+  const goals = await goalsCard(app);   // 08/11: obiettivi del mese dalla SS di Tommaso, per primi
+  return h('div', { class: 'page' }, head, goals, salesSection(customers),   // 04/11: il fatturato è la prima cosa che vedono (sul telefono si scorre poco)
     h('section', { class: 'card' }, h('h2', {}, 'Da fare oggi'),
       toOrder.length ? h('ul', { class: 'todo-list' }, toOrder.map(q => h('li', { class: 'todo' }, h('a', { href: '#/offerta/' + q.id, class: 'todo-main' },
         h('span', { class: 'due oggi' }, 'ordine'), h('span', { class: 'todo-text' }, h('strong', {}, 'Passa l\'ordine all\'ufficio'), h('small', { class: 'muted' }, `${q.number} · ${q.customer?.name || ''} · ${eur(q.total || 0)}`)))))) : null,
@@ -7329,6 +7412,7 @@ function boardSummary({ agents = [], rx = [], actions = [], unread = new Map(), 
 return { boardSummary };
 })();
 __m["js/views/board.js"] = (function () {
+const { goalsCard } = __m["js/views/goals-card.js"];
 const { loadMatches } = __m["js/views/order-match-ui.js"];
 const { h, dateIt, eur, today, toast, modal, field, emptyState } = __m["js/ui.js"];
 const { POST_CATEGORIES, postIcon, postEnded } = __m["js/data/model.js"];
@@ -7343,7 +7427,7 @@ const { followerSelect } = __m["js/views/dir-follower-ui.js"];
 // Bacheca: comunicazioni della Direzione (in app + email dalla casella di chi scrive) e follow-up.
 // Scrivono solo gli accessi Direzione con servizio comunicazioni (Tommaso, Marco); Christian legge soltanto.
 async function viewBoard(app) {
-  return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Bacheca'), h('p', { class: 'muted' }, 'Comunicazioni della Direzione e follow-up da svolgere.'))), await boardSection(app, () => app.go('bacheca')));
+  return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Bacheca'), h('p', { class: 'muted' }, 'Comunicazioni della Direzione e follow-up da svolgere.'))), await goalsCard(app), await boardSection(app, () => app.go('bacheca')));
 }
 
 const agentNames = app => (app.store.assignees || []).map(a => a.name).filter(n => n !== 'Direzionale' && !/^EX_/.test(n)).sort();
@@ -10544,7 +10628,7 @@ async function load(app) {
   const t0 = COMUNI_GEO.prov.TN?.TRAMBILENO, home = t0 ? { lat: t0[0], lng: t0[1] } : { lat: 45.873, lng: 11.074 };
   for (const [l, p] of pts) { const n = get(l); n.km = medianKm(p, home, distanceKm); n.vic = proximityScore(n.km); }
   for (const o of rx.filter(radixOfferOpen)) { const l = byCust.get(o.customerId); if (!l) continue; const n = get(l); n.rxN++; n.rxV += o.total || 0; }
-  const rows = networkRows({ labels, saved: net.agents, meetings: net.meetings, actions: net.actions, today: today() });
+  const rows = networkRows({ labels, saved: net.agents.filter(a => !a.label.startsWith('__')), meetings: net.meetings, actions: net.actions, today: today() });
   return { net, rows, nums, customers };
 }
 
@@ -10724,10 +10808,11 @@ function kpiCard(app, r, refresh) {
 async function kpiDialog(app, r, refresh) {
   const k = monthKey(), list = (r.scores?.kpi || {})[k] || [];
   const ta = h('textarea', { rows: 6, placeholder: 'Un KPI per riga: cosa | obiettivo\nes. Offerte seguite | tutte le aperte con esito o previsione' }, list.map(x => x.t + (x.target ? ' | ' + x.target : '')).join('\n'));
-  const ok = await modal(`KPI di ${monthName(k)} · ${r.name}`, h('div', { class: 'form' }, h('p', { class: 'muted' }, 'Pochi e chiari (3-4). Un KPI per riga, obiettivo dopo il simbolo |.'), ta), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
+  const msg = h('textarea', { rows: 3, placeholder: 'Messaggio all\'agente (facoltativo): compare in cima ai suoi obiettivi' }, r.scores?.msg || '');
+  const ok = await modal(`KPI di ${monthName(k)} · ${r.name}`, h('div', { class: 'form' }, h('p', { class: 'muted' }, 'Pochi e chiari (3-4). Un KPI per riga, obiettivo dopo il simbolo |. L\'agente li vede subito sulla sua Home.'), ta, field('Messaggio all\'agente', msg)), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
     const old = new Map(list.map(x => [x.t, x]));
     const items = ta.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [t, target = ''] = l.split('|').map(s => s.trim()); return { t, target, st: old.get(t)?.st || '' }; });
-    const all = { ...(r.scores?.kpi || {}) }; all[k] = items; await saveScores(app, r, { kpi: all }); return true; } }]);
+    const all = { ...(r.scores?.kpi || {}) }; all[k] = items; await saveScores(app, r, { kpi: all, msg: msg.value.trim() }); return true; } }]);
   if (ok) refresh();
 }
 
@@ -10773,13 +10858,11 @@ async function diaryCard(app, d, r, customers) {
       : emptyState('Niente negli ultimi 90 giorni.'));
 }
 
-function meridianCard(app, r, customers) {
-  const as = (app.store.assignees || []).find(a => a.name === r.label);
-  const provs = provincesOf(as?.provinces);
-  const ex = zoneExceptions(customers, r.label, provs);
-  const who = c => `${c.name.trim()}${c.vat ? ' (P.IVA ' + c.vat + ')' : ''}`;
-  const per = (provs.length ? 'province ' + provs.join(', ') : 'clienti assegnati') + (ex.excluded.length ? `, ESCLUSI ${ex.excluded.map(who).join('; ')}` : '') + (ex.included.length ? `, PIÙ questi clienti fuori zona: ${ex.included.map(who).join('; ')}` : '');
-  const q1 = `Fotografia della zona di ${r.name} al ${new Date().toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}. Perimetro: ${per}.
+// 08/11: domande standard per Meridian. Modificabili (Tommaso): il modello vale per tutti gli agenti, si può cambiare
+// anche solo per un agente. Segnaposto: {agente} {perimetro} {mese}. Il modello è una riga riservata di hub_dir_network.
+const MERIDIAN_TPL_LABEL = '__modello_meridian__';
+const DEFAULT_Q = {
+  q1: `Fotografia della zona di {agente} al {mese}. Perimetro: {perimetro}.
 Strategia: aumentare il mix. Laterizio e vetro cellulare devono crescere fino a eguagliare la fibra di legno (STEICO + NATURHELD), che va difesa ma non spinta.
 Metti i numeri in tabelle in cima:
 1. fatturato da gennaio a fine mese scorso, 2025 e 2026, e variazione %; margine % 2026 della zona e media aziendale;
@@ -10787,25 +10870,81 @@ Metti i numeri in tabelle in cima:
 3. fatturato stesso periodo 2025 e 2026 e margine % 2026 per famiglia: fibra di legno, laterizio, vetro cellulare, altro;
 4. offerte OFF 2026 per stato (accettate, scadute, evase senza ordine, in attesa) con numero e valore;
 5. concentrazione: quanto pesano i primi 3 clienti sul fatturato 2026, e i clienti che hanno perso più del 50% rispetto al 2025;
-6. i primi 5 clienti che comprano fibra o "altro" ma non laterizio né vetro cellulare.`;
-  const q2 = `Sulla base di questa fotografia della zona di ${r.name}, proponimi 4 call to action per i prossimi 30 giorni, coerenti con la strategia del mix (laterizio e vetro cellulare fino a eguagliare la fibra, che va difesa) e con il recupero degli inattivi e dei clienti in calo. Per ogni azione: cliente, obiettivo misurabile, impatto atteso su fatturato o margine. Poi indicami 6-8 clienti da intervistare per costruire il budget 2027, con il motivo.`;
-  const box = (t, q) => h('div', { class: 'ss-q' }, h('div', { class: 'st-main' }, h('strong', {}, t), h('button', { class: 'btn small', onclick: () => navigator.clipboard?.writeText(q).then(() => toast('Copiata: incollala in Focus')).catch(() => toast('Seleziona il testo e copialo')) }, 'Copia')), h('pre', { class: 'ss-pre' }, q));
+6. i primi 5 clienti che comprano fibra o "altro" ma non laterizio né vetro cellulare.`,
+  q2: `Sulla base di questa fotografia della zona di {agente}, proponimi 4 call to action per i prossimi 30 giorni, coerenti con la strategia del mix (laterizio e vetro cellulare fino a eguagliare la fibra, che va difesa) e con il recupero degli inattivi e dei clienti in calo. Per ogni azione: cliente, obiettivo misurabile, impatto atteso su fatturato o margine. Poi indicami 6-8 clienti da intervistare per costruire il budget 2027, con il motivo.`,
+};
+function meridianCard(app, d, r, customers, refresh) {
+  const as = (app.store.assignees || []).find(a => a.name === r.label);
+  const provs = provincesOf(as?.provinces);
+  const ex = zoneExceptions(customers, r.label, provs);
+  const who = c => `${c.name.trim()}${c.vat ? ' (P.IVA ' + c.vat + ')' : ''}`;
+  const per = (provs.length ? 'province ' + provs.join(', ') : 'clienti assegnati') + (ex.excluded.length ? `, ESCLUSI ${ex.excluded.map(who).join('; ')}` : '') + (ex.included.length ? `, PIÙ questi clienti fuori zona: ${ex.included.map(who).join('; ')}` : '');
+  const tplRow = d.net.agents.find(x => x.label === MERIDIAN_TPL_LABEL);
+  const fill = t => t.replaceAll('{agente}', r.name).replaceAll('{perimetro}', per).replaceAll('{mese}', new Date().toLocaleDateString('it-IT', { month: 'long', year: 'numeric' }));
+  const box = (k, title) => {
+    const own = r.scores?.[k], tpl = tplRow?.scores?.[k] || DEFAULT_Q[k];
+    const ta = h('textarea', { class: 'ss-qtext', rows: k === 'q1' ? 12 : 5 }, fill(own || tpl));
+    const save = async (patch, msg) => { await saveScores(app, r, patch); toast(msg); refresh(); };
+    const saveTpl = async () => {
+      // il testo torna modello: perimetro e nome rimessi come segnaposto
+      const t = ta.value.split(per).join('{perimetro}').split(r.name).join('{agente}');
+      await app.store.saveDirAgent({ label: MERIDIAN_TPL_LABEL, fascia: null, state: 'attivo', scores: { ...(tplRow?.scores || {}), [k]: t }, note: 'Modello delle domande per Meridian' });
+      const { [k]: _, ...rest } = r.scores || {}; await saveScores(app, r, rest); toast('Modello salvato per tutti gli agenti'); refresh(); };
+    return h('div', { class: 'ss-q' },
+      h('div', { class: 'st-main' }, h('strong', {}, title), own ? h('span', { class: 'badge warn' }, 'modificata per ' + r.name.split(' ').slice(-1)[0]) : tplRow?.scores?.[k] ? h('span', { class: 'badge muted' }, 'modello tuo') : h('span', { class: 'badge muted' }, 'modello standard')),
+      ta,
+      h('div', { class: 'actions' },
+        h('button', { class: 'btn small primary', onclick: () => navigator.clipboard?.writeText(ta.value).then(() => toast('Copiata: incollala in Focus')).catch(() => toast('Seleziona il testo e copialo')) }, 'Copia'),
+        h('button', { class: 'btn small', onclick: () => save({ [k]: ta.value }, 'Domanda salvata per questo agente').catch(e => toast(e.message, 'error')) }, 'Salva per questo agente'),
+        h('button', { class: 'btn small', onclick: () => saveTpl().catch(e => toast(e.message, 'error')) }, 'Salva come modello per tutti'),
+        own ? h('button', { class: 'btn small', onclick: () => { const { [k]: _, ...rest } = r.scores || {}; save(rest, 'Tornata al modello').catch(e => toast(e.message, 'error')); } }, 'Torna al modello') : null));
+  };
   return h('section', { class: 'card' }, h('h2', {}, 'Domande per Meridian'),
-    h('p', { class: 'muted' }, `Ogni mese: incolla la 1 in Focus, poi la 2 nella stessa chat. Con la risposta aggiorni "Nuova fotografia", KPI e clienti da intervistare. Perimetro calcolato dall'HUB: ${ex.excluded.length} esclusi, ${ex.included.length} fuori zona.`),
-    box('1 · Fotografia', q1), box('2 · Azioni e clienti', q2));
+    h('p', { class: 'muted' }, `Ogni mese: copia la 1 in Focus, poi la 2 nella stessa chat. Puoi modificarle qui: "Salva per questo agente" vale solo per lui, "Salva come modello per tutti" cambia la domanda di tutti gli agenti (nome e perimetro restano automatici). Perimetro calcolato dall'HUB: ${ex.excluded.length} esclusi, ${ex.included.length} fuori zona.`),
+    box('q1', '1 · Fotografia'), box('q2', '2 · Azioni e clienti'));
+}
+
+// 08/11: quello che l'agente deve fare (KPI del mese, azioni aperte, clienti da intervistare) va subito sulla sua Home e Bacheca.
+// Si allinea da solo a ogni apertura della scheda; fotografia, voti e note restano riservati.
+function goalsSnapshot(d, r) {
+  const k = monthKey();
+  return { label: r.label, month: k, kpi: ((r.scores?.kpi || {})[k] || []).map(x => ({ t: x.t, target: x.target || '', st: x.st || '' })),
+    actions: openActions(d.net.actions, today(), r.label).map(a => ({ title: a.title, due: a.due || null })),
+    clients: (r.scores?.clienti || []).map(c => ({ name: c.name, why: c.why || '', st: c.st || '' })), message: r.scores?.msg || '' };
+}
+async function syncGoals(app, d, r) {
+  if (!app.store.agentGoals || r.state === 'scoperta') return null;
+  const snap = goalsSnapshot(d, r), cur = await app.store.agentGoals(r.label).catch(() => null);
+  const all = x => JSON.stringify([x.month, x.kpi, x.actions, x.clients, x.message]);
+  // 08/11 (Tommaso: gli obiettivi si concordano): cambiare il contenuto li riporta a "proposta"; segnare fatto/non fatto no
+  const content = x => JSON.stringify([x.month, x.kpi.map(k => [k.t, k.target]), x.actions, x.clients.map(c => [c.name, c.why]), x.message]);
+  if (cur && all(cur) === all(snap)) return cur;
+  if (!cur && !snap.kpi.length && !snap.actions.length && !snap.clients.length) return null;
+  const keep = cur && content(cur) === content(snap);
+  await app.store.saveAgentGoals({ ...snap, status: keep ? cur.status : 'proposta', agreedAt: keep ? cur.agreedAt : null }).catch(e => toast('Obiettivi non aggiornati sulla Home dell\'agente: ' + e.message, 'error'));
+  return app.store.agentGoals(r.label).catch(() => null);
 }
 
 async function viewAgent(app, label) {
   const d = await load(app), r = d.rows.find(x => x.label === label);
   if (!r) return h('div', { class: 'page' }, h('p', {}, 'Commerciale non trovato.'), h('a', { href: '#/strategia' }, '← Sales strategy'));
   const refresh = () => app.go('strategia/' + encodeURIComponent(label));
+  const g = await syncGoals(app, d, r);
   const acts = openActions(d.net.actions, today(), label);
   const actCard = h('section', { class: 'card' }, h('h2', {}, `Azioni aperte · ${acts.length}`),
     acts.length ? h('ul', { class: 'st-list' }, acts.map(a => h('li', { class: 'st-row' }, h('div', { class: 'st-main' }, h('span', {}, a.title),
       a.due ? h('small', { class: a.late ? 'bad-text' : 'muted' }, ' entro ' + dateIt(a.due)) : null), h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => closeAction(app, a, refresh) }, 'Fatta…')))))
       : emptyState('Nessuna azione aperta: nascono quando registri un incontro.'));
-  return h('div', { class: 'page' }, headCard(app, d, r, refresh),
-    foldCards(h('div', { class: 'section-body ss-body' }, photoCard(r), kpiCard(app, r, refresh), clientsCard(app, r, refresh), actCard, await diaryCard(app, d, r, d.customers), meridianCard(app, r, d.customers)), 'ntx-ss-agent'));
+  const first = r.name.split(' ').slice(-1)[0];
+  const agree = async () => { const cur = await app.store.agentGoals(label); await app.store.saveAgentGoals({ ...cur, status: 'concordati', agreedAt: new Date().toISOString() }); toast(`Obiettivi concordati con ${first}`); refresh(); };
+  const goalsLine = r.state === 'scoperta' ? null : h('div', { class: 'ss-goals ' + (g ? '' : 'muted') }, g
+    ? [h('p', {}, h('span', { class: 'badge ' + (g.status === 'concordati' ? 'ok' : 'warn') }, g.status === 'concordati' ? 'concordati il ' + dateIt(g.agreedAt) : 'proposta da concordare'), ' ',
+        h('strong', {}, `Sulla Home di ${first}`), ` · aggiornati il ${dateIt(g.updatedAt)} · `, g.seenAt && g.seenAt >= g.updatedAt ? h('span', { class: 'ok-text' }, 'letti il ' + dateIt(g.seenAt)) : h('span', { class: 'warn-text', style: 'display:inline' }, 'non ancora letti'),
+        g.status !== 'concordati' ? [' ', h('button', { class: 'btn small primary', onclick: () => agree().catch(e => toast(e.message, 'error')) }, `Segna concordati con ${first}`)] : null),
+      g.agentNote ? h('p', { class: 'st-out' }, h('strong', {}, `Osservazioni di ${first}`), h('small', { class: 'muted' }, g.agentNoteAt ? ' · ' + dateIt(g.agentNoteAt) : ''), h('br'), g.agentNote) : null]
+    : `Quando imposti KPI, azioni o clienti da intervistare compaiono subito sulla Home di ${first} come proposta da concordare.`);
+  return h('div', { class: 'page' }, headCard(app, d, r, refresh), goalsLine,
+    foldCards(h('div', { class: 'section-body ss-body' }, photoCard(r), kpiCard(app, r, refresh), clientsCard(app, r, refresh), actCard, await diaryCard(app, d, r, d.customers), meridianCard(app, d, r, d.customers, refresh)), 'ntx-ss-agent'));
 }
 
 async function photoDialog(app, r, refresh) {
@@ -10874,7 +11013,7 @@ async function closeAction(app, a, refresh) {
   if (ok) refresh();
 }
 
-return { canSeeStrategy, viewStrategy, lastPhoto, BUDGET_QUESTIONS };
+return { canSeeStrategy, viewStrategy, lastPhoto, BUDGET_QUESTIONS, MERIDIAN_TPL_LABEL };
 })();
 __m["js/views/orders.js"] = (function () {
 // Ordini passati all'ufficio (offerte accettate): l'ufficio li segue fino all'inserimento in RADIX. Solo Direzione.
