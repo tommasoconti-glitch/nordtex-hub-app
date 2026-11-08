@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="a45ff0971d01">
+<meta name="ntx-build" content="fe463b5411cd">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -896,7 +896,7 @@ h2.fold-head::after,.fold-head h2::after{content:' ▾';color:var(--muted,#888);
 .st-trip{font-size:1rem;line-height:1}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a45ff0971d01"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"fe463b5411cd"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -10455,7 +10455,7 @@ const dueBadge = r => r.due.state === 'in ritardo' ? h('span', { class: 'badge b
   : r.due.state === 'da sentire' ? h('span', { class: 'badge warn' }, 'da sentire')
   : r.due.state === 'sentito' ? h('span', { class: 'badge ok' }, 'sentito') : null;
 const fChip = f => h('span', { class: 'chip f' + (f || 0) }, f ? 'F' + f : '—');
-const tripOf = (d, r) => tripKind(d.nums.get(r.label)?.km, r.scores?.trasferta);
+const tripOf = (d, r) => r.fascia === 1 || r.fascia === 2 ? tripKind(d.nums.get(r.label)?.km, r.scores?.trasferta) : { kind: null };   // 08/11: affiancamenti solo in fascia 1 e 2
 const tripIcon = t => t.kind ? h('span', { class: 'st-trip', title: 'Affiancamento ' + TRIP_LABEL[t.kind] + (t.auto ? ' (calcolato dai km)' : '') }, TRIP_ICON[t.kind]) : null;
 
 async function load(app) {
@@ -10503,7 +10503,7 @@ async function viewStrategy(app) {
 
   const byF = [1, 2, 3, null].map(f => [f, d.rows.filter(r => (r.fascia || null) === f)]).filter(([, rs]) => rs.length);
   const netCard = h('section', { class: 'card' }, h('h2', {}, 'Rete e fasce'),
-    h('p', { class: 'muted' }, `Fascia 1: ${d.rows.filter(r => r.fascia === 1).length} su 8 · fascia 2: ${d.rows.filter(r => r.fascia === 2).length} · fascia 3: ${d.rows.filter(r => r.fascia === 3).length}` + (unset.length ? ` · ${unset.length} senza fascia` : '') + '. 🚗 affiancamento in giornata · 🛏 con pernottamento (dai km, oltre 200 in linea d\'aria; correggibile nella scheda). Tocca un nome per la scheda.'),
+    h('p', { class: 'muted' }, `Fascia 1: ${d.rows.filter(r => r.fascia === 1).length} su 8 · fascia 2: ${d.rows.filter(r => r.fascia === 2).length} · fascia 3: ${d.rows.filter(r => r.fascia === 3).length}` + (unset.length ? ` · ${unset.length} senza fascia` : '') + '. 🚗 affiancamento in giornata · 🛏 con pernottamento, per fascia 1 e 2 (dai km, oltre 200 in linea d\'aria; correggibile nella scheda). Tocca un nome per la scheda.'),
     byF.map(([f, rs]) => [h('h3', { class: 'st-h3' }, f ? FASCE[f] : 'Senza fascia'),
       h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
         h('thead', {}, h('tr', {}, h('th', {}, 'Commerciale'), h('th', {}, 'Stato'), h('th', {}, 'Ultimo contatto'), h('th', {}, 'Azioni'), h('th', { class: 'num' }, 'Km · vicin.'), h('th', { class: 'num' }, 'Fatt. 2026'), h('th', { class: 'num' }, 'Offerte RADIX'))),
