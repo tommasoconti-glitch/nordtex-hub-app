@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="33789ef8987d">
+<meta name="ntx-build" content="f7eb2a382a8b">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -895,9 +895,31 @@ h2.fold-head::after,.fold-head h2::after{content:' ▾';color:var(--muted,#888);
 .st-auto{min-height:38px;display:flex;align-items:center;gap:4px;padding:0 4px}
 .st-trip{font-size:1rem;line-height:1}
 .st-3{grid-template-columns:repeat(3,1fr) !important} .st-photo-out{padding:8px 10px;background:var(--surface-2,#f6f7f4);border-radius:8px}
+/* 08/11 SS scheda agente */
+.ss-head h1{margin:6px 0 4px}
+.ss-eval{display:flex;align-items:center;gap:14px;margin:10px 0;flex-wrap:wrap}
+.ss-score{display:flex;flex-direction:column;align-items:center;min-width:70px;padding:6px 10px;border-radius:10px;background:var(--surface-2,#f6f7f4)}
+.ss-score strong{font-size:1.6rem;line-height:1.1}
+.ss-ind{display:flex;flex-wrap:wrap;gap:4px}
+.ss-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:6px 0 12px}
+.ss-tile{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;border-left-width:4px}
+.ss-tile strong{font-size:1.15rem}
+.ss-tile.ok{border-left-color:var(--ok)} .ss-tile.bad{border-left-color:var(--bad)}
+.ok-text{color:var(--ok)}
+.ss-txt{margin-top:8px}
+.ss-q{margin:10px 0}
+.ss-pre{white-space:pre-wrap;font-size:.82rem;background:var(--surface-2,#f6f7f4);padding:10px;border-radius:8px;max-height:260px;overflow:auto}
+.ss-grid input{width:100%;min-width:80px}
+/* 08/11: SS si usa su PC e iPad: due colonne da 1000 px (fotografia a sinistra, KPI, clienti e azioni a destra) */
+@media (min-width:1000px){
+  .ss-body{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px;align-items:start}
+  .ss-body>section.card{margin:0}
+  .ss-body>section.card:first-child{grid-row:span 3}
+  .ss-body>section.card:nth-child(n+5){grid-column:1 / -1}
+}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"33789ef8987d"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f7eb2a382a8b"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -10356,7 +10378,7 @@ __m["js/core/strategy.js"] = (function () {
 // Qui solo calcoli (senza pagina) per poterli provare. Le fasce vere stanno nel database, mai nel codice (il sito è pubblico).
 
 const FASCE = { 1: 'Fascia 1', 2: 'Fascia 2', 3: 'Fascia 3 · segnalatori' };
-const KINDS = ['intervista', 'affiancamento', 'one to one', 'riunione'];
+const KINDS = ['intervista', 'affiancamento', 'one to one', 'telefonata', 'appunto', 'riunione'];   // 08/11: telefonata e appunto (migrazione 20261108120000)
 const CRITERIA = [['zona', 'Zona strategica'], ['miglioramento', 'Miglioramento'], ['vicinanza', 'Vicinanza'], ['autonomia', 'Autonomia']];
 // 08/11 (Tommaso: "vicinanza è un dato calcolabile"): la calcola l'app, non si vota.
 // Km in linea d'aria da Trambileno alla metà dei clienti attivi e da recuperare: fino a 100 km = 3, fino a 250 = 2, oltre = 1.
@@ -10386,7 +10408,7 @@ const displayName = label => String(label || '').replace(/^EX_AREA_/, 'Ex area '
 
 /** Ultima intervista o one to one (gli affiancamenti contano anche come contatto). */
 function lastContact(meetings, label) {
-  return meetings.filter(m => m.label === label && m.kind !== 'riunione').map(m => m.date).sort().pop() || null;
+  return meetings.filter(m => m.label === label && m.kind !== 'riunione' && m.kind !== 'appunto').map(m => m.date).sort().pop() || null;
 }
 
 /**
@@ -10468,14 +10490,34 @@ function areaScores(f = {}) {
   return { scores: out, values: val, avg: xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length * 10) / 10 : null, n: xs.length };
 }
 
-return { FASCE, KINDS, CRITERIA, MANUAL_CRITERIA, proximityScore, OVERNIGHT_KM, tripKind, TRIP_ICON, TRIP_LABEL, medianKm, F2_DAYS, mondayOf, displayName, lastContact, contactDue, openActions, networkRows, thisWeek, AREA_INDICATORS, areaScores };
+// 08/11 SS: province di una zona e eccezioni (clienti con fatturato 2024-2026 assegnati diversamente), per le domande a Meridian
+const provincesOf = txt => [...new Set(String(txt || '').match(/\b[A-Z]{2}\b/g) || [])];
+function zoneExceptions(customers, label, provs) {
+  const P = new Set(provs), rev = c => (c.rev2024 || 0) + (c.rev2025 || 0) + (c.rev2026 || 0);
+  const out = customers.filter(c => P.has(String(c.prov || '').toUpperCase()) && c.assignee !== label && rev(c) > 0);
+  const inn = customers.filter(c => c.assignee === label && !P.has(String(c.prov || '').toUpperCase()) && rev(c) > 0);
+  return { excluded: out, included: inn };
+}
+/** Fotografia: dai campi di dettaglio (famiglie, offerte per stato) ai valori usati dagli indicatori. */
+function photoFlat(f = {}) {
+  const fam = f.fam || {}, off = f.off || {}, n = x => x == null || x === '' ? null : Number(x);
+  const out = { ...f };
+  if (fam.fibra) { out.fibra25 = n(fam.fibra.a25); out.fibra = n(fam.fibra.a26); }
+  if (fam.laterizio) out.laterizio = n(fam.laterizio.a26);
+  if (fam.vetro) out.vetro = n(fam.vetro.a26);
+  if (off.acc) out.offAcc = n(off.acc.v);
+  if (off.scad || off.evase) out.offPerse = (n(off.scad?.v) || 0) + (n(off.evase?.v) || 0);
+  return out;
+}
+
+return { FASCE, KINDS, CRITERIA, MANUAL_CRITERIA, proximityScore, OVERNIGHT_KM, tripKind, TRIP_ICON, TRIP_LABEL, medianKm, F2_DAYS, mondayOf, displayName, lastContact, contactDue, openActions, networkRows, thisWeek, AREA_INDICATORS, areaScores, provincesOf, zoneExceptions, photoFlat };
 })();
 __m["js/views/strategy.js"] = (function () {
 // "Strategia" (08/11/2026, Tommaso): un'unica sezione con il gestionale della Direzione, a finestre che si aprono e si chiudono.
 // Fasce della rete, chi sentire questa settimana, incontri (esito scritto a mano; l'intervista si registra con Plaud) e azioni con scadenza.
 // Solo Tommaso (session.canStrategy, controllo anche nel database). Migrazione 20261108080000.
 const { h, eur, dateIt, today, toast, modal, field, emptyState } = __m["js/ui.js"];
-const { FASCE, KINDS, MANUAL_CRITERIA, networkRows, thisWeek, openActions, displayName, proximityScore, medianKm, tripKind, TRIP_ICON, TRIP_LABEL, AREA_INDICATORS, areaScores } = __m["js/core/strategy.js"];
+const { FASCE, KINDS, MANUAL_CRITERIA, networkRows, thisWeek, openActions, displayName, proximityScore, medianKm, tripKind, TRIP_ICON, TRIP_LABEL, AREA_INDICATORS, areaScores, photoFlat, provincesOf, zoneExceptions } = __m["js/core/strategy.js"];
 const { customerPlace, distanceKm } = __m["js/core/places.js"];
 const { COMUNI_GEO } = __m["js/data/comuni-geo-data.js"];
 const { foldCards } = __m["js/views/direction.js"];
@@ -10503,11 +10545,12 @@ async function load(app) {
   for (const [l, p] of pts) { const n = get(l); n.km = medianKm(p, home, distanceKm); n.vic = proximityScore(n.km); }
   for (const o of rx.filter(radixOfferOpen)) { const l = byCust.get(o.customerId); if (!l) continue; const n = get(l); n.rxN++; n.rxV += o.total || 0; }
   const rows = networkRows({ labels, saved: net.agents, meetings: net.meetings, actions: net.actions, today: today() });
-  return { net, rows, nums };
+  return { net, rows, nums, customers };
 }
 
-async function viewStrategy(app) {
+async function viewStrategy(app, label) {
   if (!canSeeStrategy(app.session)) { app.go('home'); return h('div'); }
+  if (label) return viewAgent(app, label);
   const d = await load(app), t = today(), refresh = () => app.go('strategia');
   const numsLine = l => { const n = d.nums.get(l); if (!n) return null;
     return h('small', { class: 'muted' }, `${n.active} attivi · 2026 ${eur(n.rev26)} (2025 ${eur(n.rev25)})` + (n.rxN ? ` · ${n.rxN} offerte RADIX aperte` + (n.rxV ? ' ' + eur(n.rxV) : '') : '')); };
@@ -10523,7 +10566,7 @@ async function viewStrategy(app) {
         r.open ? h('small', { class: r.late ? 'bad-text' : 'muted' }, ` · ${r.open} azioni aperte` + (r.late ? `, ${r.late} scadute` : '')) : null),
       numsLine(r.label),
       h('div', { class: 'actions' }, h('button', { class: 'btn small primary', onclick: () => meetingDialog(app, d, r, refresh) }, 'Registra incontro'),
-        h('button', { class: 'btn small', onclick: () => agentDialog(app, d, r, refresh) }, 'Scheda')))))
+        h('a', { class: 'btn small', href: '#/strategia/' + encodeURIComponent(r.label) }, 'Scheda')))))
       : emptyState(d.rows.some(r => r.fascia) ? 'Nessuno da sentire: la rete di questa settimana è coperta.' : 'Assegna le fasce in "Rete e fasce": da lì nasce il calendario.'));
 
   const actCard = h('section', { class: 'card' }, h('h2', {}, `Azioni aperte · ${acts.length}` + (acts.some(a => a.late) ? ` (${acts.filter(a => a.late).length} scadute)` : '')),
@@ -10540,13 +10583,13 @@ async function viewStrategy(app) {
       h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
         h('thead', {}, h('tr', {}, h('th', {}, 'Commerciale'), h('th', {}, 'Stato'), h('th', {}, 'Ultimo contatto'), h('th', {}, 'Azioni'), h('th', { class: 'num' }, 'Km · vicin.'), h('th', { class: 'num' }, 'Area'), h('th', { class: 'num' }, 'Fatt. 2026'), h('th', { class: 'num' }, 'Offerte RADIX'))),
         h('tbody', {}, rs.map(r => { const n = d.nums.get(r.label) || {};
-          return h('tr', { class: 'net-row', onclick: () => agentDialog(app, d, r, refresh) },
+          return h('tr', { class: 'net-row', onclick: () => app.go('strategia/' + encodeURIComponent(r.label)) },
             h('td', {}, h('strong', {}, r.name), ' ', tripIcon(tripOf(d, r)), r.note ? h('small', { class: 'muted' }, ' · ' + r.note.slice(0, 40)) : null),
             h('td', {}, r.state !== 'attivo' ? h('span', { class: 'badge ' + (r.state === 'scoperta' ? 'bad' : 'warn') }, r.state) : dueBadge(r) || h('span', { class: 'muted' }, '–')),
             h('td', {}, r.last ? dateIt(r.last) : h('span', { class: 'muted' }, 'mai')),
             h('td', {}, r.open ? h('span', { class: r.late ? 'bad-text' : '' }, String(r.open)) : h('span', { class: 'muted' }, '–')),
             h('td', { class: 'num' }, n.km != null ? `${n.km} · ${n.vic}` : '–'),
-            h('td', { class: 'num' }, (() => { const f = lastPhoto(r); const x = f && areaScores(f); return x?.avg != null ? x.avg.toLocaleString('it-IT') + (x.n < 6 ? '*' : '') : '–'; })()),
+            h('td', { class: 'num' }, (() => { const f = lastPhoto(r); const x = f && areaScores(photoFlat(f)); return x?.avg != null ? x.avg.toLocaleString('it-IT') + (x.n < 6 ? '*' : '') : '–'; })()),
             h('td', { class: 'num' }, n.rev26 ? eur(n.rev26) : '–'), h('td', { class: 'num' }, n.rxN ? (n.rxV ? `${n.rxN} · ${eur(n.rxV)}` : String(n.rxN)) : '–')); }))))]));
 
   const recent = d.net.meetings.slice(0, 15);
@@ -10573,19 +10616,16 @@ async function agentDialog(app, d, r, refresh) {
   const trip = sel([['', 'automatica' + (tAuto.kind ? ': ' + TRIP_ICON[tAuto.kind] + ' ' + TRIP_LABEL[tAuto.kind] : '')], ['giornata', TRIP_ICON.giornata + ' in giornata'], ['notte', TRIP_ICON.notte + ' con pernottamento']], r.scores?.trasferta || '');
   const vic = h('div', { class: 'st-auto' }, nn.km != null ? h('strong', {}, String(nn.vic)) : '–', nn.km != null ? h('small', { class: 'muted' }, ` ${nn.km} km (calcolata)`) : h('small', { class: 'muted' }, ' nessun cliente localizzato'));
   const note = h('textarea', { rows: 3, placeholder: 'Note di Direzione (es. autonomia quasi massima, passaggio di consegne…)' }, r.note || '');
-  const fotoBox = photoSummary(r);
   const acts = openActions(d.net.actions, today(), r.label);
   const meets = d.net.meetings.filter(m => m.label === r.label);
   const body = h('div', { class: 'form' },
     h('div', { class: 'st-pair' }, field('Fascia', fascia), field('Stato', state)), field('Affiancamento', trip),
     h('div', { class: 'st-scores' }, MANUAL_CRITERIA.slice(0, 2).map(([k, l]) => field(l, sc[k])), field('Vicinanza', vic), field('Autonomia', sc.autonomia)), field('Note', note),
-    h('h4', {}, 'Fotografia area'), fotoBox,
     h('h4', {}, `Azioni aperte (${acts.length})`),
     acts.length ? h('ul', { class: 'checks' }, acts.map(a => h('li', {}, a.title, a.due ? h('small', { class: a.late ? 'bad-text' : 'muted' }, ' · entro ' + dateIt(a.due)) : null))) : h('p', { class: 'muted' }, 'Nessuna.'),
     h('h4', {}, `Incontri (${meets.length})`),
     meets.length ? h('ul', { class: 'st-list' }, meets.slice(0, 10).map(m => h('li', {}, h('small', { class: 'muted' }, dateIt(m.date) + ' · ' + m.kind + (m.plaud ? ' · Plaud: ' + m.plaud : '')), m.outcome ? h('p', { class: 'st-out' }, m.outcome) : null))) : h('p', { class: 'muted' }, 'Nessuno.'));
   const v = await modal(r.name, body, [
-    { label: 'Nuova fotografia', value: 'foto' },
     { label: 'Registra incontro', value: 'meet' },
     { label: 'Salva scheda', primary: true, run: async () => {
       const scores = Object.fromEntries(MANUAL_CRITERIA.map(([k]) => [k, sc[k].value ? Number(sc[k].value) : null]).filter(([, x]) => x));
@@ -10596,56 +10636,214 @@ async function agentDialog(app, d, r, refresh) {
       toast('Scheda salvata'); return 'saved';
     } }]);
   if (v === 'meet') return meetingDialog(app, d, r, refresh);
-  if (v === 'foto') return photoDialog(app, r, refresh);
   if (v === 'saved') refresh();
 }
 
-// 08/11: fotografia dell'area (numeri da Meridian) → 5 indicatori con voto calcolato
+// ===== 08/11 SS: scheda agente a pagina intera (Tommaso: "dalla fotografia deve partire il lavoro") =====
 const pct = x => (x * 100).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + '%';
-const VALFMT = { mix: pct, tenuta: x => (x >= 0 ? '+' : '') + pct(x), crescita: x => (x >= 0 ? '+' : '') + pct(x), redditivita: x => (x >= 0 ? '+' : '') + x.toLocaleString('it-IT', { maximumFractionDigits: 1 }) + ' punti', recupero: pct, conversione: pct };
+const signPct = x => (x >= 0 ? '+' : '') + pct(x);
+const VALFMT = { mix: pct, tenuta: signPct, crescita: signPct, redditivita: x => (x >= 0 ? '+' : '') + x.toLocaleString('it-IT', { maximumFractionDigits: 1 }) + ' punti', recupero: pct, conversione: pct };
 const lastPhoto = r => (r.scores?.foto || [])[0] || null;
-function photoSummary(r) {
-  const f = lastPhoto(r);
-  if (!f) return h('p', { class: 'muted' }, 'Nessuna fotografia: tocca "Nuova fotografia" e inserisci i numeri che ti dà Meridian per la zona.');
-  const a = areaScores(f);
-  return h('div', {}, h('p', {}, h('strong', {}, `Valutazione area ${a.avg != null ? a.avg.toLocaleString('it-IT') : '–'} / 3`), a.n < 6 ? h('small', { class: 'warn-text', style: 'display:inline' }, ` su ${a.n} indicatori di 6`) : null, h('small', { class: 'muted' }, ` · fotografia del ${dateIt(f.date)}` + ((r.scores.foto || []).length > 1 ? ` (precedente ${dateIt(r.scores.foto[1].date)}: ${areaScores(r.scores.foto[1]).avg ?? '–'})` : ''))),
-    h('table', { class: 'table compact' }, h('tbody', {}, AREA_INDICATORS.map(([k, l, how]) => h('tr', {}, h('td', {}, l, h('small', { class: 'muted' }, ' · ' + how)),
-      h('td', { class: 'num' }, a.values[k] != null ? VALFMT[k](a.values[k]) : '–'), h('td', { class: 'num' }, a.scores[k] ? h('strong', {}, String(a.scores[k])) : '–'))))),
-    f.actions ? h('p', { class: 'st-out' }, h('small', { class: 'muted' }, 'Azioni proposte: '), f.actions) : null);
+const scoreOf = f => areaScores(photoFlat(f));
+const FAMS = [['fibra', 'Fibra di legno'], ['laterizio', 'Laterizio'], ['vetro', 'Vetro cellulare'], ['altro', 'Altro']];
+const OFFS = [['acc', 'Accettate'], ['scad', 'Scadute'], ['evase', 'Evase senza ordine'], ['attesa', 'In attesa']];
+const monthKey = (d = today()) => d.slice(0, 7);
+const monthName = k => new Date(k + '-01T00:00:00').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+const n0 = x => x == null || x === '' ? '–' : eur(Number(x)).replace(/,00\s?€$/, ' €');
+const tone = v => v === 3 ? 'ok' : v === 2 ? 'warn' : v === 1 ? 'bad' : 'muted';
+
+// 6 domande standard al cliente per il budget 2027 (08/11)
+const BUDGET_QUESTIONS = ['Quanto prevede di acquistare nel 2027 per famiglia: fibra di legno, laterizio, vetro cellulare?',
+  'Che cantieri e progetti ha in vista nel 2027, e per quali imprese?',
+  'Quali concorrenti usa, a che prezzi e su quali prodotti?',
+  'Cosa servirebbe per comprare da noi laterizio e vetro cellulare (disponibilità, consegne, formazione, campioni)?',
+  'Come giudica il nostro servizio: tempi, depositi, offerte?',
+  'Solo per gli inattivi: perché ha smesso e cosa lo farebbe tornare?'];
+
+async function saveScores(app, r, patch) {
+  const scores = { ...(r.scores || {}), ...patch };
+  await app.store.saveDirAgent({ label: r.label, fascia: r.fascia, state: r.state, scores, note: r.note || '' });
+  r.scores = scores;
 }
+
+function headCard(app, d, r, refresh) {
+  const n = d.nums.get(r.label) || {}, f = lastPhoto(r), a = f ? scoreOf(f) : null, t = tripOf(d, r);
+  return h('section', { class: 'card ss-head' },
+    h('div', { class: 'ss-title' }, h('a', { href: '#/strategia', class: 'link' }, '← Sales strategy'),
+      h('h1', {}, r.name), h('div', { class: 'st-main' }, fChip(r.fascia), tripIcon(t), dueBadge(r),
+        r.state !== 'attivo' ? h('span', { class: 'badge ' + (r.state === 'scoperta' ? 'bad' : 'warn') }, r.state) : null,
+        h('small', { class: 'muted' }, (n.km != null ? `${n.km} km · ` : '') + (r.last ? 'ultimo contatto ' + dateIt(r.last) : 'mai sentito')),
+        r.note ? h('small', { class: 'muted' }, ' · ' + r.note) : null)),
+    a ? h('div', { class: 'ss-eval' }, h('div', { class: 'ss-score' }, h('strong', {}, a.avg != null ? a.avg.toLocaleString('it-IT') : '–'), h('small', {}, '/ 3 area')),
+      h('div', { class: 'ss-ind' }, AREA_INDICATORS.map(([k, l]) => h('span', { class: 'badge ' + tone(a.scores[k]), title: l }, `${l} ${a.values[k] != null ? VALFMT[k](a.values[k]) : '–'}`))))
+      : h('p', { class: 'muted' }, 'Nessuna fotografia: inizia da "Domande per Meridian" qui sotto, poi "Nuova fotografia".'),
+    h('div', { class: 'actions' },
+      h('button', { class: 'btn small primary', onclick: () => meetingDialog(app, d, r, refresh) }, 'Registra incontro'),
+      h('button', { class: 'btn small', onclick: () => meetingDialog(app, d, r, refresh, 'telefonata') }, 'Telefonata'),
+      h('button', { class: 'btn small', onclick: () => meetingDialog(app, d, r, refresh, 'appunto') }, 'Appunto'),
+      h('button', { class: 'btn small', onclick: () => photoDialog(app, r, refresh) }, 'Nuova fotografia'),
+      h('button', { class: 'btn small', onclick: () => agentDialog(app, d, r, refresh) }, 'Fascia e voti')));
+}
+
+function photoCard(r) {
+  const f = lastPhoto(r);
+  if (!f) return h('section', { class: 'card' }, h('h2', {}, 'Fotografia'), emptyState('Ancora nessuna fotografia della zona.'));
+  const v = photoFlat(f), prev = (r.scores.foto || [])[1];
+  const g = (v.rev25 > 0 && v.rev26 != null) ? v.rev26 / v.rev25 - 1 : null;
+  const tile = (l, val, sub, cls) => h('div', { class: 'ss-tile ' + (cls || '') }, h('small', {}, l), h('strong', {}, val), sub ? h('small', { class: 'muted' }, sub) : null);
+  const fam = f.fam || {}, off = f.off || {};
+  const famRows = FAMS.filter(([k]) => fam[k]).map(([k, l]) => { const x = fam[k], d = x.a25 > 0 ? x.a26 / x.a25 - 1 : null;
+    return h('tr', {}, h('td', {}, l), h('td', { class: 'num' }, n0(x.a25)), h('td', { class: 'num' }, n0(x.a26)), h('td', { class: 'num ' + (d == null ? '' : d >= 0 ? 'ok-text' : 'bad-text') }, d == null ? '–' : signPct(d)), h('td', { class: 'num' }, x.m != null && x.m !== '' ? String(x.m).replace('.', ',') + '%' : '–')); });
+  const offRows = OFFS.filter(([k]) => off[k]).map(([k, l]) => h('tr', {}, h('td', {}, l), h('td', { class: 'num' }, off[k].n ?? '–'), h('td', { class: 'num' }, n0(off[k].v))));
+  const txt = (l, x) => x ? h('div', { class: 'ss-txt' }, h('small', { class: 'muted' }, l), h('p', { class: 'st-out' }, x)) : null;
+  return h('section', { class: 'card' }, h('h2', {}, `Fotografia · ${dateIt(f.date)}`),
+    h('div', { class: 'ss-tiles' },
+      tile('Fatturato 2026', n0(v.rev26), g != null ? `${signPct(g)} sul 2025` : null, g == null ? '' : g >= 0 ? 'ok' : 'bad'),
+      tile('Margine zona', v.marg != null ? String(v.marg).replace('.', ',') + '%' : '–', v.margAz != null ? `media ${String(v.margAz).replace('.', ',')}%` : null, v.marg != null && v.margAz != null ? (v.marg >= v.margAz ? 'ok' : 'bad') : ''),
+      tile('Mix lat.+vetro / fibra', v.fibra > 0 ? pct(((v.laterizio || 0) + (v.vetro || 0)) / v.fibra) : '–', 'obiettivo 100%'),
+      tile('Da recuperare', n0(v.inattivi), f.inattiviN ? `${f.inattiviN} clienti inattivi` : null),
+      tile('Clienti attivi', f.attivi ?? '–', null)),
+    famRows.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' }, h('thead', {}, h('tr', {}, h('th', {}, 'Famiglia'), h('th', { class: 'num' }, '2025'), h('th', { class: 'num' }, '2026'), h('th', { class: 'num' }, 'Var.'), h('th', { class: 'num' }, 'Margine'))), h('tbody', {}, famRows))) : null,
+    offRows.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' }, h('thead', {}, h('tr', {}, h('th', {}, 'Offerte 2026'), h('th', { class: 'num' }, 'N.'), h('th', { class: 'num' }, 'Valore'))), h('tbody', {}, offRows))) : null,
+    txt('Sintesi', f.sintesi), txt('Concentrazione e clienti in calo', f.rischi), txt('Clienti da sviluppare (mix)', f.sviluppo), txt('Inattivi principali', f.inattiviTop), txt('Azioni proposte', f.actions),
+    prev ? h('small', { class: 'muted' }, `Fotografia precedente ${dateIt(prev.date)}: area ${scoreOf(prev).avg ?? '–'}`) : null);
+}
+
+function kpiCard(app, r, refresh) {
+  const k = monthKey(), list = (r.scores?.kpi || {})[k] || [];
+  const done = list.filter(x => x.st === 'fatto').length;
+  const setSt = async (i, st) => { const all = { ...(r.scores.kpi || {}) }; all[k] = list.map((x, j) => j === i ? { ...x, st } : x); await saveScores(app, r, { kpi: all }); refresh(); };
+  return h('section', { class: 'card' }, h('h2', {}, `KPI di ${monthName(k)} · ${done}/${list.length}`),
+    list.length ? h('ul', { class: 'st-list' }, list.map((x, i) => h('li', { class: 'st-row' },
+      h('div', { class: 'st-main' }, h('span', { class: 'badge ' + (x.st === 'fatto' ? 'ok' : x.st === 'non fatto' ? 'bad' : 'muted') }, x.st || 'in corso'), h('strong', {}, x.t)),
+      x.target ? h('small', { class: 'muted' }, 'Obiettivo: ' + x.target) : null,
+      h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => setSt(i, 'fatto') }, 'Fatto'), h('button', { class: 'btn small', onclick: () => setSt(i, 'non fatto') }, 'Non fatto'), h('button', { class: 'btn small', onclick: () => setSt(i, '') }, 'In corso')))))
+      : emptyState('Nessun KPI per questo mese.'),
+    h('button', { class: 'btn small', onclick: () => kpiDialog(app, r, refresh) }, list.length ? 'Modifica KPI' : 'Imposta KPI del mese'));
+}
+async function kpiDialog(app, r, refresh) {
+  const k = monthKey(), list = (r.scores?.kpi || {})[k] || [];
+  const ta = h('textarea', { rows: 6, placeholder: 'Un KPI per riga: cosa | obiettivo\nes. Offerte seguite | tutte le aperte con esito o previsione' }, list.map(x => x.t + (x.target ? ' | ' + x.target : '')).join('\n'));
+  const ok = await modal(`KPI di ${monthName(k)} · ${r.name}`, h('div', { class: 'form' }, h('p', { class: 'muted' }, 'Pochi e chiari (3-4). Un KPI per riga, obiettivo dopo il simbolo |.'), ta), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
+    const old = new Map(list.map(x => [x.t, x]));
+    const items = ta.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [t, target = ''] = l.split('|').map(s => s.trim()); return { t, target, st: old.get(t)?.st || '' }; });
+    const all = { ...(r.scores?.kpi || {}) }; all[k] = items; await saveScores(app, r, { kpi: all }); return true; } }]);
+  if (ok) refresh();
+}
+
+function clientsCard(app, r, refresh) {
+  const list = r.scores?.clienti || [], todo = list.filter(x => x.st !== 'fatta');
+  const upd = async (i, patch) => { await saveScores(app, r, { clienti: list.map((x, j) => j === i ? { ...x, ...patch } : x) }); refresh(); };
+  const close = async i => { const es = h('textarea', { rows: 5, placeholder: 'Risposte del cliente (previsione 2027 per famiglia, cantieri, concorrenti e prezzi…)' }, list[i].esito || '');
+    const ok = await modal('Intervista · ' + list[i].name, h('div', { class: 'form' }, h('ol', { class: 'help-list' }, BUDGET_QUESTIONS.map(q => h('li', {}, q))), field('Esito', es)), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, value: true }]);
+    if (ok) upd(i, { st: 'fatta', esito: es.value.trim(), il: today() }); };
+  return h('section', { class: 'card' }, h('h2', {}, `Clienti da intervistare (budget 2027) · ${todo.length} da fare`),
+    list.length ? h('ul', { class: 'st-list' }, list.map((x, i) => h('li', { class: 'st-row' },
+      h('div', { class: 'st-main' }, h('span', { class: 'badge ' + (x.st === 'fatta' ? 'ok' : 'warn') }, x.st === 'fatta' ? 'fatta' + (x.il ? ' ' + dateIt(x.il) : '') : 'da fare'), h('strong', {}, x.name), x.why ? h('small', { class: 'muted' }, ' · ' + x.why) : null),
+      x.esito ? h('p', { class: 'st-out' }, x.esito) : null,
+      h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => close(i) }, x.st === 'fatta' ? 'Modifica esito' : 'Intervista fatta…')))))
+      : emptyState('Nessun cliente in lista.'),
+    h('details', { class: 'fold-in' }, h('summary', {}, 'Le 6 domande per l\'intervista'), h('ol', { class: 'help-list' }, BUDGET_QUESTIONS.map(q => h('li', {}, q)))),
+    h('button', { class: 'btn small', onclick: () => clientsDialog(app, r, refresh) }, 'Modifica elenco'));
+}
+async function clientsDialog(app, r, refresh) {
+  const list = r.scores?.clienti || [];
+  const ta = h('textarea', { rows: 9, placeholder: 'Un cliente per riga: nome | motivo\nes. VITA SPA Berlingo | 29.700 €, nuovo, compra solo "altro": laterizio' }, list.map(x => x.name + (x.why ? ' | ' + x.why : '')).join('\n'));
+  const ok = await modal('Clienti da intervistare · ' + r.name, h('div', { class: 'form' }, ta), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
+    const old = new Map(list.map(x => [x.name, x]));
+    const items = ta.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [name, why = ''] = l.split('|').map(s => s.trim()); return { ...(old.get(name) || { st: '' }), name, why }; });
+    await saveScores(app, r, { clienti: items }); return true; } }]);
+  if (ok) refresh();
+}
+
+async function diaryCard(app, d, r, customers) {
+  const mine = new Set(customers.filter(c => c.assignee === r.label).map(c => c.id)), cname = new Map(customers.map(c => [c.id, c.name]));
+  const since = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
+  const [notes, rx] = await Promise.all([app.store.notes ? app.store.notes().catch(() => []) : [], app.store.radixNotes ? app.store.radixNotes({ since }).catch(() => []) : []]);
+  const items = [
+    ...d.net.meetings.filter(m => m.label === r.label).map(m => ({ date: m.date, who: 'Tu', what: m.kind, text: m.outcome, extra: m.plaud ? 'Plaud: ' + m.plaud : '' })),
+    ...notes.filter(n => mine.has(n.customerId) && (n.createdAt || '') >= since).map(n => ({ date: n.createdAt.slice(0, 10), who: n.authorName || 'HUB', what: (n.kind || 'nota') + ' · ' + (cname.get(n.customerId) || ''), text: n.body || n.outcome || '' })),
+    ...rx.filter(n => mine.has(n.customerId) && (n.date || '').slice(0, 10) >= since).map(n => ({ date: (n.date || '').slice(0, 10), who: n.authorName || 'RADIX', what: 'nota RADIX · ' + (cname.get(n.customerId) || ''), text: [n.subject, n.body].filter(Boolean).join(' – ') })),
+  ].filter(x => x.date).sort((a, b) => b.date.localeCompare(a.date));
+  return h('section', { class: 'card' }, h('h2', {}, `Diario · ${items.length}`),
+    h('p', { class: 'muted' }, 'Incontri, telefonate e appunti tuoi, più le note dell\'agente e di RADIX sui suoi clienti (ultimi 90 giorni).'),
+    items.length ? h('ul', { class: 'st-list' }, items.slice(0, 40).map(x => h('li', { class: 'st-row' },
+      h('div', { class: 'st-main' }, h('small', { class: 'muted' }, dateIt(x.date) + ' · '), h('strong', {}, x.who), h('small', { class: 'muted' }, ' · ' + x.what), x.extra ? h('small', { class: 'muted' }, ' · ' + x.extra) : null),
+      x.text ? h('p', { class: 'st-out' }, x.text.length > 400 ? x.text.slice(0, 400) + '…' : x.text) : null)))
+      : emptyState('Niente negli ultimi 90 giorni.'));
+}
+
+function meridianCard(app, r, customers) {
+  const as = (app.store.assignees || []).find(a => a.name === r.label);
+  const provs = provincesOf(as?.provinces);
+  const ex = zoneExceptions(customers, r.label, provs);
+  const who = c => `${c.name.trim()}${c.vat ? ' (P.IVA ' + c.vat + ')' : ''}`;
+  const per = (provs.length ? 'province ' + provs.join(', ') : 'clienti assegnati') + (ex.excluded.length ? `, ESCLUSI ${ex.excluded.map(who).join('; ')}` : '') + (ex.included.length ? `, PIÙ questi clienti fuori zona: ${ex.included.map(who).join('; ')}` : '');
+  const q1 = `Fotografia della zona di ${r.name} al ${new Date().toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}. Perimetro: ${per}.
+Strategia: aumentare il mix. Laterizio e vetro cellulare devono crescere fino a eguagliare la fibra di legno (STEICO + NATURHELD), che va difesa ma non spinta.
+Metti i numeri in tabelle in cima:
+1. fatturato da gennaio a fine mese scorso, 2025 e 2026, e variazione %; margine % 2026 della zona e media aziendale;
+2. clienti con acquisti 2026; clienti attivi nel 2024-25 senza acquisti 2026 e il loro fatturato storico (i primi 5 con cosa compravano);
+3. fatturato stesso periodo 2025 e 2026 e margine % 2026 per famiglia: fibra di legno, laterizio, vetro cellulare, altro;
+4. offerte OFF 2026 per stato (accettate, scadute, evase senza ordine, in attesa) con numero e valore;
+5. concentrazione: quanto pesano i primi 3 clienti sul fatturato 2026, e i clienti che hanno perso più del 50% rispetto al 2025;
+6. i primi 5 clienti che comprano fibra o "altro" ma non laterizio né vetro cellulare.`;
+  const q2 = `Sulla base di questa fotografia della zona di ${r.name}, proponimi 4 call to action per i prossimi 30 giorni, coerenti con la strategia del mix (laterizio e vetro cellulare fino a eguagliare la fibra, che va difesa) e con il recupero degli inattivi e dei clienti in calo. Per ogni azione: cliente, obiettivo misurabile, impatto atteso su fatturato o margine. Poi indicami 6-8 clienti da intervistare per costruire il budget 2027, con il motivo.`;
+  const box = (t, q) => h('div', { class: 'ss-q' }, h('div', { class: 'st-main' }, h('strong', {}, t), h('button', { class: 'btn small', onclick: () => navigator.clipboard?.writeText(q).then(() => toast('Copiata: incollala in Focus')).catch(() => toast('Seleziona il testo e copialo')) }, 'Copia')), h('pre', { class: 'ss-pre' }, q));
+  return h('section', { class: 'card' }, h('h2', {}, 'Domande per Meridian'),
+    h('p', { class: 'muted' }, `Ogni mese: incolla la 1 in Focus, poi la 2 nella stessa chat. Con la risposta aggiorni "Nuova fotografia", KPI e clienti da intervistare. Perimetro calcolato dall'HUB: ${ex.excluded.length} esclusi, ${ex.included.length} fuori zona.`),
+    box('1 · Fotografia', q1), box('2 · Azioni e clienti', q2));
+}
+
+async function viewAgent(app, label) {
+  const d = await load(app), r = d.rows.find(x => x.label === label);
+  if (!r) return h('div', { class: 'page' }, h('p', {}, 'Commerciale non trovato.'), h('a', { href: '#/strategia' }, '← Sales strategy'));
+  const refresh = () => app.go('strategia/' + encodeURIComponent(label));
+  const acts = openActions(d.net.actions, today(), label);
+  const actCard = h('section', { class: 'card' }, h('h2', {}, `Azioni aperte · ${acts.length}`),
+    acts.length ? h('ul', { class: 'st-list' }, acts.map(a => h('li', { class: 'st-row' }, h('div', { class: 'st-main' }, h('span', {}, a.title),
+      a.due ? h('small', { class: a.late ? 'bad-text' : 'muted' }, ' entro ' + dateIt(a.due)) : null), h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => closeAction(app, a, refresh) }, 'Fatta…')))))
+      : emptyState('Nessuna azione aperta: nascono quando registri un incontro.'));
+  return h('div', { class: 'page' }, headCard(app, d, r, refresh),
+    foldCards(h('div', { class: 'section-body ss-body' }, photoCard(r), kpiCard(app, r, refresh), clientsCard(app, r, refresh), actCard, await diaryCard(app, d, r, d.customers), meridianCard(app, r, d.customers)), 'ntx-ss-agent'));
+}
+
 async function photoDialog(app, r, refresh) {
-  const prev = lastPhoto(r) || {};
-  const inp = (k, ph) => h('input', { type: 'number', step: 'any', inputmode: 'decimal', placeholder: ph, value: prev[k] ?? '' });
-  const F = { rev25: inp('rev25', '€'), rev26: inp('rev26', '€'), marg: inp('marg', '%'), margAz: inp('margAz', '%'), inattivi: inp('inattivi', '€'),
-    fibra25: inp('fibra25', '€'), fibra: inp('fibra', '€'), laterizio: inp('laterizio', '€'), vetro: inp('vetro', '€'), offAcc: inp('offAcc', '€'), offPerse: inp('offPerse', '€') };
+  const prev = lastPhoto(r) || {}, pf = prev.fam || {}, po = prev.off || {};
+  const num = (v, ph) => h('input', { type: 'number', step: 'any', inputmode: 'decimal', placeholder: ph || '', value: v ?? '' });
+  const G = { rev25: num(prev.rev25, '€'), rev26: num(prev.rev26, '€'), marg: num(prev.marg, '%'), margAz: num(prev.margAz, '%'), attivi: num(prev.attivi), inattiviN: num(prev.inattiviN), inattivi: num(prev.inattivi, '€') };
+  const FA = Object.fromEntries(FAMS.map(([k]) => [k, { a25: num(pf[k]?.a25, '€'), a26: num(pf[k]?.a26, '€'), m: num(pf[k]?.m, '%') }]));
+  const OF = Object.fromEntries(OFFS.map(([k]) => [k, { n: num(po[k]?.n), v: num(po[k]?.v, '€') }]));
+  const T = { sintesi: ['Sintesi', 3], rischi: ['Concentrazione e clienti in calo', 3], sviluppo: ['Clienti da sviluppare (mix)', 3], inattiviTop: ['Inattivi principali', 3], actions: ['Azioni proposte', 4] };
+  const TA = Object.fromEntries(Object.entries(T).map(([k, [, rows]]) => [k, h('textarea', { rows }, prev[k] || '')]));
   const date = h('input', { type: 'date', value: today() });
-  const actions = h('textarea', { rows: 4, placeholder: 'Azioni proposte da Meridian o tue (le trasformi in azioni con scadenza quando registri l\'incontro)' });
+  const val = e => e.value === '' ? null : Number(e.value);
+  const collect = () => ({ date: date.value || today(), ...Object.fromEntries(Object.entries(G).map(([k, e]) => [k, val(e)])),
+    fam: Object.fromEntries(FAMS.map(([k]) => [k, { a25: val(FA[k].a25), a26: val(FA[k].a26), m: val(FA[k].m) }])),
+    off: Object.fromEntries(OFFS.map(([k]) => [k, { n: val(OF[k].n), v: val(OF[k].v) }])),
+    ...Object.fromEntries(Object.entries(TA).map(([k, e]) => [k, e.value.trim()])) });
   const out = h('div', { class: 'st-photo-out' });
-  const calc = () => { const a = areaScores(Object.fromEntries(Object.entries(F).map(([k, e]) => [k, e.value])));
+  const calc = () => { const a = scoreOf(collect());
     out.replaceChildren(h('strong', {}, `Valutazione area: ${a.avg != null ? a.avg.toLocaleString('it-IT') : '–'} / 3` + (a.n && a.n < 6 ? ` (su ${a.n} indicatori di 6)` : '')), ' ', h('small', { class: 'muted' }, AREA_INDICATORS.map(([k, l]) => `${l} ${a.scores[k] ?? '–'}`).join(' · '))); };
-  Object.values(F).forEach(e => e.addEventListener('input', calc)); calc();
+  const grid = (head, rows) => h('table', { class: 'table compact ss-grid' }, h('thead', {}, h('tr', {}, head.map(x => h('th', {}, x)))), h('tbody', {}, rows));
   const body = h('div', { class: 'form' },
-    h('p', { class: 'muted' }, 'Inserisci i numeri della risposta di Meridian per la zona. I voti si calcolano da soli.'),
+    h('p', { class: 'muted' }, 'Copia i numeri dalla risposta di Meridian (domande 1 e 2). I voti si calcolano da soli; i campi vuoti non contano.'),
     field('Dati al', date),
-    h('div', { class: 'st-pair' }, field('Fatturato 2025 (stesso periodo)', F.rev25), field('Fatturato 2026', F.rev26)),
-    h('div', { class: 'st-pair' }, field('Margine % zona 2026', F.marg), field('Margine % aziendale 2026', F.margAz)),
-    field('Fatturato storico clienti inattivi', F.inattivi),
-    field('Fibra di legno 2025 (stesso periodo)', F.fibra25),
-    h('div', { class: 'st-scores st-3' }, field('Fibra di legno 2026', F.fibra), field('Laterizio 2026', F.laterizio), field('Vetro cellulare 2026', F.vetro)),
-    h('div', { class: 'st-pair' }, field('Offerte 2026 accettate (€)', F.offAcc), field('Offerte 2026 perse o scadute (€)', F.offPerse)),
-    field('Azioni proposte', actions), out);
+    h('div', { class: 'st-pair' }, field('Fatturato 2025 (stesso periodo)', G.rev25), field('Fatturato 2026', G.rev26)),
+    h('div', { class: 'st-pair' }, field('Margine % zona 2026', G.marg), field('Margine % aziendale 2026', G.margAz)),
+    h('div', { class: 'st-scores st-3' }, field('Clienti attivi 2026', G.attivi), field('Clienti inattivi', G.inattiviN), field('Loro fatturato storico', G.inattivi)),
+    h('h4', {}, 'Per famiglia'), grid(['Famiglia', '2025', '2026', 'Margine %'], FAMS.map(([k, l]) => h('tr', {}, h('td', {}, l), h('td', {}, FA[k].a25), h('td', {}, FA[k].a26), h('td', {}, FA[k].m)))),
+    h('h4', {}, 'Offerte 2026 per stato'), grid(['Stato', 'N.', 'Valore'], OFFS.map(([k, l]) => h('tr', {}, h('td', {}, l), h('td', {}, OF[k].n), h('td', {}, OF[k].v)))),
+    Object.entries(T).map(([k, [l]]) => field(l, TA[k])), out);
+  body.addEventListener('input', calc); calc();
   const ok = await modal('Fotografia area · ' + r.name, body, [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
-    const foto = { date: date.value || today(), ...Object.fromEntries(Object.entries(F).map(([k, e]) => [k, e.value === '' ? null : Number(e.value)])), actions: actions.value.trim() };
-    const scores = { ...(r.scores || {}), foto: [foto, ...(r.scores?.foto || [])].slice(0, 12) };
-    await app.store.saveDirAgent({ label: r.label, fascia: r.fascia, state: r.state, scores, note: r.note || '' });
-    return true;
-  } }]);
+    await saveScores(app, r, { foto: [collect(), ...(r.scores?.foto || [])].slice(0, 12) }); return true; } }]);
   if (ok) { toast('Fotografia salvata'); refresh(); }
 }
 
-async function meetingDialog(app, d, r, refresh) {
+async function meetingDialog(app, d, r, refresh, preKind = 'intervista') {
   const date = h('input', { type: 'date', value: today() });
-  const kind = sel(KINDS.map(k => [k, k]), 'intervista');
+  const kind = sel(KINDS.map(k => [k, k]), preKind);
   const outcome = h('textarea', { rows: 5, placeholder: 'Esito: cosa è emerso, cosa ha fatto delle azioni precedenti, notizie di mercato…' });
   const plaud = h('input', { type: 'text', placeholder: 'Titolo o data della registrazione Plaud (facoltativo)' });
   const prev = openActions(d.net.actions, today(), r.label);
@@ -10676,7 +10874,7 @@ async function closeAction(app, a, refresh) {
   if (ok) refresh();
 }
 
-return { canSeeStrategy, viewStrategy, lastPhoto };
+return { canSeeStrategy, viewStrategy, lastPhoto, BUDGET_QUESTIONS };
 })();
 __m["js/views/orders.js"] = (function () {
 // Ordini passati all'ufficio (offerte accettate): l'ufficio li segue fino all'inserimento in RADIX. Solo Direzione.
