@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="fe463b5411cd">
+<meta name="ntx-build" content="33789ef8987d">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -894,9 +894,10 @@ h2.fold-head::after,.fold-head h2::after{content:' ▾';color:var(--muted,#888);
 @media (max-width:600px){.st-scores{grid-template-columns:repeat(2,1fr)}}
 .st-auto{min-height:38px;display:flex;align-items:center;gap:4px;padding:0 4px}
 .st-trip{font-size:1rem;line-height:1}
+.st-3{grid-template-columns:repeat(3,1fr) !important} .st-photo-out{padding:8px 10px;background:var(--surface-2,#f6f7f4);border-radius:8px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"fe463b5411cd"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"33789ef8987d"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -10436,14 +10437,45 @@ function thisWeek(rows) {
   return rows.filter(r => r.due.state in rank).sort((a, b) => rank[a.due.state] - rank[b.due.state] || (a.fascia || 9) - (b.fascia || 9) || a.name.localeCompare(b.name));
 }
 
-return { FASCE, KINDS, CRITERIA, MANUAL_CRITERIA, proximityScore, OVERNIGHT_KM, tripKind, TRIP_ICON, TRIP_LABEL, medianKm, F2_DAYS, mondayOf, displayName, lastContact, contactDue, openActions, networkRows, thisWeek };
+// 08/11 (Tommaso): valutazione dell'area dalla "fotografia" che dà Meridian per ogni zona di assegnazione.
+// Strategia: aumentare il mix, laterizio + vetro cellulare fino a eguagliare la fibra di legno (che non va spinta).
+// I numeri si inseriscono a mano dalla risposta di Meridian; i voti 1-3 li calcola l'app con soglie fisse.
+const AREA_INDICATORS = [
+  ['mix', 'Mix prodotto', 'laterizio + vetro cellulare / fibra di legno', '≥ 50% = 3 · 20-50% = 2 · < 20% = 1'],
+  ['tenuta', 'Tenuta fibra', 'fibra di legno 2026 contro 2025 stesso periodo', '≥ 0% = 3 · 0/−10% = 2 · oltre −10% = 1'],
+  ['crescita', 'Crescita', '2026 contro 2025 stesso periodo', '> +10% = 3 · 0/+10% = 2 · in calo = 1'],
+  ['redditivita', 'Redditività', 'margine % zona contro media aziendale', '> +3 punti = 3 · ±3 = 2 · < −3 = 1'],
+  ['recupero', 'Potenziale di recupero', 'fatturato storico inattivi / fatturato 2026', '> 30% = 3 · 10-30% = 2 · < 10% = 1'],
+  ['conversione', 'Conversione offerte', 'valore accettate / (accettate + perse)', '≥ 30% = 3 · 15-30% = 2 · < 15% = 1'],
+];
+const num = v => v === '' || v == null || isNaN(Number(v)) ? null : Number(v);
+const band = (x, hi, lo, hiStrict = true) => x == null ? null : (hiStrict ? x > hi : x >= hi) ? 3 : x >= lo ? 2 : 1;
+/** @param f { rev25, rev26, marg, margAz, inattivi, fibra25, fibra, laterizio, vetro, offAcc, offPerse } (euro, margini in %) */
+function areaScores(f = {}) {
+  const v = Object.fromEntries(Object.entries(f).map(([k, x]) => [k, num(x)]));
+  const out = {}, val = {};
+  if (v.fibra != null && (v.laterizio != null || v.vetro != null)) {
+    val.mix = v.fibra > 0 ? ((v.laterizio || 0) + (v.vetro || 0)) / v.fibra : null;
+    out.mix = v.fibra > 0 ? band(val.mix, 0.5, 0.2, false) : 3;
+  }
+  // 08/11 (Tommaso: la fibra non è il focus ma non si abbandona): il mix non deve migliorare perché cala la fibra
+  if (v.fibra25 > 0 && v.fibra != null) { val.tenuta = v.fibra / v.fibra25 - 1; out.tenuta = val.tenuta >= 0 ? 3 : val.tenuta >= -0.10 ? 2 : 1; }
+  if (v.rev25 > 0 && v.rev26 != null) { val.crescita = v.rev26 / v.rev25 - 1; out.crescita = val.crescita > 0.10 ? 3 : val.crescita >= 0 ? 2 : 1; }
+  if (v.marg != null && v.margAz != null) { val.redditivita = v.marg - v.margAz; out.redditivita = val.redditivita > 3 ? 3 : val.redditivita >= -3 ? 2 : 1; }
+  if (v.inattivi != null && v.rev26 > 0) { val.recupero = v.inattivi / v.rev26; out.recupero = band(val.recupero, 0.3, 0.1); }
+  if (v.offAcc != null && v.offPerse != null && v.offAcc + v.offPerse > 0) { val.conversione = v.offAcc / (v.offAcc + v.offPerse); out.conversione = band(val.conversione, 0.3, 0.15, false); }
+  const xs = Object.values(out).filter(x => x != null);
+  return { scores: out, values: val, avg: xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length * 10) / 10 : null, n: xs.length };
+}
+
+return { FASCE, KINDS, CRITERIA, MANUAL_CRITERIA, proximityScore, OVERNIGHT_KM, tripKind, TRIP_ICON, TRIP_LABEL, medianKm, F2_DAYS, mondayOf, displayName, lastContact, contactDue, openActions, networkRows, thisWeek, AREA_INDICATORS, areaScores };
 })();
 __m["js/views/strategy.js"] = (function () {
 // "Strategia" (08/11/2026, Tommaso): un'unica sezione con il gestionale della Direzione, a finestre che si aprono e si chiudono.
 // Fasce della rete, chi sentire questa settimana, incontri (esito scritto a mano; l'intervista si registra con Plaud) e azioni con scadenza.
 // Solo Tommaso (session.canStrategy, controllo anche nel database). Migrazione 20261108080000.
 const { h, eur, dateIt, today, toast, modal, field, emptyState } = __m["js/ui.js"];
-const { FASCE, KINDS, MANUAL_CRITERIA, networkRows, thisWeek, openActions, displayName, proximityScore, medianKm, tripKind, TRIP_ICON, TRIP_LABEL } = __m["js/core/strategy.js"];
+const { FASCE, KINDS, MANUAL_CRITERIA, networkRows, thisWeek, openActions, displayName, proximityScore, medianKm, tripKind, TRIP_ICON, TRIP_LABEL, AREA_INDICATORS, areaScores } = __m["js/core/strategy.js"];
 const { customerPlace, distanceKm } = __m["js/core/places.js"];
 const { COMUNI_GEO } = __m["js/data/comuni-geo-data.js"];
 const { foldCards } = __m["js/views/direction.js"];
@@ -10506,7 +10538,7 @@ async function viewStrategy(app) {
     h('p', { class: 'muted' }, `Fascia 1: ${d.rows.filter(r => r.fascia === 1).length} su 8 · fascia 2: ${d.rows.filter(r => r.fascia === 2).length} · fascia 3: ${d.rows.filter(r => r.fascia === 3).length}` + (unset.length ? ` · ${unset.length} senza fascia` : '') + '. 🚗 affiancamento in giornata · 🛏 con pernottamento, per fascia 1 e 2 (dai km, oltre 200 in linea d\'aria; correggibile nella scheda). Tocca un nome per la scheda.'),
     byF.map(([f, rs]) => [h('h3', { class: 'st-h3' }, f ? FASCE[f] : 'Senza fascia'),
       h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
-        h('thead', {}, h('tr', {}, h('th', {}, 'Commerciale'), h('th', {}, 'Stato'), h('th', {}, 'Ultimo contatto'), h('th', {}, 'Azioni'), h('th', { class: 'num' }, 'Km · vicin.'), h('th', { class: 'num' }, 'Fatt. 2026'), h('th', { class: 'num' }, 'Offerte RADIX'))),
+        h('thead', {}, h('tr', {}, h('th', {}, 'Commerciale'), h('th', {}, 'Stato'), h('th', {}, 'Ultimo contatto'), h('th', {}, 'Azioni'), h('th', { class: 'num' }, 'Km · vicin.'), h('th', { class: 'num' }, 'Area'), h('th', { class: 'num' }, 'Fatt. 2026'), h('th', { class: 'num' }, 'Offerte RADIX'))),
         h('tbody', {}, rs.map(r => { const n = d.nums.get(r.label) || {};
           return h('tr', { class: 'net-row', onclick: () => agentDialog(app, d, r, refresh) },
             h('td', {}, h('strong', {}, r.name), ' ', tripIcon(tripOf(d, r)), r.note ? h('small', { class: 'muted' }, ' · ' + r.note.slice(0, 40)) : null),
@@ -10514,6 +10546,7 @@ async function viewStrategy(app) {
             h('td', {}, r.last ? dateIt(r.last) : h('span', { class: 'muted' }, 'mai')),
             h('td', {}, r.open ? h('span', { class: r.late ? 'bad-text' : '' }, String(r.open)) : h('span', { class: 'muted' }, '–')),
             h('td', { class: 'num' }, n.km != null ? `${n.km} · ${n.vic}` : '–'),
+            h('td', { class: 'num' }, (() => { const f = lastPhoto(r); const x = f && areaScores(f); return x?.avg != null ? x.avg.toLocaleString('it-IT') + (x.n < 6 ? '*' : '') : '–'; })()),
             h('td', { class: 'num' }, n.rev26 ? eur(n.rev26) : '–'), h('td', { class: 'num' }, n.rxN ? (n.rxV ? `${n.rxN} · ${eur(n.rxV)}` : String(n.rxN)) : '–')); }))))]));
 
   const recent = d.net.meetings.slice(0, 15);
@@ -10540,26 +10573,74 @@ async function agentDialog(app, d, r, refresh) {
   const trip = sel([['', 'automatica' + (tAuto.kind ? ': ' + TRIP_ICON[tAuto.kind] + ' ' + TRIP_LABEL[tAuto.kind] : '')], ['giornata', TRIP_ICON.giornata + ' in giornata'], ['notte', TRIP_ICON.notte + ' con pernottamento']], r.scores?.trasferta || '');
   const vic = h('div', { class: 'st-auto' }, nn.km != null ? h('strong', {}, String(nn.vic)) : '–', nn.km != null ? h('small', { class: 'muted' }, ` ${nn.km} km (calcolata)`) : h('small', { class: 'muted' }, ' nessun cliente localizzato'));
   const note = h('textarea', { rows: 3, placeholder: 'Note di Direzione (es. autonomia quasi massima, passaggio di consegne…)' }, r.note || '');
+  const fotoBox = photoSummary(r);
   const acts = openActions(d.net.actions, today(), r.label);
   const meets = d.net.meetings.filter(m => m.label === r.label);
   const body = h('div', { class: 'form' },
     h('div', { class: 'st-pair' }, field('Fascia', fascia), field('Stato', state)), field('Affiancamento', trip),
     h('div', { class: 'st-scores' }, MANUAL_CRITERIA.slice(0, 2).map(([k, l]) => field(l, sc[k])), field('Vicinanza', vic), field('Autonomia', sc.autonomia)), field('Note', note),
+    h('h4', {}, 'Fotografia area'), fotoBox,
     h('h4', {}, `Azioni aperte (${acts.length})`),
     acts.length ? h('ul', { class: 'checks' }, acts.map(a => h('li', {}, a.title, a.due ? h('small', { class: a.late ? 'bad-text' : 'muted' }, ' · entro ' + dateIt(a.due)) : null))) : h('p', { class: 'muted' }, 'Nessuna.'),
     h('h4', {}, `Incontri (${meets.length})`),
     meets.length ? h('ul', { class: 'st-list' }, meets.slice(0, 10).map(m => h('li', {}, h('small', { class: 'muted' }, dateIt(m.date) + ' · ' + m.kind + (m.plaud ? ' · Plaud: ' + m.plaud : '')), m.outcome ? h('p', { class: 'st-out' }, m.outcome) : null))) : h('p', { class: 'muted' }, 'Nessuno.'));
   const v = await modal(r.name, body, [
+    { label: 'Nuova fotografia', value: 'foto' },
     { label: 'Registra incontro', value: 'meet' },
     { label: 'Salva scheda', primary: true, run: async () => {
       const scores = Object.fromEntries(MANUAL_CRITERIA.map(([k]) => [k, sc[k].value ? Number(sc[k].value) : null]).filter(([, x]) => x));
       if (nn.vic) scores.vicinanza = nn.vic;
       if (trip.value) scores.trasferta = trip.value;
+      if (r.scores?.foto) scores.foto = r.scores.foto;
       await app.store.saveDirAgent({ label: r.label, fascia: fascia.value ? Number(fascia.value) : null, state: state.value, scores, note: note.value.trim() });
       toast('Scheda salvata'); return 'saved';
     } }]);
   if (v === 'meet') return meetingDialog(app, d, r, refresh);
+  if (v === 'foto') return photoDialog(app, r, refresh);
   if (v === 'saved') refresh();
+}
+
+// 08/11: fotografia dell'area (numeri da Meridian) → 5 indicatori con voto calcolato
+const pct = x => (x * 100).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + '%';
+const VALFMT = { mix: pct, tenuta: x => (x >= 0 ? '+' : '') + pct(x), crescita: x => (x >= 0 ? '+' : '') + pct(x), redditivita: x => (x >= 0 ? '+' : '') + x.toLocaleString('it-IT', { maximumFractionDigits: 1 }) + ' punti', recupero: pct, conversione: pct };
+const lastPhoto = r => (r.scores?.foto || [])[0] || null;
+function photoSummary(r) {
+  const f = lastPhoto(r);
+  if (!f) return h('p', { class: 'muted' }, 'Nessuna fotografia: tocca "Nuova fotografia" e inserisci i numeri che ti dà Meridian per la zona.');
+  const a = areaScores(f);
+  return h('div', {}, h('p', {}, h('strong', {}, `Valutazione area ${a.avg != null ? a.avg.toLocaleString('it-IT') : '–'} / 3`), a.n < 6 ? h('small', { class: 'warn-text', style: 'display:inline' }, ` su ${a.n} indicatori di 6`) : null, h('small', { class: 'muted' }, ` · fotografia del ${dateIt(f.date)}` + ((r.scores.foto || []).length > 1 ? ` (precedente ${dateIt(r.scores.foto[1].date)}: ${areaScores(r.scores.foto[1]).avg ?? '–'})` : ''))),
+    h('table', { class: 'table compact' }, h('tbody', {}, AREA_INDICATORS.map(([k, l, how]) => h('tr', {}, h('td', {}, l, h('small', { class: 'muted' }, ' · ' + how)),
+      h('td', { class: 'num' }, a.values[k] != null ? VALFMT[k](a.values[k]) : '–'), h('td', { class: 'num' }, a.scores[k] ? h('strong', {}, String(a.scores[k])) : '–'))))),
+    f.actions ? h('p', { class: 'st-out' }, h('small', { class: 'muted' }, 'Azioni proposte: '), f.actions) : null);
+}
+async function photoDialog(app, r, refresh) {
+  const prev = lastPhoto(r) || {};
+  const inp = (k, ph) => h('input', { type: 'number', step: 'any', inputmode: 'decimal', placeholder: ph, value: prev[k] ?? '' });
+  const F = { rev25: inp('rev25', '€'), rev26: inp('rev26', '€'), marg: inp('marg', '%'), margAz: inp('margAz', '%'), inattivi: inp('inattivi', '€'),
+    fibra25: inp('fibra25', '€'), fibra: inp('fibra', '€'), laterizio: inp('laterizio', '€'), vetro: inp('vetro', '€'), offAcc: inp('offAcc', '€'), offPerse: inp('offPerse', '€') };
+  const date = h('input', { type: 'date', value: today() });
+  const actions = h('textarea', { rows: 4, placeholder: 'Azioni proposte da Meridian o tue (le trasformi in azioni con scadenza quando registri l\'incontro)' });
+  const out = h('div', { class: 'st-photo-out' });
+  const calc = () => { const a = areaScores(Object.fromEntries(Object.entries(F).map(([k, e]) => [k, e.value])));
+    out.replaceChildren(h('strong', {}, `Valutazione area: ${a.avg != null ? a.avg.toLocaleString('it-IT') : '–'} / 3` + (a.n && a.n < 6 ? ` (su ${a.n} indicatori di 6)` : '')), ' ', h('small', { class: 'muted' }, AREA_INDICATORS.map(([k, l]) => `${l} ${a.scores[k] ?? '–'}`).join(' · '))); };
+  Object.values(F).forEach(e => e.addEventListener('input', calc)); calc();
+  const body = h('div', { class: 'form' },
+    h('p', { class: 'muted' }, 'Inserisci i numeri della risposta di Meridian per la zona. I voti si calcolano da soli.'),
+    field('Dati al', date),
+    h('div', { class: 'st-pair' }, field('Fatturato 2025 (stesso periodo)', F.rev25), field('Fatturato 2026', F.rev26)),
+    h('div', { class: 'st-pair' }, field('Margine % zona 2026', F.marg), field('Margine % aziendale 2026', F.margAz)),
+    field('Fatturato storico clienti inattivi', F.inattivi),
+    field('Fibra di legno 2025 (stesso periodo)', F.fibra25),
+    h('div', { class: 'st-scores st-3' }, field('Fibra di legno 2026', F.fibra), field('Laterizio 2026', F.laterizio), field('Vetro cellulare 2026', F.vetro)),
+    h('div', { class: 'st-pair' }, field('Offerte 2026 accettate (€)', F.offAcc), field('Offerte 2026 perse o scadute (€)', F.offPerse)),
+    field('Azioni proposte', actions), out);
+  const ok = await modal('Fotografia area · ' + r.name, body, [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
+    const foto = { date: date.value || today(), ...Object.fromEntries(Object.entries(F).map(([k, e]) => [k, e.value === '' ? null : Number(e.value)])), actions: actions.value.trim() };
+    const scores = { ...(r.scores || {}), foto: [foto, ...(r.scores?.foto || [])].slice(0, 12) };
+    await app.store.saveDirAgent({ label: r.label, fascia: r.fascia, state: r.state, scores, note: r.note || '' });
+    return true;
+  } }]);
+  if (ok) { toast('Fotografia salvata'); refresh(); }
 }
 
 async function meetingDialog(app, d, r, refresh) {
@@ -10595,7 +10676,7 @@ async function closeAction(app, a, refresh) {
   if (ok) refresh();
 }
 
-return { canSeeStrategy, viewStrategy };
+return { canSeeStrategy, viewStrategy, lastPhoto };
 })();
 __m["js/views/orders.js"] = (function () {
 // Ordini passati all'ufficio (offerte accettate): l'ufficio li segue fino all'inserimento in RADIX. Solo Direzione.
