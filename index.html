@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="8e80100fee7a">
+<meta name="ntx-build" content="a45ff0971d01">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -893,9 +893,10 @@ h2.fold-head::after,.fold-head h2::after{content:' ▾';color:var(--muted,#888);
 .st-scores{grid-template-columns:repeat(4,1fr)}
 @media (max-width:600px){.st-scores{grid-template-columns:repeat(2,1fr)}}
 .st-auto{min-height:38px;display:flex;align-items:center;gap:4px;padding:0 4px}
+.st-trip{font-size:1rem;line-height:1}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8e80100fee7a"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a45ff0971d01"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -10360,6 +10361,16 @@ const CRITERIA = [['zona', 'Zona strategica'], ['miglioramento', 'Miglioramento'
 // Km in linea d'aria da Trambileno alla metà dei clienti attivi e da recuperare: fino a 100 km = 3, fino a 250 = 2, oltre = 1.
 const MANUAL_CRITERIA = CRITERIA.filter(([k]) => k !== 'vicinanza');
 const proximityScore = km => km == null ? null : km <= 100 ? 3 : km <= 250 ? 2 : 1;
+// 08/11 (Tommaso): per gli affiancamenti, trasferta in giornata o con pernottamento.
+// Proposta automatica dai km in linea d'aria (su strada circa +30%): oltre 200 km = pernottamento. Si può correggere a mano nella scheda.
+const OVERNIGHT_KM = 200;
+function tripKind(km, manual) {
+  if (manual === 'giornata' || manual === 'notte') return { kind: manual, auto: false };
+  if (km == null) return { kind: null, auto: true };
+  return { kind: km > OVERNIGHT_KM ? 'notte' : 'giornata', auto: true };
+}
+const TRIP_ICON = { giornata: '🚗', notte: '🛏' };
+const TRIP_LABEL = { giornata: 'in giornata', notte: 'con pernottamento' };
 function medianKm(points, from, dist) {
   const ks = points.map(p => dist(from, p)).sort((a, b) => a - b);
   if (!ks.length) return null;
@@ -10425,14 +10436,14 @@ function thisWeek(rows) {
   return rows.filter(r => r.due.state in rank).sort((a, b) => rank[a.due.state] - rank[b.due.state] || (a.fascia || 9) - (b.fascia || 9) || a.name.localeCompare(b.name));
 }
 
-return { FASCE, KINDS, CRITERIA, MANUAL_CRITERIA, proximityScore, medianKm, F2_DAYS, mondayOf, displayName, lastContact, contactDue, openActions, networkRows, thisWeek };
+return { FASCE, KINDS, CRITERIA, MANUAL_CRITERIA, proximityScore, OVERNIGHT_KM, tripKind, TRIP_ICON, TRIP_LABEL, medianKm, F2_DAYS, mondayOf, displayName, lastContact, contactDue, openActions, networkRows, thisWeek };
 })();
 __m["js/views/strategy.js"] = (function () {
 // "Strategia" (08/11/2026, Tommaso): un'unica sezione con il gestionale della Direzione, a finestre che si aprono e si chiudono.
 // Fasce della rete, chi sentire questa settimana, incontri (esito scritto a mano; l'intervista si registra con Plaud) e azioni con scadenza.
 // Solo Tommaso (session.canStrategy, controllo anche nel database). Migrazione 20261108080000.
 const { h, eur, dateIt, today, toast, modal, field, emptyState } = __m["js/ui.js"];
-const { FASCE, KINDS, MANUAL_CRITERIA, networkRows, thisWeek, openActions, displayName, proximityScore, medianKm } = __m["js/core/strategy.js"];
+const { FASCE, KINDS, MANUAL_CRITERIA, networkRows, thisWeek, openActions, displayName, proximityScore, medianKm, tripKind, TRIP_ICON, TRIP_LABEL } = __m["js/core/strategy.js"];
 const { customerPlace, distanceKm } = __m["js/core/places.js"];
 const { COMUNI_GEO } = __m["js/data/comuni-geo-data.js"];
 const { foldCards } = __m["js/views/direction.js"];
@@ -10444,6 +10455,8 @@ const dueBadge = r => r.due.state === 'in ritardo' ? h('span', { class: 'badge b
   : r.due.state === 'da sentire' ? h('span', { class: 'badge warn' }, 'da sentire')
   : r.due.state === 'sentito' ? h('span', { class: 'badge ok' }, 'sentito') : null;
 const fChip = f => h('span', { class: 'chip f' + (f || 0) }, f ? 'F' + f : '—');
+const tripOf = (d, r) => tripKind(d.nums.get(r.label)?.km, r.scores?.trasferta);
+const tripIcon = t => t.kind ? h('span', { class: 'st-trip', title: 'Affiancamento ' + TRIP_LABEL[t.kind] + (t.auto ? ' (calcolato dai km)' : '') }, TRIP_ICON[t.kind]) : null;
 
 async function load(app) {
   const [net, customers, rx] = await Promise.all([app.store.dirNetwork(), app.customers(), app.store.radixOffers ? app.store.radixOffers().catch(() => []) : []]);
@@ -10473,7 +10486,7 @@ async function viewStrategy(app) {
   const weekCard = h('section', { class: 'card' }, h('h2', {}, `Questa settimana · ${week.length} da sentire`),
     h('p', { class: 'muted' }, 'Fascia 1 ogni lunedì, fascia 2 ogni 2-3 settimane. Dopo la telefonata registri l\'incontro: esito, registrazione Plaud e azioni.'),
     week.length ? h('ul', { class: 'st-list' }, week.map(r => h('li', { class: 'st-row' },
-      h('div', { class: 'st-main' }, fChip(r.fascia), h('strong', {}, r.name), dueBadge(r),
+      h('div', { class: 'st-main' }, fChip(r.fascia), h('strong', {}, r.name), tripIcon(tripOf(d, r)), dueBadge(r),
         h('small', { class: 'muted' }, r.last ? ' ultimo contatto ' + dateIt(r.last) : ' mai sentito'),
         r.open ? h('small', { class: r.late ? 'bad-text' : 'muted' }, ` · ${r.open} azioni aperte` + (r.late ? `, ${r.late} scadute` : '')) : null),
       numsLine(r.label),
@@ -10490,13 +10503,13 @@ async function viewStrategy(app) {
 
   const byF = [1, 2, 3, null].map(f => [f, d.rows.filter(r => (r.fascia || null) === f)]).filter(([, rs]) => rs.length);
   const netCard = h('section', { class: 'card' }, h('h2', {}, 'Rete e fasce'),
-    h('p', { class: 'muted' }, `Fascia 1: ${d.rows.filter(r => r.fascia === 1).length} su 8 · fascia 2: ${d.rows.filter(r => r.fascia === 2).length} · fascia 3: ${d.rows.filter(r => r.fascia === 3).length}` + (unset.length ? ` · ${unset.length} senza fascia` : '') + '. Tocca un nome per la scheda.'),
+    h('p', { class: 'muted' }, `Fascia 1: ${d.rows.filter(r => r.fascia === 1).length} su 8 · fascia 2: ${d.rows.filter(r => r.fascia === 2).length} · fascia 3: ${d.rows.filter(r => r.fascia === 3).length}` + (unset.length ? ` · ${unset.length} senza fascia` : '') + '. 🚗 affiancamento in giornata · 🛏 con pernottamento (dai km, oltre 200 in linea d\'aria; correggibile nella scheda). Tocca un nome per la scheda.'),
     byF.map(([f, rs]) => [h('h3', { class: 'st-h3' }, f ? FASCE[f] : 'Senza fascia'),
       h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
         h('thead', {}, h('tr', {}, h('th', {}, 'Commerciale'), h('th', {}, 'Stato'), h('th', {}, 'Ultimo contatto'), h('th', {}, 'Azioni'), h('th', { class: 'num' }, 'Km · vicin.'), h('th', { class: 'num' }, 'Fatt. 2026'), h('th', { class: 'num' }, 'Offerte RADIX'))),
         h('tbody', {}, rs.map(r => { const n = d.nums.get(r.label) || {};
           return h('tr', { class: 'net-row', onclick: () => agentDialog(app, d, r, refresh) },
-            h('td', {}, h('strong', {}, r.name), r.note ? h('small', { class: 'muted' }, ' · ' + r.note.slice(0, 40)) : null),
+            h('td', {}, h('strong', {}, r.name), ' ', tripIcon(tripOf(d, r)), r.note ? h('small', { class: 'muted' }, ' · ' + r.note.slice(0, 40)) : null),
             h('td', {}, r.state !== 'attivo' ? h('span', { class: 'badge ' + (r.state === 'scoperta' ? 'bad' : 'warn') }, r.state) : dueBadge(r) || h('span', { class: 'muted' }, '–')),
             h('td', {}, r.last ? dateIt(r.last) : h('span', { class: 'muted' }, 'mai')),
             h('td', {}, r.open ? h('span', { class: r.late ? 'bad-text' : '' }, String(r.open)) : h('span', { class: 'muted' }, '–')),
@@ -10523,12 +10536,14 @@ async function agentDialog(app, d, r, refresh) {
   const state = sel(STATES.map(s => [s, s]), r.state);
   const sc = Object.fromEntries(MANUAL_CRITERIA.map(([k]) => [k, sel([['', '–'], ['1', '1'], ['2', '2'], ['3', '3']], r.scores?.[k])]));
   const nn = d.nums.get(r.label) || {};
+  const tAuto = tripKind(nn.km, null);
+  const trip = sel([['', 'automatica' + (tAuto.kind ? ': ' + TRIP_ICON[tAuto.kind] + ' ' + TRIP_LABEL[tAuto.kind] : '')], ['giornata', TRIP_ICON.giornata + ' in giornata'], ['notte', TRIP_ICON.notte + ' con pernottamento']], r.scores?.trasferta || '');
   const vic = h('div', { class: 'st-auto' }, nn.km != null ? h('strong', {}, String(nn.vic)) : '–', nn.km != null ? h('small', { class: 'muted' }, ` ${nn.km} km (calcolata)`) : h('small', { class: 'muted' }, ' nessun cliente localizzato'));
   const note = h('textarea', { rows: 3, placeholder: 'Note di Direzione (es. autonomia quasi massima, passaggio di consegne…)' }, r.note || '');
   const acts = openActions(d.net.actions, today(), r.label);
   const meets = d.net.meetings.filter(m => m.label === r.label);
   const body = h('div', { class: 'form' },
-    h('div', { class: 'st-pair' }, field('Fascia', fascia), field('Stato', state)),
+    h('div', { class: 'st-pair' }, field('Fascia', fascia), field('Stato', state)), field('Affiancamento', trip),
     h('div', { class: 'st-scores' }, MANUAL_CRITERIA.slice(0, 2).map(([k, l]) => field(l, sc[k])), field('Vicinanza', vic), field('Autonomia', sc.autonomia)), field('Note', note),
     h('h4', {}, `Azioni aperte (${acts.length})`),
     acts.length ? h('ul', { class: 'checks' }, acts.map(a => h('li', {}, a.title, a.due ? h('small', { class: a.late ? 'bad-text' : 'muted' }, ' · entro ' + dateIt(a.due)) : null))) : h('p', { class: 'muted' }, 'Nessuna.'),
@@ -10539,6 +10554,7 @@ async function agentDialog(app, d, r, refresh) {
     { label: 'Salva scheda', primary: true, run: async () => {
       const scores = Object.fromEntries(MANUAL_CRITERIA.map(([k]) => [k, sc[k].value ? Number(sc[k].value) : null]).filter(([, x]) => x));
       if (nn.vic) scores.vicinanza = nn.vic;
+      if (trip.value) scores.trasferta = trip.value;
       await app.store.saveDirAgent({ label: r.label, fascia: fascia.value ? Number(fascia.value) : null, state: state.value, scores, note: note.value.trim() });
       toast('Scheda salvata'); return 'saved';
     } }]);
