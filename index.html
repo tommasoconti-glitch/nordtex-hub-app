@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="ae9d3abe04f4">
+<meta name="ntx-build" content="5b29ee4a9a9e">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -957,9 +957,15 @@ details[open]>.ss-ssum::before{content:'▾'}
 .ss-sval{font-weight:600;text-align:right}
 @media (max-width:700px){.ss-ssum{grid-template-columns:1fr 60px}.ss-ssum .ss-bar{grid-column:1/-1}}
 .ss-glance { display: block; line-height: 1.35; } .ss-glance .ss-votes { display: block; white-space: nowrap; }
+/* 08/11 SS: gruppo "Azioni con la rete" chiuso all'apertura */
+details.ss-group > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: .4rem; flex-wrap: wrap; }
+details.ss-group > summary::-webkit-details-marker { display: none; }
+details.ss-group > summary::after { content: '▸'; color: var(--muted, #888); margin-left: .2rem; }
+details.ss-group[open] > summary::after { content: '▾'; }
+details.ss-group > summary .ss-sep { display: inline; margin: 0; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ae9d3abe04f4"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"5b29ee4a9a9e"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -10974,10 +10980,13 @@ async function viewStrategy(app, label) {
       m.outcome ? h('p', { class: 'st-out' }, m.outcome) : null)))
       : emptyState('Ancora nessun incontro registrato.'));
 
+  // 08/11 (Tommaso): "Azioni con la rete" sempre chiusa all'apertura della pagina
+  const netGroup = h('details', { class: 'ss-group' }, h('summary', {}, h('h2', { class: 'ss-sep' }, 'Azioni con la rete'), h('small', { class: 'muted' }, ` · ${acts.length} azioni aperte` + (acts.some(a => a.late) ? `, ${acts.filter(a => a.late).length} scadute` : '') + ` · ${d.rows.filter(r => r.fascia).length} commerciali in fascia`)),
+    foldCards(h('div', { class: 'section-body' }, actCard, netCard, meetCard), 'ntx-st-closed'));
   return h('div', { class: 'page' },
     h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Sales strategy'),
       h('p', { class: 'muted' }, 'Metodo 2027 con la rete: fasce, interviste, affiancamenti e azioni. Visibile solo a te.'))),
-    foldCards(h('div', { class: 'section-body' }, objectiveCard(app, d, refresh), weekCard, h('h2', { class: 'ss-sep' }, 'Strategie e tattiche'), ...strategyCards(app, d, refresh), h('h2', { class: 'ss-sep' }, 'Azioni con la rete'), actCard, netCard, meetCard), 'ntx-st-closed'));
+    foldCards(h('div', { class: 'section-body' }, objectiveCard(app, d, refresh), weekCard, h('h2', { class: 'ss-sep' }, 'Strategie e tattiche'), ...strategyCards(app, d, refresh), netGroup), 'ntx-st-closed'));
 }
 
 const sel = (opts, v) => h('select', {}, opts.map(([val, l]) => h('option', { value: val, selected: String(val) === String(v ?? '') }, l)));
