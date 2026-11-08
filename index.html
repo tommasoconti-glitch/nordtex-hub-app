@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="542b3dbabf2a">
+<meta name="ntx-build" content="6f92a01c4f8d">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -963,9 +963,13 @@ details.ss-group > summary::-webkit-details-marker { display: none; }
 details.ss-group > summary::after { content: '▸'; color: var(--muted, #888); margin-left: .2rem; }
 details.ss-group[open] > summary::after { content: '▾'; }
 details.ss-group > summary .ss-sep { display: inline; margin: 0; }
+/* 08/11 sera: Sales strategy in sola lettura (Lorenzo, Marco Terzi, Marco Ferrari) */
+.ss-readonly button:not(.ro-ok) { display: none !important; }
+.ss-ro-banner { background: var(--warn-bg, #f9eeda); border: 1px solid var(--line, #e5e0d5); border-radius: 8px; padding: 8px 12px; margin: 0 0 12px; font-size: .9rem; }
+.ss-readonly .ss-goals { display: none !important; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"542b3dbabf2a"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"6f92a01c4f8d"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2179,7 +2183,10 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     // 02/11: pagina "Aggiorna dati" solo per gli abilitati (migrazione 20261102140000; se non applicata: nessuno)
     session.canImport = (await api('/rest/v1/rpc/hub_can_import', { method: 'POST', body: {} }).catch(() => false)) === true;
     // 08/11: "Rete 2027" solo per Tommaso (migrazione 20261108080000; se non applicata: nessuno)
-    session.canStrategy = !readOnly && (await api('/rest/v1/rpc/hub_can_strategy', { method: 'POST', body: {} }).catch(() => false)) === true;
+    // 08/11 sera: Sales strategy anche in sola lettura per Lorenzo, Marco Terzi e Marco Ferrari (migrazione 20261108180000; se non applicata: solo Tommaso)
+    const ssRole = await api('/rest/v1/rpc/hub_strategy_role', { method: 'POST', body: {} }).catch(() => undefined);
+    session.canStrategy = !readOnly && (ssRole === undefined ? (await api('/rest/v1/rpc/hub_can_strategy', { method: 'POST', body: {} }).catch(() => false)) === true : ssRole === 'owner' || ssRole === 'viewer');
+    session.strategyViewer = ssRole === 'viewer';
     storage.set({ refresh_token: j.refresh_token });
     customers = null; products = null; people = null;
     customers = (await pageAll('/rest/v1/hub_customers?select=*&order=code')).map(fromDb);
@@ -10931,7 +10938,13 @@ async function load(app) {
 
 async function viewStrategy(app, label) {
   if (!canSeeStrategy(app.session)) { app.go('home'); return h('div'); }
-  if (label) return viewAgent(app, label);
+  const el = label ? await viewAgent(app, label) : await viewMain(app);
+  // 08/11 sera: chi ha la condivisione in sola lettura vede tutto ma non trova i pulsanti che modificano
+  if (app.session.strategyViewer) { el.classList.add('ss-readonly'); el.prepend(h('p', { class: 'ss-ro-banner' }, 'Sola lettura · Sales strategy di Tommaso Conti, condivisa con la Direzione e con Meridian. Le modifiche le fa solo lui.')); }
+  return el;
+}
+
+async function viewMain(app) {
   const d = await load(app), t = today(), refresh = () => app.go('strategia');
   const numsLine = l => { const n = d.nums.get(l); if (!n) return null;
     return h('small', { class: 'muted' }, `${n.active} attivi · 2026 ${eur(n.rev26)} (2025 ${eur(n.rev25)})` + (n.rxN ? ` · ${n.rxN} offerte RADIX aperte` + (n.rxV ? ' ' + eur(n.rxV) : '') : '')); };
@@ -10990,7 +11003,7 @@ async function viewStrategy(app, label) {
 
   return h('div', { class: 'page' },
     h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Sales strategy'),
-      h('p', { class: 'muted' }, 'Metodo 2027 con la rete: fasce, interviste, affiancamenti e azioni. Visibile solo a te.'))),
+      h('p', { class: 'muted' }, 'Metodo 2027 con la rete: fasce, interviste, affiancamenti e azioni.' + (app.session.strategyViewer ? '' : ' Visibile a te; in sola lettura a Marco Ferrari, Lorenzo e Marco Terzi.')))),
     foldCards(h('div', { class: 'section-body' }, objectiveCard(app, d, refresh), weekCard, h('h2', { class: 'ss-sep' }, 'Strategie e tattiche'), ...strategyCards(app, d, refresh), h('h2', { class: 'ss-sep' }, 'Azioni con la rete'), actCard, netCard, meetCard), 'ntx-st-closed'));
 }
 
