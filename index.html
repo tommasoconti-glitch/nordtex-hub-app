@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="fb92b5b2860f">
+<meta name="ntx-build" content="ba052e07ac5b">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -958,7 +958,7 @@ details[open]>.ss-ssum::before{content:'▾'}
 @media (max-width:700px){.ss-ssum{grid-template-columns:1fr 60px}.ss-ssum .ss-bar{grid-column:1/-1}}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"fb92b5b2860f"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ba052e07ac5b"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -10607,6 +10607,28 @@ function areaScores(f = {}) {
   return { scores: out, values: val, avg: xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length * 10) / 10 : null, n: xs.length };
 }
 
+// 08/11 (Tommaso: "inseriti tutti questi dati le schede si dovrebbero popolare da sole"): voti proposti dall'app, correggibili a mano.
+// Zona strategica = peso della zona: miglior anno di fatturato 2024-2026 e clienti in anagrafica (rivendite e imprese già toccate).
+// È una proposta: il valore strategico vero (mercato, concorrenza, scelta di Direzione) lo decide Tommaso.
+const ZONE_RULE = '3 se miglior anno ≥ 150.000 € o ≥ 250 clienti in anagrafica · 2 se ≥ 50.000 € o ≥ 150 clienti · altrimenti 1';
+function zoneWeightScore({ best, anag } = {}) {
+  if (!best && !anag) return null;
+  return best >= 150000 || anag >= 250 ? 3 : best >= 50000 || anag >= 150 ? 2 : 1;
+}
+// Miglioramento = quanto spazio c'è, dalla fotografia: segnali di margine di crescita (zona in calo, molti inattivi da recuperare,
+// offerte che non si chiudono, mix basso, fibra in calo). 3+ segnali = 3, 1-2 = 2, nessuno = 1.
+const IMPROVE_RULE = 'segnali dalla fotografia: zona in calo, inattivi > 30% del 2026, conversione < 15%, mix < 20%, fibra oltre −10% · 3 o più = 3 · 1-2 = 2 · nessuno = 1';
+function improvementSignals(photo) {
+  if (!photo) return null;
+  const { scores: s, n } = areaScores(photoFlat(photo));
+  if (!n) return null;
+  return [[s.crescita === 1, 'zona in calo'], [s.recupero === 3, 'molti inattivi'], [s.conversione === 1, 'offerte che non si chiudono'], [s.mix === 1, 'mix basso'], [s.tenuta === 1, 'fibra in calo']].filter(([x]) => x).map(([, l]) => l);
+}
+function improvementScore(photo) {
+  const k = improvementSignals(photo);
+  return k == null ? null : k.length >= 3 ? 3 : k.length >= 1 ? 2 : 1;
+}
+
 // 08/11 SS: province di una zona e eccezioni (clienti con fatturato 2024-2026 assegnati diversamente), per le domande a Meridian
 const provincesOf = txt => [...new Set(String(txt || '').match(/\b[A-Z]{2}\b/g) || [])];
 function zoneExceptions(customers, label, provs) {
@@ -10689,14 +10711,14 @@ function progressTo(measure, value, target) {
   return t > 0 ? Math.max(0, Math.min(1, value / t)) : null;
 }
 
-return { FASCE, KINDS, CRITERIA, MANUAL_CRITERIA, proximityScore, OVERNIGHT_KM, tripKind, TRIP_ICON, TRIP_LABEL, medianKm, F2_DAYS, mondayOf, displayName, lastContact, contactDue, openActions, networkRows, thisWeek, AREA_INDICATORS, areaScores, provincesOf, zoneExceptions, photoFlat, STRATEGY_LABEL, tacticState, tacticFor, tacticProgress, MEASURES, computeMeasures, progressTo };
+return { FASCE, KINDS, CRITERIA, MANUAL_CRITERIA, proximityScore, OVERNIGHT_KM, tripKind, TRIP_ICON, TRIP_LABEL, medianKm, F2_DAYS, mondayOf, displayName, lastContact, contactDue, openActions, networkRows, thisWeek, AREA_INDICATORS, areaScores, ZONE_RULE, zoneWeightScore, IMPROVE_RULE, improvementSignals, improvementScore, provincesOf, zoneExceptions, photoFlat, STRATEGY_LABEL, tacticState, tacticFor, tacticProgress, MEASURES, computeMeasures, progressTo };
 })();
 __m["js/views/strategy.js"] = (function () {
 // "Strategia" (08/11/2026, Tommaso): un'unica sezione con il gestionale della Direzione, a finestre che si aprono e si chiudono.
 // Fasce della rete, chi sentire questa settimana, incontri (esito scritto a mano; l'intervista si registra con Plaud) e azioni con scadenza.
 // Solo Tommaso (session.canStrategy, controllo anche nel database). Migrazione 20261108080000.
 const { h, eur, dateIt, today, toast, modal, field, emptyState } = __m["js/ui.js"];
-const { FASCE, KINDS, MANUAL_CRITERIA, networkRows, thisWeek, openActions, displayName, proximityScore, medianKm, tripKind, TRIP_ICON, TRIP_LABEL, AREA_INDICATORS, areaScores, photoFlat, provincesOf, zoneExceptions, STRATEGY_LABEL, tacticState, tacticFor, tacticProgress, MEASURES, computeMeasures, progressTo } = __m["js/core/strategy.js"];
+const { FASCE, KINDS, MANUAL_CRITERIA, networkRows, thisWeek, openActions, displayName, proximityScore, medianKm, tripKind, TRIP_ICON, TRIP_LABEL, AREA_INDICATORS, areaScores, photoFlat, provincesOf, zoneExceptions, STRATEGY_LABEL, tacticState, tacticFor, tacticProgress, MEASURES, computeMeasures, progressTo, zoneWeightScore, improvementScore, improvementSignals, ZONE_RULE, IMPROVE_RULE } = __m["js/core/strategy.js"];
 const { customerPlace, distanceKm } = __m["js/core/places.js"];
 const { COMUNI_GEO } = __m["js/data/comuni-geo-data.js"];
 const { foldCards } = __m["js/views/direction.js"];
@@ -10850,10 +10872,10 @@ async function load(app) {
   const [net, customers, rx] = await Promise.all([app.store.dirNetwork(), app.customers(), app.store.radixOffers ? app.store.radixOffers().catch(() => []) : []]);
   const labels = [...new Set([...(app.store.assignees || []).map(a => a.name), ...customers.map(c => c.assignee)])].filter(n => n && n !== 'Direzionale');
   const nums = new Map();
-  const get = l => { if (!nums.has(l)) nums.set(l, { active: 0, rev26: 0, rev25: 0, rxN: 0, rxV: 0 }); return nums.get(l); };
+  const get = l => { if (!nums.has(l)) nums.set(l, { active: 0, rev26: 0, rev25: 0, rev24: 0, anag: 0, rxN: 0, rxV: 0 }); return nums.get(l); };
   const byCust = new Map(customers.map(c => [c.id, c.assignee]));
   const pts = new Map();
-  for (const c of customers) { if (!c.assignee) continue; const n = get(c.assignee); if (c.status === 'Attivo') n.active++; n.rev26 += c.rev2026 || 0; n.rev25 += c.rev2025 || 0;
+  for (const c of customers) { if (!c.assignee) continue; const n = get(c.assignee); if (c.status === 'Attivo') n.active++; n.rev26 += c.rev2026 || 0; n.rev25 += c.rev2025 || 0; n.rev24 += c.rev2024 || 0; n.anag++;
     if (c.status === 'Attivo' || c.status === 'Da recuperare') { const pl = customerPlace(c); if (pl) (pts.get(c.assignee) || pts.set(c.assignee, []).get(c.assignee)).push(pl); } }
   const t0 = COMUNI_GEO.prov.TN?.TRAMBILENO, home = t0 ? { lat: t0[0], lng: t0[1] } : { lat: 45.873, lng: 11.074 };
   for (const [l, p] of pts) { const n = get(l); n.km = medianKm(p, home, distanceKm); n.vic = proximityScore(n.km); }
@@ -10929,8 +10951,14 @@ const sel = (opts, v) => h('select', {}, opts.map(([val, l]) => h('option', { va
 async function agentDialog(app, d, r, refresh) {
   const fascia = sel([['', '—'], ['1', FASCE[1]], ['2', FASCE[2]], ['3', FASCE[3]]], r.fascia);
   const state = sel(STATES.map(s => [s, s]), r.state);
-  const sc = Object.fromEntries(MANUAL_CRITERIA.map(([k]) => [k, sel([['', '–'], ['1', '1'], ['2', '2'], ['3', '3']], r.scores?.[k])]));
   const nn = d.nums.get(r.label) || {};
+  // 08/11: zona e miglioramento proposti dall'app (vuoto = automatico, si può correggere a mano), autonomia a mano
+  const best = Math.max(nn.rev24 || 0, nn.rev25 || 0, nn.rev26 || 0), sig = improvementSignals(lastPhoto(r));
+  const auto = { zona: zoneWeightScore({ best, anag: nn.anag }), miglioramento: improvementScore(lastPhoto(r)) };
+  const sc = Object.fromEntries(MANUAL_CRITERIA.map(([k]) => [k, sel([['', k in auto ? (auto[k] ? auto[k] + ' · auto' : 'auto: mancano dati') : '–'], ['1', '1'], ['2', '2'], ['3', '3']], r.scores?.[k])]));
+  const why = { zona: h('small', { class: 'muted', title: ZONE_RULE }, `miglior anno ${Math.round(best).toLocaleString('it-IT')} €, ${nn.anag || 0} clienti`),
+    miglioramento: h('small', { class: 'muted', title: IMPROVE_RULE }, sig ? (sig.length ? sig.join(', ') : 'nessun segnale') : 'serve la fotografia'),
+    autonomia: h('small', { class: 'muted' }, 'a mano') };
   const tAuto = tripKind(nn.km, null);
   const trip = sel([['', 'automatica' + (tAuto.kind ? ': ' + TRIP_ICON[tAuto.kind] + ' ' + TRIP_LABEL[tAuto.kind] : '')], ['giornata', TRIP_ICON.giornata + ' in giornata'], ['notte', TRIP_ICON.notte + ' con pernottamento']], r.scores?.trasferta || '');
   const vic = h('div', { class: 'st-auto' }, nn.km != null ? h('strong', {}, String(nn.vic)) : '–', nn.km != null ? h('small', { class: 'muted' }, ` ${nn.km} km (calcolata)`) : h('small', { class: 'muted' }, ' nessun cliente localizzato'));
@@ -10939,7 +10967,8 @@ async function agentDialog(app, d, r, refresh) {
   const meets = d.net.meetings.filter(m => m.label === r.label);
   const body = h('div', { class: 'form' },
     h('div', { class: 'st-pair' }, field('Fascia', fascia), field('Stato', state)), field('Affiancamento', trip),
-    h('div', { class: 'st-scores' }, MANUAL_CRITERIA.slice(0, 2).map(([k, l]) => field(l, sc[k])), field('Vicinanza', vic), field('Autonomia', sc.autonomia)), field('Note', note),
+    h('div', { class: 'st-scores' }, MANUAL_CRITERIA.slice(0, 2).map(([k, l]) => field(l, h('div', {}, sc[k], why[k]))), field('Vicinanza', vic), field('Autonomia', h('div', {}, sc.autonomia, why.autonomia))),
+    h('p', { class: 'muted small' }, '"auto" = proposto dall\'app dai dati e si aggiorna da solo; scegli 1, 2 o 3 per decidere tu. ', h('span', { title: ZONE_RULE + '\n' + IMPROVE_RULE, class: 'link' }, 'Come si calcola')), field('Note', note),
     h('h4', {}, `Azioni aperte (${acts.length})`),
     acts.length ? h('ul', { class: 'checks' }, acts.map(a => h('li', {}, a.title, a.due ? h('small', { class: a.late ? 'bad-text' : 'muted' }, ' · entro ' + dateIt(a.due)) : null))) : h('p', { class: 'muted' }, 'Nessuna.'),
     h('h4', {}, `Incontri (${meets.length})`),
@@ -10947,10 +10976,11 @@ async function agentDialog(app, d, r, refresh) {
   const v = await modal(r.name, body, [
     { label: 'Registra incontro', value: 'meet' },
     { label: 'Salva scheda', primary: true, run: async () => {
-      const scores = Object.fromEntries(MANUAL_CRITERIA.map(([k]) => [k, sc[k].value ? Number(sc[k].value) : null]).filter(([, x]) => x));
+      // 08/11 correzione: si parte dai dati già salvati (fotografie, KPI, clienti, domande, messaggio) e si cambiano solo voti e trasferta
+      const scores = { ...(r.scores || {}) };
+      for (const [k] of MANUAL_CRITERIA) { if (sc[k].value) scores[k] = Number(sc[k].value); else delete scores[k]; }
       if (nn.vic) scores.vicinanza = nn.vic;
-      if (trip.value) scores.trasferta = trip.value;
-      if (r.scores?.foto) scores.foto = r.scores.foto;
+      if (trip.value) scores.trasferta = trip.value; else delete scores.trasferta;
       await app.store.saveDirAgent({ label: r.label, fascia: fascia.value ? Number(fascia.value) : null, state: state.value, scores, note: note.value.trim() });
       toast('Scheda salvata'); return 'saved';
     } }]);
