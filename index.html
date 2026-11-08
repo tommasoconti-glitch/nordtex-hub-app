@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="5b29ee4a9a9e">
+<meta name="ntx-build" content="542b3dbabf2a">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -965,7 +965,7 @@ details.ss-group[open] > summary::after { content: '▾'; }
 details.ss-group > summary .ss-sep { display: inline; margin: 0; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"5b29ee4a9a9e"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"542b3dbabf2a"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -10950,12 +10950,20 @@ async function viewStrategy(app, label) {
         h('a', { class: 'btn small', href: '#/strategia/' + encodeURIComponent(r.label) }, 'Scheda')))))
       : emptyState(d.rows.some(r => r.fascia) ? 'Nessuno da sentire: la rete di questa settimana è coperta.' : 'Assegna le fasce in "Rete e fasce": da lì nasce il calendario.'));
 
-  const actCard = h('section', { class: 'card' }, h('h2', {}, `Azioni aperte · ${acts.length}` + (acts.some(a => a.late) ? ` (${acts.filter(a => a.late).length} scadute)` : '')),
-    acts.length ? h('ul', { class: 'st-list' }, acts.map(a => h('li', { class: 'st-row' },
-      h('div', { class: 'st-main' }, h('strong', {}, displayName(a.label)), h('span', {}, ' · ' + a.title),
-        a.due ? h('small', { class: a.late ? 'bad-text' : 'muted' }, ' entro ' + dateIt(a.due)) : h('small', { class: 'muted' }, ' senza scadenza'), tagChip(d, a.tactic) || h('small', { class: 'warn-text', style: 'display:inline' }, ' · senza tattica')),
-      h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => closeAction(app, a, refresh) }, 'Fatta…')))))
-      : emptyState('Nessuna azione aperta.'));
+  // 08/11 (Tommaso: "Azioni aperte crea molto disordine"): solo scadute e in scadenza nei prossimi 7 giorni, una riga per commerciale.
+  // L'elenco completo resta nella scheda di ogni commerciale.
+  const in7 = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+  const hot = acts.filter(a => a.due && a.due <= in7);
+  const byAg = [...hot.reduce((m, a) => m.set(a.label, [...(m.get(a.label) || []), a]), new Map())].sort((x, y) => x[1][0].due.localeCompare(y[1][0].due));
+  const lateN = hot.filter(a => a.late).length;
+  const actCard = h('section', { class: 'card' }, h('h2', {}, `Azioni in scadenza · ${hot.length}` + (lateN ? ` (${lateN} ${lateN === 1 ? 'scaduta' : 'scadute'})` : '')),
+    h('p', { class: 'muted' }, `Scadute o da fare entro 7 giorni. Le altre ${acts.length - hot.length} azioni aperte sono nelle schede dei commerciali.`),
+    byAg.length ? h('ul', { class: 'st-list' }, byAg.map(([l, as]) => { const late = as.filter(a => a.late).length;
+      return h('li', { class: 'st-row' }, h('div', { class: 'st-main' }, h('strong', {}, displayName(l)),
+        h('small', { class: late ? 'bad-text' : 'muted' }, ` · ${as.length} ${as.length === 1 ? 'azione' : 'azioni'}` + (late ? `, ${late} ${late === 1 ? 'scaduta' : 'scadute'}` : '') + ` · prima entro ${dateIt(as[0].due)}`),
+        h('small', { class: 'muted', style: 'display:block' }, as.map(a => a.title.split(':')[0]).join(' · '))),
+        h('div', { class: 'actions' }, h('a', { class: 'btn small', href: '#/strategia/' + encodeURIComponent(l) }, 'Scheda'))); }))
+      : emptyState('Niente in scadenza nei prossimi 7 giorni.'));
 
   const byF = [1, 2, 3, null].map(f => [f, d.rows.filter(r => (r.fascia || null) === f)]).filter(([, rs]) => rs.length);
   const netCard = h('section', { class: 'card' }, h('h2', {}, 'Rete e fasce'),
@@ -10980,13 +10988,10 @@ async function viewStrategy(app, label) {
       m.outcome ? h('p', { class: 'st-out' }, m.outcome) : null)))
       : emptyState('Ancora nessun incontro registrato.'));
 
-  // 08/11 (Tommaso): "Azioni con la rete" sempre chiusa all'apertura della pagina
-  const netGroup = h('details', { class: 'ss-group' }, h('summary', {}, h('h2', { class: 'ss-sep' }, 'Azioni con la rete'), h('small', { class: 'muted' }, ` · ${acts.length} azioni aperte` + (acts.some(a => a.late) ? `, ${acts.filter(a => a.late).length} scadute` : '') + ` · ${d.rows.filter(r => r.fascia).length} commerciali in fascia`)),
-    foldCards(h('div', { class: 'section-body' }, actCard, netCard, meetCard), 'ntx-st-closed'));
   return h('div', { class: 'page' },
     h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Sales strategy'),
       h('p', { class: 'muted' }, 'Metodo 2027 con la rete: fasce, interviste, affiancamenti e azioni. Visibile solo a te.'))),
-    foldCards(h('div', { class: 'section-body' }, objectiveCard(app, d, refresh), weekCard, h('h2', { class: 'ss-sep' }, 'Strategie e tattiche'), ...strategyCards(app, d, refresh), netGroup), 'ntx-st-closed'));
+    foldCards(h('div', { class: 'section-body' }, objectiveCard(app, d, refresh), weekCard, h('h2', { class: 'ss-sep' }, 'Strategie e tattiche'), ...strategyCards(app, d, refresh), h('h2', { class: 'ss-sep' }, 'Azioni con la rete'), actCard, netCard, meetCard), 'ntx-st-closed'));
 }
 
 const sel = (opts, v) => h('select', {}, opts.map(([val, l]) => h('option', { value: val, selected: String(val) === String(v ?? '') }, l)));
