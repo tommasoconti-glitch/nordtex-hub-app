@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="1148bd15ff87">
+<meta name="ntx-build" content="fb92b5b2860f">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -926,9 +926,39 @@ h2.fold-head::after,.fold-head h2::after{content:' ▾';color:var(--muted,#888);
 .ss-goals{margin:-4px 0 12px;padding:8px 12px;border-radius:8px;background:var(--surface-2,#f6f7f4)}
 .goals-note{margin:10px 0 6px} .goals-note textarea{width:100%}
 .ss-qtext{width:100%;font-family:ui-monospace,Menlo,monospace;font-size:.82rem;line-height:1.4}
+/* 08/11 SS strategie e tattiche */
+.chip.ss-tag{cursor:default;min-height:22px;padding:1px 8px;font-size:.74rem;background:var(--info-bg);color:#1d5fbf;border-color:transparent}
+.ss-goal{padding:8px 12px;border-left:4px solid var(--brand);background:var(--surface-2,#f6f7f4);border-radius:6px}
+.ss-kpis{display:flex;flex-direction:column;gap:6px}
+.ss-kpi{display:grid;grid-template-columns:2fr 2fr 1.6fr;gap:6px}
+@media (max-width:700px){.ss-kpi{grid-template-columns:1fr}}
+.ss-checks{display:flex;flex-wrap:wrap;gap:6px 14px}
+.st-line{flex-wrap:wrap} .st-line .ss-tsel{flex:1 1 180px}
+/* 08/11 SS roadmap */
+.ss-bar{position:relative;height:10px;border-radius:6px;background:var(--line);overflow:visible;margin:4px 0 2px;flex:1;min-width:120px}
+.ss-fill{display:block;height:100%;border-radius:6px;background:var(--muted)}
+.ss-fill.ok{background:var(--ok)} .ss-fill.warn{background:var(--warn)} .ss-fill.bad{background:var(--bad)}
+.ss-pace{position:absolute;top:-4px;width:2px;height:18px;background:var(--ink)}
+.ss-meas{margin:6px 0 10px}
+.ss-objm{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin:8px 0}
+.ss-obj{border-top:4px solid var(--brand)}
+.ss-strat h2{font-size:1.05rem}
+.ss-trow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ss-sep{margin:22px 0 8px;font-size:1rem;color:var(--muted)}
+.ss-srows{display:flex;flex-direction:column;gap:6px}
+.ss-srow{display:grid;grid-template-columns:56px 1.4fr 1.6fr 1.6fr 90px 90px;gap:6px}
+@media (max-width:900px){.ss-srow{grid-template-columns:1fr 1fr}}
+.modal:has(.ss-srows),.modal:has(.ss-kpis){max-width:1040px;width:96vw}
+.ss-ssum{display:grid;grid-template-columns:minmax(0,1.4fr) 70px minmax(120px,1fr);align-items:center;gap:12px;cursor:pointer;list-style:none}
+.ss-ssum::-webkit-details-marker{display:none}
+.ss-ssum::before{content:'▸';position:absolute;margin-left:-14px;color:var(--muted)}
+details[open]>.ss-ssum::before{content:'▾'}
+.ss-strat{padding-left:28px}
+.ss-sval{font-weight:600;text-align:right}
+@media (max-width:700px){.ss-ssum{grid-template-columns:1fr 60px}.ss-ssum .ss-bar{grid-column:1/-1}}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"1148bd15ff87"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"fb92b5b2860f"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1842,7 +1872,7 @@ function createLocalStore({ data, kv }) {
     },
     async saveDirAgent(x) { const a = await col('dirNetwork'); const i = a.findIndex(r => r.label === x.label); const r = { label: x.label, fascia: x.fascia || null, scores: x.scores || {}, state: x.state || 'attivo', note: x.note || '' }; if (i >= 0) a[i] = r; else a.push(r); await save('dirNetwork'); },
     async saveDirMeeting(x) { const a = await col('dirMeetings'); const id = x.id || 'm' + Date.now() + Math.random().toString(36).slice(2, 6); const r = { id, label: x.label, date: x.date, kind: x.kind, outcome: x.outcome || '', plaud: x.plaud || '' }; const i = a.findIndex(m => m.id === id); if (i >= 0) a[i] = r; else a.push(r); await save('dirMeetings'); return id; },
-    async saveDirAction(x) { const a = await col('dirActions'); const id = x.id || 'a' + Date.now() + Math.random().toString(36).slice(2, 6); const r = { id, label: x.label, meetingId: x.meetingId || null, title: x.title, due: x.due || null, doneOn: x.doneOn || null, result: x.result || '' }; const i = a.findIndex(m => m.id === id); if (i >= 0) a[i] = r; else a.push(r); await save('dirActions'); },
+    async saveDirAction(x) { const a = await col('dirActions'); const id = x.id || 'a' + Date.now() + Math.random().toString(36).slice(2, 6); const r = { id, label: x.label, meetingId: x.meetingId || null, title: x.title, due: x.due || null, doneOn: x.doneOn || null, result: x.result || '', tactic: x.tactic || null }; const i = a.findIndex(m => m.id === id); if (i >= 0) a[i] = r; else a.push(r); await save('dirActions'); },
     async removeDirAction(id) { const a = await col('dirActions'); const i = a.findIndex(m => m.id === id); if (i >= 0) a.splice(i, 1); await save('dirActions'); },   // 07/11 A4: lo storico lo scrive il database online
     async statusChanges() { mustSession(); return (await col('statusChanges')).filter(x => canSeeCustomer(x.customerId)); },
     async quoteSends(quoteId) { mustSession(); const ids = new Set((await this.quotes()).map(q => q.id)); return (await col('quoteSends')).filter(x => ids.has(x.quoteId) && (!quoteId || x.quoteId === quoteId)).slice().reverse(); },
@@ -2115,7 +2145,9 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     firstInvoice: c.first_invoice, dataAsOf: c.origin === 'HUB' ? null : c.updated_at, createdAt: c.created_at, origin: c.origin || 'RADIX', createdBy: c.created_by, annotation: c.annotation, blockedSince: c.blocked_since, salesBlockedSince: c.sales_blocked_since, review: c.review,
     rev2024: c.sales?.rev?.['2024'], rev2025: c.sales?.rev?.['2025'], rev2026: c.sales?.rev?.['2026'], salesAsOf: c.sales?.asOf || null,
     purchases: c.sales ? { families: c.sales.families || [], top: c.sales.top || [] } : null, paymentTerms: normTerms(c.payment_terms) || null, priceKey: c.price_key || null, isTest: !!c.is_test,
-    sdi: c.sdi || '', pec: c.pec || '', bank: c.bank || '', radixOpenedAt: c.radix_opened_at || null });
+    sdi: c.sdi || '', pec: c.pec || '', bank: c.bank || '', radixOpenedAt: c.radix_opened_at || null,
+    // 08/11: anche gli anni successivi (rev2027, …) per Sales strategy dal 1° gennaio
+    ...Object.fromEntries(Object.entries(c.sales?.rev || {}).filter(([y]) => Number(y) > 2026).map(([y, v]) => ['rev' + y, v])) });
   const custUuid = id => { const c = customers?.find(x => x.id === id); if (!c) throw fail('CUSTOMER', 'Cliente non nel tuo portafoglio'); return c.uuid; };
   const custCode = uuid => customers?.find(x => x.uuid === uuid)?.id;
   // Nomi degli utenti (vista hub_people: solo id e nome)
@@ -2206,7 +2238,7 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
         .map(q => api('/rest/v1/' + q).catch(() => [])));
       return { agents: n.map(r => ({ label: r.agent_label, fascia: r.fascia, scores: r.scores || {}, state: r.state, note: r.note || '' })),
         meetings: m.map(r => ({ id: r.id, label: r.agent_label, date: r.held_on, kind: r.kind, outcome: r.outcome || '', plaud: r.plaud_ref || '' })),
-        actions: a.map(r => ({ id: r.id, label: r.agent_label, meetingId: r.meeting_id, title: r.title, due: r.due, doneOn: r.done_on, result: r.result || '' })) };
+        actions: a.map(r => ({ id: r.id, label: r.agent_label, meetingId: r.meeting_id, title: r.title, due: r.due, doneOn: r.done_on, result: r.result || '', tactic: r.tactic_id || null })) };
     },
     async saveDirAgent(x) {
       return api('/rest/v1/hub_dir_network?on_conflict=agent_label', { method: 'POST', prefer: 'resolution=merge-duplicates',
@@ -2220,6 +2252,7 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     },
     async saveDirAction(x) {
       const body = { agent_label: x.label, meeting_id: x.meetingId || null, title: x.title, due: x.due || null, done_on: x.doneOn || null, result: x.result || '' };
+      if (x.tactic !== undefined) body.tactic_id = x.tactic || null;   // 08/11 migrazione 20261108160000
       return x.id ? api('/rest/v1/hub_dir_actions?id=eq.' + x.id, { method: 'PATCH', body }) : api('/rest/v1/hub_dir_actions', { method: 'POST', body });
     },
     async removeDirAction(id) { return api('/rest/v1/hub_dir_actions?id=eq.' + id, { method: 'DELETE' }); },
@@ -2706,9 +2739,9 @@ async function goalsCard(app) {
       : h('p', {}, h('span', { class: 'badge warn' }, 'Proposta da concordare'), h('small', { class: 'muted' }, ' · è la mia proposta dopo l\'analisi della tua zona: nella telefonata del lunedì la rivediamo e la fissiamo insieme. Scrivimi qui sotto cosa ne pensi.')),
     g.message ? h('p', { class: 'goals-msg' }, g.message) : null,
     g.kpi.length ? [h('h3', { class: 'st-h3' }, 'KPI del mese'), h('ul', { class: 'goals-list' }, g.kpi.map(k => { const [cls, lab] = ST[k.st || ''] || ST[''];
-      return h('li', {}, h('span', { class: 'badge ' + cls }, lab), h('strong', {}, k.t), k.target ? h('small', { class: 'muted' }, ' · ' + k.target) : null); }))] : null,
+      return h('li', {}, h('span', { class: 'badge ' + cls }, lab), h('strong', {}, k.t), k.target ? h('small', { class: 'muted' }, ' · ' + k.target) : null, k.s ? h('span', { class: 'chip ss-tag' }, k.s) : null); }))] : null,
     g.actions.length ? [h('h3', { class: 'st-h3' }, 'Azioni'), h('ul', { class: 'goals-list' }, g.actions.map(a => h('li', {},
-      a.due ? h('span', { class: 'due ' + (a.due < t ? 'scaduto' : a.due === t ? 'oggi' : '') }, 'entro ' + dateIt(a.due)) : null, h('span', {}, a.title))))] : null,
+      a.due ? h('span', { class: 'due ' + (a.due < t ? 'scaduto' : a.due === t ? 'oggi' : '') }, 'entro ' + dateIt(a.due)) : null, h('span', {}, a.title), a.s ? h('span', { class: 'chip ss-tag' }, a.s) : null)))] : null,
     g.clients.length ? [h('h3', { class: 'st-h3' }, `Clienti da intervistare per il budget 2027 · ${todo.length} da fare`),
       h('ul', { class: 'goals-list' }, g.clients.map(c => h('li', {}, h('span', { class: 'badge ' + (c.st === 'fatta' ? 'ok' : 'warn') }, c.st === 'fatta' ? 'fatta' : 'da fare'), h('strong', {}, c.name), c.why ? h('small', { class: 'muted' }, ' · ' + c.why) : null))),
       h('details', { class: 'fold-in' }, h('summary', {}, 'Le domande da fare ai clienti'), h('ol', { class: 'help-list' }, GOAL_QUESTIONS.map(q => h('li', {}, q))))] : null,
@@ -10594,18 +10627,81 @@ function photoFlat(f = {}) {
   return out;
 }
 
-return { FASCE, KINDS, CRITERIA, MANUAL_CRITERIA, proximityScore, OVERNIGHT_KM, tripKind, TRIP_ICON, TRIP_LABEL, medianKm, F2_DAYS, mondayOf, displayName, lastContact, contactDue, openActions, networkRows, thisWeek, AREA_INDICATORS, areaScores, provincesOf, zoneExceptions, photoFlat };
+// ===== 08/11 Strategie (aziendali, fisse per l'anno) e tattiche (2-3 mesi, per tutta la rete, per fascia o per agente) =====
+const STRATEGY_LABEL = '__strategia__';
+const tacticState = (t, day) => t.stato === 'chiusa' ? 'chiusa' : day < t.dal ? 'in arrivo' : day > t.al ? 'da chiudere' : 'attiva';
+/** La tattica riguarda questo agente? ambito: { tipo: 'rete' | 'fasce' | 'agenti', fasce: [1,2], agenti: [label] } */
+function tacticFor(t, label, fascia) {
+  const a = t.ambito || { tipo: 'rete' };
+  if (a.tipo === 'agenti') return (a.agenti || []).includes(label);
+  if (a.tipo === 'fasce') return (a.fasce || []).includes(fascia);
+  return true;
+}
+/** Avanzamento di una tattica: azioni (fatte, aperte, scadute) e KPI del mese collegati, su tutta la rete. */
+function tacticProgress(t, actions, agents, day) {
+  const acts = actions.filter(a => a.tactic === t.id);
+  const kpis = agents.flatMap(r => Object.values(r.scores?.kpi || {}).flat()).filter(k => k.tt === t.id);
+  return { actions: acts.length, done: acts.filter(a => a.doneOn).length, late: acts.filter(a => !a.doneOn && a.due && a.due < day).length,
+    kpi: kpis.length, kpiDone: kpis.filter(k => k.st === 'fatto').length, kpiNo: kpis.filter(k => k.st === 'non fatto').length };
+}
+
+// ===== 08/11 Roadmap: misure calcolate dai dati per obiettivo e strategie =====
+// Ogni strategia sceglie una misura; l'app la calcola dai dati dell'HUB (fatturato per cliente, offerte RADIX) o dalle fotografie (Meridian).
+const MEASURES = [
+  ['fatturato', 'Fatturato dell\'anno contro l\'anno prima', '%'],
+  ['tenuta', 'Tenuta della base: clienti attivi l\'anno prima, fatturato di quest\'anno contro quello di allora', '%'],
+  ['attivi', 'Clienti attivi contro l\'anno prima', '%'],
+  ['recuperati', 'Clienti recuperati (persi che tornano a comprare)', 'n'],
+  ['mix', 'Mix fascia 1: laterizio + vetro cellulare / fibra (fotografie)', '%'],
+  ['margine', 'Margine medio aziendale (fotografie Meridian)', '%'],
+  ['offerte', 'Offerte RADIX aperte in ritardo (obiettivo: 0)', 'n'],
+  ['manuale', 'Valore inserito a mano', ''],
+];
+const yearFrac = d => { const y = Number(d.slice(0, 4)), a = Date.UTC(y, 0, 1), b = Date.UTC(y + 1, 0, 1); return (Date.parse(d + 'T00:00:00Z') - a) / (b - a); };
+/**
+ * @param customers clienti (rev2024…rev2026), photos [{fascia, foto}] ultime fotografie, rx offerte RADIX aperte con { late }
+ */
+function computeMeasures({ customers = [], photos = [], rxLate = 0, rxOpen = 0, today }) {
+  const Y = Number(today.slice(0, 4)), rv = (c, y) => Number(c['rev' + y]) || 0;
+  const cur = customers.reduce((s, c) => s + rv(c, Y), 0), prev = customers.reduce((s, c) => s + rv(c, Y - 1), 0);
+  const base = customers.filter(c => rv(c, Y - 1) > 0), baseCur = base.reduce((s, c) => s + rv(c, Y), 0), basePrev = base.reduce((s, c) => s + rv(c, Y - 1), 0);
+  const actCur = customers.filter(c => rv(c, Y) > 0).length, actPrev = customers.filter(c => rv(c, Y - 1) > 0).length;
+  const rec = customers.filter(c => rv(c, Y) > 0 && rv(c, Y - 1) <= 0 && rv(c, Y - 2) > 0);
+  const f1 = photos.filter(p => p.fascia === 1 && p.foto);
+  const fib = f1.reduce((s, p) => s + (Number(p.foto.fibra) || 0), 0), lv = f1.reduce((s, p) => s + (Number(p.foto.laterizio) || 0) + (Number(p.foto.vetro) || 0), 0);
+  const withM = photos.filter(p => p.foto && p.foto.margAz != null).sort((a, b) => String(b.foto.date).localeCompare(String(a.foto.date)));
+  return {
+    year: Y, pace: yearFrac(today),
+    fatturato: { value: prev ? cur / prev : null, cur, prev },
+    tenuta: { value: basePrev ? baseCur / basePrev : null, cur: baseCur, prev: basePrev, n: base.length },
+    attivi: { value: actPrev ? actCur / actPrev : null, cur: actCur, prev: actPrev },
+    recuperati: { value: rec.length, eur: rec.reduce((s, c) => s + rv(c, Y), 0) },
+    mix: { value: fib ? lv / fib : null, zones: f1.length },
+    margine: { value: withM[0] ? Number(withM[0].foto.margAz) / 100 : null, date: withM[0]?.foto.date || null },
+    offerte: { value: rxLate, open: rxOpen },
+  };
+}
+/** Avanzamento verso il bersaglio: 0..1 (per "offerte" vale l'inverso: 0 in ritardo = 100%). */
+function progressTo(measure, value, target) {
+  if (value == null || target == null || target === '') return null;
+  const t = Number(target);
+  if (measure === 'offerte') return value <= t ? 1 : Math.max(0, 1 - (value - t) / Math.max(value, 1));
+  return t > 0 ? Math.max(0, Math.min(1, value / t)) : null;
+}
+
+return { FASCE, KINDS, CRITERIA, MANUAL_CRITERIA, proximityScore, OVERNIGHT_KM, tripKind, TRIP_ICON, TRIP_LABEL, medianKm, F2_DAYS, mondayOf, displayName, lastContact, contactDue, openActions, networkRows, thisWeek, AREA_INDICATORS, areaScores, provincesOf, zoneExceptions, photoFlat, STRATEGY_LABEL, tacticState, tacticFor, tacticProgress, MEASURES, computeMeasures, progressTo };
 })();
 __m["js/views/strategy.js"] = (function () {
 // "Strategia" (08/11/2026, Tommaso): un'unica sezione con il gestionale della Direzione, a finestre che si aprono e si chiudono.
 // Fasce della rete, chi sentire questa settimana, incontri (esito scritto a mano; l'intervista si registra con Plaud) e azioni con scadenza.
 // Solo Tommaso (session.canStrategy, controllo anche nel database). Migrazione 20261108080000.
 const { h, eur, dateIt, today, toast, modal, field, emptyState } = __m["js/ui.js"];
-const { FASCE, KINDS, MANUAL_CRITERIA, networkRows, thisWeek, openActions, displayName, proximityScore, medianKm, tripKind, TRIP_ICON, TRIP_LABEL, AREA_INDICATORS, areaScores, photoFlat, provincesOf, zoneExceptions } = __m["js/core/strategy.js"];
+const { FASCE, KINDS, MANUAL_CRITERIA, networkRows, thisWeek, openActions, displayName, proximityScore, medianKm, tripKind, TRIP_ICON, TRIP_LABEL, AREA_INDICATORS, areaScores, photoFlat, provincesOf, zoneExceptions, STRATEGY_LABEL, tacticState, tacticFor, tacticProgress, MEASURES, computeMeasures, progressTo } = __m["js/core/strategy.js"];
 const { customerPlace, distanceKm } = __m["js/core/places.js"];
 const { COMUNI_GEO } = __m["js/data/comuni-geo-data.js"];
 const { foldCards } = __m["js/views/direction.js"];
 const { radixOfferOpen } = __m["js/views/radix-offers.js"];
+const { radixOfferDue } = __m["js/data/model.js"];
 const canSeeStrategy = s => !!s?.canStrategy && !s.preview && !s.readOnly;
 
 const STATES = ['attivo', 'in uscita', 'scoperta'];
@@ -10615,6 +10711,140 @@ const dueBadge = r => r.due.state === 'in ritardo' ? h('span', { class: 'badge b
 const fChip = f => h('span', { class: 'chip f' + (f || 0) }, f ? 'F' + f : '—');
 const tripOf = (d, r) => r.fascia === 1 || r.fascia === 2 ? tripKind(d.nums.get(r.label)?.km, r.scores?.trasferta) : { kind: null };   // 08/11: affiancamenti solo in fascia 1 e 2
 const tripIcon = t => t.kind ? h('span', { class: 'st-trip', title: 'Affiancamento ' + TRIP_LABEL[t.kind] + (t.auto ? ' (calcolato dai km)' : '') }, TRIP_ICON[t.kind]) : null;
+
+// ===== 08/11 strategie (aziendali, fisse nell'anno) e tattiche (2-3 mesi, per rete, fascia o agente) =====
+const sName = (d, id) => (d.strat.strategie || []).find(x => x.id === id);
+const tById = (d, id) => (d.strat.tattiche || []).find(x => x.id === id);
+const tagChip = (d, id) => { const t = id && tById(d, id); if (!t) return null; const st = sName(d, t.s);
+  return h('span', { class: 'chip ss-tag', title: (st ? st.id + ' · ' + st.nome + ' → ' : '') + t.nome }, `${t.s} · ${t.nome}`); };
+const tacticOptions = (d, r) => (d.strat.tattiche || []).filter(t => t.stato !== 'chiusa' && tacticFor(t, r.label, r.fascia));
+const tacticSelect = (d, r, value) => h('select', { class: 'ss-tsel' }, h('option', { value: '' }, '— tattica —'),
+  tacticOptions(d, r).map(t => h('option', { value: t.id, selected: t.id === value }, `${t.s} · ${t.nome}`)));
+async function saveStrat(app, d, patch) {
+  const scores = { ...d.strat, ...patch };
+  await app.store.saveDirAgent({ label: STRATEGY_LABEL, fascia: null, state: 'attivo', scores, note: 'Strategie e tattiche' });
+  Object.assign(d.strat, patch);
+}
+const ambitoText = (t) => { const a = t.ambito || { tipo: 'rete' }; return a.tipo === 'agenti' ? (a.agenti || []).map(displayName).join(', ') || 'nessun agente' : a.tipo === 'fasce' ? 'fascia ' + (a.fasce || []).join(' e ') : 'tutta la rete'; };
+
+// ===== 08/11 Roadmap (Tommaso: "in alto l'obiettivo, sotto le strategie, poi tattiche e azioni; il completamento calcolato con i dati") =====
+const MEAS = Object.fromEntries(MEASURES.map(([k, l, u]) => [k, { l, u }]));
+const fmtM = (k, v) => v == null ? '–' : MEAS[k]?.u === '%' ? pct(v) : Number(v).toLocaleString('it-IT', { maximumFractionDigits: 1 });
+const tgtRatio = (k, t) => t == null || t === '' ? null : MEAS[k]?.u === '%' ? Number(t) / 100 : Number(t);
+function measureOf(d, k, manual) { const m = d.measures; if (k === 'manuale') return { value: manual == null || manual === '' ? null : Number(manual) / 100 }; return m[k] || { value: null }; }
+function bar(p, pace, label) {
+  return h('div', { class: 'ss-bar', title: label || '' }, h('span', { class: 'ss-fill ' + (p == null ? '' : p >= 1 ? 'ok' : pace != null && p < pace - 0.05 ? 'bad' : 'warn'), style: { width: p == null ? '0%' : Math.round(Math.min(1, p) * 100) + '%' } }),
+    pace != null ? h('i', { class: 'ss-pace', style: { left: Math.round(pace * 100) + '%' }, title: 'dove dovremmo essere oggi' }) : null);
+}
+function measureLine(d, k, target, manual, note) {
+  const m = measureOf(d, k, manual), tr = tgtRatio(k, target), p = progressTo(k, m.value, tr);
+  const extra = k === 'fatturato' ? ` · ${eur(m.cur)} su ${eur(m.prev)} del ${d.measures.year - 1}` : k === 'tenuta' ? ` · ${m.n} clienti attivi nel ${d.measures.year - 1}: ${eur(m.cur)} su ${eur(m.prev)}` : k === 'attivi' ? ` · ${m.cur} su ${m.prev}` : k === 'recuperati' ? ` · ${eur(m.eur)}` : k === 'mix' ? ` · ${m.zones} zone di fascia 1 con fotografia` : k === 'margine' && m.date ? ` · fotografia del ${dateIt(m.date)}` : k === 'offerte' ? ` su ${m.open} aperte` : '';
+  return h('div', { class: 'ss-meas' }, h('div', { class: 'st-main' }, h('strong', {}, fmtM(k, m.value)), h('small', { class: 'muted' }, extra + (tr != null ? ` · obiettivo ${fmtM(k, tr)}` : '') + (note ? ' · ' + note : ''))),
+    bar(p, k === 'fatturato' || k === 'tenuta' ? d.measures.pace : null, MEAS[k]?.l));
+}
+
+function objectiveCard(app, d, refresh) {
+  const st = d.strat, Y = d.measures.year, future = st.anno && st.anno > Y;
+  return h('section', { class: 'card ss-obj' }, h('h2', {}, `Obiettivo ${st.anno || ''}`.trim() + (st.locked ? ' · strategie bloccate per l\'anno' : '')),
+    st.obiettivo ? h('p', { class: 'ss-goal' }, st.obiettivo) : h('p', { class: 'muted' }, 'Imposta obiettivo e strategie dell\'anno: sono aziendali e non cambiano durante l\'anno.'),
+    future ? h('p', { class: 'muted' }, `Il ${st.anno} non è ancora iniziato: qui sotto la base ${Y} da cui si parte. Dal 1° gennaio i numeri si calcolano sul ${st.anno}.`) : null,
+    h('div', { class: 'ss-objm' },
+      h('div', {}, h('small', {}, `Fatturato ${Y} (clienti nell'HUB)`), measureLine(d, 'fatturato', st.tFatt ?? 100, null, `la tacca è il ritmo lineare (${pct(d.measures.pace)}), indicativo: l'edilizia non vende uguale tutti i mesi`)),
+      h('div', {}, h('small', {}, 'Margine medio aziendale'), measureLine(d, 'margine', st.tMarg ?? 24, null, d.measures.margine.value == null ? 'arriva con le fotografie mensili' : ''))),
+    h('div', { class: 'actions' }, st.locked
+      ? h('button', { class: 'btn small', onclick: () => unlockDialog(app, d, refresh) }, 'Sblocca (solo per correggere)')
+      : h('button', { class: 'btn small primary', onclick: () => strategyDialog(app, d, refresh) }, (st.strategie || []).length ? 'Modifica obiettivo e strategie' : 'Imposta obiettivo e strategie')));
+}
+
+function tacticRow(app, d, refresh, t) {
+  const day = today(), p = tacticProgress(t, d.net.actions, d.net.agents, day), stt = tacticState(t, day);
+  const badge = h('span', { class: 'badge ' + (stt === 'attiva' ? 'ok' : stt === 'da chiudere' ? 'warn' : 'muted') }, stt);
+  const byF = [1, 2, 3].map(f => { const labels = new Set(d.rows.filter(r => r.fascia === f).map(r => r.label)); const a = d.net.actions.filter(x => x.tactic === t.id && labels.has(x.label)); return a.length ? `F${f}: ${a.filter(x => x.doneOn).length}/${a.length}` : null; }).filter(Boolean).join(' · ');
+  const tp = p.actions + p.kpi ? (p.done + p.kpiDone) / (p.actions + p.kpi) : null;
+  return h('li', { class: 'st-row' }, h('div', { class: 'st-main' }, badge, h('strong', {}, t.nome), h('small', { class: 'muted' }, ` · ${dateIt(t.dal)} → ${dateIt(t.al)} · ${ambitoText(t)}`)),
+    t.descr ? h('small', { class: 'muted' }, t.descr) : null,
+    h('div', { class: 'ss-trow' }, bar(tp, null, 'azioni e KPI fatti'), h('small', {}, `Azioni ${p.done}/${p.actions}` + (p.late ? `, ${p.late} scadute` : '') + ` · KPI fatti ${p.kpiDone}/${p.kpi}` + (byF ? ` · ${byF}` : '') + (t.stato === 'chiusa' ? ` · esito: ${t.esito}${t.nota ? ' – ' + t.nota : ''}` : ''))),
+    t.stato !== 'chiusa' ? h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => tacticDialog(app, d, refresh, t) }, 'Modifica'), h('button', { class: 'btn small' + (stt === 'da chiudere' ? ' primary' : ''), onclick: () => closeTactic(app, d, refresh, t) }, 'Chiudi con esito')) : null);
+}
+
+function strategyCards(app, d, refresh) {
+  const day = today(), order = { 'da chiudere': 0, attiva: 1, 'in arrivo': 2, chiusa: 3 };
+  return (d.strat.strategie || []).map(x => {
+    const ts = (d.strat.tattiche || []).filter(t => t.s === x.id), open = ts.filter(t => t.stato !== 'chiusa').sort((a, b) => order[tacticState(a, day)] - order[tacticState(b, day)]), closed = ts.filter(t => t.stato === 'chiusa');
+    const active = open.filter(t => tacticState(t, day) === 'attiva').length;
+    const mm = x.misura ? measureOf(d, x.misura, x.manuale) : null, pp = mm ? progressTo(x.misura, mm.value, tgtRatio(x.misura, x.target)) : null;
+    // 08/11: chiuse di default, la barra nel titolo (colpo d'occhio); si aprono per le tattiche
+    return h('section', { class: 'card ss-strat' }, h('details', {}, h('summary', { class: 'ss-ssum' },
+        h('span', { class: 'ss-sname' }, h('strong', {}, `${x.id} · ${x.nome}`), h('small', { class: 'muted' }, ` · ${active} tattiche attive`)),
+        h('span', { class: 'ss-sval' }, mm ? fmtM(x.misura, mm.value) : '–'), bar(pp, x.misura === 'fatturato' || x.misura === 'tenuta' ? d.measures.pace : null, x.kpi)),
+      h('p', { class: 'muted' }, 'KPI annuale: ' + (x.kpi || '–')),
+      x.misura ? measureLine(d, x.misura, x.target, x.manuale) : h('small', { class: 'muted' }, 'Nessuna misura calcolata: sceglila in "Modifica obiettivo e strategie".'),
+      h('h3', { class: 'st-h3' }, 'Tattiche'),
+      open.length ? h('ul', { class: 'st-list' }, open.map(t => tacticRow(app, d, refresh, t))) : emptyState('Nessuna tattica in corso per questa strategia.'),
+      closed.length ? h('details', { class: 'fold-in' }, h('summary', {}, `Tattiche chiuse (${closed.length})`), h('ul', { class: 'st-list' }, closed.map(t => tacticRow(app, d, refresh, t)))) : null,
+      h('button', { class: 'btn small', onclick: () => tacticDialog(app, d, refresh, null, x.id) }, '+ Nuova tattica')));
+  });
+}
+
+async function strategyDialog(app, d, refresh) {
+  const st = d.strat;
+  const anno = h('input', { type: 'number', value: st.anno || new Date().getFullYear() + 1 });
+  const ob = h('textarea', { rows: 3, placeholder: 'es. Replicare il fatturato 2026 (crescita da budget) con margine medio ≥ 24%, nessuna famiglia sotto il 20%' }, st.obiettivo || '');
+  const tF = h('input', { type: 'number', step: 'any', value: st.tFatt ?? 100 }), tM = h('input', { type: 'number', step: 'any', value: st.tMarg ?? 24 });
+  const rows = h('div', { class: 'ss-srows' });
+  const msel = v => h('select', { class: 's-mis' }, h('option', { value: '' }, '— misura —'), MEASURES.map(([k, l]) => h('option', { value: k, selected: k === v }, l)));
+  const addRow = (x = {}) => rows.append(h('div', { class: 'ss-srow' }, h('input', { class: 's-id', value: x.id || '', placeholder: 'S1' }), h('input', { class: 's-nome', value: x.nome || '', placeholder: 'Nome della strategia' }),
+    h('input', { class: 's-kpi', value: x.kpi || '', placeholder: 'KPI annuale (testo)' }), msel(x.misura), h('input', { class: 's-tgt', type: 'number', step: 'any', value: x.target ?? '', placeholder: 'obiettivo (% o n.)' }),
+    h('input', { class: 's-man', type: 'number', step: 'any', value: x.manuale ?? '', placeholder: 'valore a mano %' })));
+  (st.strategie || []).forEach(addRow); if (!(st.strategie || []).length) for (let i = 0; i < 4; i++) addRow();
+  const lock = h('input', { type: 'checkbox' });
+  const ok = await modal('Obiettivo e strategie', h('div', { class: 'form' }, field('Anno', anno), field('Obiettivo', ob),
+    h('div', { class: 'st-pair' }, field('Fatturato: obiettivo in % dell\'anno prima (100 = replicare)', tF), field('Margine medio obiettivo %', tM)),
+    h('h4', {}, 'Strategie'), h('small', { class: 'muted' }, 'Per ogni strategia: la misura che l\'HUB calcola dai dati e il suo obiettivo (% per fatturato, clienti, mix, margine; numero per recuperati e offerte). "Valore a mano" solo con la misura manuale.'),
+    rows, h('button', { class: 'btn small', type: 'button', onclick: () => addRow() }, '+ strategia'),
+    h('label', { class: 'check' }, lock, ' Blocca per l\'anno (da qui in poi si lavora solo sulle tattiche)')), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
+    const num = v => v === '' ? null : Number(v);
+    const strategie = [...rows.querySelectorAll('.ss-srow')].map(el => ({ id: el.querySelector('.s-id').value.trim().toUpperCase(), nome: el.querySelector('.s-nome').value.trim(), kpi: el.querySelector('.s-kpi').value.trim(),
+      misura: el.querySelector('.s-mis').value || null, target: num(el.querySelector('.s-tgt').value), manuale: num(el.querySelector('.s-man').value) })).filter(x => x.id || x.nome);
+    if (strategie.some(x => !x.id || !x.nome)) throw new Error('Ogni strategia: codice e nome');
+    await saveStrat(app, d, { anno: Number(anno.value) || null, obiettivo: ob.value.trim(), tFatt: num(tF.value), tMarg: num(tM.value), strategie, locked: lock.checked }); return true; } }]);
+  if (ok) refresh();
+}
+async function unlockDialog(app, d, refresh) {
+  const why = h('input', { type: 'text', placeholder: 'Motivo (resta scritto)' });
+  const ok = await modal('Sbloccare le strategie?', h('div', { class: 'form' }, h('p', {}, 'Le strategie sono aziendali e non cambiano durante l\'anno. Sblocca solo per correggere un errore: il motivo resta registrato.'), field('Motivo', why)),
+    [{ label: 'Annulla', value: null }, { label: 'Sblocca', primary: true, run: async () => { if (!why.value.trim()) throw new Error('Scrivi il motivo');
+      await saveStrat(app, d, { locked: false, sblocchi: [...(d.strat.sblocchi || []), { il: today(), motivo: why.value.trim() }] }); return true; } }]);
+  if (ok) refresh();
+}
+
+async function tacticDialog(app, d, refresh, t0 = null, sId = null) {
+  const t = t0 || { s: sId || (d.strat.strategie[0] || {}).id, dal: today(), al: new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10), ambito: { tipo: 'rete' } };
+  const s = h('select', {}, d.strat.strategie.map(x => h('option', { value: x.id, selected: x.id === t.s }, `${x.id} · ${x.nome}`)));
+  const nome = h('input', { type: 'text', value: t.nome || '', placeholder: 'es. Laterizio ai clienti solo-fibra' });
+  const descr = h('textarea', { rows: 2, placeholder: 'Cosa si fa e come si misura (facoltativo)' }, t.descr || '');
+  const dal = h('input', { type: 'date', value: t.dal }), al = h('input', { type: 'date', value: t.al });
+  const tipo = h('select', {}, [['rete', 'Tutta la rete'], ['fasce', 'Per fascia'], ['agenti', 'Agenti scelti']].map(([v, l]) => h('option', { value: v, selected: (t.ambito?.tipo || 'rete') === v }, l)));
+  const fasce = [1, 2, 3].map(f => h('label', { class: 'check' }, h('input', { type: 'checkbox', value: f, checked: (t.ambito?.fasce || []).includes(f) }), ' fascia ' + f));
+  const agents = d.rows.filter(r => r.state !== 'scoperta').map(r => h('label', { class: 'check' }, h('input', { type: 'checkbox', value: r.label, checked: (t.ambito?.agenti || []).includes(r.label) }), ' ' + r.name));
+  const fBox = h('div', { class: 'ss-checks' }, fasce), aBox = h('div', { class: 'ss-checks' }, agents);
+  const sync = () => { fBox.hidden = tipo.value !== 'fasce'; aBox.hidden = tipo.value !== 'agenti'; }; tipo.addEventListener('change', sync); sync();
+  const ok = await modal(t0 ? 'Modifica tattica' : 'Nuova tattica', h('div', { class: 'form' }, field('Strategia', s), field('Tattica', nome), field('Descrizione', descr),
+    h('div', { class: 'st-pair' }, field('Dal', dal), field('Al', al)), field('Vale per', tipo), fBox, aBox), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
+    if (!nome.value.trim()) throw new Error('Dai un nome alla tattica');
+    if (!dal.value || !al.value || al.value < dal.value) throw new Error('Controlla le date');
+    const amb = { tipo: tipo.value, fasce: [...fBox.querySelectorAll('input:checked')].map(i => Number(i.value)), agenti: [...aBox.querySelectorAll('input:checked')].map(i => i.value) };
+    const nt = { ...t, id: t.id || 't' + Date.now().toString(36), s: s.value, nome: nome.value.trim(), descr: descr.value.trim(), dal: dal.value, al: al.value, ambito: amb };
+    await saveStrat(app, d, { tattiche: [...(d.strat.tattiche || []).filter(x => x.id !== nt.id), nt] }); return true; } }]);
+  if (ok) refresh();
+}
+async function closeTactic(app, d, refresh, t) {
+  const es = h('select', {}, ['ha funzionato', 'in parte', 'non ha funzionato'].map(x => h('option', { value: x }, x)));
+  const nota = h('textarea', { rows: 3, placeholder: 'Cosa ha funzionato, cosa no, cosa si rifà (per la riunione trimestrale)' });
+  const ok = await modal('Chiudi la tattica · ' + t.nome, h('div', { class: 'form' }, field('Esito', es), field('Nota', nota)), [{ label: 'Annulla', value: null }, { label: 'Chiudi', primary: true, run: async () => {
+    await saveStrat(app, d, { tattiche: d.strat.tattiche.map(x => x.id === t.id ? { ...x, stato: 'chiusa', esito: es.value, nota: nota.value.trim(), chiusa: today() } : x) }); return true; } }]);
+  if (ok) refresh();
+}
 
 async function load(app) {
   const [net, customers, rx] = await Promise.all([app.store.dirNetwork(), app.customers(), app.store.radixOffers ? app.store.radixOffers().catch(() => []) : []]);
@@ -10629,7 +10859,12 @@ async function load(app) {
   for (const [l, p] of pts) { const n = get(l); n.km = medianKm(p, home, distanceKm); n.vic = proximityScore(n.km); }
   for (const o of rx.filter(radixOfferOpen)) { const l = byCust.get(o.customerId); if (!l) continue; const n = get(l); n.rxN++; n.rxV += o.total || 0; }
   const rows = networkRows({ labels, saved: net.agents.filter(a => !a.label.startsWith('__')), meetings: net.meetings, actions: net.actions, today: today() });
-  return { net, rows, nums, customers };
+  const strat = { strategie: [], tattiche: [], ...(net.agents.find(a => a.label === STRATEGY_LABEL)?.scores || {}) };
+  // 08/11 roadmap: misure calcolate dai dati (fatturato e clienti dall'HUB, mix e margine dalle fotografie, offerte RADIX in ritardo)
+  const rxOpen = rx.filter(radixOfferOpen), t0d = today();
+  const photos = rows.map(r => ({ fascia: r.fascia, foto: (r.scores?.foto || [])[0] ? photoFlat(r.scores.foto[0]) : null }));
+  const measures = computeMeasures({ customers: customers.filter(c => !c.isTest), photos, rxLate: rxOpen.filter(o => { const due = radixOfferDue(o); return due && due < t0d; }).length, rxOpen: rxOpen.length, today: t0d });
+  return { net, rows, nums, customers, strat, measures };
 }
 
 async function viewStrategy(app, label) {
@@ -10656,7 +10891,7 @@ async function viewStrategy(app, label) {
   const actCard = h('section', { class: 'card' }, h('h2', {}, `Azioni aperte · ${acts.length}` + (acts.some(a => a.late) ? ` (${acts.filter(a => a.late).length} scadute)` : '')),
     acts.length ? h('ul', { class: 'st-list' }, acts.map(a => h('li', { class: 'st-row' },
       h('div', { class: 'st-main' }, h('strong', {}, displayName(a.label)), h('span', {}, ' · ' + a.title),
-        a.due ? h('small', { class: a.late ? 'bad-text' : 'muted' }, ' entro ' + dateIt(a.due)) : h('small', { class: 'muted' }, ' senza scadenza')),
+        a.due ? h('small', { class: a.late ? 'bad-text' : 'muted' }, ' entro ' + dateIt(a.due)) : h('small', { class: 'muted' }, ' senza scadenza'), tagChip(d, a.tactic) || h('small', { class: 'warn-text', style: 'display:inline' }, ' · senza tattica')),
       h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => closeAction(app, a, refresh) }, 'Fatta…')))))
       : emptyState('Nessuna azione aperta.'));
 
@@ -10686,7 +10921,7 @@ async function viewStrategy(app, label) {
   return h('div', { class: 'page' },
     h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Sales strategy'),
       h('p', { class: 'muted' }, 'Metodo 2027 con la rete: fasce, interviste, affiancamenti e azioni. Visibile solo a te.'))),
-    foldCards(h('div', { class: 'section-body' }, weekCard, actCard, netCard, meetCard), 'ntx-st-closed'));
+    foldCards(h('div', { class: 'section-body' }, objectiveCard(app, d, refresh), weekCard, h('h2', { class: 'ss-sep' }, 'Strategie e tattiche'), ...strategyCards(app, d, refresh), h('h2', { class: 'ss-sep' }, 'Azioni con la rete'), actCard, netCard, meetCard), 'ntx-st-closed'));
 }
 
 const sel = (opts, v) => h('select', {}, opts.map(([val, l]) => h('option', { value: val, selected: String(val) === String(v ?? '') }, l)));
@@ -10793,27 +11028,45 @@ function photoCard(r) {
     prev ? h('small', { class: 'muted' }, `Fotografia precedente ${dateIt(prev.date)}: area ${scoreOf(prev).avg ?? '–'}`) : null);
 }
 
-function kpiCard(app, r, refresh) {
+function kpiCard(app, d, r, refresh) {
   const k = monthKey(), list = (r.scores?.kpi || {})[k] || [];
   const done = list.filter(x => x.st === 'fatto').length;
   const setSt = async (i, st) => { const all = { ...(r.scores.kpi || {}) }; all[k] = list.map((x, j) => j === i ? { ...x, st } : x); await saveScores(app, r, { kpi: all }); refresh(); };
   return h('section', { class: 'card' }, h('h2', {}, `KPI di ${monthName(k)} · ${done}/${list.length}`),
     list.length ? h('ul', { class: 'st-list' }, list.map((x, i) => h('li', { class: 'st-row' },
-      h('div', { class: 'st-main' }, h('span', { class: 'badge ' + (x.st === 'fatto' ? 'ok' : x.st === 'non fatto' ? 'bad' : 'muted') }, x.st || 'in corso'), h('strong', {}, x.t)),
+      h('div', { class: 'st-main' }, h('span', { class: 'badge ' + (x.st === 'fatto' ? 'ok' : x.st === 'non fatto' ? 'bad' : 'muted') }, x.st || 'in corso'), h('strong', {}, x.t), tagChip(d, x.tt) || h('small', { class: 'warn-text', style: 'display:inline' }, ' · senza tattica')),
       x.target ? h('small', { class: 'muted' }, 'Obiettivo: ' + x.target) : null,
       h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => setSt(i, 'fatto') }, 'Fatto'), h('button', { class: 'btn small', onclick: () => setSt(i, 'non fatto') }, 'Non fatto'), h('button', { class: 'btn small', onclick: () => setSt(i, '') }, 'In corso')))))
       : emptyState('Nessun KPI per questo mese.'),
-    h('button', { class: 'btn small', onclick: () => kpiDialog(app, r, refresh) }, list.length ? 'Modifica KPI' : 'Imposta KPI del mese'));
+    h('button', { class: 'btn small', onclick: () => kpiDialog(app, d, r, refresh) }, list.length ? 'Modifica KPI' : 'Imposta KPI del mese'));
 }
-async function kpiDialog(app, r, refresh) {
+async function kpiDialog(app, d, r, refresh) {
   const k = monthKey(), list = (r.scores?.kpi || {})[k] || [];
-  const ta = h('textarea', { rows: 6, placeholder: 'Un KPI per riga: cosa | obiettivo\nes. Offerte seguite | tutte le aperte con esito o previsione' }, list.map(x => x.t + (x.target ? ' | ' + x.target : '')).join('\n'));
+  const rows = h('div', { class: 'ss-kpis' });
+  const addRow = (x = {}) => rows.append(h('div', { class: 'ss-kpi' }, h('input', { type: 'text', class: 'k-t', value: x.t || '', placeholder: 'KPI (es. Offerte seguite)' }),
+    h('input', { type: 'text', class: 'k-target', value: x.target || '', placeholder: 'Obiettivo (es. tutte le aperte con esito)' }), tacticSelect(d, r, x.tt)));
+  list.forEach(addRow); if (!list.length) { addRow(); addRow(); addRow(); }
   const msg = h('textarea', { rows: 3, placeholder: 'Messaggio all\'agente (facoltativo): compare in cima ai suoi obiettivi' }, r.scores?.msg || '');
-  const ok = await modal(`KPI di ${monthName(k)} · ${r.name}`, h('div', { class: 'form' }, h('p', { class: 'muted' }, 'Pochi e chiari (3-4). Un KPI per riga, obiettivo dopo il simbolo |. L\'agente li vede quando invii la proposta.'), ta, field('Messaggio all\'agente', msg)), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
+  const ok = await modal(`KPI di ${monthName(k)} · ${r.name}`, h('div', { class: 'form' },
+    h('p', { class: 'muted' }, 'Pochi e chiari (3-4), ognuno legato a una tattica attiva per questo agente. L\'agente li vede quando invii la proposta.'),
+    tacticOptions(d, r).length ? null : h('p', { class: 'warn-text' }, 'Nessuna tattica attiva per questo agente: creala in Sales strategy › Tattiche.'),
+    rows, h('button', { class: 'btn small', type: 'button', onclick: () => addRow() }, '+ KPI'), field('Messaggio all\'agente', msg)), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
     const old = new Map(list.map(x => [x.t, x]));
-    const items = ta.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [t, target = ''] = l.split('|').map(s => s.trim()); return { t, target, st: old.get(t)?.st || '' }; });
+    const items = [...rows.querySelectorAll('.ss-kpi')].map(el => ({ t: el.querySelector('.k-t').value.trim(), target: el.querySelector('.k-target').value.trim(), tt: el.querySelector('.ss-tsel').value || null })).filter(x => x.t)
+      .map(x => ({ ...x, st: old.get(x.t)?.st || '' }));
     const all = { ...(r.scores?.kpi || {}) }; all[k] = items; await saveScores(app, r, { kpi: all, msg: msg.value.trim() }); return true; } }]);
   if (ok) refresh();
+}
+
+// 08/11: le tattiche che valgono per questo agente, con il suo avanzamento
+function agentTacticsCard(d, r) {
+  const day = today(), ts = (d.strat.tattiche || []).filter(t => t.stato !== 'chiusa' && tacticFor(t, r.label, r.fascia));
+  const mine = { ...d, net: { ...d.net, actions: d.net.actions.filter(a => a.label === r.label), agents: [r] } };
+  return h('section', { class: 'card' }, h('h2', {}, `Tattiche per ${r.name.split(' ').slice(-1)[0]} · ${ts.length}`),
+    ts.length ? h('ul', { class: 'st-list' }, ts.map(t => { const p = tacticProgress(t, mine.net.actions, mine.net.agents, day), stt = tacticState(t, day);
+      return h('li', { class: 'st-row' }, h('div', { class: 'st-main' }, h('span', { class: 'badge ' + (stt === 'attiva' ? 'ok' : stt === 'da chiudere' ? 'warn' : 'muted') }, stt), h('strong', {}, `${t.s} · ${t.nome}`), h('small', { class: 'muted' }, ` · fino al ${dateIt(t.al)}`)),
+        h('small', {}, `Sue azioni ${p.done}/${p.actions}` + (p.late ? `, ${p.late} scadute` : '') + ` · KPI fatti ${p.kpiDone}/${p.kpi}`)); }))
+      : emptyState('Nessuna tattica in corso per questo agente.'));
 }
 
 function clientsCard(app, r, refresh) {
@@ -10908,8 +11161,9 @@ function meridianCard(app, d, r, customers, refresh) {
 // Si allinea da solo a ogni apertura della scheda; fotografia, voti e note restano riservati.
 function goalsSnapshot(d, r) {
   const k = monthKey();
-  return { label: r.label, month: k, kpi: ((r.scores?.kpi || {})[k] || []).map(x => ({ t: x.t, target: x.target || '', st: x.st || '' })),
-    actions: openActions(d.net.actions, today(), r.label).map(a => ({ title: a.title, due: a.due || null })),
+  const sOf = id => { const t = id && tById(d, id), x = t && sName(d, t.s); return x ? x.nome : ''; };   // 08/11: all'agente il nome della strategia
+  return { label: r.label, month: k, kpi: ((r.scores?.kpi || {})[k] || []).map(x => ({ t: x.t, target: x.target || '', st: x.st || '', s: sOf(x.tt) })),
+    actions: openActions(d.net.actions, today(), r.label).map(a => ({ title: a.title, due: a.due || null, s: sOf(a.tactic) })),
     clients: (r.scores?.clienti || []).map(c => ({ name: c.name, why: c.why || '', st: c.st || '' })), message: r.scores?.msg || '' };
 }
 // 08/11 (Tommaso: "la proposta deve partire quando lo decido io"): niente invio automatico.
@@ -10937,7 +11191,7 @@ async function viewAgent(app, label) {
   const acts = openActions(d.net.actions, today(), label);
   const actCard = h('section', { class: 'card' }, h('h2', {}, `Azioni aperte · ${acts.length}`),
     acts.length ? h('ul', { class: 'st-list' }, acts.map(a => h('li', { class: 'st-row' }, h('div', { class: 'st-main' }, h('span', {}, a.title),
-      a.due ? h('small', { class: a.late ? 'bad-text' : 'muted' }, ' entro ' + dateIt(a.due)) : null), h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => closeAction(app, a, refresh) }, 'Fatta…')))))
+      a.due ? h('small', { class: a.late ? 'bad-text' : 'muted' }, ' entro ' + dateIt(a.due)) : null, tagChip(d, a.tactic) || h('small', { class: 'warn-text', style: 'display:inline' }, ' · senza tattica')), h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => closeAction(app, a, refresh) }, 'Fatta…')))))
       : emptyState('Nessuna azione aperta: nascono quando registri un incontro.'));
   const first = r.name.split(' ').slice(-1)[0];
   const agree = async () => { const cur = await app.store.agentGoals(label); await app.store.saveAgentGoals({ ...cur, status: 'concordati', agreedAt: new Date().toISOString() }); toast(`Obiettivi concordati con ${first}`); refresh(); };
@@ -10952,7 +11206,7 @@ async function viewAgent(app, label) {
       g ? h('small', { class: 'muted' }, ` · inviandole tornano "proposta da concordare"`) : null) : null,
     g?.agentNote ? h('p', { class: 'st-out' }, h('strong', {}, `Osservazioni di ${first}`), h('small', { class: 'muted' }, g.agentNoteAt ? ' · ' + dateIt(g.agentNoteAt) : ''), h('br'), g.agentNote) : null);
   return h('div', { class: 'page' }, headCard(app, d, r, refresh), goalsLine,
-    foldCards(h('div', { class: 'section-body ss-body' }, photoCard(r), kpiCard(app, r, refresh), clientsCard(app, r, refresh), actCard, await diaryCard(app, d, r, d.customers), meridianCard(app, d, r, d.customers, refresh)), 'ntx-ss-agent'));
+    foldCards(h('div', { class: 'section-body ss-body' }, photoCard(r), kpiCard(app, d, r, refresh), agentTacticsCard(d, r), clientsCard(app, r, refresh), actCard, await diaryCard(app, d, r, d.customers), meridianCard(app, d, r, d.customers, refresh)), 'ntx-ss-agent'));
 }
 
 async function photoDialog(app, r, refresh) {
@@ -10996,7 +11250,7 @@ async function meetingDialog(app, d, r, refresh, preKind = 'intervista') {
   const prev = openActions(d.net.actions, today(), r.label);
   const prevBox = prev.map(a => ({ a, done: h('input', { type: 'checkbox' }), res: h('input', { type: 'text', placeholder: 'Esito dell\'azione' }) }));
   const lines = h('div', { class: 'st-new' });
-  const addLine = () => lines.append(h('div', { class: 'st-line' }, h('input', { type: 'text', class: 'st-title', placeholder: 'Nuova azione (es. visitare 3 rivendite di Cuneo)' }), h('input', { type: 'date', class: 'st-due' })));
+  const addLine = () => lines.append(h('div', { class: 'st-line' }, h('input', { type: 'text', class: 'st-title', placeholder: 'Nuova azione (es. visitare 3 rivendite di Cuneo)' }), h('input', { type: 'date', class: 'st-due' }), tacticSelect(d, r, null)));
   addLine(); addLine();
   const body = h('div', { class: 'form' }, h('div', { class: 'st-pair' }, field('Data', date), field('Tipo', kind)), field('Esito', outcome), field('Registrazione', plaud),
     prev.length ? [h('h4', {}, 'Azioni della volta scorsa: le ha fatte?'), h('ul', { class: 'checks st-prev' }, prevBox.map(x => h('li', {}, h('label', {}, x.done, ' ' + x.a.title, x.a.due ? h('small', { class: 'muted' }, ' · entro ' + dateIt(x.a.due)) : null), x.res)))] : null,
@@ -11006,7 +11260,7 @@ async function meetingDialog(app, d, r, refresh, preKind = 'intervista') {
     if (!outcome.value.trim()) throw new Error('Scrivi l\'esito dell\'incontro');
     const meetingId = await app.store.saveDirMeeting({ label: r.label, date: date.value, kind: kind.value, outcome: outcome.value.trim(), plaud: plaud.value.trim() });
     for (const x of prevBox) if (x.done.checked || x.res.value.trim()) await app.store.saveDirAction({ ...x.a, doneOn: x.done.checked ? date.value : null, result: x.res.value.trim() });
-    for (const row of lines.querySelectorAll('.st-line')) { const ti = row.querySelector('.st-title').value.trim(); if (ti) await app.store.saveDirAction({ label: r.label, meetingId, title: ti, due: row.querySelector('.st-due').value || null }); }
+    for (const row of lines.querySelectorAll('.st-line')) { const ti = row.querySelector('.st-title').value.trim(); if (ti) await app.store.saveDirAction({ label: r.label, meetingId, title: ti, due: row.querySelector('.st-due').value || null, tactic: row.querySelector('.ss-tsel').value || null }); }
     return true;
   } }]);
   if (ok) { toast('Incontro registrato'); refresh(); }
