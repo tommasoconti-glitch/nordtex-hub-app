@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="509ba79bc1dc">
+<meta name="ntx-build" content="1148bd15ff87">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -928,7 +928,7 @@ h2.fold-head::after,.fold-head h2::after{content:' ▾';color:var(--muted,#888);
 .ss-qtext{width:100%;font-family:ui-monospace,Menlo,monospace;font-size:.82rem;line-height:1.4}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"509ba79bc1dc"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"1148bd15ff87"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -10809,7 +10809,7 @@ async function kpiDialog(app, r, refresh) {
   const k = monthKey(), list = (r.scores?.kpi || {})[k] || [];
   const ta = h('textarea', { rows: 6, placeholder: 'Un KPI per riga: cosa | obiettivo\nes. Offerte seguite | tutte le aperte con esito o previsione' }, list.map(x => x.t + (x.target ? ' | ' + x.target : '')).join('\n'));
   const msg = h('textarea', { rows: 3, placeholder: 'Messaggio all\'agente (facoltativo): compare in cima ai suoi obiettivi' }, r.scores?.msg || '');
-  const ok = await modal(`KPI di ${monthName(k)} · ${r.name}`, h('div', { class: 'form' }, h('p', { class: 'muted' }, 'Pochi e chiari (3-4). Un KPI per riga, obiettivo dopo il simbolo |. L\'agente li vede subito sulla sua Home.'), ta, field('Messaggio all\'agente', msg)), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
+  const ok = await modal(`KPI di ${monthName(k)} · ${r.name}`, h('div', { class: 'form' }, h('p', { class: 'muted' }, 'Pochi e chiari (3-4). Un KPI per riga, obiettivo dopo il simbolo |. L\'agente li vede quando invii la proposta.'), ta, field('Messaggio all\'agente', msg)), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
     const old = new Map(list.map(x => [x.t, x]));
     const items = ta.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [t, target = ''] = l.split('|').map(s => s.trim()); return { t, target, st: old.get(t)?.st || '' }; });
     const all = { ...(r.scores?.kpi || {}) }; all[k] = items; await saveScores(app, r, { kpi: all, msg: msg.value.trim() }); return true; } }]);
@@ -10912,24 +10912,28 @@ function goalsSnapshot(d, r) {
     actions: openActions(d.net.actions, today(), r.label).map(a => ({ title: a.title, due: a.due || null })),
     clients: (r.scores?.clienti || []).map(c => ({ name: c.name, why: c.why || '', st: c.st || '' })), message: r.scores?.msg || '' };
 }
+// 08/11 (Tommaso: "la proposta deve partire quando lo decido io"): niente invio automatico.
+// Solo lo stato di KPI già inviati (fatto / non fatto / in corso) si allinea da solo; il resto parte con "Invia la proposta".
+const goalsAll = x => JSON.stringify([x.month, x.kpi, x.actions, x.clients, x.message]);
+const goalsContent = x => JSON.stringify([x.month, x.kpi.map(k => [k.t, k.target]), x.actions, x.clients.map(c => [c.name, c.why]), x.message]);
 async function syncGoals(app, d, r) {
-  if (!app.store.agentGoals || r.state === 'scoperta') return null;
-  const snap = goalsSnapshot(d, r), cur = await app.store.agentGoals(r.label).catch(() => null);
-  const all = x => JSON.stringify([x.month, x.kpi, x.actions, x.clients, x.message]);
-  // 08/11 (Tommaso: gli obiettivi si concordano): cambiare il contenuto li riporta a "proposta"; segnare fatto/non fatto no
-  const content = x => JSON.stringify([x.month, x.kpi.map(k => [k.t, k.target]), x.actions, x.clients.map(c => [c.name, c.why]), x.message]);
-  if (cur && all(cur) === all(snap)) return cur;
-  if (!cur && !snap.kpi.length && !snap.actions.length && !snap.clients.length) return null;
-  const keep = cur && content(cur) === content(snap);
-  await app.store.saveAgentGoals({ ...snap, status: keep ? cur.status : 'proposta', agreedAt: keep ? cur.agreedAt : null }).catch(e => toast('Obiettivi non aggiornati sulla Home dell\'agente: ' + e.message, 'error'));
-  return app.store.agentGoals(r.label).catch(() => null);
+  if (!app.store.agentGoals || r.state === 'scoperta') return { g: null, pending: false, snap: null };
+  const snap = goalsSnapshot(d, r);
+  let g = await app.store.agentGoals(r.label).catch(() => null);
+  const empty = !snap.kpi.length && !snap.actions.length && !snap.clients.length;
+  if (g && goalsContent(g) === goalsContent(snap) && goalsAll(g) !== goalsAll(snap)) {   // solo stati cambiati: si aggiornano senza chiedere
+    await app.store.saveAgentGoals({ ...snap, status: g.status, agreedAt: g.agreedAt }).catch(() => null);
+    g = await app.store.agentGoals(r.label).catch(() => g);
+  }
+  const pending = !empty && (!g || goalsContent(g) !== goalsContent(snap));
+  return { g, pending, snap };
 }
 
 async function viewAgent(app, label) {
   const d = await load(app), r = d.rows.find(x => x.label === label);
   if (!r) return h('div', { class: 'page' }, h('p', {}, 'Commerciale non trovato.'), h('a', { href: '#/strategia' }, '← Sales strategy'));
   const refresh = () => app.go('strategia/' + encodeURIComponent(label));
-  const g = await syncGoals(app, d, r);
+  const { g, pending, snap } = await syncGoals(app, d, r);
   const acts = openActions(d.net.actions, today(), label);
   const actCard = h('section', { class: 'card' }, h('h2', {}, `Azioni aperte · ${acts.length}`),
     acts.length ? h('ul', { class: 'st-list' }, acts.map(a => h('li', { class: 'st-row' }, h('div', { class: 'st-main' }, h('span', {}, a.title),
@@ -10937,12 +10941,16 @@ async function viewAgent(app, label) {
       : emptyState('Nessuna azione aperta: nascono quando registri un incontro.'));
   const first = r.name.split(' ').slice(-1)[0];
   const agree = async () => { const cur = await app.store.agentGoals(label); await app.store.saveAgentGoals({ ...cur, status: 'concordati', agreedAt: new Date().toISOString() }); toast(`Obiettivi concordati con ${first}`); refresh(); };
-  const goalsLine = r.state === 'scoperta' ? null : h('div', { class: 'ss-goals ' + (g ? '' : 'muted') }, g
-    ? [h('p', {}, h('span', { class: 'badge ' + (g.status === 'concordati' ? 'ok' : 'warn') }, g.status === 'concordati' ? 'concordati il ' + dateIt(g.agreedAt) : 'proposta da concordare'), ' ',
-        h('strong', {}, `Sulla Home di ${first}`), ` · aggiornati il ${dateIt(g.updatedAt)} · `, g.seenAt && g.seenAt >= g.updatedAt ? h('span', { class: 'ok-text' }, 'letti il ' + dateIt(g.seenAt)) : h('span', { class: 'warn-text', style: 'display:inline' }, 'non ancora letti'),
-        g.status !== 'concordati' ? [' ', h('button', { class: 'btn small primary', onclick: () => agree().catch(e => toast(e.message, 'error')) }, `Segna concordati con ${first}`)] : null),
-      g.agentNote ? h('p', { class: 'st-out' }, h('strong', {}, `Osservazioni di ${first}`), h('small', { class: 'muted' }, g.agentNoteAt ? ' · ' + dateIt(g.agentNoteAt) : ''), h('br'), g.agentNote) : null]
-    : `Quando imposti KPI, azioni o clienti da intervistare compaiono subito sulla Home di ${first} come proposta da concordare.`);
+  const send = async () => { await app.store.saveAgentGoals({ ...snap, status: 'proposta', agreedAt: null }); toast(`Proposta inviata: ora è sulla Home di ${first}`); refresh(); };
+  const sendBtn = pending ? h('button', { class: 'btn small primary', onclick: () => send().catch(e => toast(e.message, 'error')) }, g ? `Invia le modifiche a ${first}` : `Invia la proposta a ${first}`) : null;
+  const goalsLine = r.state === 'scoperta' ? null : h('div', { class: 'ss-goals' },
+    g ? h('p', {}, h('span', { class: 'badge ' + (g.status === 'concordati' ? 'ok' : 'warn') }, g.status === 'concordati' ? 'concordati il ' + dateIt(g.agreedAt) : 'proposta da concordare'), ' ',
+        h('strong', {}, `Sulla Home di ${first}`), ` · inviati il ${dateIt(g.updatedAt)} · `, g.seenAt && g.seenAt >= g.updatedAt ? h('span', { class: 'ok-text' }, 'letti il ' + dateIt(g.seenAt)) : h('span', { class: 'warn-text', style: 'display:inline' }, 'non ancora letti'),
+        g.status !== 'concordati' && !pending ? [' ', h('button', { class: 'btn small', onclick: () => agree().catch(e => toast(e.message, 'error')) }, `Segna concordati con ${first}`)] : null)
+      : h('p', { class: 'muted' }, `Quello che prepari qui (KPI, azioni, clienti da intervistare, messaggio) resta solo tuo finché non lo invii a ${first}.`),
+    pending ? h('p', {}, h('span', { class: 'badge muted' }, g ? 'modifiche non ancora inviate' : 'bozza, solo tua'), ' ', sendBtn,
+      g ? h('small', { class: 'muted' }, ` · inviandole tornano "proposta da concordare"`) : null) : null,
+    g?.agentNote ? h('p', { class: 'st-out' }, h('strong', {}, `Osservazioni di ${first}`), h('small', { class: 'muted' }, g.agentNoteAt ? ' · ' + dateIt(g.agentNoteAt) : ''), h('br'), g.agentNote) : null);
   return h('div', { class: 'page' }, headCard(app, d, r, refresh), goalsLine,
     foldCards(h('div', { class: 'section-body ss-body' }, photoCard(r), kpiCard(app, r, refresh), clientsCard(app, r, refresh), actCard, await diaryCard(app, d, r, d.customers), meridianCard(app, d, r, d.customers, refresh)), 'ntx-ss-agent'));
 }
