@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="ca9981ffda51">
+<meta name="ntx-build" content="2ee422c9098a">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -969,7 +969,7 @@ details.ss-group > summary .ss-sep { display: inline; margin: 0; }
 .ss-readonly .ss-goals { display: none !important; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ca9981ffda51"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"2ee422c9098a"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3873,7 +3873,7 @@ __m["js/core/offer-reminder.js"] = (function () {
 // 09/11/2026 (Tommaso): sollecito via email al cliente per un'offerta aperta, agganciato alla scadenza dei prezzi.
 // La mail parte dalla casella di chi la manda (link mailto), così le risposte arrivano a lui; niente firma (la mette Outlook).
 // Regole di Tommaso (09/11): senza risposta dopo 3 giorni lavorativi, sotto 3.000 € l'offerta diventa persa da sola;
-// da 3.000 a 5.000 € (o importo non indicato) si telefona; sopra 5.000 € niente mail, solo telefono o visita.
+// da 3.000 € in su (o importo non indicato) si telefona; sopra 5.000 € la mail solo per le offerte scadute (prezzi scaduti o chiuse in RADIX).
 // "Risposta" = un esito o un contatto registrato nell'HUB dopo il sollecito (l'HUB non legge la posta).
 const REMINDER = { days: 3, autoLostBelow: 3000, noMailAbove: 5000 };
 const it = d => d ? d.split('-').reverse().join('/') : '';
@@ -3935,8 +3935,10 @@ function mailtoLink(to, subject, body) {
   return `mailto:${encodeURIComponent(to || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
-/** sopra 5.000 € il sollecito non si manda per email */
-const canEmailReminder = o => !(Number(o.total) > REMINDER.noMailAbove);
+/** offerta scaduta: prezzi scaduti o non più aperta in RADIX */
+const isExpiredOffer = (o, today = new Date().toISOString().slice(0, 10)) => o.open === false || (!!o.validUntil && o.validUntil < today);
+/** sopra 5.000 € il sollecito per email solo se l'offerta è scaduta (09/11 Tommaso: "almeno per le scadute", altrimenti ci metto una vita) */
+const canEmailReminder = (o, today = new Date().toISOString().slice(0, 10)) => !(Number(o.total) > REMINDER.noMailAbove) || isExpiredOffer(o, today);
 /** cosa succede se il cliente non risponde: 'persa' (sotto 3.000 €) o 'chiamare' (da 3.000 €, o importo non indicato) */
 const reminderAction = o => Number(o.total) > 0 && Number(o.total) < REMINDER.autoLostBelow ? 'persa' : 'chiamare';
 /** segno del sollecito nell'ultima nota dell'offerta: resta finché non si registra un esito (= il cliente ha risposto) */
@@ -3956,7 +3958,7 @@ const reminderNoteText = (o, to, due) => `Offerta ${o.id}${o.subject ? ' (' + o.
   (reminderAction(o) === 'persa' ? 'diventa persa' : 'va chiamato');
 const answeredNote = sent => `Ha risposto al sollecito del ${it(sent)}`;
 
-return { REMINDER, firstEmail, isWorkday, plusWorkdays, plusDays, reminderEmail, reminderEmailMany, mailtoLink, canEmailReminder, reminderAction, reminderMarker, reminderInfo, lostNote, noAnswerText, reminderNoteText, answeredNote };
+return { REMINDER, firstEmail, isWorkday, plusWorkdays, plusDays, reminderEmail, reminderEmailMany, mailtoLink, isExpiredOffer, canEmailReminder, reminderAction, reminderMarker, reminderInfo, lostNote, noAnswerText, reminderNoteText, answeredNote };
 })();
 __m["js/views/radix-offers.js"] = (function () {
 // Offerte aperte importate da RADIX (richiesta Tommaso 01/11/2026): l'app le mostra a chi segue il cliente
@@ -4184,7 +4186,7 @@ async function viewRadixOffer(app, id) {
         !app.session.preview ? h('button', { class: 'act primary', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, h('span', { class: 'act-ico' }, '✓'), h('span', {}, 'Esito')) : null,
         c && radixOfferOpen(o) && !app.session.preview ? (canEmailReminder(o)
           ? h('button', { class: 'act', type: 'button', onclick: async () => { if (await reminderDialog(app, o, c).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, h('span', { class: 'act-ico' }, '✉'), h('span', {}, 'Sollecito'))
-          : h('button', { class: 'act', type: 'button', disabled: true, title: `Sopra ${'5.000'} € il sollecito si fa per telefono o con una visita` }, h('span', { class: 'act-ico' }, '✉'), h('span', {}, 'Sollecito solo a voce'))) : null,
+          : h('button', { class: 'act', type: 'button', disabled: true, title: `Sopra ${'5.000'} € il sollecito per email solo quando i prezzi sono scaduti: finché l'offerta è valida, telefono o visita` }, h('span', { class: 'act-ico' }, '✉'), h('span', {}, 'Sollecito solo a voce'))) : null,
         c?.phone ? h('a', { class: 'act', href: 'tel:' + (String(c.phone).match(/[+\d][\d\s/.-]{5,}/) || [''])[0].replace(/[^\d+]/g, '') }, h('span', { class: 'act-ico' }, '☎'), h('span', {}, 'Chiama')) : null,
         c ? h('a', { class: 'act', href: '#/agenda/' + c.id }, h('span', { class: 'act-ico' }, '☰'), h('span', {}, 'Scheda cliente')) : null,
         o.pdfAt && app.store.radixOfferPdf ? h('button', { class: 'act', type: 'button', onclick: () => openRadixPdf(app, o) }, h('span', { class: 'act-ico' }, '⎙'), h('span', {}, 'PDF RADIX')) : null)),
