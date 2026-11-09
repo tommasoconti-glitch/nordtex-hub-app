@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="55f398dcc372">
+<meta name="ntx-build" content="bce57a8917da">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -969,7 +969,7 @@ details.ss-group > summary .ss-sep { display: inline; margin: 0; }
 .ss-readonly .ss-goals { display: none !important; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"55f398dcc372"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"bce57a8917da"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3917,6 +3917,18 @@ function reminderEmail(o, sender = {}, today = new Date().toISOString().slice(0,
   return { subject: `Nostra offerta ${num}${subj ? ' – ' + subj : ''}`, body: lines.join('\n') };
 }
 
+/** 09/11 (Tommaso): un solo sollecito per cliente con più offerte aperte, che le elenca tutte */
+function reminderEmailMany(list = [], sender = {}, today = new Date().toISOString().slice(0, 10)) {
+  if (list.length <= 1) return reminderEmail(list[0] || {}, sender, today);
+  const contacts = [...new Set(list.map(o => String(o.contact || '').trim()))];
+  const contact = contacts.length === 1 ? contacts[0] : '';
+  const valid = o => o.validUntil ? (o.validUntil >= today ? ` – prezzi validi fino al ${it(o.validUntil)}` : ` – validità scaduta il ${it(o.validUntil)}`) : '';
+  const lines = [contact ? `Buongiorno ${contact},` : 'Buongiorno,', '', 'le scrivo in merito alle nostre offerte ancora aperte:',
+    ...list.map(o => `• n. ${o.id} del ${it(o.date)}${String(o.subject || '').trim() ? ` (${String(o.subject).trim()})` : ''}${valid(o)}`), '',
+    'Mi può confermare quali sono ancora di suo interesse e per quando prevede l\'ordine?', 'Per le offerte scadute o da modificare (prodotti, quantità) le aggiorniamo volentieri.', '', 'Cordiali saluti'];
+  return { subject: `Nostre offerte ${list.map(o => o.id).join(', ')}`, body: lines.join('\n') };
+}
+
 function mailtoLink(to, subject, body) {
   return `mailto:${encodeURIComponent(to || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
@@ -3942,7 +3954,7 @@ const reminderNoteText = (o, to, due) => `Offerta ${o.id}${o.subject ? ' (' + o.
   (reminderAction(o) === 'persa' ? 'diventa persa' : 'va chiamato');
 const answeredNote = sent => `Ha risposto al sollecito del ${it(sent)}`;
 
-return { REMINDER, firstEmail, isWorkday, plusWorkdays, plusDays, reminderEmail, mailtoLink, canEmailReminder, reminderAction, reminderMarker, reminderInfo, lostNote, noAnswerText, reminderNoteText, answeredNote };
+return { REMINDER, firstEmail, isWorkday, plusWorkdays, plusDays, reminderEmail, reminderEmailMany, mailtoLink, canEmailReminder, reminderAction, reminderMarker, reminderInfo, lostNote, noAnswerText, reminderNoteText, answeredNote };
 })();
 __m["js/views/radix-offers.js"] = (function () {
 // Offerte aperte importate da RADIX (richiesta Tommaso 01/11/2026): l'app le mostra a chi segue il cliente
@@ -3955,7 +3967,7 @@ const { RADIX_OFFER_OUTCOMES, radixOfferDue, validityInfo, isExpiring, NOTE_OUTC
 const { pickNoteForOffer } = __m["js/views/note-offers.js"];
 const { SERVICE_RX } = __m["js/core/radix-import.js"];
 const { mailtoUrl, openMailto } = __m["js/core/mailto.js"];
-const { reminderEmail, firstEmail, plusWorkdays, answeredNote, reminderNoteText, REMINDER, canEmailReminder, reminderMarker, reminderInfo, lostNote, noAnswerText } = __m["js/core/offer-reminder.js"];
+const { reminderEmail, reminderEmailMany, firstEmail, plusWorkdays, answeredNote, reminderNoteText, REMINDER, canEmailReminder, reminderMarker, reminderInfo, lostNote, noAnswerText } = __m["js/core/offer-reminder.js"];
 const CLS = { 'Da seguire': 'warn', Sentito: 'info', Accettata: 'ok', Persa: 'bad' };
 const radixOfferOpen = o => o.outcome === 'Da seguire' || o.outcome === 'Sentito';
 const dueState = o => { const d = radixOfferDue(o); if (!d || !radixOfferOpen(o)) return ''; const t = today(); return d < t ? 'scaduto' : d === t ? 'oggi' : ''; };
@@ -4153,7 +4165,7 @@ async function viewRadixOffer(app, id) {
           v && radixOfferOpen(o) ? h('span', { class: 'due ' + (v.cls === 'bad' ? 'scaduto' : v.cls === 'warn' ? 'oggi' : '') }, v.label) : null)),
       h('p', { class: 'rx-story' }, about.length ? `Sentito ${about.length} ${about.length === 1 ? 'volta' : 'volte'} per questa offerta` + (calls || visits ? ` (${[calls ? calls + ' telefonat' + (calls === 1 ? 'a' : 'e') : '', visits ? visits + ' visit' + (visits === 1 ? 'a' : 'e') : ''].filter(Boolean).join(', ')})` : '') + ` · ultimo contatto ${dateIt(about[0].createdAt)}`
         : 'Nessun contatto registrato su questa offerta.'),
-      reminderBadge(o, app, refresh),
+      reminderBadge(o, app, refresh, all),
       radixOpenForecast(app, o),
       matchBox(app, o, refresh),
       o.outcomeNote ? h('p', { class: 'rx-note' }, `Ultimo esito: “${o.outcomeNote}” — ${o.outcomeByName || ''} ${o.outcomeAt ? dateIt(o.outcomeAt) : ''}`) : null,
@@ -4220,43 +4232,69 @@ function forecastMonthInput(val) {
 // 09/11 (Tommaso): sollecito via email dalla propria casella, agganciato alla scadenza dei prezzi.
 // Registra il contatto nella storia del cliente e fissa il prossimo contatto a 7 giorni (chi non risponde va richiamato).
 const AGENT_FREE = /^(direzionale|ex_area)/i;
+const DIREZIONE_CC = 'tommaso.conti@nordtex.it';   // come QUOTE_BCC: la Direzione commerciale
 async function reminderDialog(app, o, c) {
   const s = app.session || {};
-  const m = reminderEmail(o, { name: s.name, role: s.role }, today());
+  // 09/11 (Tommaso): se il cliente ha altre offerte aperte sollecitabili, un'unica mail le elenca tutte
+  const others = app.store.radixOffers ? (await app.store.radixOffers().catch(() => []))
+    .filter(x => x.id !== o.id && x.customerId === c.id && radixOfferOpen(x) && canEmailReminder(x) && !(reminderInfo(x, today()) && !reminderInfo(x, today()).overdue))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date))) : [];
+  const picks = new Map(others.map(x => [x.id, true]));
+  const chosen = () => [o, ...others.filter(x => picks.get(x.id))].sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const cts = app.store.contacts ? await app.store.contacts(c.id).catch(() => []) : [];
   const to = h('input', { type: 'email', value: firstEmail(c.email, ...cts.map(x => x.email)), placeholder: 'indirizzo del cliente' });
-  const subj = h('input', { type: 'text', value: m.subject });
-  const body = h('textarea', { rows: 13 }, m.body);
+  // 09/11 (Tommaso): in copia il commerciale del cliente se scrive la Direzione; la Direzione (Tommaso) se scrive l'agente
+  const agentMail = s.role === 'direzione' && c.assignee && !AGENT_FREE.test(c.assignee) && app.store.agentEmails
+    ? ((await app.store.agentEmails().catch(() => [])).find(a => a.label === c.assignee)?.email || '') : '';
+  const cc = h('input', { type: 'email', value: s.role === 'direzione' ? agentMail : DIREZIONE_CC, placeholder: 'in copia (facoltativo)' });
+  const ccHint = s.role === 'direzione' ? (agentMail ? `In copia il commerciale del cliente (${c.assignee}).` : c.assignee && !AGENT_FREE.test(c.assignee) ? `Email di ${c.assignee} non trovata: scrivila se vuoi metterlo in copia.` : 'Cliente senza commerciale: copia facoltativa.')
+    : 'In copia la Direzione commerciale.';
+  const subj = h('input', { type: 'text' }), body = h('textarea', { rows: 13 });
+  let edited = false; body.addEventListener('input', () => { edited = true; }); subj.addEventListener('input', () => { edited = true; });
+  const fillText = () => { const m = reminderEmailMany(chosen(), { name: s.name, role: s.role }, today()); subj.value = m.subject; body.value = m.body; edited = false; };
+  fillText();
   const next = plusWorkdays(today(), REMINDER.days);
   const other = s.role === 'direzione' && c.assignee && !AGENT_FREE.test(c.assignee) && c.assignee !== s.assignee;
-  const res = await modal(`Sollecito offerta ${o.id}`, h('div', { class: 'form' },
+  const pickBox = others.length ? h('div', { class: 'field' }, h('span', {}, `Altre offerte aperte di ${c.name}: nella stessa mail`),
+    ...others.map(x => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: true, onchange: e => {
+      if (edited && !confirm('Hai modificato il testo: rigenerarlo con le offerte scelte?')) { e.target.checked = !e.target.checked; return; }
+      picks.set(x.id, e.target.checked); fillText(); } }),
+      ` ${x.id} del ${dateIt(x.date)}${x.subject ? ' · ' + x.subject : ''}${x.total ? ' · ' + eur(x.total) : ''}`))) : null;
+  const res = await modal(`Sollecito ${others.length ? 'offerte di ' + c.name : 'offerta ' + o.id}`, h('div', { class: 'form' },
     other ? h('p', { class: 'alert warn' }, `Cliente seguito da ${c.assignee}: di solito il sollecito lo fa l'agente. Mandalo tu solo se lo avete concordato.`) : null,
+    pickBox,
     field('A', to, to.value ? 'Puoi cambiarlo o aggiungerne altri separati da virgola.' : 'Nessuna email nella scheda cliente: scrivila qui.'),
+    field('Cc', cc, ccHint),
     field('Oggetto', subj), field('Testo', body, 'Si apre nella tua posta (con la tua firma): controlli e invii da lì. Le risposte arrivano a te.'),
-    h('p', { class: 'fine' }, `Se il cliente non risponde entro il ${dateIt(next)} ` + (reminderInfo({ ...o, outcome: 'Da seguire', outcomeNote: reminderMarker(today()) })?.action === 'persa'
-      ? `l'offerta diventa persa da sola (sotto ${'3.000'} €).` : 'compare "Non risponde a sollecito" ed è da chiamare.') + ' Quando risponde, premi «Ha risposto» sull\'offerta: il conto alla rovescia si ferma.')),
+    h('p', { class: 'fine' }, `Se il cliente non risponde entro il ${dateIt(next)}, le offerte sotto 3.000 € diventano perse da sole; le altre compaiono come "Non risponde a sollecito" e sono da chiamare. Quando risponde, premi «Ha risposto» su una delle offerte: il conto alla rovescia si ferma per tutte quelle della stessa mail.`)),
     [{ label: 'Annulla', value: false },
      { label: 'Copia testo', run: async () => { try { await navigator.clipboard.writeText(body.value); toast('Testo copiato'); } catch { toast('Copia non riuscita: selezionalo a mano', 'error'); } return false; } },
      { label: 'Apri nella posta', primary: true, run: async () => {
        const addr = to.value.trim();
        if (!addr) throw new Error('Manca l\'indirizzo email del cliente');
-       openMailto(mailtoUrl({ to: addr.split(/[;,]\s*/), subject: subj.value, body: body.value }));   // stesso modo delle altre mail (separatore giusto per Outlook)
-       if (app.store.addNote) await app.store.addNote({ customerId: c.id, kind: 'Email', outcome: 'Preventivo specifico', body: reminderNoteText(o, addr, next) }).catch(() => null);
-       const mark = (reminderMarker(today(), addr) + (o.outcomeNote ? ' · prima: ' + o.outcomeNote : '')).slice(0, 1000);
-       await app.store.setRadixOfferOutcome(o.id, { outcome: o.outcome, note: mark, next }).catch(e => toast('Sollecito non segnato sull\'offerta: ' + e.message, 'error'));
-       return true; } }]);
-  if (res) toast(`Sollecito segnato · risposta attesa entro il ${dateIt(next)}`);
+       openMailto(mailtoUrl({ to: addr.split(/[;,]\s*/), cc: cc.value.trim() ? cc.value.trim().split(/[;,]\s*/) : [], subject: subj.value, body: body.value }));   // stesso modo delle altre mail (separatore giusto per Outlook)
+       const list = chosen();
+       if (app.store.addNote) await app.store.addNote({ customerId: c.id, kind: 'Email', outcome: 'Preventivo specifico',
+         body: list.length === 1 ? reminderNoteText(o, addr, next) : `Offerte ${list.map(x => x.id).join(', ')}: sollecito unico via email a ${addr} · risposta attesa entro il ${dateIt(next)}` }).catch(() => null);
+       for (const x of list) {
+         const mark = (reminderMarker(today(), addr) + (x.outcomeNote ? ' · prima: ' + x.outcomeNote : '')).slice(0, 1000);
+         await app.store.setRadixOfferOutcome(x.id, { outcome: x.outcome, note: mark, next }).catch(e => toast(`Sollecito non segnato su ${x.id}: ` + e.message, 'error'));
+       }
+       return list.length; } }]);
+  if (res) toast(`Sollecito segnato${res > 1 ? ` su ${res} offerte` : ''} · risposta attesa entro il ${dateIt(next)}`);
   return !!res;
 }
 
 // 09/11: stato del sollecito sull'offerta (scheda e elenco), con "Ha risposto" che ferma il conto alla rovescia in un clic
-function reminderBadge(o, app, onDone) {
+function reminderBadge(o, app, onDone, siblings = []) {
   const r = reminderInfo(o, today()); if (!r) return null;
+  // stessa mail = stesso cliente e stesso giorno di sollecito: "Ha risposto" vale per tutte
+  const group = [o, ...siblings.filter(x => x.id !== o.id && o.customerId && x.customerId === o.customerId && reminderInfo(x, today())?.sent === r.sent)];
   const answered = app && !app.session?.preview ? h('button', { class: 'btn small', type: 'button', title: 'Il cliente ha risposto: si ferma il conto alla rovescia', onclick: async e => {
     e.preventDefault(); e.stopPropagation(); e.target.disabled = true;
     try {
-      await app.store.setRadixOfferOutcome(o.id, { outcome: 'Sentito', note: answeredNote(r.sent), next: plusWorkdays(today(), 5) });   // prossimo contatto tra una settimana, non il vecchio follow-up RADIX
-      if (o.customerId && app.store.addNote) await app.store.addNote({ customerId: o.customerId, kind: 'Email', outcome: 'Preventivo specifico', body: `Offerta ${o.id}: ${answeredNote(r.sent).toLowerCase()}` }).catch(() => null);
+      for (const x of group) await app.store.setRadixOfferOutcome(x.id, { outcome: 'Sentito', note: answeredNote(r.sent), next: plusWorkdays(today(), 5) });   // prossimo contatto tra una settimana, non il vecchio follow-up RADIX
+      if (o.customerId && app.store.addNote) await app.store.addNote({ customerId: o.customerId, kind: 'Email', outcome: 'Preventivo specifico', body: `${group.length > 1 ? 'Offerte ' + group.map(x => x.id).join(', ') : 'Offerta ' + o.id}: ${answeredNote(r.sent).toLowerCase()}` }).catch(() => null);
       toast('Segnato: ha risposto. Se puoi, segna la previsione.'); onDone?.();
     } catch (err) { e.target.disabled = false; toast(err.message, 'error'); }
   } }, '✓ Ha risposto') : null;
@@ -6505,7 +6543,7 @@ async function offersList(app, { onNew }) {
       stateText(o) ? h('span', { class: 'of-state' }, stateText(o)) : null,
       !o.expired && validText(o.validity) ? h('small', { class: 'of-valid ' + (o.validity.days < 0 || o.validity.days <= 2 ? 'bad-text' : o.validity.days <= 7 ? 'warn-text' : 'muted') }, validText(o.validity)) : null,
       h('small', { class: 'muted' }, [`Offerta ${o.number || 'bozza'}`, o.origin === 'radix' ? 'fatta dall\'ufficio in RADIX' : 'fatta nell\'app', 'il ' + dateIt(o.date), isDir && o.who ? 'segue ' + o.who : null].filter(Boolean).join(' · ')),
-      o.origin === 'radix' && o.state === 'aperta' ? reminderBadge(o.raw, app, reload) : null,
+      o.origin === 'radix' && o.state === 'aperta' ? reminderBadge(o.raw, app, reload, all.filter(x => x.origin === 'radix').map(x => x.raw)) : null,
       o.origin === 'radix' && o.raw.outcomeNote ? h('small', { class: 'rx-note' }, `Ultima nota: “${o.raw.outcomeNote}” — ${o.raw.outcomeByName || ''}`) : null);
     const side = h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, o.total ? eur(o.total) : '—'),
       o.origin === 'radix' && o.state === 'aperta' && !app.session.preview ? h('button', { class: 'btn small primary', type: 'button', title: 'Hai sentito il cliente? Registra com\'è andata', onclick: async () => { if (await radixOfferDialog(app, o.raw).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, 'Com\'è andata?')
