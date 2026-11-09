@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="4c713ec02665">
+<meta name="ntx-build" content="ca9981ffda51">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -969,7 +969,7 @@ details.ss-group > summary .ss-sep { display: inline; margin: 0; }
 .ss-readonly .ss-goals { display: none !important; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"4c713ec02665"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ca9981ffda51"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3902,7 +3902,7 @@ function plusDays(isoDay, n) { const d = new Date(isoDay + 'T12:00:00'); d.setDa
  * Testo del sollecito. o = offerta RADIX { id, date, subject, validUntil, contact }, sender = { name, role }.
  * Nessun importo né condizione commerciale nel testo: il cliente ha già l'offerta.
  */
-function reminderEmail(o, sender = {}, today = new Date().toISOString().slice(0, 10)) {
+function reminderEmail(o, sender = {}, today = new Date().toISOString().slice(0, 10), attach = false) {
   const num = o.id, subj = String(o.subject || '').trim();
   const contact = String(o.contact || '').trim();
   const lines = [
@@ -3912,19 +3912,21 @@ function reminderEmail(o, sender = {}, today = new Date().toISOString().slice(0,
   ];
   if (o.validUntil && o.validUntil >= today) lines.push(`Le ricordo che i prezzi sono validi fino al ${it(o.validUntil)}.`);
   else if (o.validUntil) lines.push(`La validità dei prezzi è scaduta il ${it(o.validUntil)}: se l'interesse è ancora attuale, la aggiorniamo volentieri.`);
+  if (attach) lines.push('Per comodità gliela allego di nuovo.');
   lines.push('', 'Mi può confermare se l\'offerta è ancora di suo interesse e per quando prevede l\'ordine?',
     'Se servono modifiche su prodotti o quantità, la aggiorniamo subito.', '', 'Cordiali saluti');
   return { subject: `Nostra offerta ${num}${subj ? ' – ' + subj : ''}`, body: lines.join('\n') };
 }
 
 /** 09/11 (Tommaso): un solo sollecito per cliente con più offerte aperte, che le elenca tutte */
-function reminderEmailMany(list = [], sender = {}, today = new Date().toISOString().slice(0, 10)) {
-  if (list.length <= 1) return reminderEmail(list[0] || {}, sender, today);
+function reminderEmailMany(list = [], sender = {}, today = new Date().toISOString().slice(0, 10), attach = false) {
+  if (list.length <= 1) return reminderEmail(list[0] || {}, sender, today, attach);
   const contacts = [...new Set(list.map(o => String(o.contact || '').trim()))];
   const contact = contacts.length === 1 ? contacts[0] : '';
   const valid = o => o.validUntil ? (o.validUntil >= today ? ` – prezzi validi fino al ${it(o.validUntil)}` : ` – validità scaduta il ${it(o.validUntil)}`) : '';
   const lines = [contact ? `Buongiorno ${contact},` : 'Buongiorno,', '', 'le scrivo in merito alle nostre offerte ancora aperte:',
-    ...list.map(o => `• n. ${o.id} del ${it(o.date)}${String(o.subject || '').trim() ? ` (${String(o.subject).trim()})` : ''}${valid(o)}`), '',
+    ...list.map(o => `• n. ${o.id} del ${it(o.date)}${String(o.subject || '').trim() ? ` (${String(o.subject).trim()})` : ''}${valid(o)}`),
+    ...(attach ? ['Per comodità gliele allego di nuovo.'] : []), '',
     'Mi può confermare quali sono ancora di suo interesse e per quando prevede l\'ordine?', 'Per le offerte scadute o da modificare (prodotti, quantità) le aggiorniamo volentieri.', '', 'Cordiali saluti'];
   return { subject: `Nostre offerte ${list.map(o => o.id).join(', ')}`, body: lines.join('\n') };
 }
@@ -4029,6 +4031,15 @@ async function openRadixPdf(app, o) {
     if (w) w.location.href = url; else { const a = h('a', { href: url, download: o.id + '.pdf' }); document.body.append(a); a.click(); a.remove(); }
     setTimeout(() => URL.revokeObjectURL(url), 300000);
   } catch (e) { w?.close(); toast(e.message, 'error'); }
+}
+
+// 09/11: scarica il PDF dell'offerta (per allegarlo al sollecito)
+async function downloadRadixPdf(app, o) {
+  try {
+    const url = URL.createObjectURL(await app.store.radixOfferPdf(o.id));
+    const a = h('a', { href: url, download: o.id + '.pdf' }); document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 300000);
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 function linesCard(o) {
@@ -4251,20 +4262,29 @@ async function reminderDialog(app, o, c) {
     : 'In copia la Direzione commerciale.';
   const subj = h('input', { type: 'text' }), body = h('textarea', { rows: 13 });
   let edited = false; body.addEventListener('input', () => { edited = true; }); subj.addEventListener('input', () => { edited = true; });
-  const fillText = () => { const m = reminderEmailMany(chosen(), { name: s.name, role: s.role }, today()); subj.value = m.subject; body.value = m.body; edited = false; };
-  fillText();
+  // 09/11 (cliente: "nella mail non la vedo l'offerta"): la mail aperta da HUB non può allegare file → si scaricano i PDF e si allegano in Outlook
+  const attach = h('input', { type: 'checkbox', checked: true });
+  const fillText = () => { const m = reminderEmailMany(chosen(), { name: s.name, role: s.role }, today(), attach.checked); subj.value = m.subject; body.value = m.body; edited = false; };
+  attach.addEventListener('change', e => { if (edited && !confirm('Hai modificato il testo: rigenerarlo?')) { e.target.checked = !e.target.checked; return; } fillText(); drawPdfs(); });
+  const pdfBox = h('div', { class: 'row', style: { gap: '6px', flexWrap: 'wrap' } });
+  const drawPdfs = () => fill(pdfBox, attach.checked ? chosen().map(x => x.pdfAt && app.store.radixOfferPdf
+    ? h('button', { type: 'button', class: 'btn small', onclick: () => downloadRadixPdf(app, x) }, '⬇ PDF ' + x.id)
+    : h('small', { class: 'warn-text' }, `${x.id}: PDF non nell'HUB, prendilo da RADIX`)) : []);
+  fillText(); drawPdfs();
   const next = plusWorkdays(today(), REMINDER.days);
   const other = s.role === 'direzione' && c.assignee && !AGENT_FREE.test(c.assignee) && c.assignee !== s.assignee;
   const pickBox = others.length ? h('div', { class: 'field' }, h('span', {}, `Altre offerte aperte di ${c.name}: nella stessa mail`),
     ...others.map(x => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: true, onchange: e => {
       if (edited && !confirm('Hai modificato il testo: rigenerarlo con le offerte scelte?')) { e.target.checked = !e.target.checked; return; }
-      picks.set(x.id, e.target.checked); fillText(); } }),
+      picks.set(x.id, e.target.checked); fillText(); drawPdfs(); } }),
       ` ${x.id} del ${dateIt(x.date)}${x.subject ? ' · ' + x.subject : ''}${x.total ? ' · ' + eur(x.total) : ''}`))) : null;
   const res = await modal(`Sollecito ${others.length ? 'offerte di ' + c.name : 'offerta ' + o.id}`, h('div', { class: 'form' },
     other ? h('p', { class: 'alert warn' }, `Cliente seguito da ${c.assignee}: di solito il sollecito lo fa l'agente. Mandalo tu solo se lo avete concordato.`) : null,
     pickBox,
     field('A', to, to.value ? 'Puoi cambiarlo o aggiungerne altri separati da virgola.' : 'Nessuna email nella scheda cliente: scrivila qui.'),
     field('Cc', cc, ccHint),
+    h('div', { class: 'field' }, h('label', { class: 'check' }, attach, ' Allego le offerte (PDF)'), pdfBox,
+      h('small', {}, 'La mail che si apre non può allegare file da sola: scarica i PDF qui e trascinali nella mail prima di inviarla.')),
     field('Oggetto', subj), field('Testo', body, 'Si apre nella tua posta (con la tua firma): controlli e invii da lì. Le risposte arrivano a te.'),
     h('p', { class: 'fine' }, `Se il cliente non risponde entro il ${dateIt(next)}, le offerte sotto 3.000 € diventano perse da sole; le altre compaiono come "Non risponde a sollecito" e sono da chiamare. Quando risponde, premi «Ha risposto» su una delle offerte: il conto alla rovescia si ferma per tutte quelle della stessa mail.`)),
     [{ label: 'Annulla', value: false },
