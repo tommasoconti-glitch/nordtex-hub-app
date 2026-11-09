@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="686af121d2ed">
+<meta name="ntx-build" content="39e8bb9e9dbb">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -969,7 +969,7 @@ details.ss-group > summary .ss-sep { display: inline; margin: 0; }
 .ss-readonly .ss-goals { display: none !important; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"686af121d2ed"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"39e8bb9e9dbb"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1881,7 +1881,7 @@ function createLocalStore({ data, kv }) {
       const [agents, meetings, actions] = await Promise.all([col('dirNetwork'), col('dirMeetings'), col('dirActions')]);
       return { agents: agents.slice(), meetings: meetings.slice().sort((a, b) => b.date.localeCompare(a.date)), actions: actions.slice() };
     },
-    async saveDirAgent(x) { const a = await col('dirNetwork'); const i = a.findIndex(r => r.label === x.label); const r = { label: x.label, fascia: x.fascia || null, scores: x.scores || {}, state: x.state || 'attivo', note: x.note || '' }; if (i >= 0) a[i] = r; else a.push(r); await save('dirNetwork'); },
+    async saveDirAgent(x) { const a = await col('dirNetwork'); const i = a.findIndex(r => r.label === x.label); const r = { label: x.label, fascia: x.fascia || null, scores: x.scores || {}, state: x.state || 'attivo', note: x.note || '', email: 'email' in x ? (x.email || '').trim() : (i >= 0 ? a[i].email || '' : '') }; if (i >= 0) a[i] = r; else a.push(r); await save('dirNetwork'); },
     async saveDirMeeting(x) { const a = await col('dirMeetings'); const id = x.id || 'm' + Date.now() + Math.random().toString(36).slice(2, 6); const r = { id, label: x.label, date: x.date, kind: x.kind, outcome: x.outcome || '', plaud: x.plaud || '' }; const i = a.findIndex(m => m.id === id); if (i >= 0) a[i] = r; else a.push(r); await save('dirMeetings'); return id; },
     async saveDirAction(x) { const a = await col('dirActions'); const id = x.id || 'a' + Date.now() + Math.random().toString(36).slice(2, 6); const r = { id, label: x.label, meetingId: x.meetingId || null, title: x.title, due: x.due || null, doneOn: x.doneOn || null, result: x.result || '', tactic: x.tactic || null }; const i = a.findIndex(m => m.id === id); if (i >= 0) a[i] = r; else a.push(r); await save('dirActions'); },
     async removeDirAction(id) { const a = await col('dirActions'); const i = a.findIndex(m => m.id === id); if (i >= 0) a.splice(i, 1); await save('dirActions'); },   // 07/11 A4: lo storico lo scrive il database online
@@ -2250,13 +2250,13 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     async dirNetwork() {
       const [n, m, a] = await Promise.all(['hub_dir_network?select=*', 'hub_dir_meetings?select=*&order=held_on.desc,created_at.desc', 'hub_dir_actions?select=*&order=due.asc.nullslast,created_at.asc']
         .map(q => api('/rest/v1/' + q).catch(() => [])));
-      return { agents: n.map(r => ({ label: r.agent_label, fascia: r.fascia, scores: r.scores || {}, state: r.state, note: r.note || '' })),
+      return { agents: n.map(r => ({ label: r.agent_label, fascia: r.fascia, scores: r.scores || {}, state: r.state, note: r.note || '', email: r.email || '' })),
         meetings: m.map(r => ({ id: r.id, label: r.agent_label, date: r.held_on, kind: r.kind, outcome: r.outcome || '', plaud: r.plaud_ref || '' })),
         actions: a.map(r => ({ id: r.id, label: r.agent_label, meetingId: r.meeting_id, title: r.title, due: r.due, doneOn: r.done_on, result: r.result || '', tactic: r.tactic_id || null })) };
     },
     async saveDirAgent(x) {
       return api('/rest/v1/hub_dir_network?on_conflict=agent_label', { method: 'POST', prefer: 'resolution=merge-duplicates',
-        body: { agent_label: x.label, fascia: x.fascia || null, scores: x.scores || {}, state: x.state || 'attivo', note: x.note || '', updated_at: new Date().toISOString() } });
+        body: { agent_label: x.label, fascia: x.fascia || null, scores: x.scores || {}, state: x.state || 'attivo', note: x.note || '', ...('email' in x ? { email: (x.email || '').trim() || null } : {}), updated_at: new Date().toISOString() } });
     },
     async saveDirMeeting(x) {
       const body = { agent_label: x.label, held_on: x.date, kind: x.kind, outcome: x.outcome || '', plaud_ref: x.plaud || '' };
@@ -2304,7 +2304,9 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     },
     async agentEmails() {
       if (session?.role !== 'direzione') return [];
-      return (await api('/rest/v1/hub_profiles?select=assignee_label,email&role=eq.agente&active=eq.true')).filter(p => p.email).map(p => ({ label: p.assignee_label, email: p.email }));
+      // 09/11: prima l'account HUB, poi l'email della scheda commerciale (rete 2027) per chi è fuori dalla Beta (migrazione 20261109120000)
+      try { return (await api('/rest/v1/rpc/hub_agent_contact_emails', { method: 'POST', body: {} })).map(r => ({ label: r.label, email: r.email, hasAccount: !!r.has_account })); }
+      catch { return (await api('/rest/v1/hub_profiles?select=assignee_label,email&role=eq.agente&active=eq.true')).filter(p => p.email).map(p => ({ label: p.assignee_label, email: p.email, hasAccount: true })); }
     },
     async statusHistory(customerId) { const nm = await names(); return statusRows.filter(x => x.customerId === customerId).map(x => ({ ...x, byName: x.byName || nm.get(x.by) || '' })).reverse(); },
     // Nuovo cliente potenziale (permessi: migrazione 20261031160000_hub_nuovi_clienti.sql)
@@ -7862,7 +7864,7 @@ async function radixTodoBlock(app, refresh) {
 // Email della comunicazione dalla casella di chi scrive (Tommaso, Marco): agenti in copia nascosta, nessun servizio esterno
 async function sendMail(app, p) {
   try {
-    const all = await app.store.agentEmails();
+    const all = (await app.store.agentEmails()).filter(a => a.hasAccount !== false);   // 09/11: la Bacheca solo a chi ha l'account HUB
     const list = p.audience?.length ? all.filter(a => p.audience.includes(a.label)) : all;
     const missing = (p.audience?.length ? p.audience : (app.store.assignees || []).map(a => a.name).filter(n => n !== 'Direzionale' && !/^EX_/.test(n))).filter(l => !list.some(a => a.label === l));
     if (!list.length) { toast('Email degli agenti non disponibili' + (app.store.mode === 'locale' ? ' in questa versione (ci sono nella versione online)' : ': collega prima gli accessi'), 'error'); return; }
@@ -11250,11 +11252,12 @@ async function agentDialog(app, d, r, refresh) {
   const tAuto = tripKind(nn.km, null);
   const trip = sel([['', 'automatica' + (tAuto.kind ? ': ' + TRIP_ICON[tAuto.kind] + ' ' + TRIP_LABEL[tAuto.kind] : '')], ['giornata', TRIP_ICON.giornata + ' in giornata'], ['notte', TRIP_ICON.notte + ' con pernottamento']], r.scores?.trasferta || '');
   const vic = h('div', { class: 'st-auto' }, nn.km != null ? h('strong', {}, String(nn.vic)) : '–', nn.km != null ? h('small', { class: 'muted' }, ` ${nn.km} km (calcolata)`) : h('small', { class: 'muted' }, ' nessun cliente localizzato'));
+  const email = h('input', { type: 'email', value: r.email || '', placeholder: 'nome@dominio.it (per il Cc dei solleciti se non ha l\'account HUB)' });
   const note = h('textarea', { rows: 3, placeholder: 'Note di Direzione (es. autonomia quasi massima, passaggio di consegne…)' }, r.note || '');
   const acts = openActions(d.net.actions, today(), r.label);
   const meets = d.net.meetings.filter(m => m.label === r.label);
   const body = h('div', { class: 'form' },
-    h('div', { class: 'st-pair' }, field('Fascia', fascia), field('Stato', state)), field('Affiancamento', trip),
+    h('div', { class: 'st-pair' }, field('Fascia', fascia), field('Stato', state)), field('Affiancamento', trip), field('Email', email),
     h('div', { class: 'st-scores' }, MANUAL_CRITERIA.slice(0, 2).map(([k, l]) => field(l, h('div', {}, sc[k], why[k]))), field('Vicinanza', vic), field('Autonomia', h('div', {}, sc.autonomia, why.autonomia))),
     h('p', { class: 'muted small' }, '"auto" = proposto dall\'app dai dati e si aggiorna da solo; scegli 1, 2 o 3 per decidere tu. ', h('span', { title: ZONE_RULE + '\n' + IMPROVE_RULE, class: 'link' }, 'Come si calcola')), field('Note', note),
     h('h4', {}, `Azioni aperte (${acts.length})`),
@@ -11269,7 +11272,7 @@ async function agentDialog(app, d, r, refresh) {
       for (const [k] of MANUAL_CRITERIA) { if (sc[k].value) scores[k] = Number(sc[k].value); else delete scores[k]; }
       if (nn.vic) scores.vicinanza = nn.vic;
       if (trip.value) scores.trasferta = trip.value; else delete scores.trasferta;
-      await app.store.saveDirAgent({ label: r.label, fascia: fascia.value ? Number(fascia.value) : null, state: state.value, scores, note: note.value.trim() });
+      await app.store.saveDirAgent({ label: r.label, fascia: fascia.value ? Number(fascia.value) : null, state: state.value, scores, note: note.value.trim(), email: email.value.trim() });
       toast('Scheda salvata'); return 'saved';
     } }]);
   if (v === 'meet') return meetingDialog(app, d, r, refresh);
