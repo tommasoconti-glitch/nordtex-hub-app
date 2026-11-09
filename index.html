@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="e707afbc6464">
+<meta name="ntx-build" content="55f398dcc372">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -969,7 +969,7 @@ details.ss-group > summary .ss-sep { display: inline; margin: 0; }
 .ss-readonly .ss-goals { display: none !important; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"e707afbc6464"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"55f398dcc372"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3619,6 +3619,331 @@ function matchOfferLines(parsed, offers) {
 
 return { OFFER_COLUMNS, normName, headIt, parseRadixOffers, offersPreview, ORDER_COLUMNS, parseRadixOrders, ordersPreview, decodeText, parseTsv, parseRadixSales, salesPreview, SERVICE_RX, parseRadixOfferLines, matchOfferLines };
 })();
+__m["js/core/quote-doc.js"] = (function () {
+// Documento offerta nel formato NORDTEX/RADIX (modello: offerte 1051, 1313, 1324 del 2026, Crystal Reports):
+// testata con logo, Deposito di uscita · Cantiere · Spett.le (codice cliente), barra "OFFERTA NR. … - data",
+// righe Descrizione/Codice/U.M./Quantità/Prezzo/Sconto %/Imp.netto, totali, condizioni, clausole, piè di pagina aziendale.
+// Modulo puro (stringa HTML con stili in linea): stampa/PDF nell'app ed email dalla funzione server.
+const { totals, lineAmount, lineNet, palletsFor, EURO_PALLET } = __m["js/core/pricing.js"];
+// Depositi NORDTEX: elenco e indirizzi dal sito nordtex.it (31/10/2026); telefoni di Lecco e Polymax dalle offerte RADIX
+const DEPOTS = {
+  diretta: { label: 'Consegna diretta dal produttore', lines: ['CONSEGNA DIRETTA'] },
+  SEDE: { label: 'Sede NORDTEX – Chiusa (BZ)', lines: ['SEDE NORDTEX', "PRATO DELL'OSPIZIO", '39043 CHIUSA (BZ)'], pickup: ['Sede NORDTEX', "Prato dell'Ospizio", 'IT-39043 Chiusa (BZ)'] },
+  LECCO: { label: 'Deposito Lecco – Fornaci Giussani (Inverigo CO)', lines: ['DEPOSITO LECCO -', 'FORNACI GIUSSANI', 'VIA ARISTIDE MAGNI 98', '22044 INVERIGO (CO)', 'Tel:031607100'],
+    pickup: ['Fornace Giussani', 'Via Aristide Magni, 98', 'IT-22044 Inverigo (CO)'] },
+  CASALE: { label: 'Deposito Piemonte – Savallo Autotrasporti (Casale Monferrato AL)', lines: ['DEPOSITO PIEMONTE -', 'SAVALLO AUTOTRASPORTI', 'STRADA VALENZA 7', '15033 CASALE MONFERRATO (AL)'],
+    pickup: ['Savallo Autotrasporti', 'Strada Valenza, 7', 'IT-15033 Casale Monferrato (AL)'] },
+  CASTELFRAN: { label: 'Deposito Veneto – Polymax Italia (Castelfranco Veneto TV)', lines: ['POLYMAX', 'VIA FUSINA 12', '31033 CASTELFRANCO', 'VENETO (TV)', 'Tel:0423493544', 'Fax:0423497841'],
+    pickup: ['Polymax', 'Via Fusina 12', 'IT-31033 Castelfranco Veneto (TV)'] },
+  TORRI: { label: 'Deposito Veneto – Loewenstark (Torri di Quartesolo VI)', lines: ['DEPOSITO VENETO -', 'LOEWENSTARK SRL', 'VIA CAMISANA 15', '36040 TORRI DI QUARTESOLO (VI)'],
+    pickup: ['Loewenstark srl', 'Via Camisana, 15', 'IT-36040 Torri di Quartesolo (VI)'] },
+  MARCHE: { label: 'Deposito Marche – SPEA Tecnologie Edili (Morrovalle MC)', lines: ['DEPOSITO MARCHE -', 'SPEA TECNOLOGIE EDILI SRL', 'CONTRADA SARROCCIANO', '62010 MORROVALLE (MC)'],
+    pickup: ['SPEA Tecnologie Edili srl', 'Contrada Sarrocciano', 'IT-62010 Morrovalle (MC)'] },
+};
+// 02/11: codici dei depositi in RADIX (elenco "Codice deposito") → deposito dell'offerta; gli altri solo per le giacenze
+const RADIX_DEPOTS = { CHIUSA: 'SEDE', LECCO: 'LECCO', CASALE: 'CASALE', CASTELFRAN: 'CASTELFRAN', VICENZA: 'TORRI', MACERATA: 'MARCHE' };
+const OTHER_STOCK = { 'DEL DOSSO': ['Deposito Sondrio (Piateda SO)', 'Piateda (SO)'], EDILLOGIST: ['Made Edil Logistica (Pogliano Milanese MI)', 'Pogliano Milanese (MI)'],
+  BIOISOLARE: ['Bioisolare (Malo VI)', 'Malo (VI)'], POLYMAX: ['Polymax radianti (Castelfranco Veneto TV)', 'Polymax radianti'] };
+// deposito delle giacenze → { label, place (nome corto), pickup }
+function stockDepot(code, name = '') {
+  const d = DEPOTS[RADIX_DEPOTS[code] || code];
+  if (d?.pickup) return { label: d.label, place: d.pickup[2].replace(/^IT-\d+\s*/, ''), pickup: d.pickup };
+  const o = OTHER_STOCK[code];
+  return { label: o ? o[0] : name || code, place: o ? o[1] : code, pickup: null };
+}
+const TRANSPORT_BY = ['DESTINATARIO', 'VETTORE', 'MITTENTE'];
+// 02/11 (offerta Casale di Tommaso): ritiro al deposito senza trasporto.
+// q.pickup = true/false scelto nell'offerta; offerte vecchie (q.pickup assente): ritiro se deposito con ritiro e trasporto a cura del destinatario.
+function isPickup(q) {
+  const d = DEPOTS[q.depot || 'diretta'];
+  if (!d?.pickup) return false;
+  if (q.pickup === true || q.pickup === false) return q.pickup;
+  return (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO';
+}
+const CLAUSES = ['Quotazioni valide salvo variazioni imposte dal produttore/fornitore. Non si accettano resi.', 'Non ci assumiamo responsabilità per ritardi e danni nelle consegne dovute ai vettori.'];
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// formato numeri come RADIX: separatore migliaia sempre presente (2.577,25), decimali fissi
+const fmtN = (v, d) => { const [i, f] = Math.abs(Number(v)).toFixed(d).split('.'); return (Number(v) < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : ''); };
+const n = fmtN;
+const dotDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}.${String(x.getMonth() + 1).padStart(2, '0')}.${x.getFullYear()}`; };
+const UM = { M2: 'MQ', M3: 'M3', PZ: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CF', ROTOLO: 'RT', SACCO: 'SC', BIGBAG: 'BB' };
+const UL = { M2: 'm²', M3: 'm³', ML: 'ml', PZ: 'pz', KG: 'kg' };
+const discText = d => d.filter(x => x).map(x => n(x, x % 1 ? 1 : 0)).join('+');
+// 02/11 (richiesta Tommaso, come nella vecchia app offerte): sconti nascosti nel documento → colonna Prezzo = prezzo netto, colonna Sconto % assente
+const hideDiscounts = q => q.hideDiscounts === true;
+const docPrice = (q, l) => hideDiscounts(q) ? lineNet(l) : l.listPrice;
+const customerCode = q => (q.customerId && !String(q.customerId).startsWith('H-') ? String(q.customerId) : '');
+
+// Righe aggiuntive di descrizione, come in RADIX: "(30,78m²/Pal)" e "4 bancali"
+// 02/11 (prova con Christian): destinazione della merce sul documento = cantiere scritto nelle condizioni,
+// altrimenti l'indirizzo di consegna del riquadro trasporto se diverso dalla sede del cliente.
+function destinationLines(q) {
+  const site = String(q.site || '').trim();
+  if (site) return site.split('\n').map(s => s.trim()).filter(Boolean);
+  const d = q.delivery || {}, c = q.customer || {};
+  const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!d.city || (norm(d.street) === norm(c.street) && norm(d.city) === norm(c.city))) return [];
+  return [d.street, [d.cap, d.city, d.prov ? `(${d.prov})` : ''].filter(Boolean).join(' ')].filter(Boolean);
+}
+// riga del trasporto per il cliente: niente note interne ("inserito manualmente", dettagli di calcolo)
+const MEZZO = { centinato: 'con bilico centinato', walkingfloor: 'con walking floor', groupage: 'groupage con corriere' };
+function destCity(q) {
+  const dest = destinationLines(q);
+  return dest.length ? dest[dest.length - 1].replace(/^\d{5}\s+/, '') : [q.customer?.city, q.customer?.prov ? `(${q.customer.prov})` : ''].filter(Boolean).join(' ');
+}
+function freightLabel(q, part = null) {
+  const v = part ? (part.kind === 'pallet' ? 'groupage' : part.vehicle) : Object.keys(q.logistics?.km || {}).length ? q.logistics?.vehicleType : null;   // solo trasporti a km (laterizi, vetro cellulare)
+  const city = destCity(q);
+  return ['Servizio di trasporto', MEZZO[v] || '', part?.label ? `(${part.label})` : '', city ? `- consegna a ${city}` : ''].filter(Boolean).join(' ');
+}
+// 06/11 (segnalazione Tommaso, offerta laterizi su 3 bilici): la riga trasporto riportava "1,00 × 4.334,40" come se fosse un solo carico.
+// Trasporto calcolato dall'app: una riga per ogni trasporto (luogo di carico); a km quantità = mezzi e prezzo = costo di un mezzo;
+// groupage V600 quantità = bancali × prezzo a bancale. Codici RADIX (confermati da Tommaso 06/11): mezzi pieni N88079 «carico completo»,
+// mezzo non pieno e groupage N14126 «carico diretto parziale». Importo scritto a mano, stima diversa o conti che non tornano al centesimo:
+// una sola riga 1 × importo con N14126.
+const FREIGHT_FULL = 'N88079', FREIGHT_PARTIAL = 'N14126';
+const c2 = x => Math.round(x * 100) / 100;
+function kmRows(cost, k, fullVehicles) {
+  const each = c2(cost / k);
+  if (Math.abs(each * k - cost) >= 0.005) return null;
+  const full = Math.max(0, Math.min(k, fullVehicles ?? 0)), rest = k - full;
+  return [full && { code: FREIGHT_FULL, qty: full, price: each, amount: c2(each * full) },
+    rest && { code: FREIGHT_PARTIAL, qty: rest, price: each, amount: c2(cost - each * full) }].filter(Boolean);
+}
+function freightRows(q, freight) {
+  const one = [{ code: FREIGHT_PARTIAL, qty: 1, price: freight, amount: freight, label: freightLabel(q) }];
+  const e = q.transportEstimate;
+  if (!(freight > 0) || !q.freightAuto || !e || !(Math.abs((e.amount ?? NaN) - freight) < 0.005)) return one;
+  if (Array.isArray(e.parts) && e.parts.length) {
+    const rows = [];
+    for (const p of e.parts) {
+      let r = null;
+      if (p.kind === 'km' && p.vehicles >= 1) r = kmRows(p.cost, p.vehicles, p.fullVehicles);
+      else if (p.kind === 'pallet' && p.pallets > 0 && Math.abs(p.pallets * p.perPallet - p.cost) < 0.005) r = [{ code: FREIGHT_PARTIAL, qty: p.pallets, price: p.perPallet, amount: c2(p.cost) }];
+      if (!r) r = [{ code: FREIGHT_PARTIAL, qty: 1, price: p.cost, amount: c2(p.cost) }];
+      const label = freightLabel(q, e.parts.length > 1 ? p : { ...p, label: '' });
+      rows.push(...r.map(x => ({ ...x, label })));
+    }
+    return Math.abs(rows.reduce((s, x) => s + x.amount, 0) - freight) < 0.005 ? rows : one;
+  }
+  if (!(e.vehicles >= 1)) return one;   // offerte salvate prima delle righe per trasporto: un solo luogo di carico a km
+  const r = kmRows(freight, e.vehicles, e.fullVehicles);
+  return r ? r.map(x => ({ ...x, label: freightLabel(q) })) : one;
+}
+const customerLines = c => [c.name, c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' '), c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean);
+
+function lineExtra(l) {
+  const out = [], pal = palletsFor(l);
+  if (l.palletQuantity > 0 && pal !== null) {
+    // 02/11 (errore visto su W14 PLAN: 60 pz/Pal stampato "6pz/Pal"): si tolgono gli zeri finali SOLO dopo la virgola
+    const pq = l.palletQuantity % 1 ? n(l.palletQuantity, 3).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '') : n(l.palletQuantity, 0);
+    out.push(`(${pq}${UL[l.unit] || l.unit.toLowerCase()}/Pal)`);
+    out.push(Math.abs(pal - Math.round(pal)) < 1e-6 ? `${Math.round(pal)} ${Math.round(pal) === 1 ? 'bancale' : 'bancali'}` : `circa ${n(pal, 1)} bancali`);
+  }
+  if (l.unitNote) out.push(l.unitNote);   // prezzi per unità scelti dall'agente (02/11)
+  return out;
+}
+
+function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
+  const t = totals(q);
+  const created = q.createdAt ? new Date(q.createdAt) : now;
+  const until = new Date(created.getTime() + (q.validDays || 30) * 864e5);
+  const c = q.customer || {}, depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
+  const F = 'font-family:Verdana,Arial,Helvetica,sans-serif;color:#000';
+  const cell = 'padding:5px 4px;vertical-align:top;font-size:8.5pt';
+  const num = cell + ';text-align:right;white-space:nowrap';
+  const head = (x, right) => `<th style="background:#c8c8c8;font-size:7.5pt;font-weight:bold;padding:3px 4px;text-align:${right ? 'right' : 'left'}">${x}</th>`;
+  const block = (title, lines) => `<td style="width:33%;vertical-align:top;font-size:8.5pt;line-height:1.45;padding-right:10px">${title ? `<div style="font-weight:bold;margin-bottom:6px">${title}</div>` : ''}${lines.filter(Boolean).map(esc).join('<br>')}</td>`;
+  const row = (desc, code, um, qty, price, disc, amount) => `<tr><td style="${cell};width:40%">${desc}</td><td style="${cell}">${esc(code)}</td><td style="${cell}">${esc(um)}</td>`
+    + `<td style="${num}">${qty}</td><td style="${num}">${price}</td>${disc === null ? '' : `<td style="${num};text-align:center">${disc}</td>`}<td style="${num}">${amount}</td></tr>`;
+  const site = String(q.site || '').trim();
+  const rows = q.lines.map(l => row([esc(l.description), ...lineExtra(l).map(esc)].join('<br>'), l.radixCode || l.listCode || '', UM[l.unit] || l.unit,
+    l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), n(docPrice(q, l), 3), hideDiscounts(q) ? null : discText(l.discounts), n(lineAmount(l), 2)));
+  if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), hideDiscounts(q) ? null : '', n(t.extras, 2)));
+  if (t.euroPallets) rows.push(row(esc(EURO_PALLET.label), EURO_PALLET.code, 'NR', n(t.euroPalletCount, 2), n(EURO_PALLET.price, 3), hideDiscounts(q) ? null : '', n(t.euroPallets, 2)));
+  if (t.freight) for (const f of freightRows(q, t.freight)) rows.push(row(esc(f.label), f.code, 'NR', n(f.qty, 2), n(f.price, 3), hideDiscounts(q) ? null : '', n(f.amount, 2)));
+  const notes = [];
+  const pickup = isPickup(q);
+  if (pickup) notes.push(`Materiale disponibile per il ritiro presso:<br><b>${depot.pickup.map(esc).join('<br>')}</b><br><b>Prezzo franco partenza</b> dal deposito`);
+  if (t.freightPending && !pickup) notes.push('Trasporto: da definire.');   // ritiro al deposito: nessun trasporto
+  if (q.notes) notes.push(esc(q.notes).replace(/\n/g, '<br>'));
+  const noteRows = notes.map(x => `<tr><td colspan="${hideDiscounts(q) ? 6 : 7}" style="${cell};padding-top:8px">${x}</td></tr>`).join('');
+  const tot = (k, v, bold) => `<tr><td style="font-size:8.5pt;padding:2px 4px">${k}</td><td style="font-size:8.5pt;padding:2px 4px;text-align:right${bold ? ';font-weight:bold' : ''}">${v}</td></tr>`;
+  const brand = header ? `<img src="${header}" alt="NORDTEX – For a better living" style="width:100%;display:block">`
+    : `<div style="font:italic 900 22pt Arial,sans-serif;letter-spacing:2px"><span style="color:#D40E41">NORD</span><span style="color:#676568">TEX</span> <span style="font:italic 400 12pt Georgia,serif;color:#333;letter-spacing:0">For a better living</span></div>`;
+  const foot = footer ? `<img src="${footer}" alt="Nordtex Srl" style="width:100%;display:block;margin-top:28px">`
+    : `<div style="margin-top:28px;font-size:7.5pt;color:#666;line-height:1.4"><b style="color:#D40E41">Nordtex Srl</b> · Società unipersonale · Via Prati all'Ospizio 6, 39043 Chiusa (BZ) · Tel. 0472 847 110 · info@nordtex.it · www.nordtex.it<br>P.I/C.F/RI BZ: 02623660988 · REA BZ-0189070 · Codice SDI: T04ZHR3</div>`;
+  return `<div class="nt-doc" style="${F};max-width:780px;margin:0 auto;background:#fff">
+${brand}
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px"><tr>
+${block('Deposito di uscita', depot.lines)}${block(destinationLines(q).length ? 'Destinazione merce' : '', destinationLines(q))}
+<td style="width:34%;vertical-align:top;font-size:8.5pt;line-height:1.45"><div style="font-weight:bold;margin-bottom:6px">Spett.le<span style="float:right;font-weight:normal;font-size:7.5pt">${customerCode(q) ? '(' + esc(customerCode(q)) + ')' : ''}</span></div>${customerLines(c).map(esc).join('<br>')}</td>
+</tr></table>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px"><tr><td style="background:#c8c8c8;width:58%;text-align:center;font-weight:bold;font-size:10pt;padding:4px">OFFERTA NR. ${esc(q.number || 'BOZZA')} - ${dotDate(created)}</td><td></td></tr></table>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;border-collapse:collapse"><thead><tr>${head('Descrizione')}${head('Codice')}${head('U.M.')}${head('Quantità', 1)}${head(hideDiscounts(q) ? 'Prezzo netto' : 'Prezzo', 1)}${hideDiscounts(q) ? '' : head('Sconto %', 1)}${head('Imp.netto', 1)}</tr></thead>
+<tbody>${rows.join('')}${noteRows}</tbody></table>
+<table cellpadding="0" cellspacing="0" style="margin:14px 0 0 auto;width:42%;border-top:1px solid #000;border-collapse:collapse">
+${tot('Totale merce:', n(t.taxable, 2))}<tr><td colspan="2" style="height:10px"></td></tr>${tot('Totale imponibile:', n(t.taxable, 2))}${tot(`Totale iva${t.vatRate !== 22 ? ' (' + n(t.vatRate, 0) + '%)' : ''}:`, n(t.vat, 2))}${tot('Totale offerta:', n(t.total, 2), true)}</table>
+<div style="margin-top:40px;font-size:8.5pt;line-height:1.6">Prezzi al netto dell'IVA.<br>
+<table cellpadding="0" cellspacing="0" style="font-size:8.5pt"><tr><td style="padding-right:8px">Condizione di pagamento</td><td>: <b>${esc(q.payment || 'DA CONCORDARE')}</b></td></tr>
+<tr><td>Trasporto a cura</td><td>: <b>${esc(q.transportBy || 'DESTINATARIO')}</b></td></tr><tr><td>Validità</td><td>: <b>${dotDate(until)}</b></td></tr></table></div>
+<div style="margin-top:14px;font-size:8.5pt;font-weight:bold;text-decoration:underline;line-height:1.6">${CLAUSES.map(esc).join('<br>')}</div>
+<div style="margin-top:14px;font-size:8.5pt">Ringraziamo per la gradita richiesta e inviamo cordiali saluti</div>
+<div style="margin:6px 0 0 50%;font-weight:bold;font-size:10pt">NORDTEX SRL</div>
+${foot}
+</div>`;
+}
+
+function quoteFileName(q, now = new Date()) {
+  const d = q.createdAt ? new Date(q.createdAt) : now;
+  const clean = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+  return [clean(q.customer?.name), customerCode(q), (/^OFF-\d{4}-\d+$/.test(q.number || '') ? q.number : 'OFF-' + clean(q.number || 'BOZZA')), d.toISOString().slice(0, 10)].filter(Boolean).join('_');
+}
+
+// 04/11 (offerta di Nonini): "ritiro al deposito" solo se il materiale c'è in quel deposito secondo le giacenze RADIX.
+// Restituisce le righe che non si possono ritirare: assente nel deposito, non disponibile, o quantità oltre il disponibile
+// (confronto solo se l'unità di misura coincide). Servizi senza codice RADIX (trasporti, bancali) esclusi.
+const UM_EQ = { MQ: 'M2', M2: 'M2', MC: 'M3', M3: 'M3', PZ: 'PZ', NR: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CONF' };
+function pickupStockIssues(q, stock) {
+  const radix = Object.entries(RADIX_DEPOTS).find(([, k]) => k === q?.depot)?.[0];
+  const dep = radix && stock?.depots ? stock.depots.find(d => d.code === radix) : null;
+  const out = [];
+  for (const l of q?.lines || []) {
+    if (!l.radixCode || /trasport|bancal/i.test(l.description || '')) continue;
+    const it = dep?.items?.[l.radixCode];
+    const avail = it ? Number(it.available) || 0 : 0;
+    const same = it && UM_EQ[String(it.um || '').toUpperCase()] && UM_EQ[String(it.um).toUpperCase()] === UM_EQ[String(l.unit || '').toUpperCase()];
+    if (!dep) out.push({ line: l, reason: 'giacenze del deposito non disponibili' });
+    else if (!it) out.push({ line: l, reason: 'non presente in questo deposito' });
+    else if (avail <= 0) out.push({ line: l, reason: 'non disponibile (giacenza teorica ' + avail + ')' });
+    else if (same && avail < l.qty) out.push({ line: l, reason: `disponibili solo ${String(avail).replace('.', ',')} ${String(it.um).toLowerCase()} su ${String(l.qty).replace('.', ',')}` });
+  }
+  return { depotDate: dep?.date || null, issues: out };
+}
+
+return { DEPOTS, RADIX_DEPOTS, stockDepot, TRANSPORT_BY, isPickup, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, FREIGHT_FULL, freightRows, customerLines, lineExtra, quoteDocHtml, quoteFileName, pickupStockIssues };
+})();
+__m["js/core/mailto.js"] = (function () {
+const { totals } = __m["js/core/pricing.js"];
+const { DEPOTS, fmtN, isPickup } = __m["js/core/quote-doc.js"];
+// Email preparata nel programma di posta di chi invia (Outlook, Mail, Gmail…): mittente = la casella personale.
+// Regola Direzione 31/10/2026: offerte e comunicazioni partono dalla posta dell'agente / di Tommaso / di Marco / di Christian.
+// 02/11 (prova di Christian su PC con Outlook): Outlook per Windows non riconosce più indirizzi separati da virgola → su Windows ';'
+const mailSeparator = (ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '')) => /Windows/i.test(ua) ? ';' : ',';
+function mailtoUrl({ to = [], cc = [], bcc = [], subject = '', body = '' }, sep = mailSeparator()) {
+  const list = a => [].concat(a).filter(Boolean).map(s => String(s).trim()).filter(Boolean).join(sep);
+  const q = [];
+  if (list(cc)) q.push('cc=' + encodeURIComponent(list(cc)));
+  if (list(bcc)) q.push('bcc=' + encodeURIComponent(list(bcc)));
+  if (subject) q.push('subject=' + encodeURIComponent(subject));
+  if (body) q.push('body=' + encodeURIComponent(String(body).replace(/\r?\n/g, '\r\n')));
+  return 'mailto:' + list(to).split(sep).map(encodeURIComponent).join(sep) + (q.length ? '?' + q.join('&') : '');
+}
+// testo dell'email dell'offerta (solo testo: mailto non accetta formattazione né allegati; il PDF lo allega chi invia).
+// Niente firma: la aggiunge il programma di posta di chi invia (prova del 01/11: firma doppia in Outlook).
+const itDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`; };
+function quoteMailIntro(q, now = new Date()) {
+  return `Buongiorno,\n\ncome d'accordo vi inviamo in allegato la nostra offerta n. ${q.number} del ${itDate(q.createdAt || now)}.`;
+}
+function quoteMailSummary(q, now = new Date()) {
+  const t = totals(q);
+  const depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
+  const pickup = isPickup(q);
+  const until = new Date(new Date(q.createdAt || now).getTime() + (q.validDays || 30) * 864e5);
+  const transport = pickup ? `franco deposito (${depot.pickup[0]})` : t.freightPending ? 'da definire'
+    : t.freight > 0 ? `compreso nell'offerta (${fmtN(t.freight, 2)} €)` : 'compreso';
+  return ['RIEPILOGO', `• Totale imponibile: ${fmtN(t.taxable, 2)} € + IVA`, `• Trasporto: ${transport}`,
+    `• Pagamento: ${q.payment || 'DA CONCORDARE'}`, `• Validità: fino al ${itDate(until)}`].join('\n');
+}
+function quoteMailBody(q, intro, sheets = '', now = new Date()) {
+  return [String(intro || '').trim(), quoteMailSummary(q, now), sheets, 'Restiamo a disposizione per qualsiasi chiarimento.\nCordiali saluti']
+    .filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n');
+}
+
+// apre il programma di posta senza lasciare la pagina (link temporaneo, niente navigazione)
+function openMailto(url) {
+  const a = document.createElement('a'); a.href = url; a.rel = 'noopener'; a.style.display = 'none';
+  document.body.append(a); a.click(); a.remove();
+}
+
+return { mailSeparator, mailtoUrl, quoteMailIntro, quoteMailSummary, quoteMailBody, openMailto };
+})();
+__m["js/core/offer-reminder.js"] = (function () {
+// 09/11/2026 (Tommaso): sollecito via email al cliente per un'offerta aperta, agganciato alla scadenza dei prezzi.
+// La mail parte dalla casella di chi la manda (link mailto), così le risposte arrivano a lui; niente firma (la mette Outlook).
+// Regole di Tommaso (09/11): senza risposta dopo 3 giorni lavorativi, sotto 3.000 € l'offerta diventa persa da sola;
+// da 3.000 a 5.000 € (o importo non indicato) si telefona; sopra 5.000 € niente mail, solo telefono o visita.
+// "Risposta" = un esito o un contatto registrato nell'HUB dopo il sollecito (l'HUB non legge la posta).
+const REMINDER = { days: 3, autoLostBelow: 3000, noMailAbove: 5000 };
+const it = d => d ? d.split('-').reverse().join('/') : '';
+const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+
+/** primo indirizzo email valido tra quelli del cliente (il campo può contenerne più di uno) */
+function firstEmail(...fields) {
+  for (const f of fields) { const m = String(f || '').match(EMAIL); if (m) return m[0].toLowerCase(); }
+  return '';
+}
+
+// giorni lavorativi (09/11, Tommaso: un sollecito del venerdì non può scadere il lunedì): niente sabato, domenica e festività nazionali
+const FIXED = ['01-01', '01-06', '04-25', '05-01', '06-02', '08-15', '11-01', '12-08', '12-25', '12-26'];
+function easterMonday(y) {   // calcolo gregoriano (Meeus/Jones/Butcher)
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h2 = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h2 - k) % 7, m = Math.floor((a + 11 * h2 + 22 * l) / 451);
+  const month = Math.floor((h2 + l - 7 * m + 114) / 31), day = ((h2 + l - 7 * m + 114) % 31) + 1;
+  return plusDays(`${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`, 1);
+}
+const isWorkday = iso => { const d = new Date(iso + 'T12:00:00'), w = d.getDay(); return w !== 0 && w !== 6 && !FIXED.includes(iso.slice(5)) && iso !== easterMonday(d.getFullYear()); };
+function plusWorkdays(iso, n) { let d = iso, k = 0; while (k < n) { d = plusDays(d, 1); if (isWorkday(d)) k++; } return d; }
+/** data ISO tra n giorni */
+function plusDays(isoDay, n) { const d = new Date(isoDay + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
+
+/**
+ * Testo del sollecito. o = offerta RADIX { id, date, subject, validUntil, contact }, sender = { name, role }.
+ * Nessun importo né condizione commerciale nel testo: il cliente ha già l'offerta.
+ */
+function reminderEmail(o, sender = {}, today = new Date().toISOString().slice(0, 10)) {
+  const num = o.id, subj = String(o.subject || '').trim();
+  const contact = String(o.contact || '').trim();
+  const lines = [
+    contact ? `Buongiorno ${contact},` : 'Buongiorno,',
+    '',
+    `le scrivo in merito alla nostra offerta n. ${num} del ${it(o.date)}${subj ? ` (${subj})` : ''}.`,
+  ];
+  if (o.validUntil && o.validUntil >= today) lines.push(`Le ricordo che i prezzi sono validi fino al ${it(o.validUntil)}.`);
+  else if (o.validUntil) lines.push(`La validità dei prezzi è scaduta il ${it(o.validUntil)}: se l'interesse è ancora attuale, la aggiorniamo volentieri.`);
+  lines.push('', 'Mi può confermare se l\'offerta è ancora di suo interesse e per quando prevede l\'ordine?',
+    'Se servono modifiche su prodotti o quantità, la aggiorniamo subito.', '', 'Cordiali saluti');
+  return { subject: `Nostra offerta ${num}${subj ? ' – ' + subj : ''}`, body: lines.join('\n') };
+}
+
+function mailtoLink(to, subject, body) {
+  return `mailto:${encodeURIComponent(to || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+/** sopra 5.000 € il sollecito non si manda per email */
+const canEmailReminder = o => !(Number(o.total) > REMINDER.noMailAbove);
+/** cosa succede se il cliente non risponde: 'persa' (sotto 3.000 €) o 'chiamare' (da 3.000 €, o importo non indicato) */
+const reminderAction = o => Number(o.total) > 0 && Number(o.total) < REMINDER.autoLostBelow ? 'persa' : 'chiamare';
+/** segno del sollecito nell'ultima nota dell'offerta: resta finché non si registra un esito (= il cliente ha risposto) */
+const reminderMarker = (day, to) => `Sollecito via email del ${it(day)}${to ? ' a ' + to : ''}`;
+const MARK = /^Sollecito via email del (\d{2})\/(\d{2})\/(\d{4})/;
+/** stato del sollecito su un'offerta RADIX aperta: null se non c'è; overdue = 3 giorni passati senza risposta */
+function reminderInfo(o, today = new Date().toISOString().slice(0, 10)) {
+  if (!o || !(o.outcome === 'Da seguire' || o.outcome === 'Sentito')) return null;
+  const m = String(o.outcomeNote || '').match(MARK); if (!m) return null;
+  const sent = `${m[3]}-${m[2]}-${m[1]}`, due = plusWorkdays(sent, REMINDER.days);
+  return { sent, due, overdue: today >= due, action: reminderAction(o) };
+}
+const lostNote = sent => `Non risponde a sollecito del ${it(sent)}: persa automaticamente dopo ${REMINDER.days} giorni lavorativi (offerta sotto ${'3.000'} €)`;
+const noAnswerText = 'Non risponde a sollecito: da chiamare';
+/** testo della nota nella storia del cliente (contiene il numero dell'offerta: la scheda offerta la ritrova) */
+const reminderNoteText = (o, to, due) => `Offerta ${o.id}${o.subject ? ' (' + o.subject + ')' : ''}: sollecito via email${to ? ' a ' + to : ''} · senza risposta entro il ${it(due)} ` +
+  (reminderAction(o) === 'persa' ? 'diventa persa' : 'va chiamato');
+const answeredNote = sent => `Ha risposto al sollecito del ${it(sent)}`;
+
+return { REMINDER, firstEmail, isWorkday, plusWorkdays, plusDays, reminderEmail, mailtoLink, canEmailReminder, reminderAction, reminderMarker, reminderInfo, lostNote, noAnswerText, reminderNoteText, answeredNote };
+})();
 __m["js/views/radix-offers.js"] = (function () {
 // Offerte aperte importate da RADIX (richiesta Tommaso 01/11/2026): l'app le mostra a chi segue il cliente
 // (senza cliente HUB solo alla Direzione) e permette di segnare l'esito. Le offerte restano in RADIX: qui si seguono.
@@ -3629,6 +3954,8 @@ const { h, fill, eur, dateIt, today, toast, modal, field, emptyState } = __m["js
 const { RADIX_OFFER_OUTCOMES, radixOfferDue, validityInfo, isExpiring, NOTE_OUTCOMES } = __m["js/data/model.js"];
 const { pickNoteForOffer } = __m["js/views/note-offers.js"];
 const { SERVICE_RX } = __m["js/core/radix-import.js"];
+const { mailtoUrl, openMailto } = __m["js/core/mailto.js"];
+const { reminderEmail, firstEmail, plusWorkdays, answeredNote, reminderNoteText, REMINDER, canEmailReminder, reminderMarker, reminderInfo, lostNote, noAnswerText } = __m["js/core/offer-reminder.js"];
 const CLS = { 'Da seguire': 'warn', Sentito: 'info', Accettata: 'ok', Persa: 'bad' };
 const radixOfferOpen = o => o.outcome === 'Da seguire' || o.outcome === 'Sentito';
 const dueState = o => { const d = radixOfferDue(o); if (!d || !radixOfferOpen(o)) return ''; const t = today(); return d < t ? 'scaduto' : d === t ? 'oggi' : ''; };
@@ -3795,7 +4122,8 @@ async function linkOffer(app, o, refresh) {
 }
 async function viewRadixOffer(app, id) {
   // 07/11 sera: anche le offerte non più aperte in RADIX (scadute o diventate ordine) si aprono, come dall'elenco Offerte
-  const all = app.store.radixOffers ? await app.store.radixOffers({ withClosed: true }).catch(() => []) : [];
+  let all = app.store.radixOffers ? await app.store.radixOffers({ withClosed: true }).catch(() => []) : [];
+  if (await applyReminderRules(app, all)) all = await app.store.radixOffers({ withClosed: true }).catch(() => all);   // 09/11: solleciti senza risposta
   const o = all.find(x => x.id === id);
   await loadMatches(app, all).catch(() => null);
   if (!o) return h('div', { class: 'page' }, h('a', { class: 'back', href: '#/preventivi' }, '← Offerte'), emptyState('Offerta non trovata o non visibile con il tuo accesso.'));
@@ -3825,11 +4153,15 @@ async function viewRadixOffer(app, id) {
           v && radixOfferOpen(o) ? h('span', { class: 'due ' + (v.cls === 'bad' ? 'scaduto' : v.cls === 'warn' ? 'oggi' : '') }, v.label) : null)),
       h('p', { class: 'rx-story' }, about.length ? `Sentito ${about.length} ${about.length === 1 ? 'volta' : 'volte'} per questa offerta` + (calls || visits ? ` (${[calls ? calls + ' telefonat' + (calls === 1 ? 'a' : 'e') : '', visits ? visits + ' visit' + (visits === 1 ? 'a' : 'e') : ''].filter(Boolean).join(', ')})` : '') + ` · ultimo contatto ${dateIt(about[0].createdAt)}`
         : 'Nessun contatto registrato su questa offerta.'),
+      reminderBadge(o, app, refresh),
       radixOpenForecast(app, o),
       matchBox(app, o, refresh),
       o.outcomeNote ? h('p', { class: 'rx-note' }, `Ultimo esito: “${o.outcomeNote}” — ${o.outcomeByName || ''} ${o.outcomeAt ? dateIt(o.outcomeAt) : ''}`) : null,
       h('div', { class: 'cactions' },
         !app.session.preview ? h('button', { class: 'act primary', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, h('span', { class: 'act-ico' }, '✓'), h('span', {}, 'Esito')) : null,
+        c && radixOfferOpen(o) && !app.session.preview ? (canEmailReminder(o)
+          ? h('button', { class: 'act', type: 'button', onclick: async () => { if (await reminderDialog(app, o, c).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, h('span', { class: 'act-ico' }, '✉'), h('span', {}, 'Sollecito'))
+          : h('button', { class: 'act', type: 'button', disabled: true, title: `Sopra ${'5.000'} € il sollecito si fa per telefono o con una visita` }, h('span', { class: 'act-ico' }, '✉'), h('span', {}, 'Sollecito solo a voce'))) : null,
         c?.phone ? h('a', { class: 'act', href: 'tel:' + (String(c.phone).match(/[+\d][\d\s/.-]{5,}/) || [''])[0].replace(/[^\d+]/g, '') }, h('span', { class: 'act-ico' }, '☎'), h('span', {}, 'Chiama')) : null,
         c ? h('a', { class: 'act', href: '#/agenda/' + c.id }, h('span', { class: 'act-ico' }, '☰'), h('span', {}, 'Scheda cliente')) : null,
         o.pdfAt && app.store.radixOfferPdf ? h('button', { class: 'act', type: 'button', onclick: () => openRadixPdf(app, o) }, h('span', { class: 'act-ico' }, '⎙'), h('span', {}, 'PDF RADIX')) : null)),
@@ -3885,7 +4217,70 @@ function forecastMonthInput(val) {
   return h('select', { 'aria-label': 'Mese previsto' }, h('option', { value: '' }, 'Mese previsto…'), ms.map(m => h('option', { value: m, selected: m === val }, lab(m))));
 }
 
-return { radixOfferOpen, dueState, radixOfferDialog, offerNoteText, mentionsOffer, linesSummary, radixOfferRow, radixOffersPanel, radixOffersCard, radixFuLine, radixFollowupBlock, viewRadixOffer, forecastSelect, forecastMonthInput };
+// 09/11 (Tommaso): sollecito via email dalla propria casella, agganciato alla scadenza dei prezzi.
+// Registra il contatto nella storia del cliente e fissa il prossimo contatto a 7 giorni (chi non risponde va richiamato).
+const AGENT_FREE = /^(direzionale|ex_area)/i;
+async function reminderDialog(app, o, c) {
+  const s = app.session || {};
+  const m = reminderEmail(o, { name: s.name, role: s.role }, today());
+  const cts = app.store.contacts ? await app.store.contacts(c.id).catch(() => []) : [];
+  const to = h('input', { type: 'email', value: firstEmail(c.email, ...cts.map(x => x.email)), placeholder: 'indirizzo del cliente' });
+  const subj = h('input', { type: 'text', value: m.subject });
+  const body = h('textarea', { rows: 13 }, m.body);
+  const next = plusWorkdays(today(), REMINDER.days);
+  const other = s.role === 'direzione' && c.assignee && !AGENT_FREE.test(c.assignee) && c.assignee !== s.assignee;
+  const res = await modal(`Sollecito offerta ${o.id}`, h('div', { class: 'form' },
+    other ? h('p', { class: 'alert warn' }, `Cliente seguito da ${c.assignee}: di solito il sollecito lo fa l'agente. Mandalo tu solo se lo avete concordato.`) : null,
+    field('A', to, to.value ? 'Puoi cambiarlo o aggiungerne altri separati da virgola.' : 'Nessuna email nella scheda cliente: scrivila qui.'),
+    field('Oggetto', subj), field('Testo', body, 'Si apre nella tua posta (con la tua firma): controlli e invii da lì. Le risposte arrivano a te.'),
+    h('p', { class: 'fine' }, `Se il cliente non risponde entro il ${dateIt(next)} ` + (reminderInfo({ ...o, outcome: 'Da seguire', outcomeNote: reminderMarker(today()) })?.action === 'persa'
+      ? `l'offerta diventa persa da sola (sotto ${'3.000'} €).` : 'compare "Non risponde a sollecito" ed è da chiamare.') + ' Quando risponde, premi «Ha risposto» sull\'offerta: il conto alla rovescia si ferma.')),
+    [{ label: 'Annulla', value: false },
+     { label: 'Copia testo', run: async () => { try { await navigator.clipboard.writeText(body.value); toast('Testo copiato'); } catch { toast('Copia non riuscita: selezionalo a mano', 'error'); } return false; } },
+     { label: 'Apri nella posta', primary: true, run: async () => {
+       const addr = to.value.trim();
+       if (!addr) throw new Error('Manca l\'indirizzo email del cliente');
+       openMailto(mailtoUrl({ to: addr.split(/[;,]\s*/), subject: subj.value, body: body.value }));   // stesso modo delle altre mail (separatore giusto per Outlook)
+       if (app.store.addNote) await app.store.addNote({ customerId: c.id, kind: 'Email', outcome: 'Preventivo specifico', body: reminderNoteText(o, addr, next) }).catch(() => null);
+       const mark = (reminderMarker(today(), addr) + (o.outcomeNote ? ' · prima: ' + o.outcomeNote : '')).slice(0, 1000);
+       await app.store.setRadixOfferOutcome(o.id, { outcome: o.outcome, note: mark, next }).catch(e => toast('Sollecito non segnato sull\'offerta: ' + e.message, 'error'));
+       return true; } }]);
+  if (res) toast(`Sollecito segnato · risposta attesa entro il ${dateIt(next)}`);
+  return !!res;
+}
+
+// 09/11: stato del sollecito sull'offerta (scheda e elenco), con "Ha risposto" che ferma il conto alla rovescia in un clic
+function reminderBadge(o, app, onDone) {
+  const r = reminderInfo(o, today()); if (!r) return null;
+  const answered = app && !app.session?.preview ? h('button', { class: 'btn small', type: 'button', title: 'Il cliente ha risposto: si ferma il conto alla rovescia', onclick: async e => {
+    e.preventDefault(); e.stopPropagation(); e.target.disabled = true;
+    try {
+      await app.store.setRadixOfferOutcome(o.id, { outcome: 'Sentito', note: answeredNote(r.sent), next: plusWorkdays(today(), 5) });   // prossimo contatto tra una settimana, non il vecchio follow-up RADIX
+      if (o.customerId && app.store.addNote) await app.store.addNote({ customerId: o.customerId, kind: 'Email', outcome: 'Preventivo specifico', body: `Offerta ${o.id}: ${answeredNote(r.sent).toLowerCase()}` }).catch(() => null);
+      toast('Segnato: ha risposto. Se puoi, segna la previsione.'); onDone?.();
+    } catch (err) { e.target.disabled = false; toast(err.message, 'error'); }
+  } }, '✓ Ha risposto') : null;
+  return h('p', { class: (r.overdue ? 'due scaduto' : 'muted') + ' rx-remind' },
+    r.overdue ? '📭 ' + noAnswerText + ` (sollecito del ${dateIt(r.sent)}) ` : `✉ Sollecito via email del ${dateIt(r.sent)} · risposta attesa entro il ${dateIt(r.due)} `, answered);
+}
+// 09/11 (Tommaso): sotto 3.000 €, 3 giorni lavorativi dopo il sollecito senza risposta l'offerta diventa persa da sola.
+// Gira quando si aprono le offerte (chi può scrivere: Direzione, ufficio, l'agente sulle sue). Ritorna quante ne ha chiuse.
+async function applyReminderRules(app, offers = []) {
+  if (app.session?.preview || !app.store.setRadixOfferOutcome) return 0;
+  let n = 0;
+  for (const o of offers) {
+    const r = reminderInfo(o, today());
+    if (!r?.overdue || r.action !== 'persa') continue;
+    try {
+      await app.store.setRadixOfferOutcome(o.id, { outcome: 'Persa', note: lostNote(r.sent), next: null });
+      if (o.customerId && app.store.addNote) await app.store.addNote({ customerId: o.customerId, kind: 'Altro', outcome: 'Preventivo specifico', body: `Offerta ${o.id}: ${lostNote(r.sent).toLowerCase()}` }).catch(() => null);
+      n++;
+    } catch { /* non è sua o non modificabile: la chiuderà chi la segue */ }
+  }
+  return n;
+}
+
+return { radixOfferOpen, dueState, radixOfferDialog, offerNoteText, mentionsOffer, linesSummary, radixOfferRow, radixOffersPanel, radixOffersCard, radixFuLine, radixFollowupBlock, viewRadixOffer, forecastSelect, forecastMonthInput, reminderBadge, applyReminderRules };
 })();
 __m["js/views/fiscal.js"] = (function () {
 // 02/11 (versione Ufficio): campi "dati per l'ordine" del cliente nuovo — P.IVA, SDI/PEC, pagamento, banca.
@@ -4879,211 +5274,6 @@ class PdfDoc {
 
 return { toWinAnsi, textWidth, wrapText, jpegSize, PdfDoc };
 })();
-__m["js/core/quote-doc.js"] = (function () {
-// Documento offerta nel formato NORDTEX/RADIX (modello: offerte 1051, 1313, 1324 del 2026, Crystal Reports):
-// testata con logo, Deposito di uscita · Cantiere · Spett.le (codice cliente), barra "OFFERTA NR. … - data",
-// righe Descrizione/Codice/U.M./Quantità/Prezzo/Sconto %/Imp.netto, totali, condizioni, clausole, piè di pagina aziendale.
-// Modulo puro (stringa HTML con stili in linea): stampa/PDF nell'app ed email dalla funzione server.
-const { totals, lineAmount, lineNet, palletsFor, EURO_PALLET } = __m["js/core/pricing.js"];
-// Depositi NORDTEX: elenco e indirizzi dal sito nordtex.it (31/10/2026); telefoni di Lecco e Polymax dalle offerte RADIX
-const DEPOTS = {
-  diretta: { label: 'Consegna diretta dal produttore', lines: ['CONSEGNA DIRETTA'] },
-  SEDE: { label: 'Sede NORDTEX – Chiusa (BZ)', lines: ['SEDE NORDTEX', "PRATO DELL'OSPIZIO", '39043 CHIUSA (BZ)'], pickup: ['Sede NORDTEX', "Prato dell'Ospizio", 'IT-39043 Chiusa (BZ)'] },
-  LECCO: { label: 'Deposito Lecco – Fornaci Giussani (Inverigo CO)', lines: ['DEPOSITO LECCO -', 'FORNACI GIUSSANI', 'VIA ARISTIDE MAGNI 98', '22044 INVERIGO (CO)', 'Tel:031607100'],
-    pickup: ['Fornace Giussani', 'Via Aristide Magni, 98', 'IT-22044 Inverigo (CO)'] },
-  CASALE: { label: 'Deposito Piemonte – Savallo Autotrasporti (Casale Monferrato AL)', lines: ['DEPOSITO PIEMONTE -', 'SAVALLO AUTOTRASPORTI', 'STRADA VALENZA 7', '15033 CASALE MONFERRATO (AL)'],
-    pickup: ['Savallo Autotrasporti', 'Strada Valenza, 7', 'IT-15033 Casale Monferrato (AL)'] },
-  CASTELFRAN: { label: 'Deposito Veneto – Polymax Italia (Castelfranco Veneto TV)', lines: ['POLYMAX', 'VIA FUSINA 12', '31033 CASTELFRANCO', 'VENETO (TV)', 'Tel:0423493544', 'Fax:0423497841'],
-    pickup: ['Polymax', 'Via Fusina 12', 'IT-31033 Castelfranco Veneto (TV)'] },
-  TORRI: { label: 'Deposito Veneto – Loewenstark (Torri di Quartesolo VI)', lines: ['DEPOSITO VENETO -', 'LOEWENSTARK SRL', 'VIA CAMISANA 15', '36040 TORRI DI QUARTESOLO (VI)'],
-    pickup: ['Loewenstark srl', 'Via Camisana, 15', 'IT-36040 Torri di Quartesolo (VI)'] },
-  MARCHE: { label: 'Deposito Marche – SPEA Tecnologie Edili (Morrovalle MC)', lines: ['DEPOSITO MARCHE -', 'SPEA TECNOLOGIE EDILI SRL', 'CONTRADA SARROCCIANO', '62010 MORROVALLE (MC)'],
-    pickup: ['SPEA Tecnologie Edili srl', 'Contrada Sarrocciano', 'IT-62010 Morrovalle (MC)'] },
-};
-// 02/11: codici dei depositi in RADIX (elenco "Codice deposito") → deposito dell'offerta; gli altri solo per le giacenze
-const RADIX_DEPOTS = { CHIUSA: 'SEDE', LECCO: 'LECCO', CASALE: 'CASALE', CASTELFRAN: 'CASTELFRAN', VICENZA: 'TORRI', MACERATA: 'MARCHE' };
-const OTHER_STOCK = { 'DEL DOSSO': ['Deposito Sondrio (Piateda SO)', 'Piateda (SO)'], EDILLOGIST: ['Made Edil Logistica (Pogliano Milanese MI)', 'Pogliano Milanese (MI)'],
-  BIOISOLARE: ['Bioisolare (Malo VI)', 'Malo (VI)'], POLYMAX: ['Polymax radianti (Castelfranco Veneto TV)', 'Polymax radianti'] };
-// deposito delle giacenze → { label, place (nome corto), pickup }
-function stockDepot(code, name = '') {
-  const d = DEPOTS[RADIX_DEPOTS[code] || code];
-  if (d?.pickup) return { label: d.label, place: d.pickup[2].replace(/^IT-\d+\s*/, ''), pickup: d.pickup };
-  const o = OTHER_STOCK[code];
-  return { label: o ? o[0] : name || code, place: o ? o[1] : code, pickup: null };
-}
-const TRANSPORT_BY = ['DESTINATARIO', 'VETTORE', 'MITTENTE'];
-// 02/11 (offerta Casale di Tommaso): ritiro al deposito senza trasporto.
-// q.pickup = true/false scelto nell'offerta; offerte vecchie (q.pickup assente): ritiro se deposito con ritiro e trasporto a cura del destinatario.
-function isPickup(q) {
-  const d = DEPOTS[q.depot || 'diretta'];
-  if (!d?.pickup) return false;
-  if (q.pickup === true || q.pickup === false) return q.pickup;
-  return (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO';
-}
-const CLAUSES = ['Quotazioni valide salvo variazioni imposte dal produttore/fornitore. Non si accettano resi.', 'Non ci assumiamo responsabilità per ritardi e danni nelle consegne dovute ai vettori.'];
-
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-// formato numeri come RADIX: separatore migliaia sempre presente (2.577,25), decimali fissi
-const fmtN = (v, d) => { const [i, f] = Math.abs(Number(v)).toFixed(d).split('.'); return (Number(v) < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : ''); };
-const n = fmtN;
-const dotDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}.${String(x.getMonth() + 1).padStart(2, '0')}.${x.getFullYear()}`; };
-const UM = { M2: 'MQ', M3: 'M3', PZ: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CF', ROTOLO: 'RT', SACCO: 'SC', BIGBAG: 'BB' };
-const UL = { M2: 'm²', M3: 'm³', ML: 'ml', PZ: 'pz', KG: 'kg' };
-const discText = d => d.filter(x => x).map(x => n(x, x % 1 ? 1 : 0)).join('+');
-// 02/11 (richiesta Tommaso, come nella vecchia app offerte): sconti nascosti nel documento → colonna Prezzo = prezzo netto, colonna Sconto % assente
-const hideDiscounts = q => q.hideDiscounts === true;
-const docPrice = (q, l) => hideDiscounts(q) ? lineNet(l) : l.listPrice;
-const customerCode = q => (q.customerId && !String(q.customerId).startsWith('H-') ? String(q.customerId) : '');
-
-// Righe aggiuntive di descrizione, come in RADIX: "(30,78m²/Pal)" e "4 bancali"
-// 02/11 (prova con Christian): destinazione della merce sul documento = cantiere scritto nelle condizioni,
-// altrimenti l'indirizzo di consegna del riquadro trasporto se diverso dalla sede del cliente.
-function destinationLines(q) {
-  const site = String(q.site || '').trim();
-  if (site) return site.split('\n').map(s => s.trim()).filter(Boolean);
-  const d = q.delivery || {}, c = q.customer || {};
-  const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!d.city || (norm(d.street) === norm(c.street) && norm(d.city) === norm(c.city))) return [];
-  return [d.street, [d.cap, d.city, d.prov ? `(${d.prov})` : ''].filter(Boolean).join(' ')].filter(Boolean);
-}
-// riga del trasporto per il cliente: niente note interne ("inserito manualmente", dettagli di calcolo)
-const MEZZO = { centinato: 'con bilico centinato', walkingfloor: 'con walking floor', groupage: 'groupage con corriere' };
-function destCity(q) {
-  const dest = destinationLines(q);
-  return dest.length ? dest[dest.length - 1].replace(/^\d{5}\s+/, '') : [q.customer?.city, q.customer?.prov ? `(${q.customer.prov})` : ''].filter(Boolean).join(' ');
-}
-function freightLabel(q, part = null) {
-  const v = part ? (part.kind === 'pallet' ? 'groupage' : part.vehicle) : Object.keys(q.logistics?.km || {}).length ? q.logistics?.vehicleType : null;   // solo trasporti a km (laterizi, vetro cellulare)
-  const city = destCity(q);
-  return ['Servizio di trasporto', MEZZO[v] || '', part?.label ? `(${part.label})` : '', city ? `- consegna a ${city}` : ''].filter(Boolean).join(' ');
-}
-// 06/11 (segnalazione Tommaso, offerta laterizi su 3 bilici): la riga trasporto riportava "1,00 × 4.334,40" come se fosse un solo carico.
-// Trasporto calcolato dall'app: una riga per ogni trasporto (luogo di carico); a km quantità = mezzi e prezzo = costo di un mezzo;
-// groupage V600 quantità = bancali × prezzo a bancale. Codici RADIX (confermati da Tommaso 06/11): mezzi pieni N88079 «carico completo»,
-// mezzo non pieno e groupage N14126 «carico diretto parziale». Importo scritto a mano, stima diversa o conti che non tornano al centesimo:
-// una sola riga 1 × importo con N14126.
-const FREIGHT_FULL = 'N88079', FREIGHT_PARTIAL = 'N14126';
-const c2 = x => Math.round(x * 100) / 100;
-function kmRows(cost, k, fullVehicles) {
-  const each = c2(cost / k);
-  if (Math.abs(each * k - cost) >= 0.005) return null;
-  const full = Math.max(0, Math.min(k, fullVehicles ?? 0)), rest = k - full;
-  return [full && { code: FREIGHT_FULL, qty: full, price: each, amount: c2(each * full) },
-    rest && { code: FREIGHT_PARTIAL, qty: rest, price: each, amount: c2(cost - each * full) }].filter(Boolean);
-}
-function freightRows(q, freight) {
-  const one = [{ code: FREIGHT_PARTIAL, qty: 1, price: freight, amount: freight, label: freightLabel(q) }];
-  const e = q.transportEstimate;
-  if (!(freight > 0) || !q.freightAuto || !e || !(Math.abs((e.amount ?? NaN) - freight) < 0.005)) return one;
-  if (Array.isArray(e.parts) && e.parts.length) {
-    const rows = [];
-    for (const p of e.parts) {
-      let r = null;
-      if (p.kind === 'km' && p.vehicles >= 1) r = kmRows(p.cost, p.vehicles, p.fullVehicles);
-      else if (p.kind === 'pallet' && p.pallets > 0 && Math.abs(p.pallets * p.perPallet - p.cost) < 0.005) r = [{ code: FREIGHT_PARTIAL, qty: p.pallets, price: p.perPallet, amount: c2(p.cost) }];
-      if (!r) r = [{ code: FREIGHT_PARTIAL, qty: 1, price: p.cost, amount: c2(p.cost) }];
-      const label = freightLabel(q, e.parts.length > 1 ? p : { ...p, label: '' });
-      rows.push(...r.map(x => ({ ...x, label })));
-    }
-    return Math.abs(rows.reduce((s, x) => s + x.amount, 0) - freight) < 0.005 ? rows : one;
-  }
-  if (!(e.vehicles >= 1)) return one;   // offerte salvate prima delle righe per trasporto: un solo luogo di carico a km
-  const r = kmRows(freight, e.vehicles, e.fullVehicles);
-  return r ? r.map(x => ({ ...x, label: freightLabel(q) })) : one;
-}
-const customerLines = c => [c.name, c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' '), c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean);
-
-function lineExtra(l) {
-  const out = [], pal = palletsFor(l);
-  if (l.palletQuantity > 0 && pal !== null) {
-    // 02/11 (errore visto su W14 PLAN: 60 pz/Pal stampato "6pz/Pal"): si tolgono gli zeri finali SOLO dopo la virgola
-    const pq = l.palletQuantity % 1 ? n(l.palletQuantity, 3).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '') : n(l.palletQuantity, 0);
-    out.push(`(${pq}${UL[l.unit] || l.unit.toLowerCase()}/Pal)`);
-    out.push(Math.abs(pal - Math.round(pal)) < 1e-6 ? `${Math.round(pal)} ${Math.round(pal) === 1 ? 'bancale' : 'bancali'}` : `circa ${n(pal, 1)} bancali`);
-  }
-  if (l.unitNote) out.push(l.unitNote);   // prezzi per unità scelti dall'agente (02/11)
-  return out;
-}
-
-function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
-  const t = totals(q);
-  const created = q.createdAt ? new Date(q.createdAt) : now;
-  const until = new Date(created.getTime() + (q.validDays || 30) * 864e5);
-  const c = q.customer || {}, depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
-  const F = 'font-family:Verdana,Arial,Helvetica,sans-serif;color:#000';
-  const cell = 'padding:5px 4px;vertical-align:top;font-size:8.5pt';
-  const num = cell + ';text-align:right;white-space:nowrap';
-  const head = (x, right) => `<th style="background:#c8c8c8;font-size:7.5pt;font-weight:bold;padding:3px 4px;text-align:${right ? 'right' : 'left'}">${x}</th>`;
-  const block = (title, lines) => `<td style="width:33%;vertical-align:top;font-size:8.5pt;line-height:1.45;padding-right:10px">${title ? `<div style="font-weight:bold;margin-bottom:6px">${title}</div>` : ''}${lines.filter(Boolean).map(esc).join('<br>')}</td>`;
-  const row = (desc, code, um, qty, price, disc, amount) => `<tr><td style="${cell};width:40%">${desc}</td><td style="${cell}">${esc(code)}</td><td style="${cell}">${esc(um)}</td>`
-    + `<td style="${num}">${qty}</td><td style="${num}">${price}</td>${disc === null ? '' : `<td style="${num};text-align:center">${disc}</td>`}<td style="${num}">${amount}</td></tr>`;
-  const site = String(q.site || '').trim();
-  const rows = q.lines.map(l => row([esc(l.description), ...lineExtra(l).map(esc)].join('<br>'), l.radixCode || l.listCode || '', UM[l.unit] || l.unit,
-    l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), n(docPrice(q, l), 3), hideDiscounts(q) ? null : discText(l.discounts), n(lineAmount(l), 2)));
-  if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), hideDiscounts(q) ? null : '', n(t.extras, 2)));
-  if (t.euroPallets) rows.push(row(esc(EURO_PALLET.label), EURO_PALLET.code, 'NR', n(t.euroPalletCount, 2), n(EURO_PALLET.price, 3), hideDiscounts(q) ? null : '', n(t.euroPallets, 2)));
-  if (t.freight) for (const f of freightRows(q, t.freight)) rows.push(row(esc(f.label), f.code, 'NR', n(f.qty, 2), n(f.price, 3), hideDiscounts(q) ? null : '', n(f.amount, 2)));
-  const notes = [];
-  const pickup = isPickup(q);
-  if (pickup) notes.push(`Materiale disponibile per il ritiro presso:<br><b>${depot.pickup.map(esc).join('<br>')}</b><br><b>Prezzo franco partenza</b> dal deposito`);
-  if (t.freightPending && !pickup) notes.push('Trasporto: da definire.');   // ritiro al deposito: nessun trasporto
-  if (q.notes) notes.push(esc(q.notes).replace(/\n/g, '<br>'));
-  const noteRows = notes.map(x => `<tr><td colspan="${hideDiscounts(q) ? 6 : 7}" style="${cell};padding-top:8px">${x}</td></tr>`).join('');
-  const tot = (k, v, bold) => `<tr><td style="font-size:8.5pt;padding:2px 4px">${k}</td><td style="font-size:8.5pt;padding:2px 4px;text-align:right${bold ? ';font-weight:bold' : ''}">${v}</td></tr>`;
-  const brand = header ? `<img src="${header}" alt="NORDTEX – For a better living" style="width:100%;display:block">`
-    : `<div style="font:italic 900 22pt Arial,sans-serif;letter-spacing:2px"><span style="color:#D40E41">NORD</span><span style="color:#676568">TEX</span> <span style="font:italic 400 12pt Georgia,serif;color:#333;letter-spacing:0">For a better living</span></div>`;
-  const foot = footer ? `<img src="${footer}" alt="Nordtex Srl" style="width:100%;display:block;margin-top:28px">`
-    : `<div style="margin-top:28px;font-size:7.5pt;color:#666;line-height:1.4"><b style="color:#D40E41">Nordtex Srl</b> · Società unipersonale · Via Prati all'Ospizio 6, 39043 Chiusa (BZ) · Tel. 0472 847 110 · info@nordtex.it · www.nordtex.it<br>P.I/C.F/RI BZ: 02623660988 · REA BZ-0189070 · Codice SDI: T04ZHR3</div>`;
-  return `<div class="nt-doc" style="${F};max-width:780px;margin:0 auto;background:#fff">
-${brand}
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px"><tr>
-${block('Deposito di uscita', depot.lines)}${block(destinationLines(q).length ? 'Destinazione merce' : '', destinationLines(q))}
-<td style="width:34%;vertical-align:top;font-size:8.5pt;line-height:1.45"><div style="font-weight:bold;margin-bottom:6px">Spett.le<span style="float:right;font-weight:normal;font-size:7.5pt">${customerCode(q) ? '(' + esc(customerCode(q)) + ')' : ''}</span></div>${customerLines(c).map(esc).join('<br>')}</td>
-</tr></table>
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px"><tr><td style="background:#c8c8c8;width:58%;text-align:center;font-weight:bold;font-size:10pt;padding:4px">OFFERTA NR. ${esc(q.number || 'BOZZA')} - ${dotDate(created)}</td><td></td></tr></table>
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;border-collapse:collapse"><thead><tr>${head('Descrizione')}${head('Codice')}${head('U.M.')}${head('Quantità', 1)}${head(hideDiscounts(q) ? 'Prezzo netto' : 'Prezzo', 1)}${hideDiscounts(q) ? '' : head('Sconto %', 1)}${head('Imp.netto', 1)}</tr></thead>
-<tbody>${rows.join('')}${noteRows}</tbody></table>
-<table cellpadding="0" cellspacing="0" style="margin:14px 0 0 auto;width:42%;border-top:1px solid #000;border-collapse:collapse">
-${tot('Totale merce:', n(t.taxable, 2))}<tr><td colspan="2" style="height:10px"></td></tr>${tot('Totale imponibile:', n(t.taxable, 2))}${tot(`Totale iva${t.vatRate !== 22 ? ' (' + n(t.vatRate, 0) + '%)' : ''}:`, n(t.vat, 2))}${tot('Totale offerta:', n(t.total, 2), true)}</table>
-<div style="margin-top:40px;font-size:8.5pt;line-height:1.6">Prezzi al netto dell'IVA.<br>
-<table cellpadding="0" cellspacing="0" style="font-size:8.5pt"><tr><td style="padding-right:8px">Condizione di pagamento</td><td>: <b>${esc(q.payment || 'DA CONCORDARE')}</b></td></tr>
-<tr><td>Trasporto a cura</td><td>: <b>${esc(q.transportBy || 'DESTINATARIO')}</b></td></tr><tr><td>Validità</td><td>: <b>${dotDate(until)}</b></td></tr></table></div>
-<div style="margin-top:14px;font-size:8.5pt;font-weight:bold;text-decoration:underline;line-height:1.6">${CLAUSES.map(esc).join('<br>')}</div>
-<div style="margin-top:14px;font-size:8.5pt">Ringraziamo per la gradita richiesta e inviamo cordiali saluti</div>
-<div style="margin:6px 0 0 50%;font-weight:bold;font-size:10pt">NORDTEX SRL</div>
-${foot}
-</div>`;
-}
-
-function quoteFileName(q, now = new Date()) {
-  const d = q.createdAt ? new Date(q.createdAt) : now;
-  const clean = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
-  return [clean(q.customer?.name), customerCode(q), (/^OFF-\d{4}-\d+$/.test(q.number || '') ? q.number : 'OFF-' + clean(q.number || 'BOZZA')), d.toISOString().slice(0, 10)].filter(Boolean).join('_');
-}
-
-// 04/11 (offerta di Nonini): "ritiro al deposito" solo se il materiale c'è in quel deposito secondo le giacenze RADIX.
-// Restituisce le righe che non si possono ritirare: assente nel deposito, non disponibile, o quantità oltre il disponibile
-// (confronto solo se l'unità di misura coincide). Servizi senza codice RADIX (trasporti, bancali) esclusi.
-const UM_EQ = { MQ: 'M2', M2: 'M2', MC: 'M3', M3: 'M3', PZ: 'PZ', NR: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CONF' };
-function pickupStockIssues(q, stock) {
-  const radix = Object.entries(RADIX_DEPOTS).find(([, k]) => k === q?.depot)?.[0];
-  const dep = radix && stock?.depots ? stock.depots.find(d => d.code === radix) : null;
-  const out = [];
-  for (const l of q?.lines || []) {
-    if (!l.radixCode || /trasport|bancal/i.test(l.description || '')) continue;
-    const it = dep?.items?.[l.radixCode];
-    const avail = it ? Number(it.available) || 0 : 0;
-    const same = it && UM_EQ[String(it.um || '').toUpperCase()] && UM_EQ[String(it.um).toUpperCase()] === UM_EQ[String(l.unit || '').toUpperCase()];
-    if (!dep) out.push({ line: l, reason: 'giacenze del deposito non disponibili' });
-    else if (!it) out.push({ line: l, reason: 'non presente in questo deposito' });
-    else if (avail <= 0) out.push({ line: l, reason: 'non disponibile (giacenza teorica ' + avail + ')' });
-    else if (same && avail < l.qty) out.push({ line: l, reason: `disponibili solo ${String(avail).replace('.', ',')} ${String(it.um).toLowerCase()} su ${String(l.qty).replace('.', ',')}` });
-  }
-  return { depotDate: dep?.date || null, issues: out };
-}
-
-return { DEPOTS, RADIX_DEPOTS, stockDepot, TRANSPORT_BY, isPickup, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, FREIGHT_FULL, freightRows, customerLines, lineExtra, quoteDocHtml, quoteFileName, pickupStockIssues };
-})();
 __m["js/core/quote-pdf.js"] = (function () {
 // PDF dell'offerta nel formato NORDTEX/RADIX, generato nell'app (nessun servizio esterno): lo stesso contenuto di quote-doc.js.
 // Serve all'invio dalla casella personale di chi fa l'offerta (decisione Direzione 31/10/2026).
@@ -5174,51 +5364,6 @@ function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
 }
 
 return { quotePdf };
-})();
-__m["js/core/mailto.js"] = (function () {
-const { totals } = __m["js/core/pricing.js"];
-const { DEPOTS, fmtN, isPickup } = __m["js/core/quote-doc.js"];
-// Email preparata nel programma di posta di chi invia (Outlook, Mail, Gmail…): mittente = la casella personale.
-// Regola Direzione 31/10/2026: offerte e comunicazioni partono dalla posta dell'agente / di Tommaso / di Marco / di Christian.
-// 02/11 (prova di Christian su PC con Outlook): Outlook per Windows non riconosce più indirizzi separati da virgola → su Windows ';'
-const mailSeparator = (ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '')) => /Windows/i.test(ua) ? ';' : ',';
-function mailtoUrl({ to = [], cc = [], bcc = [], subject = '', body = '' }, sep = mailSeparator()) {
-  const list = a => [].concat(a).filter(Boolean).map(s => String(s).trim()).filter(Boolean).join(sep);
-  const q = [];
-  if (list(cc)) q.push('cc=' + encodeURIComponent(list(cc)));
-  if (list(bcc)) q.push('bcc=' + encodeURIComponent(list(bcc)));
-  if (subject) q.push('subject=' + encodeURIComponent(subject));
-  if (body) q.push('body=' + encodeURIComponent(String(body).replace(/\r?\n/g, '\r\n')));
-  return 'mailto:' + list(to).split(sep).map(encodeURIComponent).join(sep) + (q.length ? '?' + q.join('&') : '');
-}
-// testo dell'email dell'offerta (solo testo: mailto non accetta formattazione né allegati; il PDF lo allega chi invia).
-// Niente firma: la aggiunge il programma di posta di chi invia (prova del 01/11: firma doppia in Outlook).
-const itDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`; };
-function quoteMailIntro(q, now = new Date()) {
-  return `Buongiorno,\n\ncome d'accordo vi inviamo in allegato la nostra offerta n. ${q.number} del ${itDate(q.createdAt || now)}.`;
-}
-function quoteMailSummary(q, now = new Date()) {
-  const t = totals(q);
-  const depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
-  const pickup = isPickup(q);
-  const until = new Date(new Date(q.createdAt || now).getTime() + (q.validDays || 30) * 864e5);
-  const transport = pickup ? `franco deposito (${depot.pickup[0]})` : t.freightPending ? 'da definire'
-    : t.freight > 0 ? `compreso nell'offerta (${fmtN(t.freight, 2)} €)` : 'compreso';
-  return ['RIEPILOGO', `• Totale imponibile: ${fmtN(t.taxable, 2)} € + IVA`, `• Trasporto: ${transport}`,
-    `• Pagamento: ${q.payment || 'DA CONCORDARE'}`, `• Validità: fino al ${itDate(until)}`].join('\n');
-}
-function quoteMailBody(q, intro, sheets = '', now = new Date()) {
-  return [String(intro || '').trim(), quoteMailSummary(q, now), sheets, 'Restiamo a disposizione per qualsiasi chiarimento.\nCordiali saluti']
-    .filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n');
-}
-
-// apre il programma di posta senza lasciare la pagina (link temporaneo, niente navigazione)
-function openMailto(url) {
-  const a = document.createElement('a'); a.href = url; a.rel = 'noopener'; a.style.display = 'none';
-  document.body.append(a); a.click(); a.remove();
-}
-
-return { mailSeparator, mailtoUrl, quoteMailIntro, quoteMailSummary, quoteMailBody, openMailto };
 })();
 __m["js/core/margins.js"] = (function () {
 // Margine (solo Direzione) e provvigione agente sulle offerte.
@@ -6105,7 +6250,7 @@ function quoteEmail(q, { message = '', senderName = '', senderEmail = '', now = 
   const c = q.customer || {};
   const subject = `Offerta NORDTEX n. ${q.number} – ${c.name || ''}`.trim();
   // corpo: messaggio dell'autore + documento nel formato offerta NORDTEX/RADIX (immagini di testata solo se indicate come URL pubblici)
-  const html = `<!doctype html><html><body style="margin:0;background:#f5f6f8;font-family:Arial,Helvetica,sans-serif;color:#17212b">
+  const html = `<!doctype html><html><body style="margin:0;background:#f5f6f8;font-family:Aptos,Calibri,Arial,Helvetica,sans-serif;color:#17212b">
 <div style="max-width:820px;margin:0 auto;padding:20px">
 ${message ? `<div style="font-size:14px;line-height:1.5;margin-bottom:18px">${esc(message).replace(/\n/g, '<br>')}</div>` : ''}
 <div style="background:#fff;border:1px solid #e4e7ec;border-radius:6px;padding:24px">${quoteDocHtml(q, { now, header: images.header || '', footer: images.footer || '' })}</div>
@@ -6217,7 +6362,7 @@ function orderMailBody(q, o, senderName = '') {
       `Pagamento: ${q.payment || 'DA CONCORDARE'}`].filter(Boolean).join('\n'),
     o.notes ? 'NOTE PER L\'UFFICIO\n' + o.notes : '',
     `L'offerta completa è nel NORDTEX HUB (offerta ${q.number}); quando è inserita, segnate nell'app il numero d'ordine RADIX.`,
-    'Grazie' + (senderName ? '\n' + senderName : ''),
+    'Grazie',   // 09/11: niente firma, la mette Outlook
   ].filter(Boolean).join('\n\n');
 }
 
@@ -6280,7 +6425,7 @@ const { acceptedWithOrder, orderRefOf } = __m["js/core/order-match.js"];
 const { loadMatches, matchBadge, cachedMatch } = __m["js/views/order-match-ui.js"];
 const { h, fill, eur, dateIt, today, toast, emptyState, debounce } = __m["js/ui.js"];
 const { unifiedOffers, quoteReminders, isExpiring } = __m["js/data/model.js"];
-const { radixOfferDialog, linesSummary } = __m["js/views/radix-offers.js"];
+const { radixOfferDialog, linesSummary, reminderBadge, applyReminderRules } = __m["js/views/radix-offers.js"];
 const { quoteCls } = __m["js/views/agenda.js"];
 const { trashAction, trashQuote } = __m["js/views/quote-cancel.js"];
 const st = { filter: null, q: '', who: '', origin: '' };   // 05/11: filter null = scelta automatica (Da richiamare se ce ne sono, altrimenti Aperte)
@@ -6301,6 +6446,7 @@ async function offersList(app, { onNew }) {
   const [quotes, radix, notes, sends] = await Promise.all([app.store.quotes(), app.store.radixOffers ? app.store.radixOffers({ withClosed: true }).catch(() => []) : [],
     app.store.notes().catch(() => []), app.store.quoteSends ? app.store.quoteSends().catch(() => []) : []]);
   const orders = app.store.radixOrders ? await app.store.radixOrders({ all: true }).catch(() => []) : [];
+  if (await applyReminderRules(app, radix)) { const r = await app.store.radixOffers({ withClosed: true }).catch(() => null); if (r) radix.splice(0, radix.length, ...r); }   // 09/11: solleciti senza risposta
   const t = today();
   // 02/11: le offerte del cliente di prova non entrano nell'elenco e nei totali (si vedono nella scheda del cliente)
   const real = list => list.filter(q => !app.store.customer(q.customerId)?.isTest);
@@ -6359,6 +6505,7 @@ async function offersList(app, { onNew }) {
       stateText(o) ? h('span', { class: 'of-state' }, stateText(o)) : null,
       !o.expired && validText(o.validity) ? h('small', { class: 'of-valid ' + (o.validity.days < 0 || o.validity.days <= 2 ? 'bad-text' : o.validity.days <= 7 ? 'warn-text' : 'muted') }, validText(o.validity)) : null,
       h('small', { class: 'muted' }, [`Offerta ${o.number || 'bozza'}`, o.origin === 'radix' ? 'fatta dall\'ufficio in RADIX' : 'fatta nell\'app', 'il ' + dateIt(o.date), isDir && o.who ? 'segue ' + o.who : null].filter(Boolean).join(' · ')),
+      o.origin === 'radix' && o.state === 'aperta' ? reminderBadge(o.raw, app, reload) : null,
       o.origin === 'radix' && o.raw.outcomeNote ? h('small', { class: 'rx-note' }, `Ultima nota: “${o.raw.outcomeNote}” — ${o.raw.outcomeByName || ''}`) : null);
     const side = h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, o.total ? eur(o.total) : '—'),
       o.origin === 'radix' && o.state === 'aperta' && !app.session.preview ? h('button', { class: 'btn small primary', type: 'button', title: 'Hai sentito il cliente? Registra com\'è andata', onclick: async () => { if (await radixOfferDialog(app, o.raw).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, 'Com\'è andata?')
@@ -7651,7 +7798,7 @@ async function sendMail(app, p) {
     const missing = (p.audience?.length ? p.audience : (app.store.assignees || []).map(a => a.name).filter(n => n !== 'Direzionale' && !/^EX_/.test(n))).filter(l => !list.some(a => a.label === l));
     if (!list.length) { toast('Email degli agenti non disponibili' + (app.store.mode === 'locale' ? ' in questa versione (ci sono nella versione online)' : ': collega prima gli accessi'), 'error'); return; }
     const due = p.due ? `\nScadenza: ${p.due.split('-').reverse().join('/')}` : '';
-    const body = `${p.kind === 'follow-up' ? 'Follow-up assegnato a te' : 'Comunicazione della Direzione commerciale'}${due}\n\n${p.body || ''}\n\nLo trovi anche in NORDTEX HUB, Bacheca.\n\n${app.session.name}\nNORDTEX Srl`;
+    const body = `${p.kind === 'follow-up' ? 'Follow-up assegnato a te' : 'Comunicazione della Direzione commerciale'}${due}\n\n${p.body || ''}\n\nLo trovi anche in NORDTEX HUB, Bacheca.`;   // 09/11: niente firma, la mette Outlook
     openMailto(mailtoUrl({ to: p.kind === 'follow-up' ? list.map(a => a.email) : [], bcc: p.kind === 'follow-up' ? [] : list.map(a => a.email), subject: `NORDTEX · ${p.kind === 'follow-up' ? 'Follow-up: ' : ''}${p.title}`, body }));
     await app.store.markPostEmailed(p.id, list.length);
     toast(`Email preparata per ${list.length} ${list.length === 1 ? 'agente' : 'agenti'} (in Ccn): inviala dal tuo programma di posta` + (missing.length ? ` · senza email: ${missing.join(', ')}` : ''));
