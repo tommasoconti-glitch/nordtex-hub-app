@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="bce57a8917da">
+<meta name="ntx-build" content="4c713ec02665">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -969,7 +969,7 @@ details.ss-group > summary .ss-sep { display: inline; margin: 0; }
 .ss-readonly .ss-goals { display: none !important; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"bce57a8917da"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"4c713ec02665"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -5532,14 +5532,18 @@ const unit = s => ({ MQ: 'M2', MC: 'M3' }[up(s).trim()] || up(s).trim());
 
 // Regola di trasporto dell'articolo (null = nessuna tariffa nel listino: quotazione ufficio)
 // 06/11 (Tommaso): blocchi rettificati con "collante incluso" (Staudacher e Leipfinger Bader): su ogni mezzo un bancale è la colla,
-// quindi un posto e il suo peso in meno per i blocchi. Peso del bancale di colla: stima, da confermare con Christian.
-const GLUE_PALLET = { slots: 1, kg: 1000, confirmed: false };
+// quindi un posto e il suo peso in meno per i blocchi.
+// 09/11 Christian: colla N09675 Maxit Mur (sacchi da 15 kg, 60 per bancale = 900 kg + bancale ≈ 915 kg); consumo circa 0,9 sacchi
+// per ogni bancale di blocchi rettificati → il bancale di colla di un mezzo pesa 15 kg di legno + 0,9 × 15 kg per bancale di blocchi (max 915).
+const GLUE_PALLET = { slots: 1, bagKg: 15, bagsPerBlockPallet: 0.9, woodKg: 15, fullKg: 915, confirmed: true };
+const glueKg = blockPallets => Math.min(GLUE_PALLET.fullKg, GLUE_PALLET.woodKg + GLUE_PALLET.bagsPerBlockPallet * GLUE_PALLET.bagKg * blockPallets);
 const hasGlue = p => p?.family === 'Blocchi in laterizio' && /collante incluso/i.test(p?.technical || '');
 // capacità utile del mezzo per i blocchi di questo articolo (bancali e kg)
 function loadCapacity(p, regime = regimeFor(p)) {
   if (!regime?.maxPallets) return null;
   const g = hasGlue(p);
-  return { pallets: regime.maxPallets - (g ? GLUE_PALLET.slots : 0), kg: regime.maxKg ? regime.maxKg - (g ? GLUE_PALLET.kg : 0) : null, glue: g };
+  const pallets = regime.maxPallets - (g ? GLUE_PALLET.slots : 0);
+  return { pallets, kg: regime.maxKg ? regime.maxKg - (g ? glueKg(pallets) : 0) : null, glue: g };
 }
 function regimeFor(p) {
   const prod = up(p.producer), fam = String(p.family || ''), txt = up([p.description, p.subfamily].join(' '));
@@ -5802,7 +5806,7 @@ function googleMapsUrl(origin, destination, { prov, corridor } = {}) {
   return 'https://www.google.com/maps/dir/?' + q.toString();
 }
 
-return { LISTINO, BRENNERO, CORRIDORS, corridorFor, ORIGIN_VIA, routeVia, ORIGINS, GLUE_PALLET, hasGlue, loadCapacity, regimeFor, isBlockAccessory, volumeM3, lineLoad, m3ZoneRate, planTransport, fillSummary, transportVerdict, googleMapsUrl };
+return { LISTINO, BRENNERO, CORRIDORS, corridorFor, ORIGIN_VIA, routeVia, ORIGINS, GLUE_PALLET, glueKg, hasGlue, loadCapacity, regimeFor, isBlockAccessory, volumeM3, lineLoad, m3ZoneRate, planTransport, fillSummary, transportVerdict, googleMapsUrl };
 })();
 __m["js/core/route.js"] = (function () {
 // Distanza stradale (sola andata) dal luogo di carico al cliente, con passaggio obbligato dal Brennero.
