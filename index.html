@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="2ee422c9098a">
+<meta name="ntx-build" content="686af121d2ed">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -969,7 +969,7 @@ details.ss-group > summary .ss-sep { display: inline; margin: 0; }
 .ss-readonly .ss-goals { display: none !important; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"2ee422c9098a"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"686af121d2ed"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4340,7 +4340,7 @@ async function applyReminderRules(app, offers = []) {
   return n;
 }
 
-return { radixOfferOpen, dueState, radixOfferDialog, offerNoteText, mentionsOffer, linesSummary, radixOfferRow, radixOffersPanel, radixOffersCard, radixFuLine, radixFollowupBlock, viewRadixOffer, forecastSelect, forecastMonthInput, reminderBadge, applyReminderRules };
+return { radixOfferOpen, dueState, radixOfferDialog, offerNoteText, mentionsOffer, linesSummary, radixOfferRow, radixOffersPanel, radixOffersCard, radixFuLine, radixFollowupBlock, viewRadixOffer, forecastSelect, forecastMonthInput, reminderDialog, reminderBadge, applyReminderRules };
 })();
 __m["js/views/fiscal.js"] = (function () {
 // 02/11 (versione Ufficio): campi "dati per l'ordine" del cliente nuovo — P.IVA, SDI/PEC, pagamento, banca.
@@ -6489,7 +6489,8 @@ const { acceptedWithOrder, orderRefOf } = __m["js/core/order-match.js"];
 const { loadMatches, matchBadge, cachedMatch } = __m["js/views/order-match-ui.js"];
 const { h, fill, eur, dateIt, today, toast, emptyState, debounce } = __m["js/ui.js"];
 const { unifiedOffers, quoteReminders, isExpiring } = __m["js/data/model.js"];
-const { radixOfferDialog, linesSummary, reminderBadge, applyReminderRules } = __m["js/views/radix-offers.js"];
+const { radixOfferDialog, linesSummary, reminderBadge, applyReminderRules, reminderDialog } = __m["js/views/radix-offers.js"];
+const { canEmailReminder, reminderInfo } = __m["js/core/offer-reminder.js"];
 const { quoteCls } = __m["js/views/agenda.js"];
 const { trashAction, trashQuote } = __m["js/views/quote-cancel.js"];
 const st = { filter: null, q: '', who: '', origin: '' };   // 05/11: filter null = scelta automatica (Da richiamare se ce ne sono, altrimenti Aperte)
@@ -6572,7 +6573,11 @@ async function offersList(app, { onNew }) {
       o.origin === 'radix' && o.state === 'aperta' ? reminderBadge(o.raw, app, reload, all.filter(x => x.origin === 'radix').map(x => x.raw)) : null,
       o.origin === 'radix' && o.raw.outcomeNote ? h('small', { class: 'rx-note' }, `Ultima nota: “${o.raw.outcomeNote}” — ${o.raw.outcomeByName || ''}`) : null);
     const side = h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, o.total ? eur(o.total) : '—'),
-      o.origin === 'radix' && o.state === 'aperta' && !app.session.preview ? h('button', { class: 'btn small primary', type: 'button', title: 'Hai sentito il cliente? Registra com\'è andata', onclick: async () => { if (await radixOfferDialog(app, o.raw).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, 'Com\'è andata?')
+      o.origin === 'radix' && o.state === 'aperta' && !app.session.preview ? h('div', { class: 'row', style: { gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' } },
+        h('button', { class: 'btn small primary', type: 'button', title: 'Hai sentito il cliente? Registra com\'è andata', onclick: async () => { if (await radixOfferDialog(app, o.raw).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, 'Com\'è andata?'),
+        // 09/11 (Tommaso): sollecito direttamente dall'elenco, senza aprire l'offerta (scadute e da richiamare)
+        c && canEmailReminder(o.raw, t) && !(reminderInfo(o.raw, t) && !reminderInfo(o.raw, t).overdue)
+          ? h('button', { class: 'btn small', type: 'button', title: 'Sollecito via email (anche per le altre offerte aperte del cliente)', onclick: async () => { if (await reminderDialog(app, o.raw, c).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, '✉ Sollecito') : null)
         : o.origin === 'app' ? h('div', { class: 'row', style: { gap: '6px', justifyContent: 'flex-end' } }, h('a', { class: 'btn small', href: '#/offerta/' + o.id }, 'Apri'), trashBtn(o.raw)) : null);
     const u = urgency(o, t);
     return h('li', { class: 'rx-offer' + (u ? ' urg-' + u : '') }, u ? h('span', { class: 'urg-dot ' + u, title: URG.find(x => x[0] === u)[1], 'aria-label': URG.find(x => x[0] === u)[1] }) : null, main, side);
