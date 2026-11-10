@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="a861b50fe047">
+<meta name="ntx-build" content="0c449feaa2dd">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -969,7 +969,7 @@ details.ss-group > summary .ss-sep { display: inline; margin: 0; }
 .ss-readonly .ss-goals { display: none !important; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a861b50fe047"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"0c449feaa2dd"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -7088,6 +7088,10 @@ async function viewQuoteEditor(app, id, customerId) {
           title: on ? 'Nel PDF: tocca per togliere' : 'Tocca per metterlo nel PDF', onclick: e => { if (e.target.tagName !== 'SELECT') toggle(r.key); } },
           h('span', { class: 'ul-tick', 'aria-hidden': 'true' }, on ? '✓' : ''), label, h('span', { class: 'ul-price' }, v === null ? '—' : eur(v))));
       })),
+      // 10/11 (segnalazione Tommaso, SL08 a 1 pz): il trasporto dell'offerta è un mezzo intero; diviso su una quantità piccola
+      // (es. la riga appena aggiunta, 1 pz) dà un prezzo unitario assurdo. Il conto è giusto, la quantità no: lo diciamo chiaramente.
+      l.unitPick.basis === 'offer' && tpu !== null && tpu > net ? h('small', { class: 'warn-text' },
+        `⚠ Con ${num(l.qty, 2)} ${String(l.unit).toLowerCase()} il trasporto di questa offerta (${eur(tpu * l.qty)}) pesa tutto su questa quantità: ${eur(tpu)} di trasporto per ${String(l.unit).toLowerCase()} contro ${eur(net)} di prodotto. Inserisci la quantità reale o usa «Carico completo».`) : null,
       h('div', { class: 'u-foot' },
         h('small', { class: 'u-note' }, note ? 'Nel PDF: ' + note.replace(/^Prezzo indicativo: /, '') : 'Tocca le righe da mettere nel PDF, sotto il prodotto.'),
         fullQty && !locked && Math.abs(l.qty - fullQty) > 1e-6 ? h('button', { type: 'button', class: 'link', onclick: () => { l.qty = fullQty; mark(); drawLines(); } }, `Quantità a carico completo (${num(fullQty, 0)} ${String(l.unit).toLowerCase()})`) : null));
