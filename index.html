@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="39e8bb9e9dbb">
+<meta name="ntx-build" content="a861b50fe047">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -208,7 +208,7 @@ mark{background:#fff1a8;color:inherit;border-radius:2px;padding:0 1px}
 .table tr.cur td{background:#f5f7fa}
 .ok-text{color:var(--ok)}
 .tp-total{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px}
-.stock{display:block;color:#1d5fbf;font-size:.78rem} .stock-badge{display:block;color:#1d5fbf;font-size:.72rem;font-weight:600}
+.stock{display:block;color:#1d5fbf;font-size:.78rem} .buy-hint{display:block;color:#6b4e00;background:#fff7e0;border-radius:4px;padding:2px 6px;margin:2px 0;font-size:.78rem} .buy-hint .link{font-size:.78rem;font-weight:600} .stock-badge{display:block;color:#1d5fbf;font-size:.72rem;font-weight:600}
 @media (max-width:760px){ .form.three-a{grid-template-columns:1fr 80px} }
 /* Home Direzione: schede; stato cliente manuale */
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:4px 0 16px;overflow-x:auto}
@@ -969,7 +969,7 @@ details.ss-group > summary .ss-sep { display: inline; margin: 0; }
 .ss-readonly .ss-goals { display: none !important; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"39e8bb9e9dbb"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a861b50fe047"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2157,6 +2157,7 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     rev2024: c.sales?.rev?.['2024'], rev2025: c.sales?.rev?.['2025'], rev2026: c.sales?.rev?.['2026'], salesAsOf: c.sales?.asOf || null,
     purchases: c.sales ? { families: c.sales.families || [], top: c.sales.top || [] } : null, paymentTerms: normTerms(c.payment_terms) || null, priceKey: c.price_key || null, isTest: !!c.is_test,
     sdi: c.sdi || '', pec: c.pec || '', bank: c.bank || '', radixOpenedAt: c.radix_opened_at || null,
+    priceHistory: c.price_history || null,   // 10/11: ultimi acquisti per articolo (migrazione 20261110140000)
     // 08/11: anche gli anni successivi (rev2027, …) per Sales strategy dal 1° gennaio
     ...Object.fromEntries(Object.entries(c.sales?.rev || {}).filter(([y]) => Number(y) > 2026).map(([y, v]) => ['rev' + y, v])) });
   const custUuid = id => { const c = customers?.find(x => x.id === id); if (!c) throw fail('CUSTOMER', 'Cliente non nel tuo portafoglio'); return c.uuid; };
@@ -6293,6 +6294,47 @@ function unitPriceNote(rows, picked, basis) {
 
 return { BULK_DENSITY, packOf, unitOptions, fullLoadQty, fullLoadTransport, offerTransportPerUnit, unitPrices, unitPriceNote };
 })();
+__m["js/core/price-history.js"] = (function () {
+// Storico prezzi del cliente nell'offerta (10/11/2026, richiesta di Manuel Nonini).
+// Fonte: fatture RADIX per cliente, data documento e articolo (tools/import_prezzi_cliente.py → colonna hub_customers.price_history).
+// Formato: { asOf: 'AAAA-MM-GG', i: { 'N12573': [['2025-10-31', 453.6, 4910.02], …] } }, acquisti dal più recente, al massimo 3 per articolo.
+// Il netto unitario è importo / quantità nell'unità principale RADIX. Lo sconto di riga non è nell'esportazione delle fatture:
+// si mostra solo lo sconto equivalente sul listino ATTUALE, e solo se le unità sono confrontabili.
+const round2 = n => Math.round(n * 100) / 100;
+
+function lastPurchases(customer, radixCode, n = 3) {
+  const list = customer?.priceHistory?.i?.[String(radixCode || '').trim()];
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter(x => Array.isArray(x) && x.length >= 3 && Number(x[1]) > 0 && Number(x[2]) > 0)
+    .map(([date, qty, value]) => ({ date, qty: Number(qty), value: Number(value), net: Number(value) / Number(qty) }))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    .slice(0, n);
+}
+
+// Il netto della fattura si confronta con il listino attuale solo se è plausibile che l'unità sia la stessa
+// (netto tra il 30% e il 130% del listino); altrimenti l'unità RADIX è diversa da quella di vendita (es. bancale/pezzo).
+function comparable(net, listPrice) {
+  if (!(listPrice > 0) || !(net > 0)) return false;
+  const r = net / listPrice;
+  return r >= 0.3 && r <= 1.3;
+}
+
+// Sconto unico che porta il listino attuale al netto pagato l'ultima volta (negativo = pagato sopra listino)
+function equivalentDiscount(net, listPrice) {
+  return comparable(net, listPrice) ? round2((1 - net / listPrice) * 100) : null;
+}
+
+// Riepilogo per la riga d'offerta: ultimo acquisto e, se confrontabili, sconto equivalente sul listino attuale
+function purchaseHint(customer, line) {
+  const all = lastPurchases(customer, line?.radixCode);
+  if (!all.length) return null;
+  const last = all[0], cmp = comparable(last.net, line.listPrice);
+  return { last, others: all.slice(1), comparable: cmp, discount: cmp ? equivalentDiscount(last.net, line.listPrice) : null, asOf: customer.priceHistory.asOf || null };
+}
+
+return { lastPurchases, comparable, equivalentDiscount, purchaseHint };
+})();
 __m["js/core/quote-email.js"] = (function () {
 // Email dell'offerta: oggetto, testo e documento HTML (tabelle in linea, leggibile da Outlook, Gmail, Apple Mail).
 // Modulo puro (nessun DOM): usato dall'app per l'anteprima e dalla funzione server che invia la mail.
@@ -6786,6 +6828,7 @@ const { quoteMargin, quoteCommission, unitCost } = __m["js/core/margins.js"];
 const { transportPanel, stockFor } = __m["js/views/transport-panel.js"];
 const { conversionLines, quantityEquivalents, entryUnits, fromEntry, toEntry } = __m["js/core/conversions.js"];
 const { unitPrices, fullLoadTransport, offerTransportPerUnit, unitPriceNote, fullLoadQty } = __m["js/core/unit-prices.js"];
+const { purchaseHint } = __m["js/core/price-history.js"];
 const { planTransport, regimeFor, lineLoad, loadCapacity } = __m["js/core/logistics.js"];
 const { quoteEmail, QUOTE_BCC, isEmail } = __m["js/core/quote-email.js"];
 const { quoteDocHtml, quoteFileName, DEPOTS, TRANSPORT_BY, isPickup, pickupStockIssues } = __m["js/core/quote-doc.js"];
@@ -6924,6 +6967,19 @@ async function viewQuoteEditor(app, id, customerId) {
   const stock = app.store.stock || null;
   const sheetLinks = p => { const t = techSheetFor(p); return t ? h('small', { class: 'sheets' }, t.sheet ? h('a', { href: t.sheet, target: '_blank', rel: 'noopener' }, '📄 Scheda tecnica') : '📄', ...t.dop.map((u, i) => [t.sheet || i ? ' · ' : ' ', h('a', { href: u, target: '_blank', rel: 'noopener' }, t.dop.length > 1 ? `DoP ${i + 1}` : 'DoP')])) : null; };
   const stockLine = code => { const s = stockFor(stock, code); return s.length ? h('small', { class: 'stock' }, `Magazzino al ${dateIt(s[0].date)}: ` + s.map(x => `${x.name.split('-')[0]} ${num(x.available, 2)} ${x.um.toLowerCase()}`).join(' · ')) : null; };
+  // 10/11 (richiesta Nonini): ultimo acquisto del cliente per questo codice, dalle fatture RADIX, con lo sconto equivalente sul listino attuale
+  const buyHint = l => {
+    const ph = purchaseHint(app.store.customer(q.customerId), l); if (!ph) return null;
+    const u = String(l.unit).toLowerCase().replace('m2', 'm²').replace('m3', 'm³'), L = ph.last;
+    const past = x => ph.comparable ? `${dateIt(x.date)}: ${num(x.qty, 2)} ${u} a ${eur(x.net)}` : `${dateIt(x.date)}: ${eur(x.value)}`;
+    const disc = ph.discount === null ? '' : ph.discount >= 0 ? ` · pari a sconto ${num(ph.discount, 2)}% sul listino attuale` : ` · ${num(-ph.discount, 2)}% sopra il listino attuale`;
+    const text = ph.comparable ? `Ultimo acquisto ${dateIt(L.date)}: ${num(L.qty, 2)} ${u} a ${eur(L.net)}/${u} netto${disc}`
+      : `Ultimo acquisto ${dateIt(L.date)}: ${eur(L.value)} (unità RADIX diversa da quella dell'offerta: netto non confrontabile)`;
+    const canUse = !locked && ph.discount !== null && ph.discount >= 0 && ph.discount <= DISCOUNT_MAX && Math.abs(totalDiscount(l.discounts) - ph.discount) > 0.01;
+    return h('small', { class: 'buy-hint', title: `Fatture RADIX al ${ph.asOf ? dateIt(ph.asOf) : '—'}. Lo sconto di riga non è nelle fatture: è calcolato sul listino di oggi.` }, '🧾 ', text,
+      canUse ? [' ', h('button', { type: 'button', class: 'link', onclick: () => { l.discounts = [ph.discount, 0, 0]; mark(); drawLines(); } }, 'Usa questo netto')] : null,
+      ph.others.length ? h('span', { class: 'muted' }, ' · prima: ' + ph.others.map(past).join(' · ')) : null);
+  };
   const root = h('div', { class: 'page editor' });
   const mark = () => { dirty = true; saveBtn.classList.add('attn'); dock.querySelector('.qd-act .btn:not(.primary)')?.classList.add('attn'); };
 
@@ -7055,6 +7111,7 @@ async function viewQuoteEditor(app, id, customerId) {
         const pal = palletsFor(l), disc = totalDiscount(l.discounts);
         fill(info, h('strong', {}, l.description), h('small', { class: 'muted' }, [l.listCode && 'cod. ' + l.listCode, l.radixCode && 'RADIX ' + l.radixCode, l.producer].filter(Boolean).join(' · ')),
           showPriceWarn && l.level === PRICE_LEVEL.WARN ? h('small', { class: 'warn-text', title: l.warnings.join('\n') }, '⚠ Prezzo da verificare nel Master') : null,
+          buyHint(l),
           convBox(byId.get(l.productId), l.qty, pal), stockLine(l.radixCode), sheetLinks(byId.get(l.productId)),
           lineEcon(l), unitBox(l, i, () => refresh()),
           byId.get(l.productId)?.clearance ? h('small', { class: 'warn-text' }, '⚠ ' + byId.get(l.productId).clearance + (pal !== null && Math.ceil(pal - 1e-6) - pal > 1e-6 ? ` → ${Math.ceil(pal - 1e-6)} bancali = ${num(Math.ceil(pal - 1e-6) * l.palletQuantity)} m²` : '')) : null,   // 05/11: articoli fuori listino a esaurimento (Isorel N88174)
