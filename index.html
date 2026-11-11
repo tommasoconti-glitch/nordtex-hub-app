@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="cfa06862329d">
+<meta name="ntx-build" content="80970d133e33">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -968,8 +968,16 @@ details.ss-group > summary .ss-sep { display: inline; margin: 0; }
 .ss-ro-banner { background: var(--warn-bg, #f9eeda); border: 1px solid var(--line, #e5e0d5); border-radius: 8px; padding: 8px 12px; margin: 0 0 12px; font-size: .9rem; }
 .ss-readonly .ss-goals { display: none !important; }
 
+/* 11/11: areali accendi/spegni e sigle delle province */
+.area-toggles{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.area-toggle{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line,#ddd);background:var(--card,#fff);border-radius:999px;padding:4px 10px;min-height:32px;font-size:.85rem;cursor:pointer;color:inherit}
+.area-toggle.off{opacity:.45;text-decoration:line-through}
+.area-toggle.off .swatch{background:#bbb!important}
+.prov-label{font:600 10px/14px system-ui,sans-serif;color:#333;text-align:center;text-shadow:0 0 2px #fff,0 0 2px #fff}
+.prov-label.off{color:#888;font-weight:500}
+
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"cfa06862329d"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"80970d133e33"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -8861,7 +8869,7 @@ function ensureCss() {
 // verde visitato da poco), filtri rapidi, finestrella con ultima visita e offerte, giro visite ordinato per motivo di visita.
 const DO = { rosso: ['#d40e41', 'Da sentire subito'], arancio: ['#e09a00', 'Da recuperare o non visitato da 90 gg'], verde: ['#2e9e5b', 'Visitato da poco'], grigio: ['#98a2b3', 'Persi e mai fatturati'] };
 const daysSince = d => d ? Math.floor((Date.now() - new Date(d + 'T12:00:00').getTime()) / 864e5) : null;
-const mapState = { mode: 'clienti', colors: 'fare', notVisited: false, withOffers: false, areas: true, heat: false };
+const mapState = { mode: 'clienti', colors: 'fare', notVisited: false, withOffers: false, areas: true, heat: false, hiddenAreas: new Set() };   // 11/11: agenti spenti negli areali
 
 async function viewMaps(app) {
   ensureCss();
@@ -8919,12 +8927,28 @@ async function viewMaps(app) {
     if (!isDir || !mapState.areas) { fill(areaLegend); return; }
     if (!cov.size) { fill(areaLegend, h('span', { class: 'warn-text' }, 'Areali non disponibili: l\'elenco agenti con le province non è arrivato dal database.')); return; }
     const by = new Map(); for (const [p, cv] of cov) { if (!by.has(cv.who)) by.set(cv.who, { ...cv, provs: [] }); by.get(cv.who).provs.push(p); }
-    fill(areaLegend, h('details', { class: 'area-fold' }, h('summary', {}, `Areali: ${by.size} assegnatari · province colorate per agente`), h('div', { class: 'map-legend' }, [...by.values()].map(a => h('span', { title: a.provs.join(' ') }, h('span', { class: 'swatch', style: { background: a.color } }), `${a.who} (${a.provs.join(' ')})`)))));
+    // 11/11 (Tommaso): ogni agente si accende e si spegne con un tocco; confini e sigle di tutte le province per leggere le distanze
+    const all = [...by.values()].sort((x, y) => x.who.localeCompare(y.who, 'it'));
+    const setAll = on => { [...all.map(a => a.who), 'Direzionale'].forEach(w => on ? mapState.hiddenAreas.delete(w) : mapState.hiddenAreas.add(w)); drawAreas(); drawAreaLegend(); redraw(); };
+    fill(areaLegend, h('details', { class: 'area-fold', open: true }, h('summary', {}, `Areali: ${by.size - [...mapState.hiddenAreas].filter(w => by.has(w)).length} di ${by.size} agenti accesi · tocca un nome per accenderlo o spegnerlo`),
+      h('div', { class: 'map-legend area-toggles' },
+        h('button', { type: 'button', class: 'chip small', onclick: () => setAll(true) }, 'Tutti'),
+        h('button', { type: 'button', class: 'chip small', onclick: () => setAll(false) }, 'Nessuno'),
+        all.map(a => { const off = mapState.hiddenAreas.has(a.who);
+          return h('button', { type: 'button', class: 'area-toggle' + (off ? ' off' : ''), 'aria-pressed': String(!off), title: a.provs.join(' '),
+            onclick: () => { off ? mapState.hiddenAreas.delete(a.who) : mapState.hiddenAreas.add(a.who); drawAreas(); drawAreaLegend(); redraw(); } },
+            h('span', { class: 'swatch', style: { background: a.color } }), `${a.who} (${a.provs.join(' ')})`); }),
+        // i clienti direzionali non hanno un areale: si accendono e spengono solo come punti
+        (() => { const off = mapState.hiddenAreas.has('Direzionale');
+          return h('button', { type: 'button', class: 'area-toggle' + (off ? ' off' : ''), 'aria-pressed': String(!off), title: 'Clienti direzionali (punti sulla mappa)',
+            onclick: () => { off ? mapState.hiddenAreas.delete('Direzionale') : mapState.hiddenAreas.add('Direzionale'); drawAreaLegend(); redraw(); } },
+            h('span', { class: 'swatch', style: { background: '#676568' } }), 'Clienti direzionali'); })())));
   }
   const visible = () => located.filter(({ c }) => state.statuses.has(c.status)
     && (!mapState.notVisited || (d => d === null || d > 90)(daysSince(visits.get(c.id))))
     && (!mapState.withOffers || g(c).open > 0)
     && (!state.assignee || c.assignee === state.assignee)
+    && (!isDir || !mapState.areas || !mapState.hiddenAreas.has(c.assignee))
     && (!state.family || (c.purchases?.families || []).some(f => f.f === state.family))
     && (!state.text || (c.name + ' ' + c.city).toLowerCase().includes(state.text)));
 
@@ -8935,10 +8959,21 @@ async function viewMaps(app) {
   // areali degli agenti (Direzione, 02/11): province colorate per agente sotto i punti
   const cov = isDir ? coverageOf(app.store.assignees || []) : new Map();
   const areaLayer = L.layerGroup();
+  function drawAreas() {
+    areaLayer.clearLayers();
+    for (const sh of PROVINCE_SHAPES) { const cv = cov.get(sh.p), on = cv && !mapState.hiddenAreas.has(cv.who);
+      let bounds = null;
+      sh.g.forEach(poly => { const pl = L.polygon(poly, on
+        ? { pane: 'areas', color: cv.color, weight: 1.2, fillColor: cv.color, fillOpacity: .24, interactive: false }
+        : { pane: 'areas', color: '#8a8a8a', weight: .7, fill: false, interactive: false }).addTo(areaLayer);
+        bounds = bounds ? bounds.extend(pl.getBounds()) : pl.getBounds(); });
+      if (bounds) L.marker(bounds.getCenter(), { pane: 'areas', interactive: false, keyboard: false,
+        icon: L.divIcon({ className: 'prov-label' + (on ? '' : ' off'), html: sh.p, iconSize: [26, 14] }) }).addTo(areaLayer);
+    }
+  }
   if (isDir) {
     map.createPane('areas'); map.getPane('areas').style.zIndex = 350;
-    for (const sh of PROVINCE_SHAPES) { const cv = cov.get(sh.p); if (!cv) continue;
-      sh.g.forEach(poly => L.polygon(poly, { pane: 'areas', color: cv.color, weight: 1, fillColor: cv.color, fillOpacity: .22, interactive: false }).addTo(areaLayer)); }
+    drawAreas();
     if (mapState.areas) areaLayer.addTo(map);
   }
   drawAreaLegend();
