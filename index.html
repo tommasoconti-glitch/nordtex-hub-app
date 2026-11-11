@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="0c449feaa2dd">
+<meta name="ntx-build" content="cfa06862329d">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -969,7 +969,7 @@ details.ss-group > summary .ss-sep { display: inline; margin: 0; }
 .ss-readonly .ss-goals { display: none !important; }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"0c449feaa2dd"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"cfa06862329d"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -6279,6 +6279,14 @@ function offerTransportPerUnit(plan, index) {
   return null;
 }
 
+// 11/11 (Tommaso, SL08): «Con trasporto» con una quantità piccola (es. 1 pz appena aggiunto) carica un mezzo intero su pochi pezzi.
+// Se il trasporto per unità supera il prezzo del prodotto e il carico completo è calcolabile, si mostra il carico completo.
+function effectiveBasis(basis, offerTpu, net, fullPerUnit) {
+  const suspect = basis === 'offer' && offerTpu != null && net > 0 && offerTpu > net;
+  if (suspect && fullPerUnit != null) return { basis: 'full', switched: true, suspect };
+  return { basis, switched: false, suspect };
+}
+
 // prezzi per le unità: net = prezzo netto per unità di vendita; tpu = trasporto per unità di vendita (null = escluso)
 function unitPrices(p, net, tpu = null) {
   return unitOptions(p).map(o => ({ ...o, price: net * o.q, withTransport: tpu === null ? null : (net + tpu) * o.q }));
@@ -6292,7 +6300,7 @@ function unitPriceNote(rows, picked, basis) {
   return 'Prezzo indicativo: ' + sel.map(r => `${eu(basis === 'none' ? r.price : r.withTransport)}/${r.label.replace(/^m³ a (\d+) kg\/m³$/, 'm³ (posa $1 kg/m³)')}`).join(' · ') + tr;
 }
 
-return { BULK_DENSITY, packOf, unitOptions, fullLoadQty, fullLoadTransport, offerTransportPerUnit, unitPrices, unitPriceNote };
+return { BULK_DENSITY, packOf, unitOptions, fullLoadQty, fullLoadTransport, offerTransportPerUnit, effectiveBasis, unitPrices, unitPriceNote };
 })();
 __m["js/core/price-history.js"] = (function () {
 // Storico prezzi del cliente nell'offerta (10/11/2026, richiesta di Manuel Nonini).
@@ -6827,7 +6835,7 @@ const { mailtoUrl, quoteMailBody, quoteMailIntro, openMailto } = __m["js/core/ma
 const { quoteMargin, quoteCommission, unitCost } = __m["js/core/margins.js"];
 const { transportPanel, stockFor } = __m["js/views/transport-panel.js"];
 const { conversionLines, quantityEquivalents, entryUnits, fromEntry, toEntry } = __m["js/core/conversions.js"];
-const { unitPrices, fullLoadTransport, offerTransportPerUnit, unitPriceNote, fullLoadQty } = __m["js/core/unit-prices.js"];
+const { unitPrices, fullLoadTransport, offerTransportPerUnit, unitPriceNote, fullLoadQty, effectiveBasis } = __m["js/core/unit-prices.js"];
 const { purchaseHint } = __m["js/core/price-history.js"];
 const { planTransport, regimeFor, lineLoad, loadCapacity } = __m["js/core/logistics.js"];
 const { quoteEmail, QUOTE_BCC, isEmail } = __m["js/core/quote-email.js"];
@@ -7055,10 +7063,12 @@ async function viewQuoteEditor(app, id, customerId) {
     let offerTpu = null, full = null;
     try { offerTpu = offerTransportPerUnit(planTransport(q.lines.map(x => ({ product: byId.get(x.productId), qty: x.qty, amount: lineAmount(x) })).filter(x => x.product), ctx), i); } catch { offerTpu = null; }
     try { full = fullLoadTransport(p, ctx); } catch { full = null; }
-    const tpu = l.unitPick.basis === 'offer' ? offerTpu : l.unitPick.basis === 'full' ? full?.perUnit ?? null : null;
+    const eb = effectiveBasis(l.unitPick.basis, offerTpu, net, full?.perUnit ?? null);   // 11/11: quantità piccola → carico completo
+    const basis = eb.basis;
+    const tpu = basis === 'offer' ? offerTpu : basis === 'full' ? full?.perUnit ?? null : null;
     const rows = unitPrices(p, net, tpu);
     if (rows.length < 2) return null;
-    const note = unitPriceNote(rows, l.unitPick.keys, l.unitPick.basis);
+    const note = unitPriceNote(rows, l.unitPick.keys, basis);
     if ((l.unitNote || '') !== note) { l.unitNote = note; mark(); }
     const box = h('details', { class: 'uprice', open: uOpen.has(l) || undefined, ontoggle: e => { e.target.open ? uOpen.add(l) : uOpen.delete(l); } });
     const toggle = key => { const on = l.unitPick.keys.includes(key); l.unitPick.keys = on ? l.unitPick.keys.filter(k => k !== key) : [...l.unitPick.keys, key]; mark(); onQty(); };
@@ -7066,9 +7076,9 @@ async function viewQuoteEditor(app, id, customerId) {
     const dens = rows.filter(r => r.key.startsWith('m3d'));
     const dSel = dens.find(r => r.key === 'm3d' + l.unitPick.density) || dens[Math.floor(dens.length / 2)];
     const shown = rows.filter(r => !r.key.startsWith('m3d') || r === dSel);
-    const val = r => l.unitPick.basis === 'none' ? r.price : r.withTransport;
+    const val = r => basis === 'none' ? r.price : r.withTransport;
     const fullQty = fullLoadQty(p);
-    const seg = (k, label, ok, title) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(l.unitPick.basis === k), class: 'useg' + (l.unitPick.basis === k ? ' on' : ''), disabled: locked || !ok, title,
+    const seg = (k, label, ok, title) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(basis === k), class: 'useg' + (basis === k ? ' on' : ''), disabled: locked || !ok, title,
       onclick: () => { l.unitPick.basis = k; mark(); onQty(); } }, label);
     const head = rows[0], picked = l.unitPick.keys.length;
     fill(box,
@@ -7090,7 +7100,9 @@ async function viewQuoteEditor(app, id, customerId) {
       })),
       // 10/11 (segnalazione Tommaso, SL08 a 1 pz): il trasporto dell'offerta è un mezzo intero; diviso su una quantità piccola
       // (es. la riga appena aggiunta, 1 pz) dà un prezzo unitario assurdo. Il conto è giusto, la quantità no: lo diciamo chiaramente.
-      l.unitPick.basis === 'offer' && tpu !== null && tpu > net ? h('small', { class: 'warn-text' },
+      eb.switched ? h('small', { class: 'warn-text' },
+        `⚠ Con ${num(l.qty, 2)} ${String(l.unit).toLowerCase()} il trasporto di questa offerta peserebbe ${eur(offerTpu)} per ${String(l.unit).toLowerCase()} (più del prodotto, ${eur(net)}): mostro il prezzo a carico completo. Inserisci la quantità reale per vedere il trasporto di questa offerta.`) :
+      basis === 'offer' && tpu !== null && tpu > net ? h('small', { class: 'warn-text' },
         `⚠ Con ${num(l.qty, 2)} ${String(l.unit).toLowerCase()} il trasporto di questa offerta (${eur(tpu * l.qty)}) pesa tutto su questa quantità: ${eur(tpu)} di trasporto per ${String(l.unit).toLowerCase()} contro ${eur(net)} di prodotto. Inserisci la quantità reale o usa «Carico completo».`) : null,
       h('div', { class: 'u-foot' },
         h('small', { class: 'u-note' }, note ? 'Nel PDF: ' + note.replace(/^Prezzo indicativo: /, '') : 'Tocca le righe da mettere nel PDF, sotto il prodotto.'),
@@ -7438,7 +7450,8 @@ async function viewQuoteEditor(app, id, customerId) {
       // 03/11: un'offerta inviata non si cancella (numero già comunicato al cliente): si annulla e sparisce da aperte, promemoria e statistiche
       q.id && (isOwner || isDir) && ['Inviata', 'Persa'].includes(q.status) ? h('button', { class: 'btn ghost', onclick: () => cancelDialog(app, q).then(ok => { if (ok) app.go('offerta/' + q.id); }).catch(e => toast(e.message, 'error')) }, 'Annulla offerta') : null,
       null));
-  tp = transportPanel(app, q, byId, { locked, mark, onApply: what => { if (what === 'qty') drawLines(); else { freightIn.value = q.freight ?? ''; freightNote.textContent = q.freightNote; drawTotals(); } } });
+  // 11/11: quando cambia il trasporto si ridisegnano anche le righe, così il «Prezzo per unità» segue i km
+  tp = transportPanel(app, q, byId, { locked, mark, onApply: what => { if (what === 'qty') drawLines(); else { freightIn.value = q.freight ?? ''; freightNote.textContent = q.freightNote; drawTotals(); drawLines(); } } });
   let head = header();
   drawLines();
   root.append(head,
