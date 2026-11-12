@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="f106303de7b5">
+<meta name="ntx-build" content="cb90d2e540d1">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -986,7 +986,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .depot-price .check{display:flex;gap:6px;align-items:flex-start}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f106303de7b5"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"cb90d2e540d1"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -7397,9 +7397,17 @@ async function viewQuoteEditor(app, id, customerId) {
     const row = (k, v, cls = '') => h('div', { class: cls }, h('span', {}, k), h('span', {}, v));
     if (!viewerIsDir) return null;   // 04/11 (Tommaso): gli agenti non vedono le provvigioni
     const m = quoteMargin(q, byId);
+    // 12/11 (offerta Policell Rivarolo): nessuna riga con costo d'acquisto → niente "costo 0 / margine negativo", si dice che non è calcolabile
+    const nd = !(m.revenue > 0);
+    const who = String(agentLabel || '').startsWith('EX_AREA_') ? `zona ${agentLabel.slice(8).replace(/_/g, ' ')} (ex agente)` : (agentLabel || '');
+    if (nd) return h('div', { class: 'econ-box dir' }, h('small', {}, 'Solo Direzione · margine'),
+      row('Margine merce', 'n.d.', 'grand-sm'),
+      c.configured ? row(`Provvigione ${who}`, `${eur(c.amount)} · ${pct(c.avgRate)}`) : row('Provvigione', 'regole da impostare'),
+      h('p', { class: 'warn-text' }, `Nessuna riga con prezzo d'acquisto: margine non calcolabile. Il costo va chiesto all'ufficio.`),
+      h('p', { class: 'fine' }, 'Trasporto e altri addebiti esclusi dal margine.'));
     return h('div', { class: 'econ-box dir' }, h('small', {}, 'Solo Direzione · margine'),
       row('Costo merce (RADIX storico)', eur(m.cost)), row('Margine merce', `${eur(m.margin)} · ${pct(m.pct)}`, 'grand-sm' + (m.margin < 0 ? ' neg' : '')),
-      c.configured ? [row(`Provvigione ${agentLabel || ''}`, `${eur(c.amount)} · ${pct(c.avgRate)}` + (c.toDefine ? ` · ${c.toDefine} ${c.toDefine === 1 ? 'riga' : 'righe'} oltre 50+15+5: da definire` : '')), row('Margine dopo provvigione', `${eur(m.margin - c.amount)} · ${pct(m.revenue > 0 ? (m.margin - c.amount) / m.revenue * 100 : null)}`, 'grand-sm')] : row('Provvigione', 'regole da impostare'),
+      c.configured ? [row(`Provvigione ${who}`, `${eur(c.amount)} · ${pct(c.avgRate)}` + (c.toDefine ? ` · ${c.toDefine} ${c.toDefine === 1 ? 'riga' : 'righe'} oltre 50+15+5: da definire` : '')), row('Margine dopo provvigione', `${eur(m.margin - c.amount)} · ${pct(m.revenue > 0 ? (m.margin - c.amount) / m.revenue * 100 : null)}`, 'grand-sm')] : row('Provvigione', 'regole da impostare'),
       m.missing ? h('p', { class: 'warn-text' }, `${m.missing} ${m.missing === 1 ? 'riga' : 'righe'} senza costo utilizzabile: margine calcolato sulle altre`) : null,
       h('p', { class: 'fine' }, 'Costi d\'acquisto RADIX storici, attualità da verificare. Trasporto e altri addebiti esclusi dal margine.'));
   }
@@ -7421,7 +7429,7 @@ async function viewQuoteEditor(app, id, customerId) {
       h('div', {}, h('span', {}, 'Imponibile'), h('span', {}, eur(t.taxable))),
       h('div', {}, h('span', {}, `IVA ${num(t.vatRate)}%`), h('span', {}, eur(t.vat))),
       h('div', { class: 'grand' }, h('span', {}, 'Totale'), h('strong', {}, eur(t.total))),
-      showPriceWarn && t.warnings ? h('p', { class: 'warn-text' }, `${t.warnings} righe con prezzo da verificare nel Master`) : null,
+      showPriceWarn && t.warnings ? h('p', { class: 'warn-text' }, `${t.warnings} ${t.warnings === 1 ? 'riga' : 'righe'} con prezzo da verificare nel Master`) : null,
       t.discountOverMax ? h('p', { class: 'bad-text' }, h('strong', {}, `⛔ ${t.discountOverMax} ${t.discountOverMax === 1 ? 'riga' : 'righe'} oltre lo sconto massimo applicabile ${DISCOUNT_MAX_LABEL}`)) : null,
       t.discountAlerts > (t.discountOverMax || 0) ? h('p', { class: 'warn-text' }, `⚠ ${t.discountAlerts - (t.discountOverMax || 0)} ${t.discountAlerts - (t.discountOverMax || 0) === 1 ? 'riga' : 'righe'} con sconto complessivo oltre ${DISCOUNT_ALERT_LABEL}: ${viewerIsDir ? 'per gli agenti serve la tua autorizzazione' : 'serve autorizzazione Direzione'}`) : null,
       t.freightPending ? h('p', { class: 'muted' }, 'Trasporto da definire: non è compreso nel totale.') : null,
