@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="ff97e235e938">
+<meta name="ntx-build" content="7f404ad3aae6">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -978,10 +978,11 @@ details.ss-group > summary .ss-sep { display: inline; margin: 0; }
 
 /* 12/11: sconti bloccati (prezzo netto da deposito) ben visibili */
 .table.lines td.disc input:disabled{background:#efefef;color:#8a8a8a;border-style:dashed}
-.depot-price{display:flex;gap:6px;align-items:flex-start;margin:4px 0;font-size:.85rem}
+.depot-price{display:flex;flex-direction:column;gap:4px;align-items:flex-start;margin:4px 0;font-size:.85rem}
+.depot-price .check{display:flex;gap:6px;align-items:flex-start}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ff97e235e938"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"7f404ad3aae6"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1647,19 +1648,24 @@ const fixProducts = list => (list || []).map(fixProduct);
 // Solo Policell BigBag 3 m³ (N88308, a giacenza nei depositi).
 const DEPOT_PRICE = { 'L05-P42-0129': { price: 120, unit: 'M3', label: 'Dal deposito: 120 €/m³ netto, trasporto compreso' } };
 const depotPriceFor = productId => DEPOT_PRICE[productId] || null;
+// 12/11 sera (Tommaso): il prezzo da deposito lo mette solo la Direzione (Tommaso, Marco), anche come prezzo speciale diverso da 120;
+// il commerciale lo chiede alla Direzione dall'offerta. L'ufficio no: autorizza la Direzione.
+const canSetDepotPrice = s => !!s && s.role === 'direzione' && !s.office && !s.readOnly && !s.preview;
 // attiva o toglie il prezzo da deposito su una riga d'offerta (il listino del catalogo resta in catalogPrice per tornare indietro)
-function setDepotPrice(line, on) {
+function setDepotPrice(line, on, { by = '', price = null, at = new Date().toISOString() } = {}) {
   const rule = depotPriceFor(line.productId); if (!rule) return line;
   if (on) {
     if (!line.depotPrice) line.catalogPrice = line.listPrice;
-    line.depotPrice = true; line.listPrice = rule.price; line.discounts = [0, 0, 0];
+    line.depotPrice = true; line.discounts = [0, 0, 0];
+    line.listPrice = Number(price) > 0 ? Math.round(Number(price) * 100) / 100 : rule.price;
+    line.depotBy = by; line.depotAt = at; delete line.depotRequest;
   } else if (line.depotPrice) {
-    line.depotPrice = false; line.listPrice = line.catalogPrice ?? line.listPrice; delete line.catalogPrice;
+    line.depotPrice = false; line.listPrice = line.catalogPrice ?? line.listPrice; delete line.catalogPrice; delete line.depotBy; delete line.depotAt;
   }
   return line;
 }
 
-return { RADIX_CODE_FIX, fixProduct, fixProducts, DEPOT_PRICE, depotPriceFor, setDepotPrice };
+return { RADIX_CODE_FIX, fixProduct, fixProducts, DEPOT_PRICE, depotPriceFor, canSetDepotPrice, setDepotPrice };
 })();
 __m["js/core/messages.js"] = (function () {
 // Messaggi (03/11/2026, richiesta Tommaso per la Beta): logica senza interfaccia, condivisa da archivio locale, online e test.
@@ -6878,7 +6884,7 @@ return { threadView, threadRow, rxRef, assistDialog, assistUnread, askOfficeCard
 })();
 __m["js/views/quotes.js"] = (function () {
 const { changeLogCard } = __m["js/views/change-log-ui.js"];
-const { depotPriceFor, setDepotPrice } = __m["js/core/product-fixes.js"];
+const { depotPriceFor, setDepotPrice, canSetDepotPrice } = __m["js/core/product-fixes.js"];
 const { forecastSelect, forecastMonthInput } = __m["js/views/radix-offers.js"];
 const { h, fill, eur, num, dateIt, toast, modal, field, emptyState, debounce } = __m["js/ui.js"];
 const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions, normPayment, LOST_REASONS, QUOTE_SNOOZE_DAYS, quoteReminders, missingForOrder } = __m["js/data/model.js"];
@@ -7178,12 +7184,34 @@ async function viewQuoteEditor(app, id, customerId) {
     const lim = `massimo ${reg.maxKg / 1000} t o ${cap.pallets} bancali${cap.glue ? ' + 1 di colla' : ''} a mezzo`;
     return h('small', { class: 'warn-text big-load' }, `⚠ Ordine grande: ${num(ld.pallets, 0)} bancali${t} → ${mezzi} mezzi (${lim}). Se la quantità è giusta, ignora l'avviso.`);
   }
-  // 12/11 (Tommaso): Policell BigBag 3 m³ che esce da un deposito NORDTEX: 120 €/m³ netto fisso, trasporto compreso (eccezione al catalogo)
+  // 12/11 (Tommaso): Policell BigBag 3 m³ che esce da un deposito NORDTEX: 120 €/m³ netto, trasporto compreso (eccezione al catalogo).
+  // Lo mette solo la Direzione, anche come prezzo speciale; il commerciale lo chiede alla Direzione dall'offerta.
   function depotBox(l) {
     const rule = depotPriceFor(l.productId); if (!rule) return null;
-    return h('label', { class: 'check depot-price' }, h('input', { type: 'checkbox', checked: !!l.depotPrice, disabled: locked,
-      onchange: e => { setDepotPrice(l, e.target.checked); mark(); drawLines(); drawTotals(); } }),
-      h('span', {}, h('strong', {}, rule.label), l.depotPrice ? ' · sconti bloccati, nessun trasporto in offerta per questa riga' : ' · altrimenti vale il catalogo: franco produttore, trasporto a km'));
+    const by = l.depotBy ? ` · autorizzato da ${l.depotBy}${l.depotAt ? ' il ' + dateIt(l.depotAt) : ''}` : '';
+    if (canSetDepotPrice(app.session)) {
+      const price = l.depotPrice ? numIn(l.listPrice, v => { if (v > 0) { l.listPrice = Math.round(v * 100) / 100; setTimeout(drawTotals); } }, { 'aria-label': 'Prezzo da deposito €/m³', style: { width: '80px' } }, null) : null;
+      return h('div', { class: 'depot-price' },
+        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!l.depotPrice, disabled: locked,
+          onchange: e => { setDepotPrice(l, e.target.checked, { by: app.session.name }); mark(); drawLines(); drawTotals(); } }),
+          h('span', {}, h('strong', {}, 'Dal deposito, trasporto compreso'), l.depotPrice ? ' · prezzo netto €/m³ (standard 120, modificabile solo dalla Direzione):' : ` · standard ${rule.price} €/m³ netto; senza spunta vale il catalogo (franco produttore, trasporto a km)`)),
+        price, l.depotRequest && !l.depotPrice ? h('small', { class: 'warn-text' }, `Il commerciale lo ha chiesto il ${dateIt(l.depotRequest)}: spunta per autorizzare.`) : null);
+    }
+    if (l.depotPrice) return h('small', { class: 'depot-price ok-text' }, `✓ Prezzo da deposito ${eur(l.listPrice)}/m³ netto, trasporto compreso${by}. Sconti e prezzo li cambia solo la Direzione.`);
+    if (l.depotRequest) return h('small', { class: 'depot-price warn-text' }, `Prezzo da deposito chiesto alla Direzione il ${dateIt(l.depotRequest)}: in attesa di autorizzazione. Intanto vale il catalogo.`);
+    if (locked) return null;
+    return h('div', { class: 'depot-price' }, h('button', { class: 'btn small', type: 'button', onclick: async e => {
+      if (!q.id) { toast('Prima salva l\'offerta, poi chiedi il prezzo da deposito', 'error'); return; }
+      if (app.session.preview) { toast('Anteprima: qui il commerciale chiede il prezzo da deposito alla Direzione.'); return; }
+      e.target.disabled = true;
+      try {
+        await app.store.sendMessage({ channel: 'ufficio', topic: 'Prezzo', quoteId: q.id, page: 'offerta',
+          body: `Richiesta prezzo da deposito per ${l.description}: ${num(l.qty)} m³${q.customer?.name ? ' per ' + q.customer.name : ''}. Prezzo standard ${rule.price} €/m³ netto con trasporto compreso, dal deposito con giacenza. Serve l'autorizzazione della Direzione: aprire l'offerta ${q.number || ''} e spuntare «Dal deposito».` });
+        l.depotRequest = new Date().toISOString(); mark(); drawLines();
+        toast('Richiesta inviata alla Direzione. Salva l\'offerta per tenerne traccia.');
+      } catch (err) { e.target.disabled = false; toast(err.message, 'error'); }
+    } }, '✉ Chiedi il prezzo da deposito alla Direzione'),
+      h('small', { class: 'muted' }, ` ${rule.price} €/m³ netto, trasporto compreso, se esce da un deposito con giacenza`));
   }
   function drawLines() {
     fill(linesBody, ...q.lines.map((l, i) => {
