@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="7f404ad3aae6">
+<meta name="ntx-build" content="f106303de7b5">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -976,13 +976,17 @@ details.ss-group > summary .ss-sep { display: inline; margin: 0; }
 .prov-label{font:600 10px/14px system-ui,sans-serif;color:#333;text-align:center;text-shadow:0 0 2px #fff,0 0 2px #fff}
 .prov-label.off{color:#888;font-weight:500}
 
+/* 12/11: dati cliente corretti in HUB */
+.fix-note{display:block;font-size:.78rem;color:#9a5b00;margin-top:2px}
+.fix-note .fix-was{color:var(--muted,#777)}
+h1 + .fix-note{margin:-4px 0 4px}
 /* 12/11: sconti bloccati (prezzo netto da deposito) ben visibili */
 .table.lines td.disc input:disabled{background:#efefef;color:#8a8a8a;border-style:dashed}
 .depot-price{display:flex;flex-direction:column;gap:4px;align-items:flex-start;margin:4px 0;font-size:.85rem}
 .depot-price .check{display:flex;gap:6px;align-items:flex-start}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"7f404ad3aae6"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f106303de7b5"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1352,6 +1356,39 @@ function missingForOrder(c) {
   if (!String(c.bank || '').trim()) out.push('banca');
   return out;
 }
+// 12/11 (Tommaso): modifica dei dati del cliente. Direzione su tutti; chi ha creato un cliente nuovo (HUB) finché non è in RADIX.
+// Clienti RADIX: la modifica è una correzione che il caricamento da RADIX non sovrascrive e va in coda "Da riportare in RADIX".
+const EDIT_FIELDS = [['name', 'Ragione sociale'], ['street', 'Via e numero'], ['cap', 'CAP'], ['city', 'Località'], ['prov', 'Provincia'],
+  ['phone', 'Telefono'], ['email', 'Email'], ['vat', 'P.IVA'], ['cf', 'Cod. fiscale'], ['sdi', 'Codice SDI'], ['pec', 'PEC'], ['paymentTerms', 'Pagamento'], ['bank', 'Banca']];
+const EDIT_LABEL = Object.fromEntries(EDIT_FIELDS);
+const EDIT_DB = { paymentTerms: 'payment_terms' };   // chiave app → colonna; le altre si chiamano uguali
+const EDIT_FROM_DB = Object.fromEntries(EDIT_FIELDS.map(([k]) => [EDIT_DB[k] || k, k]));
+function canEditCustomer(session, c) {
+  if (!session || !c || session.preview || session.readOnly || session.role === 'lettura') return false;
+  return session.role === 'direzione' || (c.origin === 'HUB' && !!c.createdBy && c.createdBy === session.userId);
+}
+// Controlla i campi e restituisce solo quelli cambiati ({ chiave: valore }, '' = svuotato)
+function customerEdits(c, f) {
+  const t = x => String(x ?? '').trim().replace(/\s+/g, ' ');
+  const norm = (k, x) => { const s = t(x);
+    return ['city', 'prov', 'sdi'].includes(k) ? s.toUpperCase() : ['vat', 'cf'].includes(k) ? s.replace(/\s/g, '').toUpperCase() : k === 'pec' ? s.toLowerCase() : s; };
+  const v = Object.fromEntries(EDIT_FIELDS.map(([k]) => [k, norm(k, k in f ? f[k] : c[k])]));
+  const out = {};
+  for (const [k] of EDIT_FIELDS) if (k in f && norm(k, c[k]) !== v[k]) out[k] = v[k];
+  // si controllano solo i campi cambiati: un dato RADIX scritto in modo particolare non blocca la correzione di un altro
+  const ch = k => k in out && out[k] !== '';
+  if ('name' in out && v.name.length < 2) throw new Error('Ragione sociale obbligatoria');
+  if (ch('prov') && !/^[A-Z]{2}$/.test(v.prov)) throw new Error('Provincia: usa la sigla di 2 lettere (es. TV)');
+  if (ch('cap') && !/^\d{5}$/.test(v.cap)) throw new Error('CAP: 5 cifre');
+  if (ch('email')) for (const e of v.email.split(/;+/).map(x => x.trim()).filter(Boolean)) if (!/^[^@\s]+@[^@\s]+\.[^@\s\[]+/.test(e)) throw new Error('Email non valida: ' + e);
+  if (ch('vat') && /^\d+$/.test(v.vat) && !validVat(v.vat)) throw new Error('P.IVA non valida: controlla le 11 cifre');
+  if (ch('vat') && !/^[A-Z0-9]{8,16}$/.test(v.vat)) throw new Error('P.IVA non valida');
+  if (ch('sdi') && !/^[A-Z0-9]{7}$/.test(v.sdi)) throw new Error('Codice SDI: 7 caratteri (lettere e cifre)');
+  if (ch('pec') && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.pec)) throw new Error('PEC non valida');
+  const iban = v.bank.replace(/\s/g, '').toUpperCase();
+  if (ch('bank') && /IT\d{2}/.test(iban) && !/IT\d{2}[A-Z]\d{10}[A-Z0-9]{12}/.test(iban)) throw new Error('IBAN non valido: controlla i 27 caratteri (IT…)');
+  return out;
+}
 const CONTACT_KINDS = ['Visita', 'Telefonata', 'Email', 'Videochiamata', 'Altro'];
 // Esiti già definiti nello schema AGENDA (hub_notes.outcome)
 const NOTE_OUTCOMES = ['Colloquio di presentazione', 'Nuova opportunità', 'Richiesta generica prezzi', 'Preventivo specifico'];
@@ -1525,7 +1562,7 @@ function checkStop({ callStatus, apptTime, note } = {}) {
 // ordine delle tappe: prima gli appuntamenti per orario, poi le altre nell'ordine scelto
 const stopOrder = (a, b) => (a.apptTime || '99') .localeCompare(b.apptTime || '99') || (a.position || 0) - (b.position || 0);
 
-return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, assigneeFor, validVat, makeProspect, checkFiscal, missingForOrder, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normTerms, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers, POST_CATEGORIES, postIcon, postEnded, CALL_STATES, checkStop, stopOrder };
+return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, assigneeFor, validVat, makeProspect, checkFiscal, missingForOrder, EDIT_FIELDS, EDIT_LABEL, EDIT_DB, EDIT_FROM_DB, canEditCustomer, customerEdits, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normTerms, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers, POST_CATEGORIES, postIcon, postEnded, CALL_STATES, checkStop, stopOrder };
 })();
 __m["js/core/preview.js"] = (function () {
 // Anteprima "come agente" per la Direzione (richiesta Tommaso 01/11/2026): l'app mostra solo ciò che vede l'agente scelto.
@@ -1716,7 +1753,7 @@ __m["js/data/local-store.js"] = (function () {
 const { checkForecast } = __m["js/core/forecast.js"];
 const { fixProducts } = __m["js/core/product-fixes.js"];
 const { seesThread, isStaffOf, checkMessage, statusAfter } = __m["js/core/messages.js"];
-const { normTerms, uid, nowIso, visibleTo, nextQuoteNumber, DIREZIONE, CONTACT_KINDS, NOTE_OUTCOMES, makeProspect, applyStatus, checkStatusChange, radixNoteView, radixVisible, checkOrderRequest, ORDER_STATES, checkRadixOutcome, radixOfferForAgent, checkStop, checkFiscal } = __m["js/data/model.js"];
+const { normTerms, uid, nowIso, visibleTo, nextQuoteNumber, DIREZIONE, CONTACT_KINDS, NOTE_OUTCOMES, makeProspect, applyStatus, checkStatusChange, radixNoteView, radixVisible, checkOrderRequest, ORDER_STATES, checkRadixOutcome, radixOfferForAgent, checkStop, checkFiscal, customerEdits, canEditCustomer } = __m["js/data/model.js"];
 function memoryKv(initial = {}) {
   const m = new Map(Object.entries(initial));
   return { async get(k) { return m.has(k) ? structuredClone(m.get(k)) : undefined; }, async set(k, v) { m.set(k, structuredClone(v)); } };
@@ -1772,6 +1809,7 @@ function createLocalStore({ data, kv }) {
         canImport: p.role === 'direzione' && /tommaso/i.test(p.name || ''), canStrategy: p.role === 'direzione' && !p.readOnly && /tommaso/i.test(p.name || ''), office: !!p.office, readOnly: !!p.readOnly };
       for (const c of await col('prospects')) byId.set(c.id, c);
       for (const x of await col('dirFollowers')) { const c = byId.get(x.id); if (c) c.dirFollower = x.f; }
+      for (const x of await col('customerFixes')) { const c = byId.get(x.customerId); if (c) c[x.field] = x.value; }   // 12/11: correzioni dei dati RADIX
       await applyAllStatus();
       return session;
     },
@@ -1799,6 +1837,33 @@ function createLocalStore({ data, kv }) {
       const s = mustSession(); const f = checkFiscal(fields); const c = byId.get(id);
       if (!c || c.origin !== 'HUB' || (!isDir() && c.createdBy !== s.userId)) throw new Error('Non puoi modificare questo cliente');
       Object.assign(c, f, { cf: c.cf || f.vat }); await save('prospects'); return c;
+    },
+    // 12/11: modifica dei dati del cliente (stesse regole della versione online)
+    async editCustomer(id, fields) {
+      const s = mustSession(); const c = byId.get(id);
+      if (!c || !canEditCustomer(s, c)) throw new Error('Solo la Direzione può modificare i dati di questo cliente');
+      const diff = customerEdits(c, fields), keys = Object.keys(diff);
+      if (!keys.length) return { changed: 0, fix: false };
+      if (c.origin === 'HUB') { Object.assign(c, diff); await save('prospects'); return { changed: keys.length, fix: false }; }
+      const list = await col('customerFixes');
+      for (const k of keys) {
+        const i = list.findIndex(x => x.customerId === id && x.field === k), prev = i >= 0 ? list[i] : null;
+        const rec = { customerId: id, field: k, value: diff[k], radixValue: prev ? prev.radixValue : String(c[k] ?? ''), byName: s.name, at: nowIso(), doneAt: null, doneByName: '' };
+        if (i >= 0) list[i] = rec; else list.push(rec);
+        c[k] = diff[k];
+      }
+      await save('customerFixes'); return { changed: keys.length, fix: true };
+    },
+    async customerFixes(id) { mustSession(); return canSeeCustomer(id) ? (await col('customerFixes')).filter(x => x.customerId === id) : []; },
+    async customerFixesAll() {
+      if (!isDir()) return [];
+      return (await col('customerFixes')).map(x => { const c = byId.get(x.customerId); return { ...x, customerName: c?.name || '', customerCity: [c?.city, c?.prov].filter(Boolean).join(' '), assignee: c?.assignee || '' }; });
+    },
+    async setFixRadixDone(fix, done = true) {
+      if (!isDir() || session.readOnly) throw new Error('Solo Direzione e Ufficio');
+      const list = await col('customerFixes'), x = list.find(y => y.customerId === fix.customerId && y.field === fix.field);
+      if (!x) throw new Error('Correzione non trovata');
+      Object.assign(x, done ? { doneAt: nowIso(), doneByName: session.name } : { doneAt: null, doneByName: '' }); await save('customerFixes');
     },
     async noteRadixDone() { mustSession(); return new Map((await col('noteRadixDone')).map(x => [x.id, { at: x.at, byName: x.byName }])); },
     async setNoteRadixDone(noteId, done = true) {
@@ -2157,7 +2222,7 @@ __m["js/data/supabase-store.js"] = (function () {
 // l'app non usa mai chiavi privilegiate. Richiede la migrazione supabase/migrations/20261031120000_hub_v1.sql.
 const { checkForecast } = __m["js/core/forecast.js"];
 const { fixProducts } = __m["js/core/product-fixes.js"];
-const { normTerms, nowIso, makeProspect, applyStatus, checkStatusChange, radixNoteView, checkOrderRequest, checkRadixOutcome, checkStop, checkFiscal } = __m["js/data/model.js"];
+const { normTerms, nowIso, makeProspect, applyStatus, checkStatusChange, radixNoteView, checkOrderRequest, checkRadixOutcome, checkStop, checkFiscal, customerEdits, canEditCustomer, EDIT_FIELDS, EDIT_DB, EDIT_FROM_DB } = __m["js/data/model.js"];
 const AUDIO_MAX = 10 * 1024 * 1024;
 const AUDIO_EXT = { 'audio/mp4': 'mp4', 'audio/webm': 'webm', 'audio/ogg': 'ogg' };
 const audioMime = t => { const m = String(t || '').split(';')[0].trim().toLowerCase(); return AUDIO_EXT[m] ? m : m === 'audio/x-m4a' || m === 'audio/aac' ? 'audio/mp4' : null; };
@@ -2214,6 +2279,8 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     priceHistory: c.price_history || null,   // 10/11: ultimi acquisti per articolo (migrazione 20261110140000)
     // 08/11: anche gli anni successivi (rev2027, …) per Sales strategy dal 1° gennaio
     ...Object.fromEntries(Object.entries(c.sales?.rev || {}).filter(([y]) => Number(y) > 2026).map(([y, v]) => ['rev' + y, v])) });
+  const fixFromDb = r => ({ customerUuid: r.customer_id, field: EDIT_FROM_DB[r.field] || r.field, value: r.value ?? '', radixValue: r.radix_value ?? '', byName: r.fixed_by_name || '', at: r.fixed_at,
+    doneAt: r.radix_done_at || null, doneByName: r.radix_done_by_name || '' });
   const custUuid = id => { const c = customers?.find(x => x.id === id); if (!c) throw fail('CUSTOMER', 'Cliente non nel tuo portafoglio'); return c.uuid; };
   const custCode = uuid => customers?.find(x => x.uuid === uuid)?.id;
   // Nomi degli utenti (vista hub_people: solo id e nome)
@@ -2395,6 +2462,39 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
         body: { vat: f.vat || null, cf: c.cf || f.vat || null, sdi: f.sdi || null, pec: f.pec || null, bank: f.bank || null, payment_terms: f.paymentTerms || null } });
       if (!row) throw fail('CUSTOMER', 'Non puoi modificare questo cliente');
       Object.assign(c, fromDb(row)); return c;
+    },
+    // 12/11 (Tommaso): modifica dei dati del cliente (migrazione 20261112140000). Clienti RADIX: correzione che il caricamento
+    // da RADIX non sovrascrive e che va in coda "Da riportare in RADIX" per l'ufficio; clienti nuovi (HUB): salvata e basta.
+    async editCustomer(id, fields) {
+      const c = customers.find(x => x.id === id); if (!c) throw fail('CUSTOMER', 'Cliente non trovato');
+      if (!canEditCustomer(session, c)) throw fail('CUSTOMER', 'Solo la Direzione può modificare i dati di questo cliente');
+      const diff = customerEdits(c, fields);
+      if (!Object.keys(diff).length) return { changed: 0, fix: false };
+      const body = Object.fromEntries(Object.entries(diff).map(([k, v]) => [EDIT_DB[k] || k, v === '' ? null : v]));
+      let r;
+      try { r = await api('/rest/v1/rpc/hub_edit_customer', { method: 'POST', body: { p_customer: c.uuid, p_fields: body } }); }
+      catch (e) {
+        if (/PGRST202|HTTP_404/.test(e.code + e.message)) throw fail('MIGRATION', 'Funzione non ancora attiva: serve l\'aggiornamento del database (Tommaso)');
+        let m = ''; try { m = JSON.parse(e.message).message; } catch { /* testo semplice */ }
+        throw m ? fail('CUSTOMER', m) : e;
+      }
+      const fresh = fromDb(r.customer);
+      for (const [k] of EDIT_FIELDS) c[k] = fresh[k];
+      return { changed: r.changed, fix: c.origin === 'RADIX' };
+    },
+    // correzioni di un cliente (le vede chi vede il cliente); senza migrazione → nessuna
+    async customerFixes(id) {
+      let u = null; try { u = custUuid(id); } catch { return []; }
+      const rows = await api('/rest/v1/hub_customer_fixes?select=*&customer_id=eq.' + u).catch(() => []);
+      return rows.map(r => ({ ...fixFromDb(r), customerId: id }));
+    },
+    // coda dell'ufficio: tutte le correzioni (Direzione), con il cliente
+    async customerFixesAll() {
+      const rows = await api('/rest/v1/hub_customer_fixes?select=*,hub_customers(code,name,city,prov,assignee_label)&order=fixed_at.desc&limit=500').catch(() => null);
+      return rows ? rows.map(r => ({ ...fixFromDb(r), customerId: r.hub_customers?.code || null, customerName: r.hub_customers?.name || '', customerCity: [r.hub_customers?.city, r.hub_customers?.prov].filter(Boolean).join(' '), assignee: r.hub_customers?.assignee_label || '' })) : null;
+    },
+    async setFixRadixDone(fix, done = true) {
+      await api('/rest/v1/rpc/hub_fix_radix_done', { method: 'POST', body: { p_customer: fix.customerUuid, p_field: EDIT_DB[fix.field] || fix.field, p_done: !!done } });
     },
     // 02/11 Ufficio: code leggere per la Home (ricontrollate ogni minuto): ordini + clienti nati nell'HUB
     async officeQueue() {
@@ -4707,7 +4807,7 @@ const { dictationAvailable, startDictation } = __m["js/core/dictation.js"];
 const { recordingAvailable, startRecording, mmss } = __m["js/core/recorder.js"];
 const { radixOfferRow, radixOfferOpen, dueState: rxDueState } = __m["js/views/radix-offers.js"];
 const { openActions } = __m["js/views/actions.js"];
-const { CONTACT_KINDS, NOTE_OUTCOMES, STATUS_ORDER, STATUS_INFO, MANUAL_STATUSES, TYPOLOGIES, dueState, assigneeFor } = __m["js/data/model.js"];
+const { CONTACT_KINDS, NOTE_OUTCOMES, STATUS_ORDER, STATUS_INFO, MANUAL_STATUSES, TYPOLOGIES, dueState, assigneeFor, canEditCustomer, EDIT_LABEL } = __m["js/data/model.js"];
 const { buildIndex, searchCustomers, highlight } = __m["js/core/search.js"];
 const { fiscalFields } = __m["js/views/fiscal.js"];
 const { radixOrderRow } = __m["js/views/radix-orders.js"];
@@ -4931,9 +5031,10 @@ function purchasesCard(c) {
 }
 
 async function customerCard(app, c) {
-  const [notes, contacts, quotes, rxAll, rxOrders] = await Promise.all([app.store.notes(c.id), app.store.contacts(c.id), app.store.quotes(c.id),
+  const [notes, contacts, quotes, rxAll, rxOrders, fixes] = await Promise.all([app.store.notes(c.id), app.store.contacts(c.id), app.store.quotes(c.id),
     app.store.radixOffers ? app.store.radixOffers({ customerId: c.id }).catch(() => []) : [],
-    app.store.radixOrders ? app.store.radixOrders({ customerId: c.id }).catch(() => []) : []]);
+    app.store.radixOrders ? app.store.radixOrders({ customerId: c.id }).catch(() => []) : [],
+    app.store.customerFixes ? app.store.customerFixes(c.id).catch(() => []) : []]);
   const lastVisit = notes.find(n => n.kind === 'Visita' || (n.source === 'RADIX' && /visita/i.test(n.kind || '')));
   const addr = [c.street, [c.cap, c.city].filter(Boolean).join(' '), c.prov ? `(${c.prov})` : ''].filter(Boolean).join(', ');
   const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([c.street, c.cap, c.city, c.prov].filter(Boolean).join(' '));
@@ -4942,7 +5043,17 @@ async function customerCard(app, c) {
   const blocked = c.blockedSince || c.salesBlockedSince;
   const provisional = String(c.assignee).startsWith('EX_AREA');
   const refresh = () => app.go('agenda/' + c.id);
-  const row = (k, v) => v === null || v === undefined || v === '' ? null : h('div', { class: 'kv' }, h('span', {}, k), h('div', {}, v));
+  const row = (k, v, ...fx) => v === null || v === undefined || v === '' ? null : h('div', { class: 'kv' }, h('span', {}, k), h('div', {}, v, fixNote(fx)));
+  // 12/11: dati corretti in HUB (clienti RADIX): sotto il dato, chi e quando; la Direzione vede anche il valore che c'è in RADIX
+  const fixBy = new Map(fixes.map(f => [f.field, f]));
+  const isDirS = app.session.role === 'direzione';
+  const fixNote = keys => { const fs = keys.map(k => fixBy.get(k)).filter(Boolean); if (!fs.length) return null;
+    const last = fs.slice().sort((a, b) => String(b.at).localeCompare(String(a.at)))[0];
+    return h('small', { class: 'fix-note' }, `corretto in HUB il ${dateIt(last.at)}${last.byName ? ' da ' + last.byName : ''}`,
+      isDirS ? ` · ${fs.every(f => f.doneAt) ? 'riportato in RADIX' : 'da riportare in RADIX'}` : '',
+      isDirS ? fs.map(f => h('span', { class: 'fix-was' }, ` · in RADIX era: ${f.radixValue || '—'}`)) : null); };
+  const canEdit = canEditCustomer(app.session, c) && !!app.store.editCustomer;
+  const editBtn = canEdit ? h('button', { class: 'btn small', type: 'button', onclick: () => editCustomerDialog(app, c).then(ok => ok && refresh()) }, '✎ Modifica dati') : null;
   const phones = phoneList(c, contacts);
   const openQ = quotes.filter(q => q.status === 'Bozza' || q.status === 'Inviata'), pastQ = quotes.filter(q => !openQ.includes(q));
   const rxOpen = rxAll.filter(radixOfferOpen), rxPast = rxAll.filter(o => !radixOfferOpen(o));
@@ -4971,7 +5082,7 @@ async function customerCard(app, c) {
   return h('article', { class: 'ccard' },
     h('a', { class: 'back', href: '#/agenda' }, '← Elenco'),
     h('header', { class: 'chead' },
-      h('div', {}, h('h1', {}, c.name), c.extra ? h('p', { class: 'muted' }, c.extra) : null,
+      h('div', {}, h('h1', {}, c.name), fixBy.has('name') ? fixNote(['name']) : null, c.extra ? h('p', { class: 'muted' }, c.extra) : null,
         h('div', { class: 'badges' }, h('span', { class: 'badge ' + (STATUS_INFO[c.status]?.cls || 'muted'), title: STATUS_INFO[c.status]?.rule }, h('span', { class: 'dot ' + (STATUS_INFO[c.status]?.cls || 'muted') }), ' ', c.status), blocked ? h('span', { class: 'badge bad' }, c.salesBlockedSince ? 'Vendita bloccata dal ' + dateIt(c.salesBlockedSince) : 'Cliente bloccato dal ' + dateIt(c.blockedSince)) : null,
           h('span', { class: 'badge muted' }, (c.attribution === 'Direzionale' ? 'Direzionale' : c.assignee) + (provisional ? ' · area in valutazione' : '')),
           followerSelect(app, c.id, refresh),   // 07/11 sera: chi segue il direzionale (Tommaso, Marco, Ufficio)
@@ -5004,11 +5115,13 @@ async function customerCard(app, c) {
         : h('p', { class: 'muted' }, 'Nessuna attività registrata. Aggiungi la prima nota: visita, telefonata o email, con un follow-up.')),
     purchasesCard(c),
     // Dati e contatti: chiuso, si apre quando serve
-    h('details', { class: 'card fold-box' }, h('summary', {}, 'Dati e contatti'),
+    h('details', { class: 'card fold-box', open: fixes.length > 0 && isDirS }, h('summary', {}, 'Dati e contatti'),
+      editBtn ? h('div', { class: 'card-head' }, h('h3', {}, 'Anagrafica'), editBtn) : null,
       h('div', { class: 'grid2' },
-        h('div', {}, row('Indirizzo', addr), row('Telefono', telLinks(c.phone)), row('Email', emails.length ? emails.map((e, i) => [i ? h('br') : null, h('a', { href: 'mailto:' + e.split(/[\s\[]/)[0] }, e)]) : null),
-          row('P.IVA', c.vat), row('Cod. fiscale', c.cf !== c.vat ? c.cf : null)),
-        h('div', {}, row('Pagamento concordato', c.paymentTerms), row('N° cliente', c.origin === 'HUB' ? 'Non ancora in RADIX' : c.number),
+        h('div', {}, row('Ragione sociale', fixBy.has('name') ? c.name : null, 'name'), row('Indirizzo', addr, 'street', 'cap', 'city', 'prov'), row('Telefono', telLinks(c.phone), 'phone'),
+          row('Email', emails.length ? emails.map((e, i) => [i ? h('br') : null, h('a', { href: 'mailto:' + e.split(/[\s\[]/)[0] }, e)]) : null, 'email'),
+          row('P.IVA', c.vat, 'vat'), row('Cod. fiscale', c.cf !== c.vat ? c.cf : null, 'cf'), row('Codice SDI', c.sdi, 'sdi'), row('PEC', c.pec, 'pec'), row('Banca', c.bank, 'bank')),
+        h('div', {}, row('Pagamento concordato', c.paymentTerms, 'paymentTerms'), row('N° cliente', c.origin === 'HUB' ? 'Non ancora in RADIX' : c.number),
           c.changedVsRadix ? row('In RADIX', `${c.radixOwner} (${c.radixAgent})`) : row('Codice agente RADIX', c.radixAgent),
           c.typology && c.typology !== '(non indicata)' ? row('Tipologia', c.typology) : null,
           row('Assegnato a', (c.attribution === 'Direzionale' ? 'Direzionale' : c.assignee) + (provisional ? ' (area in valutazione)' : '')))),
@@ -5250,6 +5363,37 @@ async function statusDialog(app, c) {
   [{ label: 'Annulla', value: false }, { label: 'Salva stato', primary: true, run: async () => { await app.store.setStatus({ customerId: c.id, status: sel.value, reason: reason.value }); app.invalidate(); toast('Stato aggiornato: ' + sel.value); return true; } }]);
 }
 
+// 12/11 (Tommaso): "Modifica dati" del cliente. Direzione su tutti; chi ha creato un cliente nuovo (HUB) finché non è in RADIX.
+// Cliente RADIX: la modifica è una correzione che RADIX non sovrascrive e va all'ufficio da riportare in RADIX.
+async function editCustomerDialog(app, c) {
+  const inp = (k, attrs = {}) => h('input', { value: c[k] || '', 'aria-label': EDIT_LABEL[k], ...attrs });
+  const f = {
+    name: inp('name'), street: inp('street'), cap: inp('cap', { inputmode: 'numeric', maxlength: 5 }), city: inp('city'),
+    prov: inp('prov', { maxlength: 2, style: { textTransform: 'uppercase' } }), phone: inp('phone', { type: 'tel' }), email: inp('email'),
+    vat: inp('vat'), cf: inp('cf', { style: { textTransform: 'uppercase' } }),
+  };
+  const fx = fiscalFields(app, c, { withVat: false });
+  const radix = c.origin !== 'HUB';
+  const save = async () => {
+    const r = await app.store.editCustomer(c.id, { ...Object.fromEntries(Object.entries(f).map(([k, el]) => [k, el.value])), ...fx.values() });
+    if (!r.changed) { toast('Nessun dato cambiato'); return true; }
+    app.invalidate?.();
+    toast(r.fix ? `Dati corretti (${r.changed}): l'ufficio li riporta in RADIX` : `Dati salvati (${r.changed})`);
+    return true;
+  };
+  return modal('Modifica dati — ' + c.name, h('div', { class: 'form' },
+    h('p', { class: 'alert ' + (radix ? 'warn' : 'info') }, radix
+      ? 'Cliente RADIX: la modifica vale subito nell\'HUB e il caricamento da RADIX non la cancella. Va in coda all\'ufficio «Da riportare in RADIX», così anche RADIX viene corretto.'
+      : 'Cliente nuovo, non ancora in RADIX: la modifica si salva e basta. Quando l\'ufficio lo apre in RADIX userà i dati aggiornati.'),
+    field('Ragione sociale', f.name),
+    field('Indirizzo', f.street), h('div', { class: 'form three' }, field('CAP', f.cap), field('Località', f.city), field('Prov.', f.prov)),
+    h('div', { class: 'form two' }, field('Telefono', f.phone, 'più numeri separati da ;'), field('Email', f.email, 'più indirizzi separati da ;')),
+    h('div', { class: 'form two' }, field('P.IVA', f.vat), field('Cod. fiscale', f.cf)),
+    fx.el,
+    h('p', { class: 'fine' }, 'Ogni modifica resta nello storico (chi, quando, prima e dopo), visibile alla Direzione in fondo alla scheda.')),
+  [{ label: 'Annulla', value: false }, { label: 'Salva', primary: true, run: save }]);
+}
+
 // 07/11 (Tommaso, caso Venuti): nella scheda di un cliente creato nell'HUB, Direzione e Ufficio lo collegano al N° cliente RADIX
 // (stessa funzione della pagina Ufficio: se il cliente RADIX è già nell'app, offerte, note e visite passano su quello).
 function radixLinkBox(app, c) {
@@ -5272,7 +5416,7 @@ function radixLinkBox(app, c) {
     h('div', { class: 'row' }, code, h('button', { class: 'btn small primary', type: 'button', onclick: go }, 'Collega a RADIX')));
 }
 
-return { listSignals, viewAgenda, phoneList, quoteCls, noteDialog, noteVoice, dictateButton, newCustomerDialog };
+return { listSignals, viewAgenda, phoneList, quoteCls, noteDialog, noteVoice, dictateButton, newCustomerDialog, editCustomerDialog };
 })();
 __m["js/core/pdf-fonts.js"] = (function () {
 // Larghezze dei caratteri Helvetica / Helvetica-Bold (font standard PDF, nessun file da incorporare), codici WinAnsi 32-255, in millesimi di punto.
@@ -9290,7 +9434,7 @@ __m["js/views/office.js"] = (function () {
 const { acceptedToOrder, acceptedRow } = __m["js/views/order-match-ui.js"];
 const { dataStatusCard } = __m["js/views/data-status-card.js"];
 const { h, fill, eur, dateIt, toast } = __m["js/ui.js"];
-const { ORDER_STATES, missingForOrder } = __m["js/data/model.js"];
+const { ORDER_STATES, missingForOrder, EDIT_LABEL } = __m["js/data/model.js"];
 const { staffPanel } = __m["js/views/messages.js"];
 const { isWaiting } = __m["js/core/messages.js"];
 const isOffice = s => !!s?.office && !s.preview;
@@ -9424,6 +9568,24 @@ function noteRow(app, n, onDone, doneInfo) {
     doneInfo ? h('p', { class: 'of-line muted' }, `Riportata in RADIX il ${dateIt(doneInfo.at)}${doneInfo.byName ? ' da ' + doneInfo.byName : ''}`) : null]);
 }
 
+// 12/11 (Tommaso): correzioni dell'anagrafica fatte nell'HUB su clienti RADIX, da riportare in RADIX (come le note)
+function fixRadixText(x) {
+  return [`Cliente N° ${x.customerId || ''} ${x.customerName}`.trim(), `${EDIT_LABEL[x.field] || x.field}: ${x.value || '(vuoto)'}`,
+    `(in RADIX oggi: ${x.radixValue || '(vuoto)'}) · corretto in HUB il ${dateIt(x.at)}${x.byName ? ' da ' + x.byName : ''}`].join('\n');
+}
+function fixRow(app, x, onDone) {
+  return row([h('span', { class: 'badge warn' }, EDIT_LABEL[x.field] || x.field), h('strong', {}, x.customerName || '—'),
+    h('span', { class: 'of-sub' }, `${x.radixValue || '(vuoto)'} → ${x.value || '(vuoto)'}`), h('span', { class: 'of-age' }, dateIt(x.at))],
+  [h('p', { class: 'of-line' }, `N° cliente ${x.customerId || '—'} · ${x.customerCity || ''} · ${x.assignee || ''}`),
+    h('p', { class: 'of-line' }, h('strong', {}, (EDIT_LABEL[x.field] || x.field) + ': '), `in RADIX «${x.radixValue || ''}» → corretto «${x.value || ''}»`),
+    h('p', { class: 'of-line muted' }, `Corretto in HUB il ${dateIt(x.at)}${x.byName ? ' da ' + x.byName : ''}`),
+    h('div', { class: 'row of-actions' }, x.customerId ? h('a', { class: 'btn small', href: '#/agenda/' + encodeURIComponent(x.customerId) }, 'Scheda cliente') : null,
+      h('button', { class: 'btn small', type: 'button', onclick: () => copy(fixRadixText(x)) }, 'Copia per RADIX'),
+      onDone ? (x.doneAt ? h('button', { class: 'btn small', type: 'button', onclick: () => onDone(x, false) }, 'Rimetti da riportare')
+        : h('button', { class: 'btn small primary', type: 'button', onclick: () => onDone(x, true) }, '✓ Riportata in RADIX')) : null),
+    x.doneAt ? h('p', { class: 'of-line muted' }, `Riportata in RADIX il ${dateIt(x.doneAt)}${x.doneByName ? ' da ' + x.doneByName : ''}`) : null]);
+}
+
 // Offerte fatte oggi nell'app (tutta la rete), le più recenti prima; escluse quelle del cliente di prova
 function todaysQuotes(quotes, now = new Date()) {
   const day = localDay(now.toISOString());
@@ -9458,9 +9620,15 @@ async function viewOfficeHome(app) {
     try { await app.store.setNoteRadixDone(n.id, isDone); toast(isDone ? 'Nota segnata come riportata in RADIX' : 'Nota rimessa tra quelle da riportare'); await load(true); }
     catch (e) { toast(/404|relation|does not exist|42P01/.test(e.message) ? 'Funzione non ancora attiva: serve l\'aggiornamento del database (Tommaso)' : e.message, 'error'); }
   }
+  async function markFix(x, isDone) {
+    try { await app.store.setFixRadixDone(x, isDone); toast(isDone ? 'Correzione segnata come riportata in RADIX' : 'Correzione rimessa tra quelle da riportare'); await load(true); }
+    catch (e) { toast(e.message, 'error'); }
+  }
   async function load(force = false) {
-    const [{ orders, customers }, quotes, asked, allNotes, done] = await Promise.all([app.store.officeQueue(), app.store.quotes(), ask ? ask.load(force).catch(() => null) : null, app.store.notes().catch(() => []),
-      app.store.noteRadixDone ? app.store.noteRadixDone().catch(() => null) : null]);
+    const [{ orders, customers }, quotes, asked, allNotes, done, allFixes] = await Promise.all([app.store.officeQueue(), app.store.quotes(), ask ? ask.load(force).catch(() => null) : null, app.store.notes().catch(() => []),
+      app.store.noteRadixDone ? app.store.noteRadixDone().catch(() => null) : null,
+      app.store.customerFixesAll ? app.store.customerFixesAll().catch(() => null) : null]);
+    const fixes = (allFixes || []).filter(x => !x.doneAt), fixesDone = (allFixes || []).filter(x => x.doneAt);
     const rxAcc = await acceptedToOrder(app).catch(() => []);   // 07/11: offerte RADIX accettate senza ordine
     const rep = notesToReport(allNotes, done || new Map());
     const notes = rep.todo, notesDone = rep.done;
@@ -9472,15 +9640,16 @@ async function viewOfficeHome(app) {
     const open = orders.filter(openOrder).sort((a, b) => String(a.requestedAt).localeCompare(String(b.requestedAt)));
     const custs = customers.slice().sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
     // avvisi: cosa è arrivato dall'ultimo controllo
-    const ids = [...open.map(o => 'o:' + o.id), ...custs.map(c => 'c:' + c.id), ...questions.map(t => 'q:' + t.id + t.lastAt)];
+    const ids = [...open.map(o => 'o:' + o.id), ...custs.map(c => 'c:' + c.id), ...questions.map(t => 'q:' + t.id + t.lastAt), ...fixes.map(x => 'f:' + x.customerId + x.field + x.at)];
     if (seen && ids.some(k => !seen.has(k))) chime();   // un solo suono per controllo, se è arrivato qualcosa di nuovo
     if (seen) {
       for (const t of questions) if (!seen.has('q:' + t.id + t.lastAt)) notify('Domanda di ' + (t.authorName || 'un commerciale'), [t.topic, t.quote?.number, t.messages?.[t.messages.length - 1]?.body?.slice(0, 80)].filter(Boolean).join(' · '));
       for (const o of open) if (!seen.has('o:' + o.id)) notify('Nuovo ordine da inserire', `${qById.get(o.quoteId)?.customer?.name || ''} · da ${o.requestedByName || ''}`);
       for (const c of custs) if (!seen.has('c:' + c.id)) notify('Nuovo cliente da aprire in RADIX', `${c.name} · ${c.assignee || ''}`);
+      for (const x of fixes) if (!seen.has('f:' + x.customerId + x.field + x.at)) notify('Dato cliente da correggere in RADIX', `${x.customerName} · ${EDIT_LABEL[x.field] || x.field}`);
     }
     seen = new Set(ids); try { sessionStorage.setItem(seenKey, JSON.stringify(ids)); } catch { /* */ }
-    setTitle(open.length + custs.length + questions.length);
+    setTitle(open.length + custs.length + questions.length + fixes.length);
     if (app.navCounts) app.navCounts.ordini = open.length;
     // contatori
     const oldestQ = list => { const w = waitText(list.slice().sort((a, b) => String(a.lastAt).localeCompare(String(b.lastAt)))[0].lastAt); return w === 'adesso' ? 'appena arrivata' : 'la più vecchia ' + w; };
@@ -9493,9 +9662,10 @@ async function viewOfficeHome(app) {
       tile('note', 'Note da riportare in RADIX', notes.length, notes.length ? `${notesToday} di oggi` : 'tutte riportate', false),
       tile('ordini', 'Ordini da inserire', open.length + rxAcc.length, open.length ? oldest(open) : rxAcc.length ? `${rxAcc.length} offerte RADIX accettate` : 'nessuno in attesa', open.some(o => Date.now() - new Date(o.requestedAt) > 4 * 3600e3)),
       ask ? tile('domande', 'Domande dei commerciali', questions.length, questions.length ? oldestQ(questions) : 'nessuna da rispondere', questions.some(t => Date.now() - new Date(t.lastAt) > 3600e3)) : tile('domande', 'Domande dei commerciali', null, 'in arrivo'),
-      tile('clienti', 'Clienti da aprire in RADIX', custs.length, custs.length ? oldest(custs) : 'nessuno in attesa', custs.some(c => Date.now() - new Date(c.createdAt) > 24 * 3600e3)));
+      tile('clienti', 'Clienti da aprire in RADIX', custs.length, custs.length ? oldest(custs) : 'nessuno in attesa', custs.some(c => Date.now() - new Date(c.createdAt) > 24 * 3600e3)),
+      allFixes ? tile('correzioni', 'Dati clienti da correggere in RADIX', fixes.length, fixes.length ? `${fixes.length === 1 ? 'una correzione' : fixes.length + ' correzioni'} fatte nell'HUB` : 'nessuna in attesa', false) : null);
     // code: si ridisegnano solo se è cambiato qualcosa e nessuno sta scrivendo in una riga aperta
-    const sig = JSON.stringify([offers.map(q => q.id + q.status + q.total), notes.map(n => n.id), notesDone.map(n => n.id), open.map(o => o.id + o.status), rxAcc.map(o => o.id), custs.map(c => c.id + c.vat + c.sdi + c.pec + c.bank + c.paymentTerms)]);
+    const sig = JSON.stringify([offers.map(q => q.id + q.status + q.total), notes.map(n => n.id), notesDone.map(n => n.id), open.map(o => o.id + o.status), rxAcc.map(o => o.id), custs.map(c => c.id + c.vat + c.sdi + c.pec + c.bank + c.paymentTerms), (allFixes || []).map(x => x.customerId + x.field + x.at + x.doneAt)]);
     const busy = box.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName || '');
     if (!force && (sig === lastSig || busy)) return;
     lastSig = sig;
@@ -9507,7 +9677,9 @@ async function viewOfficeHome(app) {
       note: h('div', {}, queue('note', 'Note da riportare in RADIX', notes.length, notes.map(n => noteRow(app, n, done ? markNote : null)), done ? 'Tutte le note dei commerciali sono state riportate.' : 'Nessuna nota dei commerciali.'),
         notesDone.length ? h('details', { class: 'fold-in of-done' }, h('summary', {}, `Già riportate (${notesDone.length})`), h('div', { class: 'of-rows' }, notesDone.slice(0, 50).map(n => noteRow(app, n, markNote, done.get(n.id))))) : null),
     };
-    const order = /irina/i.test(app.session.name || '') ? ['clienti', 'note', 'offerte', 'ordini', 'domande'] : ['offerte', 'note', 'ordini', 'domande', 'clienti'];
+    if (allFixes) cards.correzioni = h('div', {}, queue('correzioni', 'Dati clienti da correggere in RADIX', fixes.length, fixes.map(x => fixRow(app, x, markFix)), 'Nessuna correzione da riportare: anagrafica HUB e RADIX allineate.'),
+      fixesDone.length ? h('details', { class: 'fold-in of-done' }, h('summary', {}, `Già riportate (${fixesDone.length})`), h('div', { class: 'of-rows' }, fixesDone.slice(0, 50).map(x => fixRow(app, x, markFix)))) : null);
+    const order = (/irina/i.test(app.session.name || '') ? ['clienti', 'correzioni', 'note', 'offerte', 'ordini', 'domande'] : ['offerte', 'note', 'correzioni', 'ordini', 'domande', 'clienti']).filter(k => cards[k]);
     fill(box, order.map(k => cards[k]));
   }
   await load(true);
@@ -9517,7 +9689,7 @@ async function viewOfficeHome(app) {
     isOffice(app.session) ? dataStatusCard(app) : null, tiles, box);   // 07/11: Tommaso lo vede solo nella sua Home
 }
 
-return { isOffice, canSeeOfficeDesk, radixCustomerText, waitText, chime, weekNotes, NOTES_FROM, notesToReport, noteRadixText, todaysQuotes, viewOfficeHome };
+return { isOffice, canSeeOfficeDesk, radixCustomerText, waitText, chime, weekNotes, NOTES_FROM, notesToReport, noteRadixText, fixRadixText, todaysQuotes, viewOfficeHome };
 })();
 __m["js/views/first-steps.js"] = (function () {
 // "Primi passi" (07/11/2026, Tommaso): una pagina breve per l'agente che inizia. La versione per tutta la rete arriverà
@@ -9607,7 +9779,8 @@ const HELP = {
       'Dopo la consegna ufficiale (versione 1.0) le richieste si raccolgono e si rilasciano ogni 15 giorni (1.1, 1.2 …), sempre con la mail delle novità.',
     ],
     notes: ['Queste istruzioni vengono riviste prima della consegna ufficiale e aggiornate a ogni versione.',
-      'Correzione 06/11 (Direzione): nella ricerca Clienti si trova ogni cliente presente in RADIX. Reinseriti come direzionali i clienti esclusi al lancio perché senza acquisti dal 2025 (stato Perso o Mai fatturato, quindi non compaiono in "Da lavorare"); restano fuori solo i privati.'],
+      'Correzione 06/11 (Direzione): nella ricerca Clienti si trova ogni cliente presente in RADIX. Reinseriti come direzionali i clienti esclusi al lancio perché senza acquisti dal 2025 (stato Perso o Mai fatturato, quindi non compaiono in "Da lavorare"); restano fuori solo i privati.',
+      'Novità 12/11 (Direzione): nella scheda cliente il pulsante "✎ Modifica dati" (in "Dati e contatti") corregge ragione sociale, indirizzo, provincia, telefono, email, P.IVA/CF, SDI/PEC, pagamento e banca. Sui clienti RADIX la correzione non si perde al caricamento successivo e va all\'ufficio nella coda "Dati clienti da correggere in RADIX". Ogni modifica resta nello storico.'],
   },
 
   home: {
@@ -9639,6 +9812,7 @@ const HELP = {
       'Ogni riga si apre col clic: dentro trovi i dati e i pulsanti.',
       'Ordini: inseriscili in RADIX, poi scegli "Inserito" e scrivi il N° d\'ordine RADIX.',
       'Clienti nuovi: "Copia dati per RADIX", apri l\'anagrafica in RADIX, poi scrivi il N° cliente e premi "Aperto in RADIX": il cliente dell\'app diventa quello di RADIX con note e offerte.',
+      'Dati clienti da correggere in RADIX: correzioni dell\'anagrafica fatte dalla Direzione nell\'HUB (es. ragione sociale sbagliata). Apri la riga: vedi il valore in RADIX e quello corretto; "Copia per RADIX", correggi l\'anagrafica in RADIX e premi "✓ Riportata in RADIX".',
       'Note della settimana: visite, telefonate e note scritte dai commerciali da lunedì, le più recenti prima. Apri la riga per leggerla tutta; "Copia per RADIX" copia data, tipo, commerciale, cliente, testo e cose da fare, pronti da incollare.',
       'Domande dei commerciali: arrivano da "Chiedi all\'ufficio" dentro le offerte. Apri la riga, rispondi e premi Invia: il commerciale la vede nell\'offerta e riceve un\'email. "✓ Risolta" la archivia.',
       'Premi "Attiva le notifiche sul PC" una volta: per ogni ordine, cliente o domanda nuova la pagina suona e arriva un avviso di Windows. Niente email: tieni l\'HUB aperto.',
@@ -9656,8 +9830,25 @@ const HELP = {
       'Una nota già scritta si collega a un\'offerta con "🔗 collega a un\'offerta" accanto alla nota.',
       'Nuovo cliente: bastano ragione sociale, indirizzo con provincia e un contatto. I dati per l\'ordine (SDI/PEC, pagamento, banca) si possono mettere subito o quando arriva l\'ordine.',
       'Lo stato del cliente si cambia a mano solo con un motivo (es. "Cessata attività").',
+      'Un cliente nuovo che hai creato tu si corregge con "✎ Modifica dati" in "Dati e contatti", finché l\'ufficio non lo apre in RADIX. I dati dei clienti RADIX li corregge la Direzione: se trovi un errore (nome, indirizzo, telefono…) scrivilo con "💬 Assistenza".',
     ],
-    notes: ['Il fatturato e lo stato vengono da RADIX e si aggiornano ogni settimana, dopo la fatturazione del venerdì.'],
+    notes: ['Il fatturato e lo stato vengono da RADIX e si aggiornano ogni settimana, dopo la fatturazione del venerdì.',
+      'Sotto un dato corretto nell\'HUB trovi "corretto in HUB il … da …": quel dato è giusto anche se RADIX non è ancora stato aggiornato.'],
+  },
+  'agenda@ufficio': { ref: 'agenda@direzione' },
+  'agenda@direzione': {
+    title: 'Clienti',
+    intro: 'Tutti i clienti della rete con stato, fatturato, offerte e storia dei contatti.',
+    steps: [
+      'Cerca per nome, località o P.IVA; i filtri in alto separano Attivi, Da recuperare, Persi, Mai fatturato e Potenziali.',
+      'Nella scheda cliente, "In corso" mostra offerte aperte (app e RADIX), ordini in corso in RADIX e follow-up.',
+      '"✎ Modifica dati" (in "Dati e contatti"): ragione sociale, indirizzo, provincia, telefono, email, P.IVA/CF, SDI/PEC, pagamento, banca.',
+      'Cliente nuovo (codice H-…): la modifica si salva e basta.',
+      'Cliente RADIX: la modifica è una correzione. Vale subito nell\'HUB, il caricamento da RADIX non la cancella e va all\'ufficio nella coda "Dati clienti da correggere in RADIX". Sotto il dato compare "corretto in HUB il … da …", con il valore che c\'era in RADIX e se è già stato riportato.',
+      'Lo stato del cliente si cambia a mano solo con un motivo (es. "Cessata attività").',
+    ],
+    notes: ['Ogni modifica dei dati resta in "Storico modifiche" in fondo alla scheda: chi, quando, valore prima e dopo.',
+      'Gli agenti non possono modificare l\'anagrafica dei clienti RADIX: lo impedisce il database, non solo l\'app.'],
   },
   preventivi: {
     title: 'Offerte',
