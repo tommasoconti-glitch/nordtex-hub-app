@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="b395232932ec">
+<meta name="ntx-build" content="d2458d161787">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -988,7 +988,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .depot-price .check{display:flex;gap:6px;align-items:flex-start}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"b395232932ec"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"d2458d161787"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3923,7 +3923,27 @@ function partialRows(cost, k) {
   // prezzo medio a mezzo con 3 decimali (come nel documento), importo = trasporto esatto
   return oneKmRow(cost, k, FREIGHT_PARTIAL);
 }
+// 13/11 (Tommaso): la riga del trasporto va sotto il prodotto a cui si riferisce, non in fondo.
+// after = indice dell'ultima riga d'offerta servita da quel trasporto (null = in fondo)
+function freightAfter(q, p) {
+  const own = Array.isArray(p?.lines) && p.lines.length ? Math.max(...p.lines) : null;
+  if (own !== null && own < (q.lines || []).length) return own;
+  const idx = (q.lines || []).map((l, i) => (l.pickup || l.depotPrice ? -1 : i)).filter(i => i >= 0);
+  return idx.length ? idx[idx.length - 1] : null;
+}
 function freightRows(q, freight) {
+  const parts = q.transportEstimate?.parts;
+  const single = Array.isArray(parts) && parts.length === 1 ? parts[0] : null;
+  return freightRowsRaw(q, freight).map(r => ({ ...r, after: r.after !== undefined ? r.after : freightAfter(q, single) }));
+}
+// righe d'offerta e righe del trasporto nell'ordine del documento
+function docSequence(q, freight) {
+  const fr = freight ? freightRows(q, freight) : [], out = [];
+  (q.lines || []).forEach((l, i) => { out.push({ line: l, index: i }); for (const f of fr) if (f.after === i) out.push({ freight: f }); });
+  for (const f of fr) if (f.after === null || f.after >= (q.lines || []).length) out.push({ freight: f });
+  return out;
+}
+function freightRowsRaw(q, freight) {
   const one = [{ code: FREIGHT_PARTIAL, qty: 1, price: freight, amount: freight, label: freightLabel(q) }];
   const e = q.transportEstimate;
   if (freight > 0 && e && !(q.freightAuto && Math.abs((e.amount ?? NaN) - freight) < 0.005)) {
@@ -3941,7 +3961,7 @@ function freightRows(q, freight) {
       else if (p.kind === 'pallet' && p.pallets > 0 && Math.abs(p.pallets * p.perPallet - p.cost) < 0.005) r = [{ code: FREIGHT_PARTIAL, qty: p.pallets, price: p.perPallet, amount: c2(p.cost) }];
       if (!r) r = [{ code: FREIGHT_PARTIAL, qty: 1, price: p.cost, amount: c2(p.cost) }];
       const label = freightLabel(q, e.parts.length > 1 ? p : { ...p, label: '' });
-      rows.push(...r.map(x => ({ ...x, label })));
+      rows.push(...r.map(x => ({ ...x, label, after: freightAfter(q, p) })));
     }
     return Math.abs(rows.reduce((s, x) => s + x.amount, 0) - freight) < 0.005 ? rows : one;
   }
@@ -3977,11 +3997,12 @@ function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
   const row = (desc, code, um, qty, price, disc, amount) => `<tr><td style="${cell};width:40%">${desc}</td><td style="${cell}">${esc(code)}</td><td style="${cell}">${esc(um)}</td>`
     + `<td style="${num}">${qty}</td><td style="${num}">${price}</td>${disc === null ? '' : `<td style="${num};text-align:center">${disc}</td>`}<td style="${num}">${amount}</td></tr>`;
   const site = String(q.site || '').trim();
-  const rows = q.lines.map(l => row([esc(l.description), ...lineExtra(l).map(esc)].join('<br>'), l.radixCode || l.listCode || '', UM[l.unit] || l.unit,
-    l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), n(docPrice(q, l), 3), hideDiscounts(q) ? null : discText(l.discounts), n(lineAmount(l), 2)));
+  const rows = docSequence(q, t.freight).map(({ line: l, freight: f }) => f
+    ? row(esc(f.label), f.code, 'NR', n(f.qty, 2), n(f.price, 3), hideDiscounts(q) ? null : '', n(f.amount, 2))
+    : row([esc(l.description), ...lineExtra(l).map(esc)].join('<br>'), l.radixCode || l.listCode || '', UM[l.unit] || l.unit,
+      l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), n(docPrice(q, l), 3), hideDiscounts(q) ? null : discText(l.discounts), n(lineAmount(l), 2)));
   if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), hideDiscounts(q) ? null : '', n(t.extras, 2)));
   if (t.euroPallets) rows.push(row(esc(EURO_PALLET.label), EURO_PALLET.code, 'NR', n(t.euroPalletCount, 2), n(EURO_PALLET.price, 3), hideDiscounts(q) ? null : '', n(t.euroPallets, 2)));
-  if (t.freight) for (const f of freightRows(q, t.freight)) rows.push(row(esc(f.label), f.code, 'NR', n(f.qty, 2), n(f.price, 3), hideDiscounts(q) ? null : '', n(f.amount, 2)));
   const notes = [];
   const pickup = isPickup(q);
   if (pickup) notes.push(`Materiale disponibile per il ritiro presso:<br><b>${depot.pickup.map(esc).join('<br>')}</b><br><b>Prezzo franco partenza</b> dal deposito`);
@@ -4041,7 +4062,7 @@ function pickupStockIssues(q, stock) {
   return { depotDate: dep?.date || null, issues: out };
 }
 
-return { DEPOTS, RADIX_DEPOTS, stockDepot, TRANSPORT_BY, isPickup, transportByFor, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, FREIGHT_FULL, freightRows, customerLines, lineExtra, quoteDocHtml, quoteFileName, pickupStockIssues };
+return { DEPOTS, RADIX_DEPOTS, stockDepot, TRANSPORT_BY, isPickup, transportByFor, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, FREIGHT_FULL, freightRows, docSequence, customerLines, lineExtra, quoteDocHtml, quoteFileName, pickupStockIssues };
 })();
 __m["js/core/mailto.js"] = (function () {
 const { totals } = __m["js/core/pricing.js"];
@@ -5602,7 +5623,7 @@ __m["js/core/quote-pdf.js"] = (function () {
 // Serve all'invio dalla casella personale di chi fa l'offerta (decisione Direzione 31/10/2026).
 const { PdfDoc, wrapText, textWidth } = __m["js/core/pdf-writer.js"];
 const { totals, lineAmount, EURO_PALLET } = __m["js/core/pricing.js"];
-const { DEPOTS, CLAUSES, customerCode, lineExtra, fmtN: n, dotDate, UM, discText, quoteFileName, hideDiscounts, docPrice, destinationLines, freightLabel, freightRows, customerLines, isPickup, transportByFor } = __m["js/core/quote-doc.js"];
+const { DEPOTS, CLAUSES, customerCode, lineExtra, fmtN: n, dotDate, UM, discText, quoteFileName, hideDiscounts, docPrice, destinationLines, freightLabel, freightRows, docSequence, customerLines, isPickup, transportByFor } = __m["js/core/quote-doc.js"];
 const MM = 72 / 25.4;
 function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
   const t = totals(q);
@@ -5655,11 +5676,11 @@ function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
   };
   drawTop();
   const wrap = s => wrapText(s, descW, 8.5);
-  for (const l of q.lines) row([...wrap(l.description), ...lineExtra(l).flatMap(wrap)],
+  const freightRow = f => row(wrap(f.label), { code: f.code, um: 'NR', qty: n(f.qty, 2), price: hideDiscounts(q) ? '' : n(f.price, 3), disc: hideDiscounts(q) ? n(f.price, 3) : '', amount: n(f.amount, 2) });
+  for (const { line: l, freight: f } of docSequence(q, t.freight)) if (f) freightRow(f); else row([...wrap(l.description), ...lineExtra(l).flatMap(wrap)],
     { code: l.radixCode || l.listCode || '', um: UM[l.unit] || l.unit, qty: l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), price: hideDiscounts(q) ? '' : n(l.listPrice, 3), disc: hideDiscounts(q) ? n(docPrice(q, l), 3) : discText(l.discounts), amount: n(lineAmount(l), 2) });
   if (t.extras) row(wrap(q.extrasLabel || 'Altri addebiti'), { code: '', um: 'NR', qty: '1,00', price: hideDiscounts(q) ? '' : n(t.extras, 3), disc: hideDiscounts(q) ? n(t.extras, 3) : '', amount: n(t.extras, 2) });
   if (t.euroPallets) row(wrap(EURO_PALLET.label), { code: EURO_PALLET.code, um: 'NR', qty: n(t.euroPalletCount, 2), price: hideDiscounts(q) ? '' : n(EURO_PALLET.price, 3), disc: hideDiscounts(q) ? n(EURO_PALLET.price, 3) : '', amount: n(t.euroPallets, 2) });
-  if (t.freight) for (const f of freightRows(q, t.freight)) row(wrap(f.label), { code: f.code, um: 'NR', qty: n(f.qty, 2), price: hideDiscounts(q) ? '' : n(f.price, 3), disc: hideDiscounts(q) ? n(f.price, 3) : '', amount: n(f.amount, 2) });
   const pickup = isPickup(q);
   if (pickup) row(['Materiale disponibile per il ritiro presso:', ...depot.pickup, 'Prezzo franco partenza dal deposito']);
   if (t.freightPending && !pickup) row(['Trasporto: da definire.']);
@@ -5993,7 +6014,7 @@ function planTransport(lines, ctx = {}) {
     if (!reg) { office.push({ index: i, description: l.product.description, reason: 'Nessuna tariffa nel listino: quotazione ufficio' }); continue; }
     const key = reg.id + (reg.origin ? ':' + reg.origin.address : '');
     if (!groups.has(key)) groups.set(key, { key, regime: reg, lines: [] });
-    groups.get(key).lines.push({ index: i, product: l.product, qty: l.qty, amount: l.amount, load: lineLoad(l.product, l.qty, reg) });
+    groups.get(key).lines.push({ index: l.qi ?? i, product: l.product, qty: l.qty, amount: l.amount, load: lineLoad(l.product, l.qty, reg) });
   }
   const out = [];
   for (const g of groups.values()) {
@@ -6237,7 +6258,8 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
           vehicles: g.regime.kind === 'km' ? g.vehicles : null, fullVehicles: g.partialPct ? g.vehicles - 1 : fs ? (fs.allFull || fs.missingPallets === 0 ? fs.vehicles : fs.full) : null,
           ...(g.partialPct ? { partialPct: g.partialPct, perVehicle: g.perVehicle } : {}),
           vehicle: g.regime.kind === 'km' ? (g.regime.fixedVehicle || q.logistics.vehicleType || 'centinato') : null,
-          pallets: g.regime.kind === 'pallet' ? g.occupancy.pallets : null, perPallet: g.regime.perPallet ?? null };
+          pallets: g.regime.kind === 'pallet' ? g.occupancy.pallets : null, perPallet: g.regime.perPallet ?? null,
+          lines: g.lines.map(x => x.index) };   // 13/11: righe d'offerta a cui si riferisce (la riga trasporto va sotto di loro)
       });
       const one = parts.length === 1 && parts[0].kind === 'km' ? parts[0] : null, vehicles = one ? one.vehicles : null, fullVehicles = one ? one.fullVehicles : null;
       if (q.freight !== v.amount || q.freightNote !== note || JSON.stringify(q.transportEstimate?.parts ?? null) !== JSON.stringify(parts)) { q.freight = v.amount; q.freightAuto = true; q.freightNote = note; q.transportEstimate = { amount: v.amount, source: plan.source, at: new Date().toISOString(), level: v.level, vehicles, fullVehicles, parts }; mark(); onApply('freight'); }
@@ -6357,12 +6379,12 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
       lastPlan = null; return;
     }
     // 12/11: le righe a prezzo da deposito hanno il trasporto compreso: fuori dal calcolo
-    const depotOnly = q.lines.length > 0 && q.lines.every(l => l.depotPrice);
+    const depotOnly = q.lines.length > 0 && q.lines.every(l => l.depotPrice) ;
     if (depotOnly) {
       if ((q.freight === null || q.freight === undefined || q.freightAuto) && q.freight !== 0) { q.freight = 0; q.freightAuto = true; q.freightNote = 'Trasporto compreso nel prezzo da deposito'; q.transportEstimate = null; mark(); onApply('freight'); }
       fill(box, addr, h('p', { class: 'alert info' }, 'Trasporto compreso nel prezzo da deposito (120 €/m³ netto): nessun trasporto in offerta.')); lastPlan = null; return;
     }
-    const lines = q.lines.map(l => ({ product: { ...(byId.get(l.productId) || {}), description: l.description }, qty: l.qty, amount: lineAmount(l), skip: !!l.depotPrice || !!l.pickup })).filter(x => x.product.id);
+    const lines = q.lines.map((l, qi) => ({ qi, product: { ...(byId.get(l.productId) || {}), description: l.description }, qty: l.qty, amount: lineAmount(l), skip: !!l.depotPrice || !!l.pickup })).filter(x => x.product.id);
     if (!lines.length) { fill(box, addr, h('p', { class: 'muted' }, 'Aggiungi prodotti per calcolare trasporto e carico.')); lastPlan = null; return; }
     const plan = planTransport(lines, { prov: q.delivery.prov, km: q.logistics.km, vehicleType: q.logistics.vehicleType, partial: partialMap(q) });
     lastPlan = plan;
@@ -7391,7 +7413,7 @@ async function viewQuoteEditor(app, id, customerId) {
   function deliveredLine(l, i) {
     let offerTpu = null;
     const ctx = { prov: q.delivery?.prov || q.customer?.prov, km: q.logistics?.km || {}, vehicleType: q.logistics?.vehicleType, partial: partialMap(q) };
-    try { offerTpu = offerTransportPerUnit(planTransport(q.lines.map(x => ({ product: byId.get(x.productId), qty: x.qty, amount: lineAmount(x), skip: !!x.depotPrice || !!x.pickup })).filter(x => x.product), ctx), i); } catch { offerTpu = null; }
+    try { offerTpu = offerTransportPerUnit(planTransport(q.lines.map((x, qi) => ({ qi, product: byId.get(x.productId), qty: x.qty, amount: lineAmount(x), skip: !!x.depotPrice || !!x.pickup })).filter(x => x.product), ctx), i); } catch { offerTpu = null; }
     const d = l.pickup ? { value: lineNet(l), transport: 0, note: `senza trasporto` } : deliveredPrice({ line: l, net: lineNet(l), lines: q.lines.filter(x => !x.pickup), freight: q.freight, pickup: isPickup(q), offerTpu });
     if (!d) return null;
     const u = String(l.unit).toLowerCase().replace('m3', 'm³').replace('m2', 'm²');
@@ -9955,7 +9977,8 @@ const HELP = {
       'Novità 13/11: nel PDF e nell\'email dell\'offerta il trasporto a km è su una sola riga con il numero dei mezzi (es. 2 bilici = quantità 2), anche se uno non è pieno. Codice N14126 se c\'è un mezzo parziale, N88079 se sono tutti pieni.',
       'Novità 13/11 (Direzione): nel riquadro Trasporto, se l\'ultimo mezzo non è pieno, la spunta «Ultimo mezzo con doppio scarico» fa pagare solo una percentuale del mezzo (di partenza quanto è pieno, modificabile). Da usare solo se il camion porta anche merce di un altro cliente; nel PDF resta una riga sola N14126 con il numero dei bilici che partono e il prezzo medio a bilico. Il commerciale la chiede alla Direzione. Supplemento del secondo scarico: importo da confermare con l\'ufficio.',
       'Novità 13/11: se l\'ultimo mezzo è pieno al 25% o meno, il riquadro Trasporto propone di dividere la riga: i mezzi pieni restano in consegna e il resto lo ritira il cliente nel deposito scelto (con la giacenza accanto). Policell ritirato in deposito: 120 €/m³ netto. Nel PDF la riga dice «Ritiro a cura del cliente presso …». «Annulla divisione» rimette tutto in consegna.',
-      'Novità 13/11: «Trasporto a cura» diventa MITTENTE da solo quando l\'offerta addebita il trasporto (non è un ritiro); se lo scegli a mano resta la tua scelta.'],
+      'Novità 13/11: «Trasporto a cura» diventa MITTENTE da solo quando l\'offerta addebita il trasporto (non è un ritiro); se lo scegli a mano resta la tua scelta.',
+      'Novità 13/11: nel PDF e nell\'email la riga del trasporto sta subito sotto il prodotto che trasporta (con più luoghi di carico, ognuna sotto i suoi prodotti), non più in fondo.'],
   },
 
   home: {
