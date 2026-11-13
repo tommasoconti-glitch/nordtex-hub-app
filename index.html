@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="87fb15fc5ad1">
+<meta name="ntx-build" content="2a8b30458938">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -987,7 +987,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .depot-price .check{display:flex;gap:6px;align-items:flex-start}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"87fb15fc5ad1"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"2a8b30458938"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -6527,7 +6527,7 @@ function unitPriceNote(rows, picked, basis) {
   return 'Prezzo indicativo: ' + sel.map(r => `${eu(basis === 'none' ? r.price : r.withTransport)}/${r.label.replace(/^m³ a (\d+) kg\/m³$/, 'm³ (posa $1 kg/m³)')}`).join(' · ') + tr;
 }
 
-// 13/11 (Tommaso, offerta Comever OFF-2026-0024): prezzo per unità CON trasporto, sempre visibile sotto la riga,
+// 13/11 (Tommaso, offerta Policell a carico completo): prezzo per unità CON trasporto, sempre visibile sotto la riga,
 // così mentre si cambiano gli sconti si vede subito il prezzo «reso» (es. Policell ~110 €/m³ a carico completo).
 // line = riga; net = netto per unità; lines = tutte le righe; freight = trasporto dell'offerta (null = da definire);
 // pickup = ritiro al deposito; offerTpu = quota di trasporto per unità della riga dalla stima (più righe con trasporto).
