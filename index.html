@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="8fbb786941ab">
+<meta name="ntx-build" content="46ec0a618c4b">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -203,6 +203,7 @@ mark{background:#fff1a8;color:inherit;border-radius:2px;padding:0 1px}
 .tp-bar{height:10px;background:#eef1f5;border-radius:6px;overflow:hidden} .tp-bar i{display:block;height:100%;background:var(--brand);border-radius:6px}
 .tp-km{display:flex;flex-direction:column;gap:6px;font-size:.88rem}
 .tp-km-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap} .tp-km-row input{width:100px}
+.tp-partial{margin:8px 0;padding:8px 10px;border:1px dashed var(--line);border-radius:8px;display:flex;flex-direction:column;gap:4px}
 .tp-cost{margin:0} .tp-cost strong{font-size:1.15rem}
 .table.compact td,.table.compact th{padding:6px 8px;font-size:.85rem}
 .table tr.cur td{background:#f5f7fa}
@@ -987,7 +988,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .depot-price .check{display:flex;gap:6px;align-items:flex-start}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8fbb786941ab"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"46ec0a618c4b"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3865,6 +3866,11 @@ const c2 = x => Math.round(x * 100) / 100;
 // 13/11 (Tommaso, Policell 99 m³ = 1 bilico pieno + 1 parziale allo stesso prezzo: "non mi piace" le due righe):
 // i mezzi a km costano uguale, pieni o no → UNA riga con la quantità dei mezzi. Codice N14126 se c'è un mezzo parziale, N88079 se tutti pieni.
 const kmCode = (k, fullVehicles) => (Math.max(0, Math.min(k, fullVehicles ?? 0)) < k ? FREIGHT_PARTIAL : FREIGHT_FULL);
+const c3 = x => Math.round(x * 1000) / 1000;
+function oneKmRow(amount, k, code) {
+  const price = c3(amount / k);
+  return Math.abs(price * k - amount) <= 0.0051 ? [{ code, qty: k, price, amount: c2(amount) }] : null;
+}
 function kmRows(cost, k, fullVehicles) {
   const each = c2(cost / k);
   if (Math.abs(each * k - cost) >= 0.005) return null;
@@ -3874,16 +3880,23 @@ function kmRows(cost, k, fullVehicles) {
 // trasporto a km con N mezzi, la riga si divide sui mezzi (carichi completi + carico parziale); i centesimi che avanzano vanno sull'ultimo.
 function manualKmRows(amount, k, fullVehicles) {
   const each = c2(amount / k), code = kmCode(k, fullVehicles);
-  if (Math.abs(each * k - amount) < 0.005) return [{ code, qty: k, price: each, amount: c2(amount) }];
+  const one = oneKmRow(amount, k, code); if (one) return one;   // 13/11: riga unica, prezzo a 3 decimali
   // i centesimi che non si dividono vanno su una riga a parte (stesso codice)
   return [k > 1 && { code, qty: k - 1, price: each, amount: c2(each * (k - 1)) },
     { code, qty: 1, price: c2(amount - each * (k - 1)), amount: c2(amount - each * (k - 1)) }].filter(Boolean);
+}
+// 13/11 (Tommaso): ultimo mezzo con doppio scarico a prezzo ridotto → mezzi pieni N88079 a prezzo intero + mezzo parziale N14126 al suo prezzo
+function partialRows(cost, k) {
+  // 13/11 ore 5 (Tommaso: «l'offerta deve essere su una riga unica, partono due bilici quindi si mette 2»): una riga N14126 × mezzi,
+  // prezzo medio a mezzo con 3 decimali (come nel documento), importo = trasporto esatto
+  return oneKmRow(cost, k, FREIGHT_PARTIAL);
 }
 function freightRows(q, freight) {
   const one = [{ code: FREIGHT_PARTIAL, qty: 1, price: freight, amount: freight, label: freightLabel(q) }];
   const e = q.transportEstimate;
   if (freight > 0 && e && !(q.freightAuto && Math.abs((e.amount ?? NaN) - freight) < 0.005)) {
     const kp = Array.isArray(e.parts) && e.parts.length ? (e.parts.length === 1 && e.parts[0].kind === 'km' ? e.parts[0] : null) : (e.vehicles >= 1 ? e : null);
+    if (kp && kp.partialPct) { const r = partialRows(freight, kp.vehicles); return (r || one).map(x => ({ ...x, label: freightLabel(q) })); }
     if (kp && kp.vehicles >= 1 && kp.vehicles <= 20) return manualKmRows(freight, kp.vehicles, kp.fullVehicles).map(x => ({ ...x, label: freightLabel(q) }));
     return one;
   }
@@ -3892,7 +3905,7 @@ function freightRows(q, freight) {
     const rows = [];
     for (const p of e.parts) {
       let r = null;
-      if (p.kind === 'km' && p.vehicles >= 1) r = kmRows(p.cost, p.vehicles, p.fullVehicles);
+      if (p.kind === 'km' && p.vehicles >= 1) r = p.partialPct ? partialRows(p.cost, p.vehicles) : kmRows(p.cost, p.vehicles, p.fullVehicles);
       else if (p.kind === 'pallet' && p.pallets > 0 && Math.abs(p.pallets * p.perPallet - p.cost) < 0.005) r = [{ code: FREIGHT_PARTIAL, qty: p.pallets, price: p.perPallet, amount: c2(p.cost) }];
       if (!r) r = [{ code: FREIGHT_PARTIAL, qty: 1, price: p.cost, amount: c2(p.cost) }];
       const label = freightLabel(q, e.parts.length > 1 ? p : { ...p, label: '' });
@@ -5900,7 +5913,16 @@ function groupCost(regime, { fraction, pallets, m3, amount }, ctx) {
     // la tariffa a km è per mezzo intero: se l'ultimo mezzo viaggia poco carico, il costo pesa molto sulla merce
     const lastFill = fraction - (vehicles - 1);
     const warn = lastFill < 0.5 - eps ? `${vehicles === 1 ? 'Mezzo' : 'Ultimo mezzo'} pieno al ${Math.max(1, Math.round(lastFill * 100))}%: la tariffa a km si paga per il mezzo intero` : '';
-    return { cost: vehicles * ctx.km * rate, vehicles, warn, detail: `${vehicles} ${vehicles === 1 ? 'mezzo' : 'mezzi'} ${vtype === 'walkingfloor' ? 'walking floor' : 'centinati'} × ${ctx.km} km × ${rate.toFixed(2).replace('.', ',')} €/km` };
+    const perVehicle = ctx.km * rate;
+    const base = `${vehicles} ${vehicles === 1 ? 'mezzo' : 'mezzi'} ${vtype === 'walkingfloor' ? 'walking floor' : 'centinati'} × ${ctx.km} km × ${rate.toFixed(2).replace('.', ',')} €/km`;
+    // 13/11 (Tommaso): ultimo mezzo parziale con DOPPIO SCARICO (il camion porta anche merce di un altro cliente):
+    // la Direzione fa pagare solo una percentuale del mezzo (di partenza: quanto è pieno). Senza doppio scarico si paga intero.
+    const pp = Number(ctx.partialPct);
+    if (pp > 0 && pp < 100 && lastFill < 1 - eps) {
+      const cost = Math.round(((vehicles - 1) * perVehicle + perVehicle * pp / 100) * 100) / 100;
+      return { cost, vehicles, perVehicle, partialPct: pp, warn: '', detail: `${base}; ultimo mezzo con doppio scarico al ${pp}%` };
+    }
+    return { cost: vehicles * perVehicle, vehicles, perVehicle, warn, detail: base };
   }
   if (regime.kind === 'm3zone') {
     const r = m3ZoneRate(ctx.prov); if (r === null) return { cost: null, reason: 'Provincia di consegna non in tabella (pag. 36)' };
@@ -5947,7 +5969,7 @@ function planTransport(lines, ctx = {}) {
     const sum = k => g.lines.reduce((s, x) => s + (x.load[k] ?? 0), 0);
     const occ = { fraction: sum('fraction'), pallets: g.lines.every(x => x.load.pallets !== null) ? sum('pallets') : null, m3: g.lines.every(x => x.load.m3 !== null) ? sum('m3') : null,
       amount: g.lines.every(x => Number.isFinite(x.amount)) ? g.lines.reduce((s, x) => s + x.amount, 0) : null };
-    const c = { region, prov: ctx.prov, km: ctx.km?.[reg.origin?.address] ?? ctx.kmAll, vehicleType: ctx.vehicleType || 'centinato' };
+    const c = { region, prov: ctx.prov, km: ctx.km?.[reg.origin?.address] ?? ctx.kmAll, vehicleType: ctx.vehicleType || 'centinato', partialPct: ctx.partial?.[reg.origin?.address] ?? null };
     const res = known ? groupCost(reg, occ, c) : { cost: null, reason: g.lines.find(x => x.load.fraction === null).load.reason };
     // incidenza per riga, in proporzione all'ingombro
     const perLine = g.lines.map(x => {
@@ -5991,7 +6013,7 @@ function planTransport(lines, ctx = {}) {
       }
     }
     out.push({ key: g.key, regime: reg, occupancy: occ, fill: occ.fraction - Math.floor(occ.fraction - 1e-6), vehicles: res.vehicles ?? Math.max(1, Math.ceil(occ.fraction - 1e-6)),
-      cost: res.cost === null ? null : r2(res.cost), detail: res.detail || '', reason: res.reason || '', warn: [reg.warn, res.warn].filter(Boolean).join('; '), lines: perLine,
+      cost: res.cost === null ? null : r2(res.cost), perVehicle: res.perVehicle ?? null, partialPct: res.partialPct ?? null, detail: res.detail || '', reason: res.reason || '', warn: [reg.warn, res.warn].filter(Boolean).join('; '), lines: perLine,
       main: main ? { index: main.index, description: main.product.description, unit: unit(main.product.saleUnit), palletQuantity: main.product.palletQuantity } : null, scenarios,
       basis: [...new Set(g.lines.map(x => x.load.basis).filter(Boolean))].join(', ') });
   }
@@ -6046,7 +6068,10 @@ function googleMapsUrl(origin, destination, { prov, corridor } = {}) {
   return 'https://www.google.com/maps/dir/?' + q.toString();
 }
 
-return { LISTINO, BRENNERO, CORRIDORS, corridorFor, ORIGIN_VIA, routeVia, ORIGINS, GLUE_PALLET, glueKg, hasGlue, loadCapacity, regimeFor, isBlockAccessory, volumeM3, lineLoad, m3ZoneRate, planTransport, fillSummary, transportVerdict, googleMapsUrl };
+// 13/11: percentuali del mezzo parziale con doppio scarico salvate nell'offerta (q.logistics.partial = { indirizzo carico: { pct, by, at } })
+const partialMap = q => Object.fromEntries(Object.entries(q?.logistics?.partial || {}).filter(([, v]) => v && v.pct > 0 && v.pct < 100).map(([k, v]) => [k, v.pct]));
+
+return { LISTINO, BRENNERO, CORRIDORS, corridorFor, ORIGIN_VIA, routeVia, ORIGINS, GLUE_PALLET, glueKg, hasGlue, loadCapacity, regimeFor, isBlockAccessory, volumeM3, lineLoad, m3ZoneRate, planTransport, fillSummary, transportVerdict, googleMapsUrl, partialMap };
 })();
 __m["js/core/route.js"] = (function () {
 // Distanza stradale (sola andata) dal luogo di carico al cliente, con passaggio obbligato dal Brennero.
@@ -6109,7 +6134,8 @@ __m["js/views/transport-panel.js"] = (function () {
 // Riquadro "Trasporto e carico" dell'offerta: regole del listino, km via Brennero, riempimento del mezzo,
 // incidenza per m² / m³ / bancale, quantità consigliate per mezzo carico e carico completo.
 const { h, fill, eur, num, toast } = __m["js/ui.js"];
-const { planTransport, googleMapsUrl, fillSummary, transportVerdict, corridorFor, ORIGIN_VIA } = __m["js/core/logistics.js"];
+const { planTransport, googleMapsUrl, fillSummary, transportVerdict, corridorFor, ORIGIN_VIA, partialMap } = __m["js/core/logistics.js"];
+const { canSetDepotPrice } = __m["js/core/product-fixes.js"];
 const { kmViaBrennero, addressVariants } = __m["js/core/route.js"];
 const { lineAmount } = __m["js/core/pricing.js"];
 const { DEPOTS } = __m["js/core/quote-doc.js"];
@@ -6175,7 +6201,8 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
       const parts = plan.groups.filter(g => g.cost > 0).map(g => {
         const fs = g.regime.kind === 'km' ? fillSummary(g) : null;
         return { label: g.regime.label.split(' · ')[0], kind: g.regime.kind, cost: g.cost,
-          vehicles: g.regime.kind === 'km' ? g.vehicles : null, fullVehicles: fs ? (fs.allFull || fs.missingPallets === 0 ? fs.vehicles : fs.full) : null,
+          vehicles: g.regime.kind === 'km' ? g.vehicles : null, fullVehicles: g.partialPct ? g.vehicles - 1 : fs ? (fs.allFull || fs.missingPallets === 0 ? fs.vehicles : fs.full) : null,
+          ...(g.partialPct ? { partialPct: g.partialPct, perVehicle: g.perVehicle } : {}),
           vehicle: g.regime.kind === 'km' ? (g.regime.fixedVehicle || q.logistics.vehicleType || 'centinato') : null,
           pallets: g.regime.kind === 'pallet' ? g.occupancy.pallets : null, perPallet: g.regime.perPallet ?? null };
       });
@@ -6201,6 +6228,25 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
       h('button', { class: 'btn small ghost', 'aria-expanded': String(open), onclick: () => { open = !open; try { localStorage.setItem('ntx-tp-open', open ? '1' : '0'); } catch { /* facoltativo */ } redraw(); } }, open ? 'Nascondi dettagli' : 'Dettagli calcolo'));
   }
 
+  // 13/11 (Tommaso): ultimo mezzo parziale con doppio scarico → la Direzione fa pagare una percentuale del mezzo (modificabile).
+  // Il commerciale non lo imposta: lo chiede alla Direzione. Senza doppio scarico il mezzo si paga intero (il trasportatore lo fa pagare intero).
+  function partialBox(g, fs) {
+    if (g.regime.kind !== 'km' || !fs || fs.allFull) return null;
+    const addr = g.regime.origin.address, cur = q.logistics.partial?.[addr] || null, dir = canSetDepotPrice(app.session);
+    const set = v => { q.logistics.partial = { ...(q.logistics.partial || {}) }; if (v) q.logistics.partial[addr] = v; else delete q.logistics.partial[addr]; mark(); redraw(); };
+    const who = cur ? h('small', { class: 'muted' }, ` · impostato da ${cur.by || 'Direzione'}${cur.at ? ' il ' + new Date(cur.at).toLocaleDateString('it-IT') : ''}`) : null;
+    const supp = cur ? h('small', { class: 'warn-text' }, '⚠ Doppio scarico: aggiungere il supplemento del secondo scarico a carico del cliente (importo da confermare con l\'ufficio).') : null;
+    if (!dir) return h('div', { class: 'tp-partial' }, cur
+      ? [h('strong', {}, `Ultimo mezzo con doppio scarico: si paga il ${cur.pct}% del mezzo`), who, supp]
+      : h('small', { class: 'muted' }, `Ultimo mezzo pieno al ${fs.lastPct}%: si paga intero. Se viaggia con merce di un altro cliente (doppio scarico), chiedi alla Direzione il prezzo ridotto.`));
+    const pctIn = h('input', { type: 'number', min: 1, max: 99, step: 1, value: cur?.pct ?? '', disabled: locked || !cur, 'aria-label': 'Percentuale del mezzo parziale', style: { width: '70px' },
+      onchange: e => { const v = Math.round(Number(e.target.value)); if (v > 0 && v < 100) set({ ...cur, pct: v, by: app.session?.displayName || app.session?.name || 'Direzione', at: new Date().toISOString() }); else { toast('Percentuale tra 1 e 99', 'error'); e.target.value = cur?.pct ?? ''; } } });
+    return h('div', { class: 'tp-partial' },
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!cur, disabled: locked,
+        onchange: e => set(e.target.checked ? { pct: Math.min(99, Math.max(1, fs.lastPct)), by: app.session?.displayName || app.session?.name || 'Direzione', at: new Date().toISOString() } : null) }),
+        h('span', {}, h('strong', {}, 'Ultimo mezzo con doppio scarico'), ` · pieno al ${fs.lastPct}%: si paga solo questa percentuale del mezzo (solo se viaggia con merce di un altro cliente)`)),
+      cur ? h('div', { class: 'tp-km-row' }, h('label', {}, 'Percentuale del mezzo ', pctIn, ' %'), who) : null, supp);
+  }
   function groupView(g) {
     const reg = g.regime, occ = g.occupancy, pct = Math.min(100, Math.round(g.fill * 100));
     const fs = fillSummary(g);
@@ -6222,7 +6268,7 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
         fs ? h('span', {}, h('strong', {}, fillText(fs)), fs.missingPallets ? ` · per riempire l'ultimo mezzo: +${fs.missingPallets} ${fs.missingPallets === 1 ? 'bancale' : 'bancali'}${fs.missingQty ? ` (+${qtyFmt(fs.missingQty, fs.unit)})` : ''}` : '') : null,
         h('small', { class: 'muted' }, [occ.pallets !== null ? `Totale ${num(occ.pallets, 1)} bancali` : '', occ.m3 !== null ? `${num(occ.m3, 1)} m³` : '', fs?.limit ? `per mezzo: ${fs.limit}` : ''].filter(Boolean).join(' · '),
           '. La barra mostra quanto è pieno l\'ultimo mezzo.')),
-      kmBox,
+      kmBox, partialBox(g, fs),
       g.cost !== null ? h('p', { class: 'tp-cost' }, h('strong', {}, eu(g.cost)), ' ', h('span', { class: 'muted' }, g.detail)) : h('p', { class: 'warn-text' }, g.reason || 'Costo non determinabile'),
       reg.note ? h('small', { class: 'muted' }, reg.note) : null,
       g.cost !== null ? h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
@@ -6256,7 +6302,7 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
     }
     const lines = q.lines.map(l => ({ product: { ...(byId.get(l.productId) || {}), description: l.description }, qty: l.qty, amount: lineAmount(l), skip: !!l.depotPrice })).filter(x => x.product.id);
     if (!lines.length) { fill(box, addr, h('p', { class: 'muted' }, 'Aggiungi prodotti per calcolare trasporto e carico.')); lastPlan = null; return; }
-    const plan = planTransport(lines, { prov: q.delivery.prov, km: q.logistics.km, vehicleType: q.logistics.vehicleType });
+    const plan = planTransport(lines, { prov: q.delivery.prov, km: q.logistics.km, vehicleType: q.logistics.vehicleType, partial: partialMap(q) });
     lastPlan = plan;
     const v = transportVerdict(plan);
     autoApply(plan, v);
@@ -7080,7 +7126,7 @@ const { transportPanel, stockFor } = __m["js/views/transport-panel.js"];
 const { conversionLines, quantityEquivalents, entryUnits, fromEntry, toEntry } = __m["js/core/conversions.js"];
 const { unitPrices, fullLoadTransport, offerTransportPerUnit, unitPriceNote, fullLoadQty, effectiveBasis, deliveredPrice } = __m["js/core/unit-prices.js"];
 const { purchaseHint } = __m["js/core/price-history.js"];
-const { planTransport, regimeFor, lineLoad, loadCapacity } = __m["js/core/logistics.js"];
+const { planTransport, regimeFor, lineLoad, loadCapacity, partialMap } = __m["js/core/logistics.js"];
 const { quoteEmail, QUOTE_BCC, isEmail } = __m["js/core/quote-email.js"];
 const { quoteDocHtml, quoteFileName, DEPOTS, TRANSPORT_BY, isPickup, pickupStockIssues } = __m["js/core/quote-doc.js"];
 const { techSheetFor, sheetLinksText, sheetEntries } = __m["js/core/tech-sheets.js"];
@@ -7282,7 +7328,7 @@ async function viewQuoteEditor(app, id, customerId) {
   // 13/11 (Tommaso): prezzo per unità con trasporto, aggiornato mentre si cambiano gli sconti
   function deliveredLine(l, i) {
     let offerTpu = null;
-    const ctx = { prov: q.delivery?.prov || q.customer?.prov, km: q.logistics?.km || {}, vehicleType: q.logistics?.vehicleType };
+    const ctx = { prov: q.delivery?.prov || q.customer?.prov, km: q.logistics?.km || {}, vehicleType: q.logistics?.vehicleType, partial: partialMap(q) };
     try { offerTpu = offerTransportPerUnit(planTransport(q.lines.map(x => ({ product: byId.get(x.productId), qty: x.qty, amount: lineAmount(x), skip: !!x.depotPrice })).filter(x => x.product), ctx), i); } catch { offerTpu = null; }
     const d = deliveredPrice({ line: l, net: lineNet(l), lines: q.lines, freight: q.freight, pickup: isPickup(q), offerTpu });
     if (!d) return null;
@@ -7311,7 +7357,7 @@ async function viewQuoteEditor(app, id, customerId) {
   const uOpen = new WeakSet();   // riquadri aperti (non si salva nell'offerta)
   function unitBox(l, i, onQty) {
     const p = byId.get(l.productId); if (!p) return null;
-    const ctx = { prov: q.delivery?.prov || q.customer?.prov, km: q.logistics?.km || {}, vehicleType: q.logistics?.vehicleType };
+    const ctx = { prov: q.delivery?.prov || q.customer?.prov, km: q.logistics?.km || {}, vehicleType: q.logistics?.vehicleType, partial: partialMap(q) };
     l.unitPick = l.unitPick || { keys: [], basis: 'none' };
     const net = lineNet(l);
     let offerTpu = null, full = null;
@@ -9835,7 +9881,8 @@ const HELP = {
       'Correzione 06/11 (Direzione): nella ricerca Clienti si trova ogni cliente presente in RADIX. Reinseriti come direzionali i clienti esclusi al lancio perché senza acquisti dal 2025 (stato Perso o Mai fatturato, quindi non compaiono in "Da lavorare"); restano fuori solo i privati.',
       'Novità 12/11 (Direzione): nella scheda cliente il pulsante "✎ Modifica dati" (in "Dati e contatti") corregge ragione sociale, indirizzo, provincia, telefono, email, P.IVA/CF, SDI/PEC, pagamento e banca. Sui clienti RADIX la correzione non si perde al caricamento successivo e va all\'ufficio nella coda "Dati clienti da correggere in RADIX". Ogni modifica resta nello storico.',
       'Novità 13/11: sotto ogni riga dell\'offerta c\'è il prezzo per unità con trasporto (es. «Con trasporto: 109,13 €/m³»), che si aggiorna mentre cambi gli sconti. Con un solo articolo trasportato è esatto (trasporto dell\'offerta diviso sulla quantità); con più articoli è la quota stimata; dal deposito il prezzo è già con trasporto.',
-      'Novità 13/11: nel PDF e nell\'email dell\'offerta il trasporto a km è su una sola riga con il numero dei mezzi (es. 2 bilici = quantità 2), anche se uno non è pieno. Codice N14126 se c\'è un mezzo parziale, N88079 se sono tutti pieni.'],
+      'Novità 13/11: nel PDF e nell\'email dell\'offerta il trasporto a km è su una sola riga con il numero dei mezzi (es. 2 bilici = quantità 2), anche se uno non è pieno. Codice N14126 se c\'è un mezzo parziale, N88079 se sono tutti pieni.',
+      'Novità 13/11 (Direzione): nel riquadro Trasporto, se l\'ultimo mezzo non è pieno, la spunta «Ultimo mezzo con doppio scarico» fa pagare solo una percentuale del mezzo (di partenza quanto è pieno, modificabile). Da usare solo se il camion porta anche merce di un altro cliente; nel PDF resta una riga sola N14126 con il numero dei bilici che partono e il prezzo medio a bilico. Il commerciale la chiede alla Direzione. Supplemento del secondo scarico: importo da confermare con l\'ufficio.'],
   },
 
   home: {
