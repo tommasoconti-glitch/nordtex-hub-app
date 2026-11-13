@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="2a8b30458938">
+<meta name="ntx-build" content="8fbb786941ab">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -987,7 +987,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .depot-price .check{display:flex;gap:6px;align-items:flex-start}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"2a8b30458938"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8fbb786941ab"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3862,25 +3862,22 @@ function freightLabel(q, part = null) {
 // una sola riga 1 × importo con N14126.
 const FREIGHT_FULL = 'N88079', FREIGHT_PARTIAL = 'N14126';
 const c2 = x => Math.round(x * 100) / 100;
+// 13/11 (Tommaso, Policell 99 m³ = 1 bilico pieno + 1 parziale allo stesso prezzo: "non mi piace" le due righe):
+// i mezzi a km costano uguale, pieni o no → UNA riga con la quantità dei mezzi. Codice N14126 se c'è un mezzo parziale, N88079 se tutti pieni.
+const kmCode = (k, fullVehicles) => (Math.max(0, Math.min(k, fullVehicles ?? 0)) < k ? FREIGHT_PARTIAL : FREIGHT_FULL);
 function kmRows(cost, k, fullVehicles) {
   const each = c2(cost / k);
   if (Math.abs(each * k - cost) >= 0.005) return null;
-  const full = Math.max(0, Math.min(k, fullVehicles ?? 0)), rest = k - full;
-  return [full && { code: FREIGHT_FULL, qty: full, price: each, amount: c2(each * full) },
-    rest && { code: FREIGHT_PARTIAL, qty: rest, price: each, amount: c2(cost - each * full) }].filter(Boolean);
+  return [{ code: kmCode(k, fullVehicles), qty: k, price: each, amount: c2(cost) }];
 }
 // 12/11 (Tommaso, laterizi su 2 bilici e mezzo: "segna sempre 1"): anche con l'importo scritto a mano, se il calcolo aveva un solo
 // trasporto a km con N mezzi, la riga si divide sui mezzi (carichi completi + carico parziale); i centesimi che avanzano vanno sull'ultimo.
 function manualKmRows(amount, k, fullVehicles) {
-  const each = c2(amount / k), full = Math.max(0, Math.min(k, fullVehicles ?? 0)), rest = k - full;
-  if (rest > 0) {
-    const restAmt = c2(amount - each * full);
-    return [full && { code: FREIGHT_FULL, qty: full, price: each, amount: c2(each * full) },
-      { code: FREIGHT_PARTIAL, qty: rest, price: c2(restAmt / rest), amount: restAmt }].filter(Boolean);
-  }
-  if (Math.abs(each * k - amount) < 0.005) return [{ code: FREIGHT_FULL, qty: k, price: each, amount: c2(amount) }];
-  return [k > 1 && { code: FREIGHT_FULL, qty: k - 1, price: each, amount: c2(each * (k - 1)) },
-    { code: FREIGHT_FULL, qty: 1, price: c2(amount - each * (k - 1)), amount: c2(amount - each * (k - 1)) }].filter(Boolean);
+  const each = c2(amount / k), code = kmCode(k, fullVehicles);
+  if (Math.abs(each * k - amount) < 0.005) return [{ code, qty: k, price: each, amount: c2(amount) }];
+  // i centesimi che non si dividono vanno su una riga a parte (stesso codice)
+  return [k > 1 && { code, qty: k - 1, price: each, amount: c2(each * (k - 1)) },
+    { code, qty: 1, price: c2(amount - each * (k - 1)), amount: c2(amount - each * (k - 1)) }].filter(Boolean);
 }
 function freightRows(q, freight) {
   const one = [{ code: FREIGHT_PARTIAL, qty: 1, price: freight, amount: freight, label: freightLabel(q) }];
@@ -9837,7 +9834,8 @@ const HELP = {
     notes: ['Queste istruzioni vengono riviste prima della consegna ufficiale e aggiornate a ogni versione.',
       'Correzione 06/11 (Direzione): nella ricerca Clienti si trova ogni cliente presente in RADIX. Reinseriti come direzionali i clienti esclusi al lancio perché senza acquisti dal 2025 (stato Perso o Mai fatturato, quindi non compaiono in "Da lavorare"); restano fuori solo i privati.',
       'Novità 12/11 (Direzione): nella scheda cliente il pulsante "✎ Modifica dati" (in "Dati e contatti") corregge ragione sociale, indirizzo, provincia, telefono, email, P.IVA/CF, SDI/PEC, pagamento e banca. Sui clienti RADIX la correzione non si perde al caricamento successivo e va all\'ufficio nella coda "Dati clienti da correggere in RADIX". Ogni modifica resta nello storico.',
-      'Novità 13/11: sotto ogni riga dell\'offerta c\'è il prezzo per unità con trasporto (es. «Con trasporto: 109,13 €/m³»), che si aggiorna mentre cambi gli sconti. Con un solo articolo trasportato è esatto (trasporto dell\'offerta diviso sulla quantità); con più articoli è la quota stimata; dal deposito il prezzo è già con trasporto.'],
+      'Novità 13/11: sotto ogni riga dell\'offerta c\'è il prezzo per unità con trasporto (es. «Con trasporto: 109,13 €/m³»), che si aggiorna mentre cambi gli sconti. Con un solo articolo trasportato è esatto (trasporto dell\'offerta diviso sulla quantità); con più articoli è la quota stimata; dal deposito il prezzo è già con trasporto.',
+      'Novità 13/11: nel PDF e nell\'email dell\'offerta il trasporto a km è su una sola riga con il numero dei mezzi (es. 2 bilici = quantità 2), anche se uno non è pieno. Codice N14126 se c\'è un mezzo parziale, N88079 se sono tutti pieni.'],
   },
 
   home: {
