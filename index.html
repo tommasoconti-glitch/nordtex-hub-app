@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="46ec0a618c4b">
+<meta name="ntx-build" content="b395232932ec">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -988,7 +988,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .depot-price .check{display:flex;gap:6px;align-items:flex-start}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"46ec0a618c4b"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"b395232932ec"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1704,7 +1704,32 @@ function setDepotPrice(line, on, { by = '', price = null, at = new Date().toISOS
   return line;
 }
 
-return { RADIX_CODE_FIX, fixProduct, fixProducts, DEPOT_PRICE, depotPriceFor, canSetDepotPrice, setDepotPrice };
+// 13/11 (Tommaso, offerta Policell 138 m³ = 2 bilici pieni + 6 m³): quando l'ultimo mezzo è quasi vuoto,
+// la riga si divide: i mezzi pieni restano in consegna, il resto lo ritira il cliente in un deposito NORDTEX.
+// Il resto ha il prezzo da deposito dove c'è la regola (Policell 120 €/m³ netto, deciso 13/11), altrimenti il prezzo della riga.
+const PICKUP_SPLIT_MAX_PCT = 25;   // si propone fino a un ultimo mezzo pieno al 25%
+function splitForPickup(lines, index, { keepQty, depot, depotLabel, by = '', at = new Date().toISOString() }) {
+  const l = lines[index]; if (!l || !(keepQty > 0) || !(keepQty < l.qty) || !depot) return lines;
+  const rest = Math.round((l.qty - keepQty) * 1000) / 1000;
+  const p = { ...structuredClone(l), qty: rest, pickup: { depot, label: depotLabel || depot, by, at } };
+  delete p.depotPrice; delete p.depotBy; delete p.depotAt; delete p.depotRequest;
+  const rule = depotPriceFor(l.productId);
+  if (rule) { p.catalogPrice = l.depotPrice ? (l.catalogPrice ?? l.listPrice) : l.listPrice; p.listPrice = rule.price; p.discounts = [0, 0, 0]; p.pickupPrice = true; }
+  const out = lines.slice(); out[index] = { ...l, qty: Math.round(keepQty * 1000) / 1000 }; out.splice(index + 1, 0, p);
+  return out;
+}
+// annulla: la quantità ritirata torna sulla riga in consegna dello stesso prodotto
+function undoPickup(lines, index) {
+  const p = lines[index]; if (!p?.pickup) return lines;
+  const j = lines.findIndex((x, k) => k !== index && x.productId === p.productId && !x.pickup);
+  const out = lines.slice();
+  if (j >= 0) out[j] = { ...out[j], qty: Math.round((out[j].qty + p.qty) * 1000) / 1000 };
+  else { const back = { ...p }; delete back.pickup; if (back.pickupPrice) { back.listPrice = back.catalogPrice ?? back.listPrice; delete back.catalogPrice; delete back.pickupPrice; } return out.map((x, k) => k === index ? back : x); }
+  out.splice(index, 1);
+  return out;
+}
+
+return { RADIX_CODE_FIX, fixProduct, fixProducts, DEPOT_PRICE, depotPriceFor, canSetDepotPrice, setDepotPrice, PICKUP_SPLIT_MAX_PCT, splitForPickup, undoPickup };
 })();
 __m["js/core/messages.js"] = (function () {
 // Messaggi (03/11/2026, richiesta Tommaso per la Beta): logica senza interfaccia, condivisa da archivio locale, online e test.
@@ -3819,6 +3844,13 @@ function isPickup(q) {
   if (q.pickup === true || q.pickup === false) return q.pickup;
   return (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO';
 }
+// 13/11 (Tommaso): se addebitiamo il trasporto e non è un ritiro, il trasporto è «a cura» nostra → MITTENTE,
+// a meno che qualcuno l'abbia scelto a mano nell'offerta (q.transportByManual).
+function transportByFor(q) {
+  if (q.transportByManual) return q.transportBy || 'DESTINATARIO';
+  if (!isPickup(q) && Number(q.freight) > 0) return 'MITTENTE';
+  return q.transportBy || 'DESTINATARIO';
+}
 const CLAUSES = ['Quotazioni valide salvo variazioni imposte dal produttore/fornitore. Non si accettano resi.', 'Non ci assumiamo responsabilità per ritardi e danni nelle consegne dovute ai vettori.'];
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -3928,6 +3960,7 @@ function lineExtra(l) {
     out.push(Math.abs(pal - Math.round(pal)) < 1e-6 ? `${Math.round(pal)} ${Math.round(pal) === 1 ? 'bancale' : 'bancali'}` : `circa ${n(pal, 1)} bancali`);
   }
   if (l.unitNote) out.push(l.unitNote);   // prezzi per unità scelti dall'agente (02/11)
+  if (l.pickup) out.push(`Ritiro a cura del cliente presso ${l.pickup.label}`);   // 13/11: resto ritirato in deposito
   return out;
 }
 
@@ -3973,7 +4006,7 @@ ${block('Deposito di uscita', depot.lines)}${block(destinationLines(q).length ? 
 ${tot('Totale merce:', n(t.taxable, 2))}<tr><td colspan="2" style="height:10px"></td></tr>${tot('Totale imponibile:', n(t.taxable, 2))}${tot(`Totale iva${t.vatRate !== 22 ? ' (' + n(t.vatRate, 0) + '%)' : ''}:`, n(t.vat, 2))}${tot('Totale offerta:', n(t.total, 2), true)}</table>
 <div style="margin-top:40px;font-size:8.5pt;line-height:1.6">Prezzi al netto dell'IVA.<br>
 <table cellpadding="0" cellspacing="0" style="font-size:8.5pt"><tr><td style="padding-right:8px">Condizione di pagamento</td><td>: <b>${esc(q.payment || 'DA CONCORDARE')}</b></td></tr>
-<tr><td>Trasporto a cura</td><td>: <b>${esc(q.transportBy || 'DESTINATARIO')}</b></td></tr><tr><td>Validità</td><td>: <b>${dotDate(until)}</b></td></tr></table></div>
+<tr><td>Trasporto a cura</td><td>: <b>${esc(transportByFor(q))}</b></td></tr><tr><td>Validità</td><td>: <b>${dotDate(until)}</b></td></tr></table></div>
 <div style="margin-top:14px;font-size:8.5pt;font-weight:bold;text-decoration:underline;line-height:1.6">${CLAUSES.map(esc).join('<br>')}</div>
 <div style="margin-top:14px;font-size:8.5pt">Ringraziamo per la gradita richiesta e inviamo cordiali saluti</div>
 <div style="margin:6px 0 0 50%;font-weight:bold;font-size:10pt">NORDTEX SRL</div>
@@ -4008,7 +4041,7 @@ function pickupStockIssues(q, stock) {
   return { depotDate: dep?.date || null, issues: out };
 }
 
-return { DEPOTS, RADIX_DEPOTS, stockDepot, TRANSPORT_BY, isPickup, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, FREIGHT_FULL, freightRows, customerLines, lineExtra, quoteDocHtml, quoteFileName, pickupStockIssues };
+return { DEPOTS, RADIX_DEPOTS, stockDepot, TRANSPORT_BY, isPickup, transportByFor, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, FREIGHT_FULL, freightRows, customerLines, lineExtra, quoteDocHtml, quoteFileName, pickupStockIssues };
 })();
 __m["js/core/mailto.js"] = (function () {
 const { totals } = __m["js/core/pricing.js"];
@@ -5569,7 +5602,7 @@ __m["js/core/quote-pdf.js"] = (function () {
 // Serve all'invio dalla casella personale di chi fa l'offerta (decisione Direzione 31/10/2026).
 const { PdfDoc, wrapText, textWidth } = __m["js/core/pdf-writer.js"];
 const { totals, lineAmount, EURO_PALLET } = __m["js/core/pricing.js"];
-const { DEPOTS, CLAUSES, customerCode, lineExtra, fmtN: n, dotDate, UM, discText, quoteFileName, hideDiscounts, docPrice, destinationLines, freightLabel, freightRows, customerLines, isPickup } = __m["js/core/quote-doc.js"];
+const { DEPOTS, CLAUSES, customerCode, lineExtra, fmtN: n, dotDate, UM, discText, quoteFileName, hideDiscounts, docPrice, destinationLines, freightLabel, freightRows, customerLines, isPickup, transportByFor } = __m["js/core/quote-doc.js"];
 const MM = 72 / 25.4;
 function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
   const t = totals(q);
@@ -5642,7 +5675,7 @@ function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
   tot('Totale imponibile:', n(t.taxable, 2)); tot(`Totale iva${t.vatRate !== 22 ? ' (' + n(t.vatRate, 0) + '%)' : ''}:`, n(t.vat, 2)); tot('Totale offerta:', n(t.total, 2), true);
   y += 22;
   doc.text(L, y, "Prezzi al netto dell'IVA.", { size: 8.5 }); y += 12;
-  for (const [k, v] of [['Condizione di pagamento', q.payment || 'DA CONCORDARE'], ['Trasporto a cura', q.transportBy || 'DESTINATARIO'], ['Validità', dotDate(until)]]) {
+  for (const [k, v] of [['Condizione di pagamento', q.payment || 'DA CONCORDARE'], ['Trasporto a cura', transportByFor(q)], ['Validità', dotDate(until)]]) {
     doc.text(L, y, k, { size: 8.5 }); doc.text(L + 120, y, ': ', { size: 8.5 }); doc.text(L + 128, y, v, { size: 8.5, bold: true }); y += 12;
   }
   y += 8;
@@ -6135,10 +6168,10 @@ __m["js/views/transport-panel.js"] = (function () {
 // incidenza per m² / m³ / bancale, quantità consigliate per mezzo carico e carico completo.
 const { h, fill, eur, num, toast } = __m["js/ui.js"];
 const { planTransport, googleMapsUrl, fillSummary, transportVerdict, corridorFor, ORIGIN_VIA, partialMap } = __m["js/core/logistics.js"];
-const { canSetDepotPrice } = __m["js/core/product-fixes.js"];
+const { canSetDepotPrice, splitForPickup, PICKUP_SPLIT_MAX_PCT, depotPriceFor } = __m["js/core/product-fixes.js"];
 const { kmViaBrennero, addressVariants } = __m["js/core/route.js"];
 const { lineAmount } = __m["js/core/pricing.js"];
-const { DEPOTS } = __m["js/core/quote-doc.js"];
+const { DEPOTS, RADIX_DEPOTS } = __m["js/core/quote-doc.js"];
 const eu = (n, d = 2) => { if (n === null || n === undefined) return '—'; const [i, f] = Math.abs(Number(n)).toFixed(d).split('.'); return (n < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : '') + ' €'; };   // 1.452,00 €
 const qtyFmt = (n, u) => `${num(n, u === 'PZ' || u === 'SA' ? 0 : 2)} ${({ M2: 'm²', M3: 'm³', ML: 'ml' }[u] || (u || '').toLowerCase())}`;
 
@@ -6230,6 +6263,35 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
 
   // 13/11 (Tommaso): ultimo mezzo parziale con doppio scarico → la Direzione fa pagare una percentuale del mezzo (modificabile).
   // Il commerciale non lo imposta: lo chiede alla Direzione. Senza doppio scarico il mezzo si paga intero (il trasportatore lo fa pagare intero).
+  // depositi più vicini per area di consegna (13/11): prima quelli con giacenza sufficiente, poi i più vicini
+  const NEAR_DEPOTS = { veneto: ['CASTELFRAN', 'TORRI', 'SEDE', 'LECCO'], trentino: ['SEDE', 'TORRI', 'CASTELFRAN', 'LECCO'], lombardia: ['LECCO', 'CASALE', 'TORRI', 'CASTELFRAN'],
+    piemonte: ['CASALE', 'LECCO'], emilia: ['TORRI', 'CASTELFRAN', 'LECCO', 'CASALE', 'MARCHE'], centro: ['MARCHE', 'TORRI', 'CASTELFRAN'], friuli: ['CASTELFRAN', 'TORRI', 'SEDE'] };
+  const regionOfProv = pv => { pv = String(pv || '').toUpperCase();
+    if (/^(VR|VI|PD|TV|VE|BL|RO)$/.test(pv)) return 'veneto'; if (/^(TN|BZ)$/.test(pv)) return 'trentino';
+    if (/^(MI|MB|CO|LC|VA|BG|BS|SO|PV|LO|CR|MN)$/.test(pv)) return 'lombardia'; if (/^(TO|CN|AT|AL|NO|VC|BI|VB|AO|GE|SV|IM|SP)$/.test(pv)) return 'piemonte';
+    if (/^(BO|MO|RE|PR|PC|FE|RA|FC|RN)$/.test(pv)) return 'emilia'; if (/^(UD|PN|GO|TS)$/.test(pv)) return 'friuli'; return 'centro'; };
+  // 13/11 (Tommaso): ultimo mezzo quasi vuoto → proposta di dividere la riga: mezzi pieni in consegna + il resto ritirato dal cliente in deposito
+  function pickupBox(g, fs) {
+    if (g.regime.kind !== 'km' || !fs || fs.allFull || fs.vehicles < 2 || fs.lastPct > PICKUP_SPLIT_MAX_PCT || g.lines.length !== 1 || locked) return null;
+    const i = g.main.index, l = q.lines[i]; if (!l || l.pickup) return null;
+    const perVehicle = l.qty / g.occupancy.fraction, keep = Math.round(perVehicle * (fs.vehicles - 1) * 1000) / 1000, rest = Math.round((l.qty - keep) * 1000) / 1000;
+    if (!(rest > 0)) return null;
+    const u = ({ M2: 'm²', M3: 'm³', ML: 'ml' }[l.unit] || String(l.unit).toLowerCase());
+    const stock = app.store.stock || null, product = byId.get(l.productId) || {};
+    const near = NEAR_DEPOTS[regionOfProv(q.delivery?.prov || q.customer?.prov)] || [], nearRank = k => { const r = near.indexOf(k); return r < 0 ? 99 : r; };
+    const opts = Object.entries(DEPOTS).filter(([k]) => k !== 'diretta').map(([k, d]) => {
+      const st = stockFor(stock, product.radixCode).find(x => (RADIX_DEPOTS[x.depot] || x.depot) === k);
+      return { k, label: d.label, avail: st ? Number(st.available) || 0 : null };
+    }).sort((a, b) => (b.avail >= rest) - (a.avail >= rest) || nearRank(a.k) - nearRank(b.k) || (b.avail ?? -1) - (a.avail ?? -1));
+    const sel = h('select', { 'aria-label': 'Deposito per il ritiro' }, opts.map(o => h('option', { value: o.k }, `${o.label}${o.avail === null ? '' : ` · a magazzino ${num(o.avail, 2)} ${u}`}${o.avail !== null && o.avail < rest ? ' (non basta)' : ''}`)));
+    return h('div', { class: 'tp-partial' },
+      h('strong', {}, `Ultimo mezzo pieno al ${fs.lastPct}%: ${num(rest, 2)} ${u} su un mezzo quasi vuoto.`),
+      h('small', {}, `Conviene dividere: ${num(keep, 2)} ${u} in consegna con ${fs.vehicles - 1} ${fs.vehicles - 1 === 1 ? 'mezzo pieno' : 'mezzi pieni'} e ${num(rest, 2)} ${u} ritirati dal cliente in deposito${depotPriceFor(l.productId) ? ` al prezzo da deposito (${depotPriceFor(l.productId).price} €/${u} netto)` : ''}.`),
+      h('div', { class: 'tp-km-row' }, sel, h('button', { class: 'btn small', onclick: () => {
+        const k = sel.value; q.lines = splitForPickup(q.lines, i, { keepQty: keep, depot: k, depotLabel: DEPOTS[k]?.label || k, by: app.session?.name || app.session?.displayName || '' });
+        mark(); onApply('qty'); toast(`Riga divisa: ${num(rest, 2)} ${u} in ritiro al deposito`);
+      } }, 'Dividi: resto al ritiro in deposito')));
+  }
   function partialBox(g, fs) {
     if (g.regime.kind !== 'km' || !fs || fs.allFull) return null;
     const addr = g.regime.origin.address, cur = q.logistics.partial?.[addr] || null, dir = canSetDepotPrice(app.session);
@@ -6268,7 +6330,7 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
         fs ? h('span', {}, h('strong', {}, fillText(fs)), fs.missingPallets ? ` · per riempire l'ultimo mezzo: +${fs.missingPallets} ${fs.missingPallets === 1 ? 'bancale' : 'bancali'}${fs.missingQty ? ` (+${qtyFmt(fs.missingQty, fs.unit)})` : ''}` : '') : null,
         h('small', { class: 'muted' }, [occ.pallets !== null ? `Totale ${num(occ.pallets, 1)} bancali` : '', occ.m3 !== null ? `${num(occ.m3, 1)} m³` : '', fs?.limit ? `per mezzo: ${fs.limit}` : ''].filter(Boolean).join(' · '),
           '. La barra mostra quanto è pieno l\'ultimo mezzo.')),
-      kmBox, partialBox(g, fs),
+      kmBox, pickupBox(g, fs), partialBox(g, fs),
       g.cost !== null ? h('p', { class: 'tp-cost' }, h('strong', {}, eu(g.cost)), ' ', h('span', { class: 'muted' }, g.detail)) : h('p', { class: 'warn-text' }, g.reason || 'Costo non determinabile'),
       reg.note ? h('small', { class: 'muted' }, reg.note) : null,
       g.cost !== null ? h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
@@ -6300,7 +6362,7 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
       if ((q.freight === null || q.freight === undefined || q.freightAuto) && q.freight !== 0) { q.freight = 0; q.freightAuto = true; q.freightNote = 'Trasporto compreso nel prezzo da deposito'; q.transportEstimate = null; mark(); onApply('freight'); }
       fill(box, addr, h('p', { class: 'alert info' }, 'Trasporto compreso nel prezzo da deposito (120 €/m³ netto): nessun trasporto in offerta.')); lastPlan = null; return;
     }
-    const lines = q.lines.map(l => ({ product: { ...(byId.get(l.productId) || {}), description: l.description }, qty: l.qty, amount: lineAmount(l), skip: !!l.depotPrice })).filter(x => x.product.id);
+    const lines = q.lines.map(l => ({ product: { ...(byId.get(l.productId) || {}), description: l.description }, qty: l.qty, amount: lineAmount(l), skip: !!l.depotPrice || !!l.pickup })).filter(x => x.product.id);
     if (!lines.length) { fill(box, addr, h('p', { class: 'muted' }, 'Aggiungi prodotti per calcolare trasporto e carico.')); lastPlan = null; return; }
     const plan = planTransport(lines, { prov: q.delivery.prov, km: q.logistics.km, vehicleType: q.logistics.vehicleType, partial: partialMap(q) });
     lastPlan = plan;
@@ -6635,7 +6697,7 @@ __m["js/core/quote-email.js"] = (function () {
 // Email dell'offerta: oggetto, testo e documento HTML (tabelle in linea, leggibile da Outlook, Gmail, Apple Mail).
 // Modulo puro (nessun DOM): usato dall'app per l'anteprima e dalla funzione server che invia la mail.
 const { totals, lineNet, lineAmount } = __m["js/core/pricing.js"];
-const { quoteDocHtml, isPickup } = __m["js/core/quote-doc.js"];
+const { quoteDocHtml, isPickup, transportByFor } = __m["js/core/quote-doc.js"];
 const COMPANY = { name: 'NORDTEX Srl', addr: "Prato dell'Ospizio, 6 · I-39043 Chiusa (BZ)", contacts: 'T. +39 0472 847 110 · info@nordtex.it · www.nordtex.it', vat: 'P.IVA 02623660988' };
 // Copia conoscenza nascosta obbligatoria per gli invii degli agenti (decisione Direzione 31/10/2026)
 const QUOTE_BCC = ['tommaso.conti@nordtex.it', 'commerciale@nordtex.it'];
@@ -6662,7 +6724,7 @@ ${senderName ? `<p style="font-size:13px;margin-top:16px">${esc(senderName)}${se
 </div></body></html>`;
   const text = `${message ? message + '\n\n' : ''}Offerta NORDTEX n. ${q.number} del ${dateIt(created)} (valida fino al ${dateIt(until)})\nSpett.le ${c.name}\n\n`
     + q.lines.map(l => `- ${l.description}: ${num(l.qty)} ${l.unit} × ${eur(lineNet(l))} = ${eur(lineAmount(l))}`).join('\n')
-    + `\n\nMerce netta ${eur(t.goods)}${t.euroPallets ? `\nBancali Euro V600 (${t.euroPalletCount} × 20 €) ${eur(t.euroPallets)}` : ''}\nTrasporto ${isPickup(q) && !t.freight ? 'nessuno (ritiro al deposito)' : t.freightPending ? 'da definire' : eur(t.freight)}\nImponibile ${eur(t.taxable)}\nIVA ${num(t.vatRate)}% ${eur(t.vat)}\nTotale ${eur(t.total)}\n\nCondizione di pagamento: ${q.payment || 'DA CONCORDARE'}\nTrasporto a cura: ${q.transportBy || 'DESTINATARIO'}\nValidità: ${dateIt(until)}\n${PRICE_NOTE}\n`;
+    + `\n\nMerce netta ${eur(t.goods)}${t.euroPallets ? `\nBancali Euro V600 (${t.euroPalletCount} × 20 €) ${eur(t.euroPallets)}` : ''}\nTrasporto ${isPickup(q) && !t.freight ? 'nessuno (ritiro al deposito)' : t.freightPending ? 'da definire' : eur(t.freight)}\nImponibile ${eur(t.taxable)}\nIVA ${num(t.vatRate)}% ${eur(t.vat)}\nTotale ${eur(t.total)}\n\nCondizione di pagamento: ${q.payment || 'DA CONCORDARE'}\nTrasporto a cura: ${transportByFor(q)}\nValidità: ${dateIt(until)}\n${PRICE_NOTE}\n`;
   return { subject, html, text, total: t.total };
 }
 
@@ -7108,7 +7170,7 @@ return { threadView, threadRow, rxRef, assistDialog, assistUnread, askOfficeCard
 })();
 __m["js/views/quotes.js"] = (function () {
 const { changeLogCard } = __m["js/views/change-log-ui.js"];
-const { depotPriceFor, setDepotPrice, canSetDepotPrice } = __m["js/core/product-fixes.js"];
+const { depotPriceFor, setDepotPrice, canSetDepotPrice, undoPickup } = __m["js/core/product-fixes.js"];
 const { forecastSelect, forecastMonthInput } = __m["js/views/radix-offers.js"];
 const { h, fill, eur, num, dateIt, toast, modal, field, emptyState, debounce } = __m["js/ui.js"];
 const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions, normPayment, LOST_REASONS, QUOTE_SNOOZE_DAYS, quoteReminders, missingForOrder } = __m["js/data/model.js"];
@@ -7128,7 +7190,7 @@ const { unitPrices, fullLoadTransport, offerTransportPerUnit, unitPriceNote, ful
 const { purchaseHint } = __m["js/core/price-history.js"];
 const { planTransport, regimeFor, lineLoad, loadCapacity, partialMap } = __m["js/core/logistics.js"];
 const { quoteEmail, QUOTE_BCC, isEmail } = __m["js/core/quote-email.js"];
-const { quoteDocHtml, quoteFileName, DEPOTS, TRANSPORT_BY, isPickup, pickupStockIssues } = __m["js/core/quote-doc.js"];
+const { quoteDocHtml, quoteFileName, DEPOTS, TRANSPORT_BY, isPickup, pickupStockIssues, transportByFor } = __m["js/core/quote-doc.js"];
 const { techSheetFor, sheetLinksText, sheetEntries } = __m["js/core/tech-sheets.js"];
 const { orderMailBody, orderMailSubject, orderMailTo } = __m["js/core/order-mail.js"];
 const { ORDER_STATES } = __m["js/data/model.js"];
@@ -7329,12 +7391,12 @@ async function viewQuoteEditor(app, id, customerId) {
   function deliveredLine(l, i) {
     let offerTpu = null;
     const ctx = { prov: q.delivery?.prov || q.customer?.prov, km: q.logistics?.km || {}, vehicleType: q.logistics?.vehicleType, partial: partialMap(q) };
-    try { offerTpu = offerTransportPerUnit(planTransport(q.lines.map(x => ({ product: byId.get(x.productId), qty: x.qty, amount: lineAmount(x), skip: !!x.depotPrice })).filter(x => x.product), ctx), i); } catch { offerTpu = null; }
-    const d = deliveredPrice({ line: l, net: lineNet(l), lines: q.lines, freight: q.freight, pickup: isPickup(q), offerTpu });
+    try { offerTpu = offerTransportPerUnit(planTransport(q.lines.map(x => ({ product: byId.get(x.productId), qty: x.qty, amount: lineAmount(x), skip: !!x.depotPrice || !!x.pickup })).filter(x => x.product), ctx), i); } catch { offerTpu = null; }
+    const d = l.pickup ? { value: lineNet(l), transport: 0, note: `senza trasporto` } : deliveredPrice({ line: l, net: lineNet(l), lines: q.lines.filter(x => !x.pickup), freight: q.freight, pickup: isPickup(q), offerTpu });
     if (!d) return null;
     const u = String(l.unit).toLowerCase().replace('m3', 'm³').replace('m2', 'm²');
     return h('small', { class: 'delivered' + (d.value === null ? ' muted' : '') },
-      d.value === null ? `Prezzo con trasporto: ${d.note}` : [h('strong', {}, `Con trasporto: ${eur(d.value)}/${u}`), ` · ${d.estimate ? '≈ ' : ''}${d.note}${d.transport ? ` (${eur(d.transport)}/${u})` : ''}`]);
+      d.value === null ? `Prezzo con trasporto: ${d.note}` : [h('strong', {}, `${l.pickup ? 'Ritiro in deposito' : 'Con trasporto'}: ${eur(d.value)}/${u}`), ` · ${d.estimate ? '≈ ' : ''}${d.note}${d.transport ? ` (${eur(d.transport)}/${u})` : ''}`]);
   }
   // Margine (Direzione) o provvigione (agente) sulla riga
   function lineEcon(l) {
@@ -7421,7 +7483,16 @@ async function viewQuoteEditor(app, id, customerId) {
   }
   // 12/11 (Tommaso): Policell BigBag 3 m³ che esce da un deposito NORDTEX: 120 €/m³ netto, trasporto compreso (eccezione al catalogo).
   // Lo mette solo la Direzione, anche come prezzo speciale; il commerciale lo chiede alla Direzione dall'offerta.
+  // 13/11: riga del resto ritirato dal cliente in deposito (divisa dal riquadro Trasporto)
+  function pickupLineBox(l, i) {
+    if (!l.pickup) return null;
+    const who = l.pickup.by ? ` · divisa da ${l.pickup.by}${l.pickup.at ? ' il ' + dateIt(l.pickup.at) : ''}` : '';
+    return h('div', { class: 'depot-price' },
+      h('small', { class: 'ok-text' }, h('strong', {}, `Ritiro a cura del cliente: ${l.pickup.label}`), l.pickupPrice ? ` · prezzo da deposito ${eur(l.listPrice)} netto (sconti e prezzo li cambia solo la Direzione)` : '', who),
+      locked ? null : h('button', { class: 'btn small', onclick: () => { q.lines = undoPickup(q.lines, i); mark(); drawLines(); tp?.redraw(); drawTotals(); toast('Divisione annullata: la quantità torna in consegna'); } }, 'Annulla divisione'));
+  }
   function depotBox(l) {
+    if (l.pickup) return null;
     const rule = depotPriceFor(l.productId); if (!rule) return null;
     const by = l.depotBy ? ` · autorizzato da ${l.depotBy}${l.depotAt ? ' il ' + dateIt(l.depotAt) : ''}` : '';
     if (canSetDepotPrice(app.session)) {
@@ -7458,7 +7529,7 @@ async function viewQuoteEditor(app, id, customerId) {
           showPriceWarn && l.level === PRICE_LEVEL.WARN ? h('small', { class: 'warn-text', title: l.warnings.join('\n') }, '⚠ Prezzo da verificare nel Master') : null,
           buyHint(l),
           convBox(byId.get(l.productId), l.qty, pal), stockLine(l.radixCode), sheetLinks(byId.get(l.productId)),
-          depotBox(l),
+          depotBox(l), pickupLineBox(l, i),
           deliveredLine(l, i), lineEcon(l), unitBox(l, i, () => refresh()),
           byId.get(l.productId)?.clearance ? h('small', { class: 'warn-text' }, '⚠ ' + byId.get(l.productId).clearance + (pal !== null && Math.ceil(pal - 1e-6) - pal > 1e-6 ? ` → ${Math.ceil(pal - 1e-6)} bancali = ${num(Math.ceil(pal - 1e-6) * l.palletQuantity)} m²` : '')) : null,   // 05/11: articoli fuori listino a esaurimento (Isorel N88174)
           byId.get(l.productId)?.family === 'Blocchi in laterizio' && pal !== null && Math.ceil(pal - 1e-6) - pal > 1e-6 ? h('small', { class: 'warn-text' }, `Laterizi: vendita solo a bancali completi → ${Math.ceil(pal - 1e-6)} bancali = ${num(Math.ceil(pal - 1e-6) * l.palletQuantity)} ${String(l.unit).toLowerCase()}`) : null,
@@ -7473,7 +7544,7 @@ async function viewQuoteEditor(app, id, customerId) {
         h('td', { class: 'art' }, info),
         h('td', { class: 'num', 'data-label': 'Quantità' }, qtyCell(l, live)),
         h('td', { class: 'num', 'data-label': 'Listino' }, eur(l.listPrice)),
-        ...[0, 1, 2].map(k => h('td', { class: 'num disc', 'data-label': `Sc.${k + 1} %` }, numIn(l.discounts[k], v => { l.discounts[k] = Math.min(100, Math.max(0, v)); }, { max: 100, 'aria-label': `Sconto ${k + 1}`, ...(l.depotPrice ? { disabled: true, title: 'Prezzo da deposito: netto fisso' } : {}) }, live))),
+        ...[0, 1, 2].map(k => h('td', { class: 'num disc', 'data-label': `Sc.${k + 1} %` }, numIn(l.discounts[k], v => { l.discounts[k] = Math.min(100, Math.max(0, v)); }, { max: 100, 'aria-label': `Sconto ${k + 1}`, ...(l.depotPrice || (l.pickupPrice && !canSetDepotPrice(app.session)) ? { disabled: true, title: 'Prezzo da deposito: netto fisso' } : {}) }, live))),
         netTd, amtTd,
         h('td', {}, locked ? null : h('button', { class: 'icon-btn', 'aria-label': 'Rimuovi riga', onclick: () => { q.lines.splice(i, 1); mark(); drawLines(); } }, '✕')));
     }));
@@ -7552,8 +7623,8 @@ async function viewQuoteEditor(app, id, customerId) {
     const can = !!DEPOTS[q.depot || 'diretta']?.pickup, on = can && isPickup(q);
     fill(pickupSel, h('option', { value: 'trasporto', selected: !on }, 'Con trasporto (consegna al cliente)'),
       h('option', { value: 'ritiro', selected: on, disabled: !can }, 'Ritiro al deposito, senza trasporto'));
-    fill(byBox, h('select', { disabled: locked || on, 'aria-label': 'Trasporto a cura', onchange: e => { q.transportBy = e.target.value; mark(); } },
-      TRANSPORT_BY.map(t => h('option', { value: t, selected: t === (q.transportBy || 'DESTINATARIO') }, t))));
+    fill(byBox, h('select', { disabled: locked || on, 'aria-label': 'Trasporto a cura', onchange: e => { q.transportBy = e.target.value; q.transportByManual = true; mark(); } },
+      TRANSPORT_BY.map(t => h('option', { value: t, selected: t === transportByFor(q) }, t))));
     const why = on ? pickupBlockText() : '';
     pickupHint.classList.toggle('warn-text', !!why);
     pickupHint.textContent = why ? '⚠ ' + why : on ? `Ritiro presso ${DEPOTS[q.depot].pickup.join(', ')}: prezzo franco deposito, nessun trasporto in offerta.`
@@ -7789,7 +7860,7 @@ async function viewQuoteEditor(app, id, customerId) {
       q.id && (isOwner || isDir) && ['Inviata', 'Persa'].includes(q.status) ? h('button', { class: 'btn ghost', onclick: () => cancelDialog(app, q).then(ok => { if (ok) app.go('offerta/' + q.id); }).catch(e => toast(e.message, 'error')) }, 'Annulla offerta') : null,
       null));
   // 11/11: quando cambia il trasporto si ridisegnano anche le righe, così il «Prezzo per unità» segue i km
-  tp = transportPanel(app, q, byId, { locked, mark, onApply: what => { if (what === 'qty') drawLines(); else { freightIn.value = q.freight ?? ''; freightNote.textContent = q.freightNote; drawTotals(); drawLines(); } } });
+  tp = transportPanel(app, q, byId, { locked, mark, onApply: what => { if (what === 'qty') drawLines(); else { freightIn.value = q.freight ?? ''; freightNote.textContent = q.freightNote; drawTotals(); drawLines(); } drawPickup(); } });
   let head = header();
   drawLines();
   // 12/11: DOM append scrive «null» come testo (si vedeva sotto il trasporto per la Direzione): si passano solo nodi e testi veri
@@ -9882,7 +9953,9 @@ const HELP = {
       'Novità 12/11 (Direzione): nella scheda cliente il pulsante "✎ Modifica dati" (in "Dati e contatti") corregge ragione sociale, indirizzo, provincia, telefono, email, P.IVA/CF, SDI/PEC, pagamento e banca. Sui clienti RADIX la correzione non si perde al caricamento successivo e va all\'ufficio nella coda "Dati clienti da correggere in RADIX". Ogni modifica resta nello storico.',
       'Novità 13/11: sotto ogni riga dell\'offerta c\'è il prezzo per unità con trasporto (es. «Con trasporto: 109,13 €/m³»), che si aggiorna mentre cambi gli sconti. Con un solo articolo trasportato è esatto (trasporto dell\'offerta diviso sulla quantità); con più articoli è la quota stimata; dal deposito il prezzo è già con trasporto.',
       'Novità 13/11: nel PDF e nell\'email dell\'offerta il trasporto a km è su una sola riga con il numero dei mezzi (es. 2 bilici = quantità 2), anche se uno non è pieno. Codice N14126 se c\'è un mezzo parziale, N88079 se sono tutti pieni.',
-      'Novità 13/11 (Direzione): nel riquadro Trasporto, se l\'ultimo mezzo non è pieno, la spunta «Ultimo mezzo con doppio scarico» fa pagare solo una percentuale del mezzo (di partenza quanto è pieno, modificabile). Da usare solo se il camion porta anche merce di un altro cliente; nel PDF resta una riga sola N14126 con il numero dei bilici che partono e il prezzo medio a bilico. Il commerciale la chiede alla Direzione. Supplemento del secondo scarico: importo da confermare con l\'ufficio.'],
+      'Novità 13/11 (Direzione): nel riquadro Trasporto, se l\'ultimo mezzo non è pieno, la spunta «Ultimo mezzo con doppio scarico» fa pagare solo una percentuale del mezzo (di partenza quanto è pieno, modificabile). Da usare solo se il camion porta anche merce di un altro cliente; nel PDF resta una riga sola N14126 con il numero dei bilici che partono e il prezzo medio a bilico. Il commerciale la chiede alla Direzione. Supplemento del secondo scarico: importo da confermare con l\'ufficio.',
+      'Novità 13/11: se l\'ultimo mezzo è pieno al 25% o meno, il riquadro Trasporto propone di dividere la riga: i mezzi pieni restano in consegna e il resto lo ritira il cliente nel deposito scelto (con la giacenza accanto). Policell ritirato in deposito: 120 €/m³ netto. Nel PDF la riga dice «Ritiro a cura del cliente presso …». «Annulla divisione» rimette tutto in consegna.',
+      'Novità 13/11: «Trasporto a cura» diventa MITTENTE da solo quando l\'offerta addebita il trasporto (non è un ritiro); se lo scegli a mano resta la tua scelta.'],
   },
 
   home: {
