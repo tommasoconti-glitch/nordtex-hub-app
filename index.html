@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="f00362177f99">
+<meta name="ntx-build" content="87fb15fc5ad1">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -296,6 +296,7 @@ mark{background:#fff1a8;color:inherit;border-radius:2px;padding:0 1px}
 @media (max-width:760px){ :root[data-look="chiara"] body{font-size:16px} :root[data-look="chiara"] h1{font-size:1.45rem} }
 /* margine e provvigione */
 .econ{display:block;font-size:.76rem;color:#475057} .econ.neg{color:var(--bad);font-weight:600}
+.delivered{display:block;font-size:.82rem;color:var(--ink,#1d2329);margin-top:2px} .delivered strong{color:#0b6b3a} .delivered.muted{color:var(--muted)}
 .econ-box{margin-top:14px;border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:2px}
 .econ-box>small{text-transform:uppercase;letter-spacing:.06em;font-size:.68rem;font-weight:700;color:var(--muted)}
 .econ-box>div{display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-size:.9rem}
@@ -986,7 +987,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .depot-price .check{display:flex;gap:6px;align-items:flex-start}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f00362177f99"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"87fb15fc5ad1"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -6526,7 +6527,25 @@ function unitPriceNote(rows, picked, basis) {
   return 'Prezzo indicativo: ' + sel.map(r => `${eu(basis === 'none' ? r.price : r.withTransport)}/${r.label.replace(/^m³ a (\d+) kg\/m³$/, 'm³ (posa $1 kg/m³)')}`).join(' · ') + tr;
 }
 
-return { BULK_DENSITY, packOf, unitOptions, fullLoadQty, fullLoadTransport, offerTransportPerUnit, effectiveBasis, unitPrices, unitPriceNote };
+// 13/11 (Tommaso, offerta Comever OFF-2026-0024): prezzo per unità CON trasporto, sempre visibile sotto la riga,
+// così mentre si cambiano gli sconti si vede subito il prezzo «reso» (es. Policell ~110 €/m³ a carico completo).
+// line = riga; net = netto per unità; lines = tutte le righe; freight = trasporto dell'offerta (null = da definire);
+// pickup = ritiro al deposito; offerTpu = quota di trasporto per unità della riga dalla stima (più righe con trasporto).
+function deliveredPrice({ line, net, lines, freight, pickup = false, offerTpu = null }) {
+  if (!line || !(line.qty > 0) || !(net > 0)) return null;
+  if (line.depotPrice) return { value: net, transport: 0, note: 'trasporto compreso (dal deposito)' };
+  if (pickup) return null;
+  if (freight === null || freight === undefined) return { value: null, note: 'trasporto da definire' };
+  const moved = (lines || []).filter(x => x && x.qty > 0 && !x.depotPrice);
+  if (moved.length === 1 && moved[0] === line) {
+    const t = freight / line.qty;
+    return { value: net + t, transport: t, note: 'trasporto dell\'offerta diviso sulla quantità' };
+  }
+  if (offerTpu !== null && offerTpu !== undefined) return { value: net + offerTpu, transport: offerTpu, note: 'quota di trasporto stimata per questa riga', estimate: true };
+  return { value: null, note: 'più articoli: trasporto non divisibile per riga' };
+}
+
+return { BULK_DENSITY, packOf, unitOptions, fullLoadQty, fullLoadTransport, offerTransportPerUnit, effectiveBasis, unitPrices, unitPriceNote, deliveredPrice };
 })();
 __m["js/core/price-history.js"] = (function () {
 // Storico prezzi del cliente nell'offerta (10/11/2026, richiesta di Manuel Nonini).
@@ -7062,7 +7081,7 @@ const { mailtoUrl, quoteMailBody, quoteMailIntro, openMailto } = __m["js/core/ma
 const { quoteMargin, quoteCommission, unitCost } = __m["js/core/margins.js"];
 const { transportPanel, stockFor } = __m["js/views/transport-panel.js"];
 const { conversionLines, quantityEquivalents, entryUnits, fromEntry, toEntry } = __m["js/core/conversions.js"];
-const { unitPrices, fullLoadTransport, offerTransportPerUnit, unitPriceNote, fullLoadQty, effectiveBasis } = __m["js/core/unit-prices.js"];
+const { unitPrices, fullLoadTransport, offerTransportPerUnit, unitPriceNote, fullLoadQty, effectiveBasis, deliveredPrice } = __m["js/core/unit-prices.js"];
 const { purchaseHint } = __m["js/core/price-history.js"];
 const { planTransport, regimeFor, lineLoad, loadCapacity } = __m["js/core/logistics.js"];
 const { quoteEmail, QUOTE_BCC, isEmail } = __m["js/core/quote-email.js"];
@@ -7263,6 +7282,17 @@ async function viewQuoteEditor(app, id, customerId) {
       oninput: e => { clearTimeout(t); if (e.target.value === '') return; t = setTimeout(() => { onset(read(e)); mark(); live ? live() : null; }, 450); },
       onchange: e => { clearTimeout(t); onset(read(e)); mark(); drawLines(); } });
   };
+  // 13/11 (Tommaso): prezzo per unità con trasporto, aggiornato mentre si cambiano gli sconti
+  function deliveredLine(l, i) {
+    let offerTpu = null;
+    const ctx = { prov: q.delivery?.prov || q.customer?.prov, km: q.logistics?.km || {}, vehicleType: q.logistics?.vehicleType };
+    try { offerTpu = offerTransportPerUnit(planTransport(q.lines.map(x => ({ product: byId.get(x.productId), qty: x.qty, amount: lineAmount(x), skip: !!x.depotPrice })).filter(x => x.product), ctx), i); } catch { offerTpu = null; }
+    const d = deliveredPrice({ line: l, net: lineNet(l), lines: q.lines, freight: q.freight, pickup: isPickup(q), offerTpu });
+    if (!d) return null;
+    const u = String(l.unit).toLowerCase().replace('m3', 'm³').replace('m2', 'm²');
+    return h('small', { class: 'delivered' + (d.value === null ? ' muted' : '') },
+      d.value === null ? `Prezzo con trasporto: ${d.note}` : [h('strong', {}, `Con trasporto: ${eur(d.value)}/${u}`), ` · ${d.estimate ? '≈ ' : ''}${d.note}${d.transport ? ` (${eur(d.transport)}/${u})` : ''}`]);
+  }
   // Margine (Direzione) o provvigione (agente) sulla riga
   function lineEcon(l) {
     if (viewerIsDir) {
@@ -7386,7 +7416,7 @@ async function viewQuoteEditor(app, id, customerId) {
           buyHint(l),
           convBox(byId.get(l.productId), l.qty, pal), stockLine(l.radixCode), sheetLinks(byId.get(l.productId)),
           depotBox(l),
-          lineEcon(l), unitBox(l, i, () => refresh()),
+          deliveredLine(l, i), lineEcon(l), unitBox(l, i, () => refresh()),
           byId.get(l.productId)?.clearance ? h('small', { class: 'warn-text' }, '⚠ ' + byId.get(l.productId).clearance + (pal !== null && Math.ceil(pal - 1e-6) - pal > 1e-6 ? ` → ${Math.ceil(pal - 1e-6)} bancali = ${num(Math.ceil(pal - 1e-6) * l.palletQuantity)} m²` : '')) : null,   // 05/11: articoli fuori listino a esaurimento (Isorel N88174)
           byId.get(l.productId)?.family === 'Blocchi in laterizio' && pal !== null && Math.ceil(pal - 1e-6) - pal > 1e-6 ? h('small', { class: 'warn-text' }, `Laterizi: vendita solo a bancali completi → ${Math.ceil(pal - 1e-6)} bancali = ${num(Math.ceil(pal - 1e-6) * l.palletQuantity)} ${String(l.unit).toLowerCase()}`) : null,
           bigLoad(l, pal),
@@ -7394,7 +7424,7 @@ async function viewQuoteEditor(app, id, customerId) {
             : disc > DISCOUNT_ALERT ? h('small', { class: 'warn-text' }, `⚠ ${num(disc)}% · oltre ${DISCOUNT_ALERT_LABEL}`) : null);   // 06/11: sulla riga solo l'etichetta, la spiegazione una volta sotto il totale
         fill(netTd, eur(lineNet(l))); fill(amtTd, h('strong', {}, eur(lineAmount(l))));
       };
-      const live = () => { refresh(); tp?.redraw(); drawTotals(); };
+      const live = () => { tp?.redraw(); refresh(); drawTotals(); };   // 13/11: prima il trasporto, poi il prezzo con trasporto
       refresh();
       return h('tr', { class: showPriceWarn && l.level === PRICE_LEVEL.WARN ? 'warnrow' : '' },
         h('td', { class: 'art' }, info),
@@ -9806,7 +9836,8 @@ const HELP = {
     ],
     notes: ['Queste istruzioni vengono riviste prima della consegna ufficiale e aggiornate a ogni versione.',
       'Correzione 06/11 (Direzione): nella ricerca Clienti si trova ogni cliente presente in RADIX. Reinseriti come direzionali i clienti esclusi al lancio perché senza acquisti dal 2025 (stato Perso o Mai fatturato, quindi non compaiono in "Da lavorare"); restano fuori solo i privati.',
-      'Novità 12/11 (Direzione): nella scheda cliente il pulsante "✎ Modifica dati" (in "Dati e contatti") corregge ragione sociale, indirizzo, provincia, telefono, email, P.IVA/CF, SDI/PEC, pagamento e banca. Sui clienti RADIX la correzione non si perde al caricamento successivo e va all\'ufficio nella coda "Dati clienti da correggere in RADIX". Ogni modifica resta nello storico.'],
+      'Novità 12/11 (Direzione): nella scheda cliente il pulsante "✎ Modifica dati" (in "Dati e contatti") corregge ragione sociale, indirizzo, provincia, telefono, email, P.IVA/CF, SDI/PEC, pagamento e banca. Sui clienti RADIX la correzione non si perde al caricamento successivo e va all\'ufficio nella coda "Dati clienti da correggere in RADIX". Ogni modifica resta nello storico.',
+      'Novità 13/11: sotto ogni riga dell\'offerta c\'è il prezzo per unità con trasporto (es. «Con trasporto: 109,13 €/m³»), che si aggiorna mentre cambi gli sconti. Con un solo articolo trasportato è esatto (trasporto dell\'offerta diviso sulla quantità); con più articoli è la quota stimata; dal deposito il prezzo è già con trasporto.'],
   },
 
   home: {
