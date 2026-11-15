@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="d2458d161787">
+<meta name="ntx-build" content="d95152455d09">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -988,7 +988,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .depot-price .check{display:flex;gap:6px;align-items:flex-start}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"d2458d161787"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"d95152455d09"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -11620,8 +11620,11 @@ function bar(p, pace, label) {
   return h('div', { class: 'ss-bar', title: label || '' }, h('span', { class: 'ss-fill ' + (p == null ? '' : p >= 1 ? 'ok' : pace != null && p < pace - 0.05 ? 'bad' : 'warn'), style: { width: p == null ? '0%' : Math.round(Math.min(1, p) * 100) + '%' } }),
     pace != null ? h('i', { class: 'ss-pace', style: { left: Math.round(pace * 100) + '%' }, title: 'dove dovremmo essere oggi' }) : null);
 }
+// 15/11: il margine delle fotografie Meridian non è ancora il margine sul solo prodotto del piano (in correzione): si mostra, ma senza barra verde/rossa contro l'obiettivo
+const MARG_NOTE = 'misura Meridian in correzione: non ancora confrontabile con l\'obiettivo sul solo prodotto';
 function measureLine(d, k, target, manual, note) {
-  const m = measureOf(d, k, manual), tr = tgtRatio(k, target), p = progressTo(k, m.value, tr);
+  const m = measureOf(d, k, manual), tr = tgtRatio(k, target), p = k === 'margine' ? null : progressTo(k, m.value, tr);
+  if (k === 'margine' && m.value != null) note = note ? note + ' · ' + MARG_NOTE : MARG_NOTE;
   const extra = k === 'fatturato' ? ` · ${eur(m.cur)} su ${eur(m.prev)} del ${d.measures.year - 1}` : k === 'tenuta' ? ` · ${m.n} clienti attivi nel ${d.measures.year - 1}: ${eur(m.cur)} su ${eur(m.prev)}` : k === 'attivi' ? ` · ${m.cur} su ${m.prev}` : k === 'recuperati' ? ` · ${eur(m.eur)}` : k === 'mix' ? ` · ${m.zones} zone di fascia 1 con fotografia` : k === 'margine' && m.date ? ` · fotografia del ${dateIt(m.date)}` : k === 'offerte' ? ` su ${m.open} aperte` : '';
   return h('div', { class: 'ss-meas' }, h('div', { class: 'st-main' }, h('strong', {}, fmtM(k, m.value)), h('small', { class: 'muted' }, extra + (tr != null ? ` · obiettivo ${fmtM(k, tr)}` : '') + (note ? ' · ' + note : ''))),
     bar(p, k === 'fatturato' || k === 'tenuta' ? d.measures.pace : null, MEAS[k]?.l));
@@ -11656,10 +11659,11 @@ function strategyCards(app, d, refresh) {
   return (d.strat.strategie || []).map(x => {
     const ts = (d.strat.tattiche || []).filter(t => t.s === x.id), open = ts.filter(t => t.stato !== 'chiusa').sort((a, b) => order[tacticState(a, day)] - order[tacticState(b, day)]), closed = ts.filter(t => t.stato === 'chiusa');
     const active = open.filter(t => tacticState(t, day) === 'attiva').length;
-    const mm = x.misura ? measureOf(d, x.misura, x.manuale) : null, pp = mm ? progressTo(x.misura, mm.value, tgtRatio(x.misura, x.target)) : null;
+    const coming = open.filter(t => tacticState(t, day) === 'in arrivo').length;
+    const mm = x.misura ? measureOf(d, x.misura, x.manuale) : null, pp = mm && x.misura !== 'margine' ? progressTo(x.misura, mm.value, tgtRatio(x.misura, x.target)) : null;
     // 08/11: chiuse di default, la barra nel titolo (colpo d'occhio); si aprono per le tattiche
     return h('section', { class: 'card ss-strat' }, h('details', {}, h('summary', { class: 'ss-ssum' },
-        h('span', { class: 'ss-sname' }, h('strong', {}, `${x.id} · ${x.nome}`), h('small', { class: 'muted' }, ` · ${active} tattiche attive`)),
+        h('span', { class: 'ss-sname' }, h('strong', {}, `${x.id} · ${x.nome}`), h('small', { class: 'muted' }, ` · ${active} tattiche attive` + (coming ? `, ${coming} in partenza` : ''))),
         h('span', { class: 'ss-sval' }, mm ? fmtM(x.misura, mm.value) : '–'), bar(pp, x.misura === 'fatturato' || x.misura === 'tenuta' ? d.measures.pace : null, x.kpi)),
       h('p', { class: 'muted' }, 'KPI annuale: ' + (x.kpi || '–')),
       x.misura ? measureLine(d, x.misura, x.target, x.manuale) : h('small', { class: 'muted' }, 'Nessuna misura calcolata: sceglila in "Modifica obiettivo e strategie".'),
