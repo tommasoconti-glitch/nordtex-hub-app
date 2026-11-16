@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="fbe1acbaf6b6">
+<meta name="ntx-build" content="2cbf44bf92a5">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -988,7 +988,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .depot-price .check{display:flex;gap:6px;align-items:flex-start}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"fbe1acbaf6b6"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"2cbf44bf92a5"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3975,15 +3975,16 @@ function freightRowsRaw(q, freight) {
 const customerLines = c => [c.name, c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' '), c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean);
 
 // 16/11 (Christian): negli articoli con bordo maschio/femmina la descrizione riporta «bordo a incastro M+F».
-// Elenco dalle schede del listino (testo tecnico «incastro») + Naturtex 160 indicato da Christian.
-// Esclusi i prodotti con bordo liscio o incastro secondo il formato (Naturtex 110 WALL, therm dry 110, protect H 270, internal).
-const TG = ['NORDTEX - Naturtex 140', 'NORDTEX - Naturtex 160', 'NORDTEX - Naturtex 180', 'NORDTEX - Naturtex 220', 'NORDTEX protect M 230 i',
-  'NORDTEX universal', 'NORDTEX special dry 140', 'NORDTEX safe', 'NORDTEX floor'];
-const tongueGroove = d => { const s = String(d || ''); return !/incastro|listelli/i.test(s) && TG.some(k => s === k || s.startsWith(k + ' ')); };
+// Per codice di listino, non per nome: nello stesso prodotto ci sono formati con bordo liscio.
+// Naturheld dall'estratto listino NH (Christian 16/11 sera): 110 WALL solo 1880×615; 140 solo 1880×615 (1250×600 liscio);
+// 180 tutti tranne 3000×1250 (liscio); 220 solo 2550×615 (1250×600 liscio); 110 ROOF, 160, 200 e 140 install senza incastro.
+// Altri marchi: righe del listino con il testo tecnico «(incastro)» (protect M 230 i, universal, universal dry/black, special dry 140, safe, floor).
+const TG = new Set(["25002001", "25002002", "25002003", "25002004", "25003001", "25003002", "25003003", "25003004", "25003005", "25003006", "25003007", "25003008", "25003009", "25004001", "25004002", "25004003", "25004004", "25004007", "25004008", "25004009", "25004010", "25005001", "25005004", "301668", "330561", "334121", "334122", "334123", "334180", "334273", "334274", "334275", "334276", "335244", "338431", "341344", "341345", "344668", "344670", "367943", "367949", "367950", "389781", "399305", "411038", "411876", "411900", "411901", "411913", "411917", "411919", "411921", "411940", "411966", "411968", "411970", "411972", "411975", "426980", "426984", "427013", "433507", "433513", "433514", "433515", "433550", "433551", "433553", "433556"]);
+const tongueGroove = l => !!l && TG.has(String(l.listCode || '').trim());
 
 function lineExtra(l) {
   const out = [], pal = palletsFor(l);
-  if (tongueGroove(l.description)) out.push('bordo a incastro M+F');
+  if (tongueGroove(l)) out.push('bordo a incastro M+F');
   if (l.palletQuantity > 0 && pal !== null) {
     // 02/11 (errore visto su W14 PLAN: 60 pz/Pal stampato "6pz/Pal"): si tolgono gli zeri finali SOLO dopo la virgola
     const pq = l.palletQuantity % 1 ? n(l.palletQuantity, 3).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '') : n(l.palletQuantity, 0);
