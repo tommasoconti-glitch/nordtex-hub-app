@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="1a92c5c30997">
+<meta name="ntx-build" content="d7e8bcb4041c">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1027,7 +1027,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 :root[data-scheme="dark"] .ph-ok{background:#1f3a2a;color:#9fd8b4} :root[data-scheme="dark"] .ph-warn{background:#3d3118;color:#f0c674} :root[data-scheme="dark"] .ph-dorm{background:#43291a;color:#f1a774} :root[data-scheme="dark"] .ph-bad{background:#45202a;color:#f2a0ad} :root[data-scheme="dark"] .ph-muted,:root[data-scheme="dark"] .ph-dark{background:#333;color:#ccc} :root[data-scheme="dark"] .ph-info{background:#1f2f48;color:#a9c6f2}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"1a92c5c30997"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"d7e8bcb4041c"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1361,7 +1361,12 @@ function checkStatusChange({ status, reason }) {
   if (String(reason || '').trim().length < 3) throw new Error('Scrivi il motivo del cambio di stato');
 }
 const SISTEMISTI = 'Sistemisti - impianti radianti';
-const TYPOLOGIES = ['Rivendita edile', 'Impresa edile', 'Progettista / studio tecnico', 'Serramentista / falegnameria', SISTEMISTI, 'Applicatore / posatore', 'Altro'];
+// 17/11/2026 (Tommaso): i commerciali NON inventano tipologie, si usano SOLO quelle di RADIX, scritte come in RADIX
+// (altrimenti nascono doppioni tipo «Impresa edile» accanto a «Imprese» che poi vanno corretti a mano).
+const TYPOLOGIES = ['Magazzini edili', 'Imprese', 'Industria del legno', 'Industria', 'arch, ing etc', SISTEMISTI, 'Colorificio', 'Autostrasportatori'];
+// Vecchie voci dell'HUB (fino al 16/11) ricondotte a quelle RADIX quando la corrispondenza è certa; le altre restano da decidere.
+const TYPOLOGY_FROM_HUB = { 'Rivendita edile': 'Magazzini edili', 'Impresa edile': 'Imprese', 'Progettista / studio tecnico': 'arch, ing etc' };
+const normTypology = t => (t && TYPOLOGY_FROM_HUB[t]) || t || null;
 
 // Assegnazione di un nuovo cliente con le stesse regole del 31/10: sistemisti a Paulon, poi provincia della rete, altrimenti Direzionale
 function assigneeFor({ prov, typology }, assignees = []) {
@@ -1394,7 +1399,8 @@ function makeProspect(f, session, assignees) {
   if (!assignee) throw new Error('Profilo senza portafoglio: impossibile assegnare il cliente');
   const fx = checkFiscal({ vat, sdi: f.sdi, pec: f.pec, bank: f.bank, paymentTerms: f.paymentTerms }, { partial: true });
   return { ...fx, name, extra: t(f.extra), street: t(f.street), cap: t(f.cap), city: t(f.city).toUpperCase(), prov, phone: t(f.phone), email, vat, cf: t(f.cf).toUpperCase() || vat,
-    typology: t(f.typology), assignee, attribution: assignee === 'Direzionale' ? 'Direzionale' : 'Agente', status: 'Potenziale', origin: 'HUB', annotation: t(f.notes),
+    typology: TYPOLOGIES.includes(t(f.typology)) ? t(f.typology) : null, assignee,   // 17/11: solo tipologie RADIX
+    attribution: assignee === 'Direzionale' ? 'Direzionale' : 'Agente', status: 'Potenziale', origin: 'HUB', annotation: t(f.notes),
     lastYear: null, lastInvoice: null, monthsSince: null, inv2024: 0, inv2025: 0, inv2026: 0, invTotal: 0 };
 }
 // 02/11 (versione Ufficio): dati fiscali del cliente nuovo. Facoltativi alla creazione, obbligatori quando l'offerta diventa ordine.
@@ -1632,7 +1638,7 @@ function checkStop({ callStatus, apptTime, note } = {}) {
 // ordine delle tappe: prima gli appuntamenti per orario, poi le altre nell'ordine scelto
 const stopOrder = (a, b) => (a.apptTime || '99') .localeCompare(b.apptTime || '99') || (a.position || 0) - (b.position || 0);
 
-return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, PHASES, PHASE_ORDER, WORK_PHASES, customerPhase, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, assigneeFor, validVat, makeProspect, checkFiscal, missingForOrder, EDIT_FIELDS, EDIT_LABEL, EDIT_DB, EDIT_FROM_DB, canEditCustomer, customerEdits, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normTerms, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers, POST_CATEGORIES, postIcon, postEnded, CALL_STATES, checkStop, stopOrder };
+return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, PHASES, PHASE_ORDER, WORK_PHASES, customerPhase, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, TYPOLOGY_FROM_HUB, normTypology, assigneeFor, validVat, makeProspect, checkFiscal, missingForOrder, EDIT_FIELDS, EDIT_LABEL, EDIT_DB, EDIT_FROM_DB, canEditCustomer, customerEdits, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normTerms, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers, POST_CATEGORIES, postIcon, postEnded, CALL_STATES, checkStop, stopOrder };
 })();
 __m["js/core/preview.js"] = (function () {
 // Anteprima "come agente" per la Direzione (richiesta Tommaso 01/11/2026): l'app mostra solo ciò che vede l'agente scelto.
@@ -2318,6 +2324,7 @@ __m["js/data/supabase-store.js"] = (function () {
 // Archivio condiviso su Supabase (stesso interfaccia dell'archivio locale).
 // Login ordinario email/password; i permessi sono applicati dal database (RLS),
 // l'app non usa mai chiavi privilegiate. Richiede la migrazione supabase/migrations/20261031120000_hub_v1.sql.
+const { normTypology } = __m["js/data/model.js"];
 const { checkForecast } = __m["js/core/forecast.js"];
 const { fixProducts } = __m["js/core/product-fixes.js"];
 const { normTerms, nowIso, makeProspect, applyStatus, checkStatusChange, radixNoteView, checkOrderRequest, checkRadixOutcome, checkStop, checkFiscal, customerEdits, canEditCustomer, EDIT_FIELDS, EDIT_DB, EDIT_FROM_DB } = __m["js/data/model.js"];
@@ -2368,7 +2375,7 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     }
   }
   const fromDb = c => ({ uuid: c.id, id: c.code, number: c.code, name: c.name, extra: c.extra, street: c.street, cap: c.cap, city: c.city, prov: c.prov, phone: c.phone, email: c.email, vat: c.vat, cf: c.cf,
-    typology: c.typology, assignee: c.assignee_label, attribution: c.attribution, dirFollower: c.dir_follower || null, radixAgent: c.radix_agent, radixOwner: c.radix_owner, changedVsRadix: c.changed_vs_radix,
+    typology: normTypology(c.typology), assignee: c.assignee_label, attribution: c.attribution, dirFollower: c.dir_follower || null, radixAgent: c.radix_agent, radixOwner: c.radix_owner, changedVsRadix: c.changed_vs_radix,
     lastYear: c.last_year, lastInvoice: c.last_invoice, status: c.status, monthsSince: c.months_since, inv2024: c.inv_2024, inv2025: c.inv_2025, inv2026: c.inv_2026, invTotal: c.inv_total,
     firstInvoice: c.first_invoice, dataAsOf: c.origin === 'HUB' ? null : c.updated_at, createdAt: c.created_at, origin: c.origin || 'RADIX', createdBy: c.created_by, annotation: c.annotation, blockedSince: c.blocked_since, salesBlockedSince: c.sales_blocked_since, review: c.review,
     rev2024: c.sales?.rev?.['2024'], rev2025: c.sales?.rev?.['2025'], rev2026: c.sales?.rev?.['2026'], salesAsOf: c.sales?.asOf || null,
