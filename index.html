@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="6d058a1a9098">
+<meta name="ntx-build" content="1a92c5c30997">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1009,8 +1009,25 @@ h1 + .fix-note{margin:-4px 0 4px}
 @media (max-width: 640px) { .photo-card .photo-3 { grid-template-columns: 1fr; } .rx-agents-t th:nth-child(4), .rx-agents-t td:nth-child(4) { display: none; } }
 .kpis.trend-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
+/* 17/11 Clienti: etichetta di fascia con la parola (al posto del pallino); stessi colori nei filtri, che fanno da legenda */
+.ph { display: inline-block; border-radius: 10px; padding: 2px 9px; font-size: .74rem; font-weight: 600; line-height: 1.5; white-space: nowrap; }
+.ph.big { font-size: .9rem; padding: 4px 12px; }
+.ph-ok { background: #e3f2e8; color: #1e6b3f; } .ph-warn { background: #fdf0d8; color: #8a5600; } .ph-dorm { background: #f9dfc8; color: #8a3d00; }
+.ph-bad { background: #fbe0e3; color: #a4162c; } .ph-muted { background: #ececec; color: #555; } .ph-info { background: #e2ecfb; color: #1d4f9a; } .ph-dark { background: #e4e4e4; color: #333; }
+.chips .chip.ph { border-color: transparent; font-weight: 500; }
+.chips .chip.ph.on { outline: 2px solid currentColor; outline-offset: -2px; }
+.citem.citem2 { align-items: flex-start; }
+.citem2 .cflags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.cmeta.cmeta2 { text-align: right; display: flex; flex-direction: column; align-items: flex-end; }
+.cmeta2 strong { font-size: .95rem; font-variant-numeric: tabular-nums; }
+.cmeta2 small { color: var(--muted, #777); font-size: .72rem; text-transform: none; letter-spacing: 0; white-space: normal; }
+.cmeta.cmeta2 { max-width: 46%; flex: 0 0 auto; }
+.citem2 .cname { flex: 1 1 auto; }
+.chips .chip.ph b { margin-left: 6px; }
+:root[data-scheme="dark"] .ph-ok{background:#1f3a2a;color:#9fd8b4} :root[data-scheme="dark"] .ph-warn{background:#3d3118;color:#f0c674} :root[data-scheme="dark"] .ph-dorm{background:#43291a;color:#f1a774} :root[data-scheme="dark"] .ph-bad{background:#45202a;color:#f2a0ad} :root[data-scheme="dark"] .ph-muted,:root[data-scheme="dark"] .ph-dark{background:#333;color:#ccc} :root[data-scheme="dark"] .ph-info{background:#1f2f48;color:#a9c6f2}
+
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"6d058a1a9098"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"1a92c5c30997"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1304,6 +1321,32 @@ const STATUS_INFO = {
   'Cessata attività': { cls: 'dark', rule: 'Azienda chiusa o non più operativa', hint: 'Nessuna azione' },
 };
 
+// 17/11/2026 (Tommaso, controllo pagina Clienti): al posto del pallino un'etichetta con la parola, con le fasce del piano 2027.
+// attivo = acquisto negli ultimi 6 mesi · in calo = 6-12 mesi · dormiente = 1-2 anni · perso = oltre 2 anni · mai comprato.
+// Gli stati scelti a mano che non dipendono dagli acquisti (Potenziale, Non interessato, Cessata attività) restano quelli.
+const PHASES = {
+  attivo: { cls: 'ok', label: 'attivo', rule: 'Acquisto negli ultimi 6 mesi', hint: 'Seguire e allargare la gamma acquistata' },
+  calo: { cls: 'warn', label: 'in calo', rule: 'Ultimo acquisto da 6 a 12 mesi fa', hint: 'Ricontattare e capire perché non ordina' },
+  dormiente: { cls: 'dorm', label: 'dormiente', rule: 'Ultimo acquisto da 1 a 2 anni fa', hint: 'Priorità di recupero: basta riportarlo a una parte di quello che comprava' },
+  perso: { cls: 'bad', label: 'perso', rule: 'Ultimo acquisto oltre 2 anni fa', hint: 'Valutare se vale la pena riattivarlo' },
+  mai: { cls: 'muted', label: 'mai comprato', rule: 'Nessuna fattura in RADIX' },
+  potenziale: { cls: 'info', label: 'potenziale', rule: 'Nuovo cliente inserito in HUB, non ancora in RADIX' },
+  noint: { cls: 'dark', label: 'non interessato', rule: 'Contattato, al momento non interessato' },
+  cessata: { cls: 'dark', label: 'cessata attività', rule: 'Azienda chiusa o non più operativa' },
+};
+const PHASE_ORDER = ['attivo', 'calo', 'dormiente', 'perso', 'mai', 'potenziale', 'noint', 'cessata'];
+const WORK_PHASES = ['attivo', 'calo', 'dormiente', 'potenziale'];
+function customerPhase(c, now = new Date()) {
+  if (c.status === 'Potenziale') return { key: 'potenziale', ...PHASES.potenziale, text: PHASES.potenziale.label };
+  if (c.status === 'Non interessato') return { key: 'noint', ...PHASES.noint, text: PHASES.noint.label };
+  if (c.status === 'Cessata attività') return { key: 'cessata', ...PHASES.cessata, text: PHASES.cessata.label };
+  if (!c.lastInvoice) return { key: 'mai', ...PHASES.mai, text: PHASES.mai.label };
+  const days = Math.floor((now - new Date(c.lastInvoice + 'T12:00:00')) / 864e5), m = Math.floor(days / 30.44), y = Math.floor(days / 365.25);
+  const key = days < 183 ? 'attivo' : days < 365 ? 'calo' : days < 730 ? 'dormiente' : 'perso';
+  const text = key === 'calo' ? `in calo · ${m} mesi` : key === 'dormiente' ? `dormiente · ${y === 1 ? '1 anno' : y + ' anni'}` : PHASES[key].label;
+  return { key, ...PHASES[key], text, days };
+}
+
 // Stato effettivo: l'ultima modifica manuale vale finché RADIX non registra un acquisto successivo alla modifica
 function applyStatus(c, change) {
   if (c.radixStatus === undefined) c.radixStatus = c.status;
@@ -1589,7 +1632,7 @@ function checkStop({ callStatus, apptTime, note } = {}) {
 // ordine delle tappe: prima gli appuntamenti per orario, poi le altre nell'ordine scelto
 const stopOrder = (a, b) => (a.apptTime || '99') .localeCompare(b.apptTime || '99') || (a.position || 0) - (b.position || 0);
 
-return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, assigneeFor, validVat, makeProspect, checkFiscal, missingForOrder, EDIT_FIELDS, EDIT_LABEL, EDIT_DB, EDIT_FROM_DB, canEditCustomer, customerEdits, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normTerms, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers, POST_CATEGORIES, postIcon, postEnded, CALL_STATES, checkStop, stopOrder };
+return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, PHASES, PHASE_ORDER, WORK_PHASES, customerPhase, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, assigneeFor, validVat, makeProspect, checkFiscal, missingForOrder, EDIT_FIELDS, EDIT_LABEL, EDIT_DB, EDIT_FROM_DB, canEditCustomer, customerEdits, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normTerms, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers, POST_CATEGORIES, postIcon, postEnded, CALL_STATES, checkStop, stopOrder };
 })();
 __m["js/core/preview.js"] = (function () {
 // Anteprima "come agente" per la Direzione (richiesta Tommaso 01/11/2026): l'app mostra solo ciò che vede l'agente scelto.
@@ -4906,7 +4949,7 @@ const { dictationAvailable, startDictation } = __m["js/core/dictation.js"];
 const { recordingAvailable, startRecording, mmss } = __m["js/core/recorder.js"];
 const { radixOfferRow, radixOfferOpen, dueState: rxDueState } = __m["js/views/radix-offers.js"];
 const { openActions } = __m["js/views/actions.js"];
-const { CONTACT_KINDS, NOTE_OUTCOMES, STATUS_ORDER, STATUS_INFO, MANUAL_STATUSES, TYPOLOGIES, dueState, assigneeFor, canEditCustomer, EDIT_LABEL } = __m["js/data/model.js"];
+const { CONTACT_KINDS, NOTE_OUTCOMES, STATUS_ORDER, STATUS_INFO, MANUAL_STATUSES, TYPOLOGIES, PHASES, PHASE_ORDER, WORK_PHASES, customerPhase, dueState, assigneeFor, canEditCustomer, EDIT_LABEL } = __m["js/data/model.js"];
 const { buildIndex, searchCustomers, highlight } = __m["js/core/search.js"];
 const { fiscalFields } = __m["js/views/fiscal.js"];
 const { radixOrderRow } = __m["js/views/radix-orders.js"];
@@ -4915,9 +4958,12 @@ const { offerChoices, offerSelect, parseRef, noteOfferChip, linkNoteDialog, canL
 // 01/11 sera (Tommaso: "si può migliorare?"): all'apertura solo i clienti su cui lavorare (attivi, da recuperare, potenziali),
 // in ordine "da seguire prima"; la ricerca cerca sempre in tutti i clienti.
 const WORK = ['Attivo', 'Da recuperare', 'Potenziale'];
-const state = { q: '', status: 'lavoro', prov: '', assignee: '', sort: 'priorita', limit: 200 };
-const SORTS = { priorita: 'Da seguire prima', visita: 'Non visitati da più tempo', nome: 'Nome A-Z', recente: 'Acquisto più recente', fermi: 'Fermi da più tempo' };
-const matchStatus = (c, st, searching) => !st || (st === 'lavoro' ? (searching || WORK.includes(c.status)) : st === 'tutti' || c.status === st);
+const state = { q: '', status: 'lavoro', prov: '', assignee: '', typ: '', sort: null, limit: 200 };
+const SORTS = { priorita: 'Da seguire prima', fatturato: 'Fatturato più alto', visita: 'Non visitati da più tempo', nome: 'Nome A-Z', recente: 'Acquisto più recente', fermi: 'Fermi da più tempo' };
+// 17/11: i filtri seguono le fasce (etichette con la parola); i vecchi collegamenti «stato/Da recuperare» = in calo + dormiente
+const LEGACY = { 'Da recuperare': ['calo', 'dormiente'], Attivo: ['attivo'], Perso: ['perso'], 'Mai fatturato': ['mai'], Potenziale: ['potenziale'] };
+const matchStatus = (c, st, searching) => { if (!st || st === 'tutti') return true; const k = customerPhase(c).key;
+  return st === 'lavoro' ? (searching || WORK_PHASES.includes(k)) : (LEGACY[st] || [st]).includes(k); };
 let indexCache = { src: null, ix: null };
 
 // Segnali per l'ordine "da seguire prima" e per i bollini sulle righe (follow-up, offerte, contatti recenti)
@@ -4949,6 +4995,7 @@ async function viewAgenda(app, a1, a2) {
   const all = await app.customers();
   if (indexCache.src !== all) indexCache = { src: all, ix: buildIndex(all) };
   const isDir = app.session.role === 'direzione';
+  if (!state.sort) state.sort = isDir ? 'fatturato' : 'priorita';   // 17/11: la Direzione parte dal fatturato
   const selected = a1 ? app.store.customer(a1) : null;
   const listBox = h('div', { class: 'clist', role: 'listbox', 'aria-label': 'Clienti' });
   const counter = h('small', { class: 'muted' });
@@ -4958,10 +5005,11 @@ async function viewAgenda(app, a1, a2) {
   // 07/11 (Tommaso): la ricerca è sempre su tutti i clienti visibili, senza filtri. Con un filtro attivo dimenticato l'agente pensava
   // che il cliente non ci fosse e creava il doppione. I filtri valgono solo per scorrere l'elenco senza ricerca.
   const searching = () => !!state.q.trim();
-  const filtersOn = () => !!(state.prov || state.assignee || (state.status && state.status !== 'lavoro' && state.status !== 'tutti'));
-  function base() { return searchCustomers(indexCache.ix, state.q).filter(r => searching() || ((!state.prov || r.c.prov === state.prov) && (!state.assignee || r.c.assignee === state.assignee))); }
+  const filtersOn = () => !!(state.prov || state.assignee || state.typ || (state.status && state.status !== 'lavoro' && state.status !== 'tutti'));
+  function base() { return searchCustomers(indexCache.ix, state.q).filter(r => searching() || ((!state.prov || r.c.prov === state.prov) && (!state.assignee || r.c.assignee === state.assignee) && (!state.typ || (r.c.typology || '(non indicata)') === state.typ))); }
   function sorted(rows) {
-    const by = { nome: (a, b) => a.c.name.localeCompare(b.c.name, 'it'),
+    const by = { fatturato: (a, b) => (b.c.rev2026 || 0) - (a.c.rev2026 || 0) || (b.c.rev2025 || 0) - (a.c.rev2025 || 0) || a.c.name.localeCompare(b.c.name, 'it'),
+      nome: (a, b) => a.c.name.localeCompare(b.c.name, 'it'),
       visita: (a, b) => (sig.visits?.get(a.c.id) || '0000').localeCompare(sig.visits?.get(b.c.id) || '0000') || (b.c.rev2026 || 0) - (a.c.rev2026 || 0) || a.c.name.localeCompare(b.c.name, 'it'),
       recente: (a, b) => (b.c.lastInvoice || '').localeCompare(a.c.lastInvoice || '') || a.c.name.localeCompare(b.c.name, 'it'),
       fermi: (a, b) => (a.c.lastInvoice || '9999').localeCompare(b.c.lastInvoice || '9999') || a.c.name.localeCompare(b.c.name, 'it'),
@@ -4972,13 +5020,13 @@ async function viewAgenda(app, a1, a2) {
     return rows.slice().sort(by);
   }
   function drawChips(rows) {
-    const n = Object.fromEntries(STATUS_ORDER.map(s => [s, 0])); for (const r of rows) n[r.c.status] = (n[r.c.status] || 0) + 1;
-    const work = rows.filter(r => WORK.includes(r.c.status)).length;
+    const n = Object.fromEntries(PHASE_ORDER.map(s => [s, 0])); for (const r of rows) n[customerPhase(r.c).key]++;
+    const work = WORK_PHASES.reduce((a, k) => a + n[k], 0);
     const on = key => !searching() && state.status === key;
-    const chip = (key, label, count, dot, title) => h('button', { class: 'chip' + (on(key) ? ' on' : ''), 'aria-pressed': String(on(key)), title: title || '', disabled: searching(),
-      onclick: () => { state.status = key; state.limit = 200; drawList(); } }, dot ? h('span', { class: 'dot ' + dot }) : null, label, h('b', {}, count.toLocaleString('it-IT')));
-    fill(chipsBox, chip('lavoro', 'Da lavorare', work, null, 'Attivi, da recuperare e potenziali'),
-      STATUS_ORDER.filter(s => n[s] || state.status === s).map(s => chip(s, s, n[s], STATUS_INFO[s].cls, STATUS_INFO[s].rule)),
+    const chip = (key, label, count, cls, title) => h('button', { class: 'chip' + (cls ? ' ph ph-' + cls : '') + (on(key) ? ' on' : ''), 'aria-pressed': String(on(key)), title: title || '', disabled: searching(),
+      onclick: () => { state.status = key; state.limit = 200; drawList(); } }, label, h('b', {}, count.toLocaleString('it-IT')));
+    fill(chipsBox, chip('lavoro', 'Da lavorare', work, null, 'Attivi, in calo, dormienti e potenziali'),
+      PHASE_ORDER.filter(k => n[k] || state.status === k).map(k => chip(k, PHASES[k].label, n[k], PHASES[k].cls, PHASES[k].rule)),
       chip('tutti', 'Tutti', rows.length, null, 'Tutti i clienti'));
   }
   function drawList() {
@@ -4989,13 +5037,15 @@ async function viewAgenda(app, a1, a2) {
     const fuzzy = rows[0]?.fuzzy;
     counter.textContent = `${rows.length.toLocaleString('it-IT')} clienti` + (searching() ? ' · ricerca su tutti i tuoi clienti' + (filtersOn() ? ', filtri sospesi' : '') : '') + (fuzzy ? ' · nessun risultato esatto, mostro i più simili' : '');
     fill(listBox, ...rows.slice(0, state.limit).map(({ c }) => {
-      const info = STATUS_INFO[c.status] || STATUS_INFO['Mai fatturato'];
-      return h('a', { href: '#/agenda/' + c.id, role: 'option', 'aria-selected': String(selected?.id === c.id), class: 'citem' + (selected?.id === c.id ? ' sel' : '') },
-        h('span', { class: 'dot ' + info.cls, title: `${c.status}: ${info.rule}` }),
+      // 17/11 (anteprima approvata): etichetta con la parola al posto del pallino; a destra fatturato 2026, confronto e ultimo acquisto
+      const ph = customerPhase(c), r26 = c.rev2026 || 0, r25 = c.rev2025 || 0;
+      return h('a', { href: '#/agenda/' + c.id, role: 'option', 'aria-selected': String(selected?.id === c.id), class: 'citem citem2' + (selected?.id === c.id ? ' sel' : '') },
         h('span', { class: 'cname' }, h('span', {}, highlight(c.name, state.q).map(p => typeof p === 'string' ? p : h('mark', {}, p.mark))),
-          h('small', {}, [c.city, c.prov].filter(Boolean).join(' · ') + (isDir ? ' · ' + c.assignee : '')), flags(sig.get(c.id))),
-        h('span', { class: 'cmeta' }, h('span', { title: c.lastInvoice ? 'Ultima fattura ' + dateIt(c.lastInvoice) : 'Mai fatturato' }, h('small', {}, 'acq. '), c.lastInvoice ? sinceShort(c.monthsSince) : '—'),
-          visitMeta(sig.visits?.get(c.id))));
+          h('small', {}, [c.city, c.typology, isDir ? c.assignee : ''].filter(Boolean).join(' · ')),
+          h('span', { class: 'cflags' }, h('span', { class: 'ph ph-' + ph.cls, title: ph.rule }, ph.text), flagList(sig.get(c.id)))),
+        h('span', { class: 'cmeta cmeta2' }, h('strong', {}, r26 ? eur0(r26) : '—'),
+          h('small', {}, r26 ? '2026 · ' + (!r25 ? 'nuovo' : (r26 >= r25 ? '▲' : '▼') + ' vs 2025') : 'nessun acquisto 2026'),
+          h('small', {}, c.lastInvoice ? 'ultimo acquisto ' + sinceLong(c.monthsSince) : c.origin === 'HUB' ? 'nuovo cliente' : 'mai fatturato')));
     }),
       rows.length > state.limit ? h('button', { class: 'btn ghost', onclick: () => { state.limit += 300; drawList(); } }, `Mostra altri (${rows.length - state.limit})`) : null,
       rows.length ? null : emptyState(state.q ? `Nessun cliente trovato per “${state.q}”. Prova con una parte del nome, la città, la P.IVA o il numero cliente.` : 'Nessun cliente con questi filtri.',
@@ -5005,7 +5055,8 @@ async function viewAgenda(app, a1, a2) {
   const sel = (value, opts, key, label) => h('select', { 'aria-label': label, onchange: e => { state[key] = e.target.value; state.limit = 200; drawList(); } },
     h('option', { value: '' }, label), opts.map(o => h('option', { value: o, selected: o === value }, o)));
   const sortSel = h('select', { 'aria-label': 'Ordina', onchange: e => { state.sort = e.target.value; drawList(); } }, Object.entries(SORTS).map(([v, l]) => h('option', { value: v, selected: v === state.sort }, l)));
-  const filtersBox = h('div', { class: 'filters' }, sel(state.prov, provs, 'prov', 'Provincia'),
+  const typs = [...new Set(all.map(c => c.typology || '(non indicata)'))].sort((a, b) => a === '(non indicata)' ? 1 : b === '(non indicata)' ? -1 : a.localeCompare(b, 'it'));
+  const filtersBox = h('div', { class: 'filters' }, sel(state.prov, provs, 'prov', 'Provincia'), sel(state.typ, typs, 'typ', 'Tipologia'),
     isDir ? sel(state.assignee, [...new Set(all.map(c => c.assignee))].sort(), 'assignee', 'Assegnatario') : null, sortSel);
   const search = h('input', { type: 'search', enterkeyhint: 'search', autocomplete: 'off', placeholder: 'Cerca: nome, città, P.IVA, telefono, n° cliente…', value: state.q, 'aria-label': 'Cerca cliente',
     oninput: debounce(e => { state.q = e.target.value; state.limit = 200; drawList(); }, 120),
@@ -5030,6 +5081,11 @@ async function viewAgenda(app, a1, a2) {
   return h('div', { class: 'split' + (selected ? ' has-sel' : '') }, left, right);
 }
 
+const eur0 = v => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' €';   // it-IT non separa le migliaia sotto 10.000
+function flagList(g) {
+  if (!g) return null;
+  return [g.late ? ['bad', 'follow-up scaduto'] : null, g.rxDue ? ['warn', 'offerta da sentire'] : g.open ? ['info', g.open === 1 ? 'offerta aperta' : g.open + ' offerte aperte'] : null].filter(Boolean).map(([cls, t]) => h('span', { class: 'flag ' + cls }, t));
+}
 // bollini sulla riga: cosa c'è in sospeso con il cliente
 function flags(g) {
   if (!g) return null;
@@ -5064,6 +5120,7 @@ function glance(app, c, notes, quotes, rxOpen = [], lastVisit = null) {
   const trend = (() => {
     const [a, b] = [series[1][1] || 0, series[2][1] || 0];
     if (!a && !b) return null;
+    if (!a && b) return ['su', c.inv2024 || c.rev2024 ? 'Tornato a comprare nel 2026' : 'Nuovo nel 2026'];   // 17/11: niente «sopra il 2025» se il 2025 è zero
     return b > a ? ['su', '2026 già sopra il 2025'] : b === a ? ['pari', '2026 in linea con il 2025'] : ['giu', b ? '2026 sotto il 2025 (anno in corso)' : 'Nessun acquisto nel 2026'];
   })();
   const contactAge = last ? daysAgo(last.createdAt) : null;
@@ -5072,20 +5129,26 @@ function glance(app, c, notes, quotes, rxOpen = [], lastVisit = null) {
 
   return h('section', { class: 'card glance ' + info.cls, 'aria-label': 'Colpo d\'occhio sul cliente' },
     h('div', { class: 'gl-status' },
-      h('span', { class: 'dot big ' + info.cls }),
-      h('div', { class: 'gl-st-text' }, h('strong', {}, c.status),
-        ch && !ch.superseded ? h('span', {}, `Impostato da ${ch.byName || 'utente'} il ${dateIt(ch.at)}: “${ch.reason}”` + (c.radixStatus && c.radixStatus !== c.status ? ` · secondo RADIX: ${c.radixStatus}` : '')) : h('span', {}, info.rule),
+      (ph => h('span', { class: 'ph big ph-' + ph.cls, title: ph.rule }, ph.text))(customerPhase(c)),   // 17/11: fascia con la parola
+      h('div', { class: 'gl-st-text' }, h('strong', {}, (ph => ph.key === 'mai' || ph.key === 'potenziale' || ph.key === 'noint' || ph.key === 'cessata' ? c.status : ph.rule)(customerPhase(c))),
+        ch && !ch.superseded ? h('span', {}, `Impostato da ${ch.byName || 'utente'} il ${dateIt(ch.at)}: “${ch.reason}”` + (c.radixStatus && c.radixStatus !== c.status ? ` · secondo RADIX: ${c.radixStatus}` : '')) : h('span', {}, c.lastInvoice ? 'Ultima fattura il ' + dateIt(c.lastInvoice) : info.rule),
         ch?.superseded ? h('span', { class: 'muted' }, `Il ${dateIt(ch.at)} era stato impostato “${ch.status}”: il cliente ha acquistato dopo, vale lo stato da RADIX.`) : null,
-        h('em', {}, info.hint)),
+        h('em', {}, customerPhase(c).hint || info.hint)),
       h('button', { class: 'btn small gl-change', onclick: () => statusDialog(app, c).then(ok => ok && app.go('agenda/' + c.id)) }, 'Cambia stato')),
     h('div', { class: 'gl-grid' },
       tile(c.monthsSince > 12 ? 'bad' : c.monthsSince > 6 ? 'warn' : '', 'Ultimo acquisto', c.lastInvoice ? dateIt(c.lastInvoice) : 'Mai', c.lastInvoice ? sinceLong(c.monthsSince) : c.origin === 'HUB' ? 'nuovo cliente' : 'nessuna fattura dal 2009'),
       (() => { const vd = lastVisit ? lastVisit.createdAt.slice(0, 10) : null, days = visitAge(vd), cls = visitCls(days);
         const contact = last && last !== lastVisit ? `ultimo contatto ${dateIt(last.createdAt)} (${String(last.kind || '').replace('RADIX · ', '').toLowerCase()})` : '';
-        return tile(cls === 'ok' ? '' : cls, 'Ultima visita', vd ? dateIt(vd) : 'Mai', [vd ? (days < 1 ? 'oggi' : days === 1 ? 'ieri' : `${days} giorni fa`) + (lastVisit.authorName ? ' · ' + lastVisit.authorName : '') : 'nessuna visita registrata', contact].filter(Boolean).join(' · ')); })(),
+        // 17/11 (Tommaso): «Ultima visita» mostrava una nota RADIX dell'ufficio: ora «Ultimo contatto», con cosa è e chi l'ha scritto; la visita solo se c'è davvero
+        const kindOf = n => String(n.kind || '').replace('RADIX · ', '').toLowerCase();
+        const lc = last || lastVisit, lcd = lc ? lc.createdAt.slice(0, 10) : null, lcDays = visitAge(lcd);
+        const what = lc ? [String(lc.kind || '').startsWith('RADIX') ? 'nota RADIX' + (kindOf(lc) && kindOf(lc) !== 'nota' ? ' (' + kindOf(lc) + ')' : '') : kindOf(lc) || 'nota', lc.authorName ? 'di ' + lc.authorName : ''].filter(Boolean).join(' ') : '';
+        return tile(lcDays === null || lcDays > 180 ? 'bad' : lcDays > 90 ? 'warn' : '', 'Ultimo contatto', lcd ? dateIt(lcd) : 'Mai',
+          [lcd ? `${what} · ${lcDays < 1 ? 'oggi' : lcDays === 1 ? 'ieri' : lcDays + ' giorni fa'}` : 'nessun contatto registrato', vd ? (lastVisit === lc ? '' : 'ultima visita ' + dateIt(vd)) : 'nessuna visita registrata'].filter(Boolean).join(' · ')); })(),
       tile(next && dueState(next) === 'scaduto' ? 'bad' : next && dueState(next) === 'oggi' ? 'warn' : '', 'Prossimo follow-up', next ? (next.due ? dateIt(next.due) : 'Senza data') : 'Nessuno', next ? next.title : (open.length ? '' : 'nessuna azione aperta')),
-      (n => tile('', 'Offerte aperte', n ? eur(openQ.reduce((s, q) => s + (q.total || 0), 0) + rxOpen.reduce((s, o) => s + (o.total || 0), 0)) : '0',
-        n ? `${n} in corso` + (rxOpen.length ? ` (${rxOpen.length} RADIX)` : '') + (won.length ? ` · ${won.length} accettate` : '') : (won.length ? `${won.length} accettate` : 'nessuna')))(openQ.length + rxOpen.length)),
+      (n => { const tot = openQ.reduce((s, q) => s + (q.total || 0), 0) + rxOpen.reduce((s, o) => s + (o.total || 0), 0);
+        return tile('', 'Offerte aperte', n ? (tot ? eur(tot) : n === 1 ? '1 offerta' : n + ' offerte') : '0',
+        n && !tot ? 'importo non indicato in RADIX' : n ? `${n} in corso` + (rxOpen.length ? ` (${rxOpen.length} RADIX)` : '') + (won.length ? ` · ${won.length} accettate` : '') : (won.length ? `${won.length} accettate` : 'nessuna')); })(openQ.length + rxOpen.length)),
     c.origin === 'HUB' && !c.invTotal ? null : h('div', { class: 'gl-trend' },
       h('div', { class: 'gl-bars', role: 'img', 'aria-label': (hasRev ? 'Fatturato' : 'Fatture') + ' per anno: ' + series.map(([y, v]) => `${y} ${v || 0}`).join(', ') },
         series.map(([y, v]) => h('div', { class: 'gl-bar' + (y === '2026' ? ' cur' : '') },
@@ -5182,7 +5245,7 @@ async function customerCard(app, c) {
     h('a', { class: 'back', href: '#/agenda' }, '← Elenco'),
     h('header', { class: 'chead' },
       h('div', {}, h('h1', {}, c.name), fixBy.has('name') ? fixNote(['name']) : null, c.extra ? h('p', { class: 'muted' }, c.extra) : null,
-        h('div', { class: 'badges' }, h('span', { class: 'badge ' + (STATUS_INFO[c.status]?.cls || 'muted'), title: STATUS_INFO[c.status]?.rule }, h('span', { class: 'dot ' + (STATUS_INFO[c.status]?.cls || 'muted') }), ' ', c.status), blocked ? h('span', { class: 'badge bad' }, c.salesBlockedSince ? 'Vendita bloccata dal ' + dateIt(c.salesBlockedSince) : 'Cliente bloccato dal ' + dateIt(c.blockedSince)) : null,
+        h('div', { class: 'badges' }, (ph => h('span', { class: 'ph ph-' + ph.cls, title: ph.rule }, ph.text))(customerPhase(c)), blocked ? h('span', { class: 'badge bad' }, c.salesBlockedSince ? 'Vendita bloccata dal ' + dateIt(c.salesBlockedSince) : 'Cliente bloccato dal ' + dateIt(c.blockedSince)) : null,
           h('span', { class: 'badge muted' }, (c.attribution === 'Direzionale' ? 'Direzionale' : c.assignee) + (provisional ? ' · area in valutazione' : '')),
           followerSelect(app, c.id, refresh),   // 07/11 sera: chi segue il direzionale (Tommaso, Marco, Ufficio)
           c.city ? h('span', { class: 'badge muted' }, [c.city, c.prov].filter(Boolean).join(' ')) : null))),
