@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="25c278600fe0">
+<meta name="ntx-build" content="6d058a1a9098">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -997,9 +997,20 @@ h1 + .fix-note{margin:-4px 0 4px}
 .rx-agents .rx-agent > summary span:nth-child(2), .rx-agents .rx-agent > summary span:nth-child(3) { text-align: right; font-variant-numeric: tabular-nums; }
 .rx-agents .rx-agent[open] > summary strong { color: var(--brand, #D40E41); }
 @media (max-width: 640px) { .rx-agents .rx-agent > summary { grid-template-columns: 1fr auto; } .rx-agents .rx-agent > summary .due { grid-column: 1 / -1; justify-self: start; } }
+/* 17/11 Home Direzione come da anteprima: tabella offerte per commerciale e fotografia */
+.rx-agents-t .r { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rx-agents-t tr.rx-agent-row { cursor: pointer; }
+.rx-agents-t tr.rx-agent-row:hover, .rx-agents-t tr.rx-agent-row.on { background: var(--hover, #f6f7ee); }
+.rx-agents-t tr.rx-agent-list td { padding-top: 0; }
+.rx-agents-t .link { color: var(--link, #1a56db); }
+.photo-card .kpis { margin-top: .6rem; }
+.photo-card .photo-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.photo-card .photo-plan { margin-top: .6rem; }
+@media (max-width: 640px) { .photo-card .photo-3 { grid-template-columns: 1fr; } .rx-agents-t th:nth-child(4), .rx-agents-t td:nth-child(4) { display: none; } }
+.kpis.trend-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"25c278600fe0"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"6d058a1a9098"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -8129,16 +8140,18 @@ async function homeDirection(app, { head, foot, customers, quotes, actions, note
       h('span', { class: 'today-n ' + cls }, n.toLocaleString('it-IT')), h('span', { class: 'today-text' }, h('strong', {}, title), h('small', { class: 'muted' }, sub)), h('span', { class: 'more-go' }, '›')))))
       : h('p', { class: 'today-ok' }, '✓ Tutto in ordine: niente di scaduto.'));
 
-  const trendCard = await trendSection(app, { customers, quotes, notes, rxOpen, rxNotes });
+  const trendCard = await trendSection(app, { customers, quotes, notes, rxOpen, rxNotes, photo: true });
   const rxAgents = rxByAgent(app, rxFollow, () => app.go('home'));
+  const rxOrd = app.store.radixOrders ? await app.store.radixOrders({ all: true }).catch(() => []) : [];
+  const photo = companyPhoto(app, { rxOpen, quotes, ordMonth: rxOrd.length ? rxOrd.filter(o => String(o.date || '').slice(0, 7) === t.slice(0, 7)) : null });
 
   // 03/11: messaggi (Assistenza dei commerciali e domande all'ufficio) sotto l'Andamento, solo per chi risponde all'assistenza (Tommaso)
   const msgs = isAssistDesk(app.session) && app.store.threads ? [h('h2', { class: 'section-title' }, 'Messaggi'), await directionMessages(app)] : null;
-  return h('div', { class: 'page home-dir' }, head, todayCard, rxAgents, h('h2', { class: 'section-title' }, 'Andamento'), trendCard, msgs, foot);
+  return h('div', { class: 'page home-dir' }, head, photo, rxAgents, todayCard, h('h2', { class: 'section-title' }, 'Andamento'), trendCard, msgs, foot);
 }
 
 // Andamento (Direzione: tutta la rete; agente: il suo portafoglio, perché i dati arrivano già filtrati)
-async function trendSection(app, { customers, quotes, notes, rxOpen, rxNotes = null }) {
+async function trendSection(app, { customers, quotes, notes, rxOpen, rxNotes = null, photo = false }) {   // photo: offerte e ordini sono già nella fotografia
   const t = today(), day = n => new Date(Date.now() - n * 864e5).toISOString();
   const d7 = day(7), d14 = day(14), d60 = day(60), month = t.slice(0, 7);
   if (!rxNotes) rxNotes = app.store.radixNotes ? await app.store.radixNotes({ since: d60.slice(0, 10) }).catch(() => []) : [];
@@ -8157,30 +8170,62 @@ async function trendSection(app, { customers, quotes, notes, rxOpen, rxNotes = n
   const recTouched = recover.filter(c => touched.has(c.id)).length;
   const trend = a7 === aPrev ? 'come la settimana prima' : `${a7 > aPrev ? '▲' : '▼'} ${Math.abs(a7 - aPrev)} rispetto alla settimana prima`;
   const tile = (label, value, sub, href) => h('a', { class: 'kpi', href }, h('small', {}, label), h('strong', {}, value), sub ? h('span', {}, sub) : null);
-  return h('section', { class: 'kpis trend' },
-    tile('Offerte aperte', eur(sum(openQ, q => q.total) + sum(rxOpen, o => o.total)), `${openQ.length + rxOpen.length} offerte`, '#/preventivi' + (openQ.length ? '' : '/radix')),
-    rxOrd.length ? tile('Ordini del mese', eur(sum(ordMonth, o => o.total)), `${ordMonth.length} ordini in RADIX`, app.session.role === 'direzione' ? '#/ordini' : '#/preventivi')
+  return h('section', { class: 'kpis trend' + (photo ? ' trend-2' : '') },
+    photo ? null : tile('Offerte aperte', eur(sum(openQ, q => q.total) + sum(rxOpen, o => o.total)), `${openQ.length + rxOpen.length} offerte`, '#/preventivi' + (openQ.length ? '' : '/radix')),
+    photo ? null : rxOrd.length ? tile('Ordini del mese', eur(sum(ordMonth, o => o.total)), `${ordMonth.length} ordini in RADIX`, app.session.role === 'direzione' ? '#/ordini' : '#/preventivi')
       : tile('Accettate nel mese', eur(sum(wonApp, q => q.total) + sum(wonRx, o => o.total)), `${wonApp.length + wonRx.length} offerte`, '#/preventivi'),
     tile('Attività ultimi 7 giorni', a7.toLocaleString('it-IT'), trend, app.session.role === 'direzione' ? '#/rete' : '#/agenda'),
     tile('Clienti da recuperare sentiti', `${recTouched} su ${recover.length}`, 'negli ultimi 60 giorni', '#/agenda/stato/Da recuperare'));
 
 }
 
-// 17/11 (Tommaso, controllo Home): le offerte RADIX da sentire non più come un numero unico per tutta la rete,
-// ma divise per commerciale (titolare del cliente nell'HUB), ordinate per valore; un clic apre l'elenco di quel commerciale.
+// 17/11 (Tommaso, controllo Home, anteprima approvata): le offerte RADIX da sentire divise per commerciale, in tabella
+// (commerciale · offerte · valore · la più vecchia · Apri), le prime 7 per valore e il resto a richiesta.
+// Le zone ex Voghera (EX_AREA_GV_1/2) si mostrano già sotto Battaglia, che le prende da dicembre.
+const AGENT_SHOW = { EX_AREA_GV_1: 'Battaglia Valerio', EX_AREA_GV_2: 'Battaglia Valerio' };
 function rxByAgent(app, rxFollow, refresh) {
   if (!rxFollow.length) return null;
   const t = today(), days = d => Math.max(0, Math.round((new Date(t) - new Date(d)) / 864e5));
   const g = new Map();
-  for (const o of rxFollow) { const c = o.customerId ? app.store.customer(o.customerId) : null; const k = c?.assignee || 'Senza commerciale';
+  for (const o of rxFollow) { const c = o.customerId ? app.store.customer(o.customerId) : null; const raw = c?.assignee || 'Senza commerciale'; const k = AGENT_SHOW[raw] || raw;
     const x = g.get(k) || { k, n: 0, v: 0, old: '9999', list: [] }; x.n++; x.v += o.total || 0; const d = radixOfferDue(o) || o.date || t; if (d < x.old) x.old = d; x.list.push(o); g.set(k, x); }
   const rows = [...g.values()].sort((a, b) => b.v - a.v);
+  const e0 = v => Math.round(v).toLocaleString('it-IT') + ' €';
+  const list = h('tbody');
+  const open = r => { const tr = h('tr', { class: 'rx-agent-list' }, h('td', { colspan: 5 }, h('ul', { class: 'checks' }, r.list.slice().sort((a, b) => (b.total || 0) - (a.total || 0)).map(o => radixFuLine(app, o, refresh))))); return tr; };
+  const row = r => { let det = null; const tr = h('tr', { class: 'rx-agent-row', onclick: () => { if (det) { det.remove(); det = null; tr.classList.remove('on'); } else { det = open(r); tr.after(det); tr.classList.add('on'); } } },
+    h('td', {}, h('strong', {}, r.k)), h('td', { class: 'r' }, String(r.n)), h('td', { class: 'r' }, e0(r.v)),
+    h('td', { class: 'r' }, h('span', { class: 'due ' + (days(r.old) > 30 ? 'scaduto' : 'oggi') }, `${days(r.old)} giorni`)), h('td', { class: 'r' }, h('span', { class: 'link' }, 'Apri ›')));
+    return tr; };
+  const TOP = 7;
+  rows.slice(0, TOP).forEach(r => list.append(row(r)));
+  const more = rows.length > TOP ? h('button', { class: 'link', type: 'button', onclick: () => { rows.slice(TOP).forEach(r => list.append(row(r))); more.remove(); } }, `Mostra tutti i ${rows.length} commerciali ›`) : null;
   return h('section', { class: 'card rx-agents' }, h('h2', {}, `Offerte RADIX da sentire · ${rxFollow.length}`),
-    h('p', { class: 'fine' }, `${eur(rows.reduce((a, r) => a + r.v, 0))} in tutto · per commerciale, dalla più grande · tocca un nome per vedere le sue offerte`),
-    rows.map(r => h('details', { class: 'rx-agent' },
-      h('summary', {}, h('strong', {}, r.k), h('span', {}, `${r.n} ${r.n === 1 ? 'offerta' : 'offerte'}`), h('span', {}, eur(r.v)),
-        h('span', { class: 'due ' + (days(r.old) > 30 ? 'scaduto' : 'oggi') }, `la più vecchia da ${days(r.old)} giorni`)),
-      h('ul', { class: 'checks' }, r.list.sort((a, b) => (b.total || 0) - (a.total || 0)).map(o => radixFuLine(app, o, refresh))))));
+    h('p', { class: 'fine' }, `${e0(rows.reduce((a, r) => a + r.v, 0))} in tutto · per commerciale, dalla più grande · tocca una riga per vedere le offerte`),
+    h('table', { class: 'table compact rx-agents-t' }, h('thead', {}, h('tr', {}, h('th', {}, 'Commerciale'), h('th', { class: 'r' }, 'Offerte'), h('th', { class: 'r' }, 'Valore'), h('th', { class: 'r' }, 'La più vecchia'), h('th', {}))), list), more);
+}
+
+// 17/11 Fotografia dell'azienda (Tommaso: dati globali, da Meridian, perimetro dato da noi): il riquadro c'è già,
+// i numeri arrivano quando Meridian li manda ogni notte. Fino ad allora: offerte aperte e ordini del mese dall'HUB, il resto «in arrivo».
+function companyPhoto(app, { rxOpen, quotes, ordMonth }) {
+  const sum = (xs, f) => xs.reduce((a, x) => a + (f(x) || 0), 0);
+  const openQ = quotes.filter(q => q.status === 'Bozza' || q.status === 'Inviata');
+  const m = app.store.companyPhoto || null;   // da Meridian (quando collegato)
+  const k = (lab, val, sub, cls = '') => h('div', { class: 'kpi ' + cls }, h('small', {}, lab), h('strong', {}, val), sub ? h('span', {}, sub) : null);
+  const wait = 'in arrivo da Meridian';
+  return h('section', { class: 'card photo-card' }, h('h2', {}, 'Fotografia dell\'azienda'),
+    h('p', { class: 'fine' }, 'Da inizio anno, confrontata con lo stesso periodo dell\'anno prima · azienda globale' + (m?.asOf ? ' · dati Meridian del ' + dateIt(m.asOf) : '')),
+    h('div', { class: 'kpis photo-3' },
+      k('Fatturato azienda', m?.revenue != null ? eur(m.revenue) : '—', m?.revenue != null ? `${m.revenueVsPy >= 0 ? '▲' : '▼'} ${Math.abs(m.revenueVsPy).toLocaleString('it-IT')}% vs anno prima` : wait),
+      k('Margine sul prodotto', m?.margin != null ? m.margin.toLocaleString('it-IT') + '%' : '—', 'obiettivo 21,5% · trasporti esclusi' + (m?.margin != null ? '' : ' · ' + wait)),
+      k('Saldo trasporti', m?.freight != null ? eur(m.freight) : '—', 'ricavi trasporto meno vettori · ' + (m?.freight != null ? 'obiettivo almeno a pari' : 'in attesa della soluzione con Basaglia'))),
+    h('div', { class: 'kpis' },
+      k('Clienti attivi', m?.activeCustomers != null ? m.activeCustomers.toLocaleString('it-IT') : '—', m?.activeCustomers != null ? '' : wait),
+      k('Clienti nuovi', m?.newCustomers != null ? m.newCustomers.toLocaleString('it-IT') : '—', m?.newCustomers != null ? '' : wait),
+      k('Ordini del mese', ordMonth ? eur(sum(ordMonth, o => o.total)) : '—', ordMonth ? `${ordMonth.length} ordini in RADIX` : 'ordini RADIX non caricati'),
+      k('Offerte aperte', eur(sum(openQ, q => q.total) + sum(rxOpen, o => o.total)), `${openQ.length + rxOpen.length} offerte`)),
+    h('div', { class: 'kpi photo-plan' }, h('small', {}, 'Piano 2027 · crescita della rete'), h('div', { class: 'target-bar' }, h('i', { style: 'width:0%' })),
+      h('span', {}, '0 € su 265.016 € di crescita concordata · soglia di attenzione +5% · si attiva il 1/1/2027')));
 }
 
 return { viewHome, openActions };
