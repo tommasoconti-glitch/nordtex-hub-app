@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="8eba8eba9e2c">
+<meta name="ntx-build" content="213021f46a52">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1041,8 +1041,19 @@ h1 + .fix-note{margin:-4px 0 4px}
 .o2o-dp{border-bottom:1px solid var(--line,#eee);padding:10px 0;display:grid;gap:6px}
 @media (max-width:700px){.o2o-tiles{grid-template-columns:repeat(2,1fr)}}
 
+/* 17/11: Nuovo cliente / Nuovo contatto sotto la ricerca; collegamenti tra clienti e contatti */
+.new-row { display: flex; gap: 8px; margin: 8px 0 4px; }
+.new-row .btn { flex: 1; }
+.links-card .list li { display: block; }
+.links-card .lk-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.links-card .lk-note { margin-top: 2px; }
+.links-card .lk-foot { display: flex; gap: 12px; align-items: baseline; margin-top: 2px; }
+.link-results { display: grid; gap: 4px; }
+.link-pick { text-align: left; background: none; border: 1px solid var(--line, #ddd); border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit; }
+.link-pick:hover { background: var(--hover, #f4f4f4); }
+
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8eba8eba9e2c"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"213021f46a52"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1362,12 +1373,14 @@ const PHASES = {
   perso: { cls: 'bad', label: 'perso', rule: 'Ultimo acquisto oltre 2 anni fa', hint: 'Valutare se vale la pena riattivarlo' },
   mai: { cls: 'muted', label: 'mai comprato', rule: 'Nessuna fattura in RADIX' },
   potenziale: { cls: 'info', label: 'potenziale', rule: 'Nuovo cliente inserito in HUB, non ancora in RADIX' },
+  contatto: { cls: 'muted', label: 'contatto', rule: 'Inserito in HUB senza offerte: diventa cliente alla prima offerta', hint: 'Registra visite e note; con la prima offerta diventa cliente e va aperto in RADIX' },
   noint: { cls: 'dark', label: 'non interessato', rule: 'Contattato, al momento non interessato' },
   cessata: { cls: 'dark', label: 'cessata attività', rule: 'Azienda chiusa o non più operativa' },
 };
-const PHASE_ORDER = ['attivo', 'calo', 'dormiente', 'perso', 'mai', 'potenziale', 'noint', 'cessata'];
+const PHASE_ORDER = ['attivo', 'calo', 'dormiente', 'perso', 'mai', 'potenziale', 'contatto', 'noint', 'cessata'];
 const WORK_PHASES = ['attivo', 'calo', 'dormiente', 'potenziale'];
 function customerPhase(c, now = new Date()) {
+  if (c.contact) return { key: 'contatto', ...PHASES.contatto, text: PHASES.contatto.label };
   if (c.status === 'Potenziale') return { key: 'potenziale', ...PHASES.potenziale, text: PHASES.potenziale.label };
   if (c.status === 'Non interessato') return { key: 'noint', ...PHASES.noint, text: PHASES.noint.label };
   if (c.status === 'Cessata attività') return { key: 'cessata', ...PHASES.cessata, text: PHASES.cessata.label };
@@ -1376,6 +1389,47 @@ function customerPhase(c, now = new Date()) {
   const key = days < 183 ? 'attivo' : days < 365 ? 'calo' : days < 730 ? 'dormiente' : 'perso';
   const text = key === 'calo' ? `in calo · ${m} mesi` : key === 'dormiente' ? `dormiente · ${y === 1 ? '1 anno' : y + ' anni'}` : PHASES[key].label;
   return { key, ...PHASES[key], text, days };
+}
+
+// 17/11 (Tommaso): «registrato senza offerta = contatto, non cliente». Un cliente nato nell'HUB senza offerte (dell'app o RADIX
+// collegate) è un contatto: fuori da «Da lavorare» e dalla coda dell'ufficio; alla prima offerta diventa cliente da solo.
+function markContacts(customers, quotes = [], radixOffers = []) {
+  const offered = new Set([...quotes.map(q => q.customerId), ...radixOffers.map(o => o.customerId)].filter(Boolean));
+  for (const c of customers || []) c.contact = c.origin === 'HUB' && !offered.has(c.id);
+  return customers;
+}
+
+// Collegamenti tra clienti e contatti (17/11, Tommaso: «l'impresa collegata alle rivendite di cui è cliente e i progettisti che utilizza»).
+// Un legame ha un verso: da → a. Ogni tipo si legge dai due lati.
+const LINK_KINDS = {
+  'compra da': { out: 'Compra da', in: 'Gli compra', hintOut: 'rivendita da cui si rifornisce', hintIn: 'impresa o cliente che compra qui' },
+  'progettista': { out: 'È progettista per', in: 'Progettista', hintOut: 'impresa o cliente per cui progetta', hintIn: 'progettista che usa' },
+  'lavora con': { out: 'Lavora con', in: 'Lavora con', hintOut: 'altro soggetto con cui lavora', hintIn: 'altro soggetto con cui lavora' },
+};
+// Scelte nella finestra «Collega», viste dal cliente aperto: [tipo, verso] (out = il cliente aperto è «da»)
+const LINK_CHOICES = [
+  ['compra da', 'out', 'Compra da… (la rivendita da cui si rifornisce)'],
+  ['compra da', 'in', 'Gli compra… (impresa o cliente che compra da questa rivendita)'],
+  ['progettista', 'in', 'Progettista che usa…'],
+  ['progettista', 'out', 'È progettista per… (impresa o cliente)'],
+  ['lavora con', 'out', 'Lavora con…'],
+];
+/** Legami di un cliente, letti dal suo lato: { id, kind, label, other: {code,name,city,prov}, note, by, at, mine } */
+function linksFor(code, links = []) {
+  return links.filter(l => l.fromCode === code || l.toCode === code).map(l => {
+    const out = l.fromCode === code, k = LINK_KINDS[l.kind] || { out: l.kind, in: l.kind };
+    return { id: l.id, kind: l.kind, label: out ? k.out : k.in, other: out ? { code: l.toCode, name: l.toName, city: l.toCity, prov: l.toProv } : { code: l.fromCode, name: l.fromName, city: l.fromCity, prov: l.fromProv },
+      note: l.note || '', byName: l.byName || '', createdBy: l.createdBy, at: l.createdAt };
+  }).sort((a, b) => a.label.localeCompare(b.label, 'it') || String(a.other.name).localeCompare(String(b.other.name), 'it'));
+}
+/** Controlli prima di salvare un legame */
+function checkLink({ fromCode, toCode, kind }, existing = []) {
+  if (!LINK_KINDS[kind]) throw new Error('Tipo di collegamento non valido');
+  if (!fromCode || !toCode) throw new Error('Scegli il cliente o contatto da collegare');
+  if (fromCode === toCode) throw new Error('Non si può collegare un cliente a se stesso');
+  const same = l => l.kind === kind && ((l.fromCode === fromCode && l.toCode === toCode) || (kind === 'lavora con' && l.fromCode === toCode && l.toCode === fromCode));
+  if (existing.some(same)) throw new Error('Questo collegamento c\'è già');
+  return true;
 }
 
 // Stato effettivo: l'ultima modifica manuale vale finché RADIX non registra un acquisto successivo alla modifica
@@ -1669,7 +1723,7 @@ function checkStop({ callStatus, apptTime, note } = {}) {
 // ordine delle tappe: prima gli appuntamenti per orario, poi le altre nell'ordine scelto
 const stopOrder = (a, b) => (a.apptTime || '99') .localeCompare(b.apptTime || '99') || (a.position || 0) - (b.position || 0);
 
-return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, PHASES, PHASE_ORDER, WORK_PHASES, customerPhase, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, TYPOLOGY_FROM_HUB, normTypology, assigneeFor, validVat, makeProspect, checkFiscal, missingForOrder, EDIT_FIELDS, EDIT_LABEL, EDIT_DB, EDIT_FROM_DB, canEditCustomer, customerEdits, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normTerms, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers, POST_CATEGORIES, postIcon, postEnded, CALL_STATES, checkStop, stopOrder };
+return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, PHASES, PHASE_ORDER, WORK_PHASES, customerPhase, markContacts, LINK_KINDS, LINK_CHOICES, linksFor, checkLink, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, TYPOLOGY_FROM_HUB, normTypology, assigneeFor, validVat, makeProspect, checkFiscal, missingForOrder, EDIT_FIELDS, EDIT_LABEL, EDIT_DB, EDIT_FROM_DB, canEditCustomer, customerEdits, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normTerms, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers, POST_CATEGORIES, postIcon, postEnded, CALL_STATES, checkStop, stopOrder };
 })();
 __m["js/core/preview.js"] = (function () {
 // Anteprima "come agente" per la Direzione (richiesta Tommaso 01/11/2026): l'app mostra solo ciò che vede l'agente scelto.
@@ -1885,7 +1939,7 @@ __m["js/data/local-store.js"] = (function () {
 const { checkForecast } = __m["js/core/forecast.js"];
 const { fixProducts } = __m["js/core/product-fixes.js"];
 const { seesThread, isStaffOf, checkMessage, statusAfter } = __m["js/core/messages.js"];
-const { normTerms, uid, nowIso, visibleTo, nextQuoteNumber, DIREZIONE, CONTACT_KINDS, NOTE_OUTCOMES, makeProspect, applyStatus, checkStatusChange, radixNoteView, radixVisible, checkOrderRequest, ORDER_STATES, checkRadixOutcome, radixOfferForAgent, checkStop, checkFiscal, customerEdits, canEditCustomer } = __m["js/data/model.js"];
+const { normTerms, uid, nowIso, visibleTo, nextQuoteNumber, DIREZIONE, CONTACT_KINDS, NOTE_OUTCOMES, makeProspect, checkLink, applyStatus, checkStatusChange, radixNoteView, radixVisible, checkOrderRequest, ORDER_STATES, checkRadixOutcome, radixOfferForAgent, checkStop, checkFiscal, customerEdits, canEditCustomer } = __m["js/data/model.js"];
 function memoryKv(initial = {}) {
   const m = new Map(Object.entries(initial));
   return { async get(k) { return m.has(k) ? structuredClone(m.get(k)) : undefined; }, async set(k, v) { m.set(k, structuredClone(v)); } };
@@ -1902,7 +1956,7 @@ function indexedDbKv(dbName = 'nordtex-hub') {
   return { get: k => tx('readonly', s => s.get(k)), set: (k, v) => tx('readwrite', s => s.put(v, k)) };
 }
 
-const COLLECTIONS = ['dirFollowers', 'notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio', 'postReads', 'plans', 'stops', 'radixLinks', 'threads', 'radixLines'];
+const COLLECTIONS = ['links', 'dirFollowers', 'notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio', 'postReads', 'plans', 'stops', 'radixLinks', 'threads', 'radixLines'];
 
 function createLocalStore({ data, kv }) {
   if (data?.schema !== 'nordtex-hub-data-v1') throw new Error('Dati HUB non compatibili');
@@ -2273,6 +2327,28 @@ function createLocalStore({ data, kv }) {
     // Nella versione locale non c'è un server di posta: l'invio è disponibile solo online
     async statusHistory(customerId) { mustSession(); if (!canSeeCustomer(customerId)) return []; return (await col('statusChanges')).map((x, i) => [x, i]).filter(([x]) => x.customerId === customerId).sort((a, b) => b[0].at.localeCompare(a[0].at) || b[1] - a[1]).map(([x]) => x); },
 
+    // 17/11: collegamenti tra clienti e contatti
+    async links(customerId) {
+      mustSession(); const nm = id => byId.get(id) || {};
+      return (await col('links')).filter(l => l.fromCode === customerId || l.toCode === customerId).map(l => ({ ...l,
+        fromName: nm(l.fromCode).name || l.fromName, fromCity: nm(l.fromCode).city || l.fromCity, fromProv: nm(l.fromCode).prov || l.fromProv,
+        toName: nm(l.toCode).name || l.toName, toCity: nm(l.toCode).city || l.toCity, toProv: nm(l.toCode).prov || l.toProv }));
+    },
+    async addLink({ fromCode, toCode, kind, note, other }) {
+      const s = mustSession(); const list = await col('links');
+      if (!canSeeCustomer(fromCode) && !canSeeCustomer(toCode)) throw new Error('Cliente non nel tuo portafoglio');
+      if (!byId.get(fromCode) || !byId.get(toCode)) throw new Error('Cliente non trovato');
+      checkLink({ fromCode, toCode, kind }, list);
+      const f = byId.get(fromCode), t = byId.get(toCode);
+      list.push({ id: uid(), kind, note: String(note || '').trim(), fromCode, toCode, fromName: f.name, fromCity: f.city, fromProv: f.prov, toName: t.name, toCity: t.city, toProv: t.prov,
+        createdBy: s.userId, byName: s.name, createdAt: nowIso() });
+      await save('links');
+    },
+    async deleteLink(id) {
+      const s = mustSession(); const list = await col('links'); const i = list.findIndex(l => l.id === id);
+      if (i < 0) return; if (list[i].createdBy !== s.userId && s.role !== 'direzione') throw new Error('Solo chi l\'ha creato o la Direzione può eliminarlo');
+      list.splice(i, 1); await save('links');
+    },
     async contacts(customerId) { mustSession(); return (await col('contacts')).filter(c => c.customerId === customerId && canSeeCustomer(customerId)); },
     async saveContact(c) {
       const s = mustSession(); if (!canSeeCustomer(c.customerId)) throw new Error('Cliente non nel tuo portafoglio');
@@ -2788,6 +2864,28 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       return c.id ? api('/rest/v1/hub_contacts?id=eq.' + c.id, { method: 'PATCH', body }) : api('/rest/v1/hub_contacts', { method: 'POST', body });
     },
     async deleteContact(id) { return api('/rest/v1/hub_contacts?id=eq.' + id, { method: 'DELETE' }); },
+    // 17/11: collegamenti tra clienti e contatti (migrazione 20261117160000). Il lato che l'utente non vede si legge dalla copia del nome.
+    async links(customerId) {
+      const u = custUuid(customerId);
+      const rows = await api('/rest/v1/hub_customer_links?select=*&or=(from_id.eq.' + u + ',to_id.eq.' + u + ')&order=created_at');
+      const nm = await names().catch(() => new Map());
+      const side = (id, name, city, prov) => { const c = customers?.find(x => x.uuid === id); return c ? { code: c.id, name: c.name, city: c.city, prov: c.prov } : { code: 'ref:' + id, name, city, prov }; };
+      return rows.map(r => { const f = side(r.from_id, r.from_name, r.from_city, r.from_prov), t = side(r.to_id, r.to_name, r.to_city, r.to_prov);
+        return { id: r.id, kind: r.kind, note: r.note || '', fromCode: f.code, fromName: f.name, fromCity: f.city, fromProv: f.prov, toCode: t.code, toName: t.name, toCity: t.city, toProv: t.prov,
+          createdBy: r.created_by, byName: nm.get(r.created_by) || '', createdAt: r.created_at }; });
+    },
+    async addLink({ fromCode, toCode, kind, note, other }) {
+      const ref = async code => customers?.find(x => x.id === code)?.uuid || await api('/rest/v1/rpc/hub_customer_ref', { method: 'POST', body: { p_code: code } });
+      const info = code => { const c = customers?.find(x => x.id === code); return c ? { name: c.name, city: c.city, prov: c.prov } : { name: other?.name || '', city: other?.city || '', prov: other?.prov || '' }; };
+      const [fu, tu] = [await ref(fromCode), await ref(toCode)];
+      if (!fu || !tu) throw fail('LINK', 'Cliente non trovato');
+      const fi = info(fromCode), ti = info(toCode);
+      try {
+        await api('/rest/v1/hub_customer_links', { method: 'POST', body: { from_id: fu, to_id: tu, kind, note: String(note || '').trim() || null,
+          from_name: fi.name, from_city: fi.city || null, from_prov: fi.prov || null, to_name: ti.name, to_city: ti.city || null, to_prov: ti.prov || null } });
+      } catch (e) { if (/duplicate|23505|unique/i.test(e.message || '')) throw fail('LINK', 'Questo collegamento c\'è già'); throw e; }
+    },
+    async deleteLink(id) { return api('/rest/v1/hub_customer_links?id=eq.' + id, { method: 'DELETE' }); },
 
     async quotes(customerId) {
       const rows = await api('/rest/v1/hub_quotes?select=id,number,status,revision,doc,owner_id,created_at,updated_at,customer_id&order=updated_at.desc'
@@ -4995,7 +5093,7 @@ const { dictationAvailable, startDictation } = __m["js/core/dictation.js"];
 const { recordingAvailable, startRecording, mmss } = __m["js/core/recorder.js"];
 const { radixOfferRow, radixOfferOpen, dueState: rxDueState } = __m["js/views/radix-offers.js"];
 const { openActions } = __m["js/views/actions.js"];
-const { CONTACT_KINDS, NOTE_OUTCOMES, STATUS_ORDER, STATUS_INFO, MANUAL_STATUSES, TYPOLOGIES, PHASES, PHASE_ORDER, WORK_PHASES, customerPhase, dueState, assigneeFor, canEditCustomer, EDIT_LABEL } = __m["js/data/model.js"];
+const { CONTACT_KINDS, NOTE_OUTCOMES, STATUS_ORDER, STATUS_INFO, MANUAL_STATUSES, TYPOLOGIES, PHASES, PHASE_ORDER, WORK_PHASES, customerPhase, dueState, assigneeFor, canEditCustomer, EDIT_LABEL, LINK_CHOICES, linksFor, checkLink } = __m["js/data/model.js"];
 const { buildIndex, searchCustomers, highlight } = __m["js/core/search.js"];
 const { fiscalFields } = __m["js/views/fiscal.js"];
 const { radixOrderRow } = __m["js/views/radix-orders.js"];
@@ -5091,7 +5189,7 @@ async function viewAgenda(app, a1, a2) {
           h('span', { class: 'cflags' }, h('span', { class: 'ph ph-' + ph.cls, title: ph.rule }, ph.text), flagList(sig.get(c.id)))),
         h('span', { class: 'cmeta cmeta2' }, h('strong', {}, r26 ? eur0(r26) : '—'),
           h('small', {}, r26 ? '2026 · ' + (!r25 ? 'nuovo' : (r26 >= r25 ? '▲' : '▼') + ' vs 2025') : 'nessun acquisto 2026'),
-          h('small', {}, c.lastInvoice ? 'ultimo acquisto ' + sinceLong(c.monthsSince) : c.origin === 'HUB' ? 'nuovo cliente' : 'mai fatturato')));
+          h('small', {}, c.lastInvoice ? 'ultimo acquisto ' + sinceLong(c.monthsSince) : c.contact ? 'contatto, nessuna offerta' : c.origin === 'HUB' ? 'nuovo cliente' : 'mai fatturato')));
     }),
       rows.length > state.limit ? h('button', { class: 'btn ghost', onclick: () => { state.limit += 300; drawList(); } }, `Mostra altri (${rows.length - state.limit})`) : null,
       rows.length ? null : emptyState(state.q ? `Nessun cliente trovato per “${state.q}”. Prova con una parte del nome, la città, la P.IVA o il numero cliente.` : 'Nessun cliente con questi filtri.',
@@ -5120,7 +5218,9 @@ async function viewAgenda(app, a1, a2) {
   drawList();
 
   const newBtn = h('button', { class: 'btn primary small', onclick: () => newCustomerDialog(app, search.value) }, '+ Nuovo cliente');
-  const left = h('section', { class: 'pane-list' }, h('div', { class: 'list-tools' }, h('div', { class: 'search-row' }, search, newBtn), chipsBox,
+  // 17/11 (Tommaso): progettisti, imprese e altri contatti senza offerta; alla prima offerta diventano clienti
+  const newContactBtn = h('button', { class: 'btn small', onclick: () => newCustomerDialog(app, search.value, { contact: true }) }, '+ Nuovo contatto');
+  const left = h('section', { class: 'pane-list' }, h('div', { class: 'list-tools' }, h('div', { class: 'search-row' }, search), h('div', { class: 'new-row' }, newBtn, newContactBtn), chipsBox,
     filtersBox, counter), listBox);
   const right = h('section', { class: 'pane-detail' }, selected ? await customerCard(app, selected) : emptyState('Seleziona un cliente dall\'elenco.'));
   if (!selected && matchMedia('(min-width: 761px) and (hover: hover)').matches) setTimeout(() => search.focus(), 0);
@@ -5177,12 +5277,12 @@ function glance(app, c, notes, quotes, rxOpen = [], lastVisit = null) {
     h('div', { class: 'gl-status' },
       (ph => h('span', { class: 'ph big ph-' + ph.cls, title: ph.rule }, ph.text))(customerPhase(c)),   // 17/11: fascia con la parola
       h('div', { class: 'gl-st-text' }, h('strong', {}, (ph => ph.key === 'mai' || ph.key === 'potenziale' || ph.key === 'noint' || ph.key === 'cessata' ? c.status : ph.rule)(customerPhase(c))),
-        ch && !ch.superseded ? h('span', {}, `Impostato da ${ch.byName || 'utente'} il ${dateIt(ch.at)}: “${ch.reason}”` + (c.radixStatus && c.radixStatus !== c.status ? ` · secondo RADIX: ${c.radixStatus}` : '')) : h('span', {}, c.lastInvoice ? 'Ultima fattura il ' + dateIt(c.lastInvoice) : info.rule),
+        ch && !ch.superseded ? h('span', {}, `Impostato da ${ch.byName || 'utente'} il ${dateIt(ch.at)}: “${ch.reason}”` + (c.radixStatus && c.radixStatus !== c.status ? ` · secondo RADIX: ${c.radixStatus}` : '')) : h('span', {}, c.lastInvoice ? 'Ultima fattura il ' + dateIt(c.lastInvoice) : c.contact ? 'Non va aperto in RADIX finché non c\'è un\'offerta' : info.rule),
         ch?.superseded ? h('span', { class: 'muted' }, `Il ${dateIt(ch.at)} era stato impostato “${ch.status}”: il cliente ha acquistato dopo, vale lo stato da RADIX.`) : null,
         h('em', {}, customerPhase(c).hint || info.hint)),
       h('button', { class: 'btn small gl-change', onclick: () => statusDialog(app, c).then(ok => ok && app.go('agenda/' + c.id)) }, 'Cambia stato')),
     h('div', { class: 'gl-grid' },
-      tile(c.monthsSince > 12 ? 'bad' : c.monthsSince > 6 ? 'warn' : '', 'Ultimo acquisto', c.lastInvoice ? dateIt(c.lastInvoice) : 'Mai', c.lastInvoice ? sinceLong(c.monthsSince) : c.origin === 'HUB' ? 'nuovo cliente' : 'nessuna fattura dal 2009'),
+      tile(c.monthsSince > 12 ? 'bad' : c.monthsSince > 6 ? 'warn' : '', 'Ultimo acquisto', c.lastInvoice ? dateIt(c.lastInvoice) : 'Mai', c.lastInvoice ? sinceLong(c.monthsSince) : c.contact ? 'contatto' : c.origin === 'HUB' ? 'nuovo cliente' : 'nessuna fattura dal 2009'),
       (() => { const vd = lastVisit ? lastVisit.createdAt.slice(0, 10) : null, days = visitAge(vd), cls = visitCls(days);
         const contact = last && last !== lastVisit ? `ultimo contatto ${dateIt(last.createdAt)} (${String(last.kind || '').replace('RADIX · ', '').toLowerCase()})` : '';
         // 17/11 (Tommaso): «Ultima visita» mostrava una nota RADIX dell'ufficio: ora «Ultimo contatto», con cosa è e chi l'ha scritto; la visita solo se c'è davvero
@@ -5205,7 +5305,7 @@ function glance(app, c, notes, quotes, rxOpen = [], lastVisit = null) {
         h('small', {}, hasRev ? 'Fatturato per anno' : 'Fatture emesse per anno'),
         trend ? h('p', { class: 'gl-tr ' + trend[0] }, { su: '▲ ', pari: '■ ', giu: '▼ ' }[trend[0]], trend[1]) : null,
         h('p', { class: 'muted' }, c.firstInvoice ? `Cliente dal ${new Date(c.firstInvoice).getFullYear()} · ${c.invTotal || 0} ${c.invTotal === 1 ? 'fattura' : 'fatture'} in totale` : 'Nessuno storico di fatturazione'))),
-    h('p', { class: 'gl-foot' }, c.origin === 'HUB' ? `Nuovo cliente inserito in HUB${c.createdAt ? ' il ' + dateIt(c.createdAt) : ''}${c.createdByName ? ' da ' + c.createdByName : ''} · non ancora in RADIX` : `Dati di acquisto RADIX al ${dateIt(c.salesAsOf || asOf)}`));
+    h('p', { class: 'gl-foot' }, c.origin === 'HUB' ? `${c.contact ? 'Contatto' : 'Nuovo cliente'} inserito in HUB${c.createdAt ? ' il ' + dateIt(c.createdAt) : ''}${c.createdByName ? ' da ' + c.createdByName : ''} · non ancora in RADIX` : `Dati di acquisto RADIX al ${dateIt(c.salesAsOf || asOf)}`));
 }
 
 // Nota RADIX: oggetto in evidenza, testo lungo (email di prezzo) richiudibile
@@ -5243,6 +5343,7 @@ async function customerCard(app, c) {
     app.store.radixOffers ? app.store.radixOffers({ customerId: c.id }).catch(() => []) : [],
     app.store.radixOrders ? app.store.radixOrders({ customerId: c.id }).catch(() => []) : [],
     app.store.customerFixes ? app.store.customerFixes(c.id).catch(() => []) : []]);
+  const links = app.store.links ? await app.store.links(c.id).catch(() => null) : null;   // null = tabella non ancora creata
   const lastVisit = notes.find(n => n.kind === 'Visita' || (n.source === 'RADIX' && /visita/i.test(n.kind || '')));
   const addr = [c.street, [c.cap, c.city].filter(Boolean).join(' '), c.prov ? `(${c.prov})` : ''].filter(Boolean).join(', ');
   const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([c.street, c.cap, c.city, c.prov].filter(Boolean).join(' '));
@@ -5321,6 +5422,7 @@ async function customerCard(app, c) {
       notes.length ? [h('ol', { class: 'timeline' }, recent.map(noteItem)),
         older.length ? h('details', { class: 'fold-in' }, h('summary', {}, `Vedi tutte (${notes.length})`), h('ol', { class: 'timeline' }, older.map(noteItem))) : null]
         : h('p', { class: 'muted' }, 'Nessuna attività registrata. Aggiungi la prima nota: visita, telefonata o email, con un follow-up.')),
+    links ? linksCard(app, c, links, refresh) : null,
     purchasesCard(c),
     // Dati e contatti: chiuso, si apre quando serve
     h('details', { class: 'card fold-box', open: fixes.length > 0 && isDirS }, h('summary', {}, 'Dati e contatti'),
@@ -5495,7 +5597,7 @@ async function contactDialog(app, c, p = {}) {
 }
 
 // Nuovo cliente (potenziale): anche per clienti mai seguiti, per poter registrare contatti e fare offerte
-async function newCustomerDialog(app, preset = '', { thenQuote = false, onCreated = null } = {}) {
+async function newCustomerDialog(app, preset = '', { thenQuote = false, onCreated = null, contact = false } = {}) {
   const isDir = app.session.role === 'direzione';
   const all = await app.customers();
   if (indexCache.src !== all) indexCache = { src: all, ix: buildIndex(all) };
@@ -5541,7 +5643,7 @@ async function newCustomerDialog(app, preset = '', { thenQuote = false, onCreate
       [{ label: 'Non crearlo', value: false }, { label: 'È un altro cliente: crea', primary: true, value: true }])) !== true) return false;
     try {
       const c = await app.store.addCustomer({ name: name.value, vat: vat.value, street: street.value, cap: cap.value, city: city.value, prov: prov.value, phone: phone.value, email: email.value, typology: typ.value, notes: notes.value, assignee: asg?.value || '', ...fx.values() });
-      app.invalidate(); toast('Cliente creato: ' + c.name);
+      app.invalidate(); toast((contact ? 'Contatto creato: ' : 'Cliente creato: ') + c.name);
       if (onCreated) { await onCreated(c); return true; }
       app.go(goQuote ? 'offerta/nuova/' + c.id : 'agenda/' + c.id); return true;
     } catch (e) {
@@ -5549,13 +5651,17 @@ async function newCustomerDialog(app, preset = '', { thenQuote = false, onCreate
       throw e;
     }
   };
-  return modal('Nuovo cliente', h('div', { class: 'form' }, field('Ragione sociale', name), similar, elsewhere,
+  if (contact) { name.placeholder = 'Nome dello studio, del professionista o dell\'impresa *'; notes.placeholder = 'Come è nato il contatto, cantiere, rivendita da cui compra…'; }
+  return modal(contact ? 'Nuovo contatto' : 'Nuovo cliente', h('div', { class: 'form' },
+    contact ? h('p', { class: 'alert info' }, 'Un contatto (progettista, impresa, altro) non va in RADIX e non entra nei conteggi dei clienti. Ci registri visite e note e lo colleghi alle rivendite o alle imprese con cui lavora. Alla prima offerta diventa cliente da solo.') : null,
+    field(contact ? 'Nome' : 'Ragione sociale', name), similar, elsewhere,
     h('div', { class: 'form two' }, field('P.IVA', vat), field('Tipologia', typ)),
     field('Indirizzo', street), h('div', { class: 'form three' }, field('CAP', cap), field('Località', city), field('Prov.', prov)),
     h('div', { class: 'form two' }, field('Telefono', phone), field('Email', email)),
     isDir ? field('Assegnatario', asg) : null, asgHint, field('Note', notes),
-    h('details', { class: 'fold-in' }, h('summary', {}, 'Dati per l\'ordine (SDI/PEC, pagamento, banca): facoltativi ora, obbligatori quando arriva l\'ordine'), fx.el)),
-  [{ label: 'Annulla', value: false }, { label: 'Salva', run: () => save(false) }, { label: 'Salva e crea offerta', primary: true, run: () => save(true) }]);
+    contact ? null : h('details', { class: 'fold-in' }, h('summary', {}, 'Dati per l\'ordine (SDI/PEC, pagamento, banca): facoltativi ora, obbligatori quando arriva l\'ordine'), fx.el)),
+  contact ? [{ label: 'Annulla', value: false }, { label: 'Salva contatto', primary: true, run: () => save(false) }]
+    : [{ label: 'Annulla', value: false }, { label: 'Salva', run: () => save(false) }, { label: 'Salva e crea offerta', primary: true, run: () => save(true) }]);
 }
 
 // Cambio di stato manuale con motivo; lo storico resta consultabile
@@ -5622,6 +5728,58 @@ function radixLinkBox(app, c) {
     h('p', {}, h('strong', {}, 'Cliente creato nell\'HUB, non ancora collegato a RADIX. '),
       'Quando è aperto in RADIX (o se c\'è già), scrivi qui il suo N° cliente: se quel cliente è già nell\'app, offerte, note e visite passano su di lui e questo doppione sparisce.'),
     h('div', { class: 'row' }, code, h('button', { class: 'btn small primary', type: 'button', onclick: go }, 'Collega a RADIX')));
+}
+
+// 17/11 (Tommaso): collegamenti tra clienti e contatti — l'impresa con le rivendite da cui compra e i progettisti che usa
+function linksCard(app, c, links, refresh) {
+  const mine = linksFor(c.id, links);
+  const canDel = l => !app.session.preview && !app.session.readOnly && (l.createdBy === app.session.userId || app.session.role === 'direzione');
+  const del = async l => { if (await modal('Elimina collegamento', h('p', {}, `${l.label}: ${l.other.name}. Lo elimino?`), [{ label: 'Annulla', value: false }, { label: 'Elimina', primary: true, value: true }]) !== true) return;
+    try { await app.store.deleteLink(l.id); toast('Collegamento eliminato'); refresh(); } catch (e) { toast(e.message, 'error'); } };
+  const groups = [...new Set(mine.map(l => l.label))];
+  return h('section', { class: 'card links-card' },
+    h('div', { class: 'card-head' }, h('h2', {}, 'Collegamenti'), app.session.preview || app.session.readOnly ? null : h('button', { class: 'btn small', onclick: () => linkDialog(app, c, links).then(ok => ok && refresh()) }, '+ Collega')),
+    mine.length ? groups.map(g => [h('h3', { class: 'sub-h' }, g), h('ul', { class: 'list' }, mine.filter(l => l.label === g).map(l => h('li', {},
+      h('div', { class: 'lk-main' }, String(l.other.code).startsWith('ref:') ? h('strong', {}, l.other.name) : h('a', { href: '#/agenda/' + l.other.code }, h('strong', {}, l.other.name)),
+        h('small', { class: 'muted' }, [[l.other.city, l.other.prov].filter(Boolean).join(' '), String(l.other.code).startsWith('ref:') ? 'non nel tuo portafoglio' : ''].filter(Boolean).join(' · '))),
+      l.note ? h('div', { class: 'lk-note' }, l.note) : null,
+      h('div', { class: 'lk-foot' }, h('small', { class: 'muted' }, [l.byName, l.at ? dateIt(l.at) : ''].filter(Boolean).join(' · ')),
+        canDel(l) ? h('button', { class: 'link', onclick: () => del(l) }, 'Elimina') : null))))])
+      : h('p', { class: 'muted' }, c.typology === 'Magazzini edili' ? 'Nessun collegamento. Aggiungi le imprese che comprano qui e i progettisti che le seguono.' : 'Nessun collegamento. Aggiungi la rivendita da cui compra e i progettisti con cui lavora.'));
+}
+
+async function linkDialog(app, c, existing) {
+  const all = await app.customers();
+  if (indexCache.src !== all) indexCache = { src: all, ix: buildIndex(all) };
+  const kind = h('select', {}, LINK_CHOICES.map(([k, dir, label], i) => h('option', { value: i }, label)));
+  if (c.typology === 'Magazzini edili') kind.value = '1'; else if (c.typology === 'arch, ing etc') kind.value = '3';
+  const q = h('input', { type: 'search', placeholder: 'Cerca nome, città, n° cliente…', autocomplete: 'off' });
+  const note = h('input', { placeholder: 'Facoltativa: es. cantiere, quanto compra lì, chi è il referente', maxlength: 300 });
+  const results = h('div', { class: 'similar link-results' });
+  let picked = null, seq = 0;
+  const choose = o => { picked = o; q.value = o.name; fill(results, h('p', { class: 'alert info' }, 'Scelto: ', h('strong', {}, o.name), ' · ' + [o.city, o.prov].filter(Boolean).join(' ') + (o.hidden ? ` · seguito da ${o.followedBy}` : ''))); };
+  const search = debounce(async () => {
+    picked = null; const my = ++seq, text = q.value.trim();
+    if (text.length < 2) { fill(results); return; }
+    const local = searchCustomers(indexCache.ix, text).filter(r => r.c.id !== c.id && (!r.fuzzy || r.score > 20)).slice(0, 6).map(r => ({ code: r.c.id, name: r.c.name, city: r.c.city, prov: r.c.prov, phase: customerPhase(r.c).text }));
+    let other = [];
+    if (text.length >= 5 && app.store.customerLookup) { const seen = new Set(all.map(x => String(x.id)));
+      other = ((await app.store.customerLookup(text, '').catch(() => null)) || []).filter(r => !seen.has(String(r.code)) && r.code !== c.id).map(r => ({ code: r.code, name: r.name, city: r.city, prov: r.prov, followedBy: r.followedBy, hidden: true })); }
+    if (my !== seq) return;
+    const row = o => h('button', { type: 'button', class: 'link-pick', onclick: () => choose(o) }, h('strong', {}, o.name), h('small', { class: 'muted' }, ' · ' + [o.city, o.prov, o.phase, o.hidden ? 'seguito da ' + o.followedBy : ''].filter(Boolean).join(' · ')));
+    fill(results, local.length || other.length ? [local.map(row), other.length ? [h('small', { class: 'muted' }, 'Fuori dal tuo portafoglio:'), other.map(row)] : null]
+      : h('small', { class: 'muted' }, 'Nessuno trovato. Se non esiste ancora, crealo prima con «+ Nuovo contatto».'));
+  }, 250);
+  q.addEventListener('input', search);
+  return modal('Collega — ' + c.name, h('div', { class: 'form' }, field('Che legame', kind), field('Con chi', q), results, field('Nota', note)),
+    [{ label: 'Annulla', value: false }, { label: 'Collega', primary: true, run: async () => {
+      if (!picked) { toast('Scegli dall\'elenco con chi collegarlo', 'error'); return false; }
+      const [k, dir] = LINK_CHOICES[+kind.value];
+      const rec = dir === 'out' ? { fromCode: c.id, toCode: picked.code } : { fromCode: picked.code, toCode: c.id };
+      const prev = (existing || []).map(l => ({ kind: l.kind, fromCode: l.fromCode, toCode: l.toCode }));
+      checkLink({ ...rec, kind: k }, prev);
+      await app.store.addLink({ ...rec, kind: k, note: note.value, other: picked });
+      toast('Collegamento salvato'); return true; } }]);
 }
 
 return { listSignals, viewAgenda, phoneList, quoteCls, noteDialog, noteVoice, dictateButton, newCustomerDialog, editCustomerDialog };
@@ -9923,7 +10081,7 @@ __m["js/views/office.js"] = (function () {
 const { acceptedToOrder, acceptedRow } = __m["js/views/order-match-ui.js"];
 const { dataStatusCard } = __m["js/views/data-status-card.js"];
 const { h, fill, eur, dateIt, toast } = __m["js/ui.js"];
-const { ORDER_STATES, missingForOrder, EDIT_LABEL } = __m["js/data/model.js"];
+const { markContacts, ORDER_STATES, missingForOrder, EDIT_LABEL } = __m["js/data/model.js"];
 const { staffPanel } = __m["js/views/messages.js"];
 const { isWaiting } = __m["js/core/messages.js"];
 const isOffice = s => !!s?.office && !s.preview;
@@ -10119,7 +10277,10 @@ async function viewOfficeHome(app) {
       app.store.customerFixesAll ? app.store.customerFixesAll().catch(() => null) : null]);
     const fixes = (allFixes || []).filter(x => !x.doneAt), fixesDone = (allFixes || []).filter(x => x.doneAt);
     const rxAcc = await acceptedToOrder(app).catch(() => []);   // 07/11: offerte RADIX accettate senza ordine
-    const rep = notesToReport(allNotes, done || new Map());
+    // 17/11: i clienti nati nell'HUB senza offerte sono contatti: non si aprono in RADIX e le loro note non si riportano, finché non arriva un'offerta
+    markContacts(customers, quotes, app.store.radixOffers ? await app.store.radixOffers().catch(() => []) : []);
+    const contactIds = new Set(customers.filter(c => c.contact).map(c => c.id)), contactsOnly = customers.filter(c => c.contact);
+    const rep = notesToReport(allNotes.filter(n => !contactIds.has(n.customerId)), done || new Map());
     const notes = rep.todo, notesDone = rep.done;
     const notesToday = notes.filter(n => localDay(n.createdAt) === localDay(new Date().toISOString())).length;
     const questions = (asked?.all || []).filter(t => isWaiting(t));
@@ -10127,7 +10288,7 @@ async function viewOfficeHome(app) {
     const newIds = new Set(customers.map(c => c.id));
     const offers = todaysQuotes(quotes);
     const open = orders.filter(openOrder).sort((a, b) => String(a.requestedAt).localeCompare(String(b.requestedAt)));
-    const custs = customers.slice().sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+    const custs = customers.filter(c => !c.contact).sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
     // avvisi: cosa è arrivato dall'ultimo controllo
     const ids = [...open.map(o => 'o:' + o.id), ...custs.map(c => 'c:' + c.id), ...questions.map(t => 'q:' + t.id + t.lastAt), ...fixes.map(x => 'f:' + x.customerId + x.field + x.at)];
     if (seen && ids.some(k => !seen.has(k))) chime();   // un solo suono per controllo, se è arrivato qualcosa di nuovo
@@ -10162,7 +10323,10 @@ async function viewOfficeHome(app) {
       offerte: queue('offerte', 'Offerte di oggi', offers.length, offers.map(quoteRow), 'Ancora nessuna offerta oggi.'),
       ordini: queue('ordini', 'Ordini da inserire', open.length + rxAcc.length, [...open.map(o => { const q = qById.get(o.quoteId); return orderRow(app, o, q, !!q && newIds.has(q.customerId), load); }), ...rxAcc.map(o => acceptedRow(app, o, load))], 'Nessun ordine in attesa.'),
       domande: ask ? ask.card : queue('domande', 'Domande dei commerciali', null, null, 'Qui arriveranno le domande dei commerciali.'),
-      clienti: queue('clienti', 'Clienti nuovi da aprire in RADIX', custs.length, custs.map(c => customerRow(app, c, load)), 'Nessun cliente da aprire.'),
+      clienti: h('div', {}, queue('clienti', 'Clienti nuovi da aprire in RADIX', custs.length, custs.map(c => customerRow(app, c, load)), 'Nessun cliente da aprire.'),
+        contactsOnly.length ? h('details', { class: 'fold-in of-done' }, h('summary', {}, `Contatti senza offerte (${contactsOnly.length}): non vanno aperti in RADIX`),
+          h('p', { class: 'muted small' }, 'Progettisti, imprese e altri contatti inseriti dai commerciali. Alla prima offerta diventano clienti e compaiono qui sopra.'),
+          h('ul', { class: 'list' }, contactsOnly.slice(0, 100).map(c => h('li', {}, h('a', { href: '#/agenda/' + c.id }, c.name), h('small', { class: 'muted' }, ' · ' + [c.city, c.prov, c.typology, c.assignee].filter(Boolean).join(' · ')))))) : null),
       note: h('div', {}, queue('note', 'Note da riportare in RADIX', notes.length, notes.map(n => noteRow(app, n, done ? markNote : null)), done ? 'Tutte le note dei commerciali sono state riportate.' : 'Nessuna nota dei commerciali.'),
         notesDone.length ? h('details', { class: 'fold-in of-done' }, h('summary', {}, `Già riportate (${notesDone.length})`), h('div', { class: 'of-rows' }, notesDone.slice(0, 50).map(n => noteRow(app, n, markNote, done.get(n.id))))) : null),
     };
@@ -13356,6 +13520,7 @@ const { createLocalStore, indexedDbKv } = __m["js/data/local-store.js"];
 const { createSupabaseStore } = __m["js/data/supabase-store.js"];
 const { viewHome } = __m["js/views/home.js"];
 const { viewAgenda, newCustomerDialog } = __m["js/views/agenda.js"];
+const { markContacts } = __m["js/data/model.js"];
 const { viewQuotes, viewQuoteEditor, pickCustomer } = __m["js/views/quotes.js"];
 const { viewBoard } = __m["js/views/board.js"];
 const { viewNetwork, viewManager } = __m["js/views/direction.js"];
@@ -13399,7 +13564,10 @@ const initials = name => String(name || '').split(/\s+/).filter(Boolean).slice(0
 const app = {
   help: key => helpDialog(key),
   store: null, session: null, cache: {},
-  async customers() { return this.cache.customers ||= await this.store.customers(); },
+  // 17/11: i clienti nati nell'HUB senza offerte sono «contatti» (markContacts)
+  async customers() { return this.cache.customers ||= await (async () => { const list = await this.store.customers();
+    const [q, rx] = await Promise.all([this.store.quotes().catch(() => []), this.store.radixOffers ? this.store.radixOffers().catch(() => []) : []]);
+    return markContacts(list, q, rx); })(); },
   async products() { return this.cache.products ||= await this.store.products(); },
   go(route) { if (location.hash !== '#/' + route) location.hash = '#/' + route; else render(); },
   invalidate() { delete this.cache.customers; },
