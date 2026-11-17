@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="83df2c9ae2e9">
+<meta name="ntx-build" content="f28dcf638759">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1053,7 +1053,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .link-pick:hover { background: var(--hover, #f4f4f4); }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"83df2c9ae2e9"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f28dcf638759"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1687,6 +1687,15 @@ function validityInfo(validUntil, today = new Date().toISOString().slice(0, 10))
   return { days, cls: '', label: 'valida fino al ' + validUntil.split('-').reverse().join('/') };
 }
 const isExpiring = v => !!v && v.days >= 0 && v.days <= 7;
+// 17/11 (Tommaso: «deve arrivare al commerciale»): il promemoria di un'offerta dell'app sul cliente di un commerciale va al commerciale,
+// chiunque l'abbia fatta (Direzione, Marco, ufficio); sui clienti direzionali resta a chi l'ha fatta.
+function followsQuote(session, q, customer) {
+  if (!session) return false;
+  if (session.preview) return true;
+  const agentCust = !!customer && customer.attribution !== 'Direzionale' && !!customer.assignee && customer.assignee !== 'Direzionale';
+  if (agentCust) return session.role === 'agente' && customer.assignee === session.assignee;
+  return q.ownerId === session.userId;
+}
 // Offerte dell'app e di RADIX in un solo elenco: stato comune (aperta/accettata/persa), data del prossimo contatto, validità
 function unifiedOffers({ quotes = [], radix = [], reminders = [], customer = () => null, today = new Date().toISOString().slice(0, 10) }) {
   const due = new Map(reminders.map(r => [r.quote.id, r.due]));
@@ -1723,7 +1732,7 @@ function checkStop({ callStatus, apptTime, note } = {}) {
 // ordine delle tappe: prima gli appuntamenti per orario, poi le altre nell'ordine scelto
 const stopOrder = (a, b) => (a.apptTime || '99') .localeCompare(b.apptTime || '99') || (a.position || 0) - (b.position || 0);
 
-return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, PHASES, PHASE_ORDER, WORK_PHASES, customerPhase, markContacts, LINK_KINDS, LINK_CHOICES, linksFor, checkLink, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, TYPOLOGY_FROM_HUB, normTypology, assigneeFor, validVat, makeProspect, checkFiscal, missingForOrder, EDIT_FIELDS, EDIT_LABEL, EDIT_DB, EDIT_FROM_DB, canEditCustomer, customerEdits, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normTerms, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, unifiedOffers, POST_CATEGORIES, postIcon, postEnded, CALL_STATES, checkStop, stopOrder };
+return { STATUS_ORDER, MANUAL_STATUSES, STATUS_INFO, PHASES, PHASE_ORDER, WORK_PHASES, customerPhase, markContacts, LINK_KINDS, LINK_CHOICES, linksFor, checkLink, applyStatus, checkStatusChange, SISTEMISTI, TYPOLOGIES, TYPOLOGY_FROM_HUB, normTypology, assigneeFor, validVat, makeProspect, checkFiscal, missingForOrder, EDIT_FIELDS, EDIT_LABEL, EDIT_DB, EDIT_FROM_DB, canEditCustomer, customerEdits, CONTACT_KINDS, NOTE_OUTCOMES, QUOTE_STATES, DIREZIONE, uid, nowIso, productLabel, visibleTo, initials, nextQuoteNumber, dueState, PAYMENT_TERMS, PAYMENT_OTHER, AGENT_PAYMENT_TERMS, paymentOptions, normTerms, normPayment, QUOTE_CALL_DAYS, LOST_REASONS, quoteSentAt, quoteReminders, RADIX_DIRECTION_GROUPS, radixNoteView, radixVisible, ORDER_STATES, ORDER_OFFICE_EMAIL, checkOrderRequest, RADIX_OFFER_OUTCOMES, checkRadixOutcome, radixOfferDue, radixOfferForAgent, validityInfo, isExpiring, followsQuote, unifiedOffers, POST_CATEGORIES, postIcon, postEnded, CALL_STATES, checkStop, stopOrder };
 })();
 __m["js/core/preview.js"] = (function () {
 // Anteprima "come agente" per la Direzione (richiesta Tommaso 01/11/2026): l'app mostra solo ciò che vede l'agente scelto.
@@ -4757,7 +4766,7 @@ function recoverReminders(customers, lastContact, today, { days = RECOVER_DAYS, 
 return { RECOVER_DAYS, weekFriday, recoverReminders };
 })();
 __m["js/views/actions.js"] = (function () {
-const { dueState, quoteReminders } = __m["js/data/model.js"];
+const { dueState, quoteReminders, followsQuote } = __m["js/data/model.js"];
 const { recoverReminders, RECOVER_DAYS } = __m["js/core/recover-reminders.js"];
 // Follow-up aperti visibili all'utente, ordinati per scadenza:
 // note cliente + follow-up assegnati dalla Direzione + promemoria automatici delle offerte inviate (richiamo 7 gg, esito 30 gg)
@@ -4769,7 +4778,7 @@ async function openActions(app) {
   const fromNotes = mine.flatMap(n => n.actions.filter(a => !a.done).map(a => ({ ...a, note: n, state: dueState(a) })));
   const assigned = posts.filter(p => p.kind === 'follow-up' && !p.doneAt).map(p => ({ id: p.id, title: p.title, due: p.due, assigned: p, state: dueState({ due: p.due }),
     note: { id: null, customerId: p.customerId, authorName: p.authorName } }));
-  const myQuotes = isDir || app.session.preview ? quotes : quotes.filter(q => q.ownerId === app.session.userId);
+  const myQuotes = quotes.filter(q => followsQuote(app.session, q, app.store.customer(q.customerId)));   // 17/11: al commerciale del cliente
   const fromQuotes = quoteReminders(myQuotes, notes, sends).map(r => ({ id: 'q:' + r.quote.id + ':' + r.kind, title: r.title, due: r.due, quoteReminder: r,
     state: r.kind === 'esito' ? 'scaduto' : dueState({ due: r.due }), note: { id: null, customerId: r.quote.customerId, authorName: r.quote.ownerName || '' } }));
   // 07/11 A2 (Tommaso: "3 a settimana"): clienti da recuperare non sentiti da 60 giorni, 3 per agente, contano anche le note RADIX
@@ -7489,7 +7498,7 @@ const { changeLogCard } = __m["js/views/change-log-ui.js"];
 const { depotPriceFor, setDepotPrice, canSetDepotPrice, undoPickup } = __m["js/core/product-fixes.js"];
 const { forecastSelect, forecastMonthInput } = __m["js/views/radix-offers.js"];
 const { h, fill, eur, num, dateIt, toast, modal, field, emptyState, debounce } = __m["js/ui.js"];
-const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions, normPayment, LOST_REASONS, QUOTE_SNOOZE_DAYS, quoteReminders, missingForOrder } = __m["js/data/model.js"];
+const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions, normPayment, LOST_REASONS, QUOTE_SNOOZE_DAYS, quoteReminders, missingForOrder, followsQuote } = __m["js/data/model.js"];
 const { fiscalFields } = __m["js/views/fiscal.js"];
 const { makeLine, fixLineDescriptions, totals, lineNet, lineAmount, priceLevel, canQuote, searchProducts, totalDiscount, palletsFor, PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL, DISCOUNT_MAX, DISCOUNT_MAX_LABEL, EURO_PALLET, euroPalletCount, BIGBAG_PALLET, bigBagCount } = __m["js/core/pricing.js"];
 const { regionOf } = __m["js/core/geo.js"];
@@ -7590,7 +7599,7 @@ async function orderDialog(app, q) {
 async function outcomeGate(app) {
   if (app.session.role === 'direzione') return true;
   const [quotes, sends] = await Promise.all([app.store.quotes(), app.store.quoteSends ? app.store.quoteSends().catch(() => []) : []]);
-  let due = quoteReminders(quotes.filter(x => app.session.preview || x.ownerId === app.session.userId), [], sends).filter(r => r.kind === 'esito').map(r => r.quote);
+  let due = quoteReminders(quotes.filter(x => followsQuote(app.session, x, app.store.customer(x.customerId))), [], sends).filter(r => r.kind === 'esito').map(r => r.quote);
   if (!due.length) return true;
   return new Promise(resolve => {
     const list = h('div', { class: 'gate-list' });
