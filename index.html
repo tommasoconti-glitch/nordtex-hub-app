@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="4d3608f41678">
+<meta name="ntx-build" content="54be5775439e">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1042,7 +1042,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 @media (max-width:700px){.o2o-tiles{grid-template-columns:repeat(2,1fr)}}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"4d3608f41678"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"54be5775439e"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1276,8 +1276,8 @@ function euroPalletCount(lines) {
 
 // 17/11 (Tommaso): vetro cellulare in BigBag. Senza gru il BigBag si scarica con il carrello elevatore e serve un bancale
 // in legno per ogni BigBag, a 15 €. Si aggiunge con una spunta nell'offerta (q.bigBagPallets = true); il cliente con la gru lo può rifiutare.
-const BIGBAG_PALLET = { code: '', price: 15, label: 'Bancale in legno per lo scarico del BigBag (uno per BigBag)',
-  note: 'Bancali per lo scarico dei BigBag: senza gru, lo scarico con carrello elevatore richiede un bancale in legno per ogni BigBag, addebitato a 15,00 € cadauno. Se disponete di una gru o di altro mezzo idoneo al sollevamento dei BigBag, vi preghiamo di indicarlo alla conferma d\'ordine: i bancali non saranno forniti né addebitati.' };
+const BIGBAG_PALLET = { code: '', price: 15, label: 'Europallet per lo scarico del BigBag (uno per BigBag)',
+  note: 'Europallet per lo scarico dei BigBag: senza gru, lo scarico con carrello elevatore richiede un europallet per ogni BigBag, addebitato a 15,00 € cadauno. Se disponete di una gru o di altro mezzo idoneo al sollevamento dei BigBag, vi preghiamo di indicarlo alla conferma d\'ordine: gli europallet non saranno forniti né addebitati.' };
 // numero di BigBag delle righe: la misura del sacco è nella descrizione («BigBag 3 m³»), la quantità della riga è in m³
 function bigBagCount(lines) {
   let n = 0;
@@ -6867,7 +6867,7 @@ ${senderName ? `<p style="font-size:13px;margin-top:16px">${esc(senderName)}${se
 </div></body></html>`;
   const text = `${message ? message + '\n\n' : ''}Offerta NORDTEX n. ${q.number} del ${dateIt(created)} (valida fino al ${dateIt(until)})\nSpett.le ${c.name}\n\n`
     + q.lines.map(l => `- ${l.description}: ${num(l.qty)} ${l.unit} × ${eur(lineNet(l))} = ${eur(lineAmount(l))}`).join('\n')
-    + `\n\nMerce netta ${eur(t.goods)}${t.euroPallets ? `\nBancali Euro V600 (${t.euroPalletCount} × 20 €) ${eur(t.euroPallets)}` : ''}${t.bigBagPallets ? `\nBancali per lo scarico dei BigBag (${t.bigBagPalletCount} × 15 €) ${eur(t.bigBagPallets)}` : ''}\nTrasporto ${isPickup(q) && !t.freight ? 'nessuno (ritiro al deposito)' : t.freightPending ? 'da definire' : eur(t.freight)}\nImponibile ${eur(t.taxable)}\nIVA ${num(t.vatRate)}% ${eur(t.vat)}\nTotale ${eur(t.total)}\n\nCondizione di pagamento: ${q.payment || 'DA CONCORDARE'}\nTrasporto a cura: ${transportByFor(q)}\nValidità: ${dateIt(until)}\n${PRICE_NOTE}\n`;
+    + `\n\nMerce netta ${eur(t.goods)}${t.euroPallets ? `\nBancali Euro V600 (${t.euroPalletCount} × 20 €) ${eur(t.euroPallets)}` : ''}${t.bigBagPallets ? `\nEuropallet per lo scarico dei BigBag (${t.bigBagPalletCount} × 15 €) ${eur(t.bigBagPallets)}` : ''}\nTrasporto ${isPickup(q) && !t.freight ? 'nessuno (ritiro al deposito)' : t.freightPending ? 'da definire' : eur(t.freight)}\nImponibile ${eur(t.taxable)}\nIVA ${num(t.vatRate)}% ${eur(t.vat)}\nTotale ${eur(t.total)}\n\nCondizione di pagamento: ${q.payment || 'DA CONCORDARE'}\nTrasporto a cura: ${transportByFor(q)}\nValidità: ${dateIt(until)}\n${PRICE_NOTE}\n`;
   return { subject, html, text, total: t.total };
 }
 
@@ -6966,7 +6966,7 @@ function orderMailBody(q, o, senderName = '') {
       `Consegna a: ${o.deliveryAddress || 'sede del cliente'}`, o.siteContact ? `Referente per la consegna: ${o.siteContact}` : '',
       `Deposito / partenza: ${depot} · trasporto a cura: ${q.transportBy || 'DESTINATARIO'}`].filter(Boolean).join('\n'),
     ['ARTICOLI', ...lines].join('\n'),
-    ['IMPORTI', `Merce netta: ${n2(t.goods)} €`, t.extras ? `${q.extrasLabel || 'Altri addebiti'}: ${n2(t.extras)} €` : '', t.euroPallets ? `Bancali Euro V600 (${t.euroPalletCount} × 20 €): ${n2(t.euroPallets)} €` : '', t.bigBagPallets ? `Bancali per lo scarico dei BigBag (${t.bigBagPalletCount} × 15 €): ${n2(t.bigBagPallets)} €` : '',
+    ['IMPORTI', `Merce netta: ${n2(t.goods)} €`, t.extras ? `${q.extrasLabel || 'Altri addebiti'}: ${n2(t.extras)} €` : '', t.euroPallets ? `Bancali Euro V600 (${t.euroPalletCount} × 20 €): ${n2(t.euroPallets)} €` : '', t.bigBagPallets ? `Europallet per lo scarico dei BigBag (${t.bigBagPalletCount} × 15 €): ${n2(t.bigBagPallets)} €` : '',
       `Trasporto: ${t.freightPending ? 'da definire' : n2(t.freight) + ' €'}`, `Imponibile: ${n2(t.taxable)} € + IVA ${n2(t.vatRate).replace(/,00$/, '')}%`,
       `Pagamento: ${q.payment || 'DA CONCORDARE'}`].filter(Boolean).join('\n'),
     o.notes ? 'NOTE PER L\'UFFICIO\n' + o.notes : '',
@@ -7728,7 +7728,7 @@ async function viewQuoteEditor(app, id, customerId) {
       // 17/11: bancale per lo scarico del BigBag senza gru (15 € l'uno), con la nota per il cliente che lo può rifiutare
       nBag ? h('label', { class: 'check hide-disc' }, h('input', { type: 'checkbox', checked: !!q.bigBagPallets, disabled: locked,
         onchange: e => { q.bigBagPallets = e.target.checked; mark(); drawTotals(); } }),
-        h('strong', {}, `Bancali per lo scarico dei BigBag: ${nBag} × ${eur(BIGBAG_PALLET.price)} = ${eur(nBag * BIGBAG_PALLET.price)}`),
+        h('strong', {}, `Europallet per lo scarico dei BigBag: ${nBag} × ${eur(BIGBAG_PALLET.price)} = ${eur(nBag * BIGBAG_PALLET.price)}`),
         h('span', { class: 'muted' }, ' · da spuntare se il cliente non ha la gru per sollevare il BigBag: nell\'offerta compare anche la nota che li può rifiutare se ha la gru')) : null);
     fill(totBox, 
       h('div', {}, h('span', {}, 'Valore a listino'), h('span', {}, eur(t.listValue))),
@@ -7736,7 +7736,7 @@ async function viewQuoteEditor(app, id, customerId) {
       h('div', {}, h('span', {}, 'Merce netta'), h('strong', {}, eur(t.goods))),
       t.extras ? h('div', {}, h('span', {}, q.extrasLabel || 'Altri addebiti'), h('span', {}, eur(t.extras))) : null,
       t.euroPallets ? h('div', {}, h('span', {}, `Bancali Euro V600 (${t.euroPalletCount})`), h('span', {}, eur(t.euroPallets))) : null,
-      t.bigBagPallets ? h('div', {}, h('span', {}, `Bancali scarico BigBag (${t.bigBagPalletCount})`), h('span', {}, eur(t.bigBagPallets))) : null,
+      t.bigBagPallets ? h('div', {}, h('span', {}, `Europallet scarico BigBag (${t.bigBagPalletCount})`), h('span', {}, eur(t.bigBagPallets))) : null,
       h('div', {}, h('span', {}, 'Trasporto'), h('span', {}, t.freightPending ? 'da definire' : eur(t.freight))),
       h('div', {}, h('span', {}, 'Imponibile'), h('span', {}, eur(t.taxable))),
       h('div', {}, h('span', {}, `IVA ${num(t.vatRate)}%`), h('span', {}, eur(t.vat))),
