@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="2cbf44bf92a5">
+<meta name="ntx-build" content="a24ab4c7b57d">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -988,7 +988,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .depot-price .check{display:flex;gap:6px;align-items:flex-start}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"2cbf44bf92a5"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a24ab4c7b57d"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2960,105 +2960,6 @@ function commentBox(app, g) {
 
 return { GOAL_QUESTIONS, goalsCard };
 })();
-__m["js/core/data-status.js"] = (function () {
-// Semaforo "Dati RADIX di oggi" (07/11/2026, richiesta Tommaso: rafforzare i caricamenti a mano di Irina).
-// Caso del 06/11: mancava l'Excel delle offerte aperte e 6 PDF su 7 sono rimasti fuori senza che nessuno se ne accorgesse.
-// Routine (05/11): ogni giorno lavorativo la mattina Excel offerte aperte + ordini aperti, la sera i PDF delle offerte;
-// ogni lunedì giacenze; il fatturato dopo la fatturazione del venerdì (09/11). Qui si confronta il registro dei caricamenti (hub_imports) con la routine.
-
-const pad = n => String(n).padStart(2, '0');
-const localDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-// lunedì della settimana di d (data locale)
-function mondayOf(d) { const m = new Date(d); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return localDate(m); }
-// venerdì più recente (oggi compreso): 09/11 Tommaso, si fattura il venerdì → il fatturato si carica il venerdì sera (o nel fine settimana)
-function fridayOf(d) { const m = new Date(d); m.setDate(m.getDate() - ((m.getDay() + 2) % 7)); return localDate(m); }
-
-/**
- * @param log righe del registro: { kind, at (ISO), summary }
- * @param now Date (ora locale del dispositivo)
- * @returns { workday, items: [{ key, label, state: 'ok'|'warn'|'missing'|'later', detail }], level }
- */
-function dataStatus(log = [], now = new Date()) {
-  const day = localDate(now), hour = now.getHours() + now.getMinutes() / 60, dow = now.getDay();
-  const workday = dow >= 1 && dow <= 5, monday = mondayOf(now);
-  const last = kind => log.filter(r => r.kind === kind && r.at).sort((a, b) => String(b.at).localeCompare(String(a.at)))[0] || null;
-  const dayOf = r => (r ? localDate(new Date(r.at)) : '');
-  const items = [];
-  const daily = (key, label, kind, by) => {
-    const r = last(kind), done = dayOf(r) === day;
-    items.push({ key, label, state: done ? 'ok' : !workday ? 'later' : hour >= by ? 'missing' : 'later',
-      detail: done ? 'caricato alle ' + new Date(r.at).toTimeString().slice(0, 5) : !workday ? 'non serve nel fine settimana' : hour >= by ? 'manca il caricamento di oggi' : 'da caricare in mattinata', at: r?.at || null });
-  };
-  daily('offerte', 'Offerte aperte (Excel)', 'offerte', 11);
-  daily('ordini', 'Ordini aperti (Excel)', 'ordini', 11);
-  // PDF delle offerte: la sera; se alcuni PDF erano di offerte non ancora nell'app, va ricaricato dopo l'Excel
-  {
-    const r = last('righe offerte'), done = dayOf(r) === day, off = last('offerte');
-    const missingOffers = done ? Number(r.summary?.notInApp || 0) : 0;
-    const noExcel = done && workday && dayOf(off) !== day;
-    let state = 'later', detail = !workday ? 'non serve nel fine settimana' : 'da caricare in serata';
-    if (done && missingOffers) { state = 'warn'; detail = `${missingOffers} PDF di offerte non ancora nell'app: carica l'Excel delle offerte aperte e ricarica i PDF`; }
-    else if (done && noExcel) { state = 'warn'; detail = 'caricati, ma l\'Excel delle offerte aperte di oggi manca: le offerte nuove restano senza righe'; }
-    else if (done) { state = 'ok'; detail = `caricati alle ${new Date(r.at).toTimeString().slice(0, 5)} · righe su ${r.summary?.offers ?? 0} offerte`; }
-    else if (workday && hour >= 18) { state = 'missing'; detail = 'mancano i PDF delle offerte di oggi'; }
-    else if (workday && hour >= 16) { state = 'warn'; detail = 'da caricare stasera'; }
-    items.push({ key: 'pdf', label: 'PDF delle offerte (sera)', state, detail, at: r?.at || null });
-  }
-  // settimanale: giacenze dal lunedì della settimana
-  {
-    const r = last('giacenze'), done = r && dayOf(r) >= monday;
-    items.push({ key: 'giacenze', label: 'Giacenze (lunedì)', state: done ? 'ok' : dow === 1 && hour < 12 ? 'later' : 'warn',
-      detail: done ? 'caricate ' + (dayOf(r) === day ? 'oggi' : 'il ' + dayOf(r).split('-').reverse().join('/')) : r ? 'ultimo il ' + dayOf(r).split('-').reverse().join('/') + ': da caricare questa settimana' : 'mai caricate dall\'app', at: r?.at || null });
-  }
-  // settimanale: fatturato dopo la fatturazione del venerdì (09/11: prima era il lunedì)
-  {
-    const r = last('fatturato'), friday = fridayOf(now), done = r && dayOf(r) >= friday, weekend = dow === 5 || dow === 6 || dow === 0;
-    items.push({ key: 'fatturato', label: 'Fatturato per cliente (venerdì)', state: done ? 'ok' : weekend ? 'later' : 'warn',
-      detail: done ? 'caricato ' + (dayOf(r) === day ? 'oggi' : 'il ' + dayOf(r).split('-').reverse().join('/')) + ' · fatture di venerdì ' + friday.split('-').reverse().join('/')
-        : weekend ? 'da caricare dopo la fatturazione del venerdì' : (r ? 'ultimo il ' + dayOf(r).split('-').reverse().join('/') + ': ' : '') + 'mancano le fatture di venerdì ' + friday.split('-').reverse().join('/'), at: r?.at || null });
-  }
-  const level = items.some(i => i.state === 'missing') ? 'missing' : items.some(i => i.state === 'warn') ? 'warn' : 'ok';
-  return { workday, items, level };
-}
-
-return { dataStatus };
-})();
-__m["js/views/data-status-card.js"] = (function () {
-// Riquadro "Dati RADIX di oggi" (07/11/2026): semaforo dei caricamenti per chi carica i dati (Tommaso, Irina).
-const { h, fill } = __m["js/ui.js"];
-const { dataStatus } = __m["js/core/data-status.js"];
-const canUpdateData = s => !!s?.canImport && !s.preview;   // come in data-update.js (qui senza import, per non creare un giro di moduli)
-
-const ICON = { ok: '✓', warn: '!', missing: '✕', later: '…' };
-const TITLE = { ok: 'Dati RADIX di oggi: tutto caricato', warn: 'Dati RADIX di oggi: c\'è qualcosa da sistemare', missing: 'Dati RADIX di oggi: manca un caricamento' };
-
-function dataStatusCard(app, { link = true } = {}) {
-  if (!canUpdateData(app.session) || !app.store.importLog) return null;
-  const box = h('section', { class: 'card ds-card', 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Controllo i caricamenti di oggi…'));
-  app.store.importLog().then(log => {
-    const st = dataStatus(log, new Date());
-    // 07/11: per Tommaso anche il backup settimanale (ricordato su questo computer)
-    if (app.session.role === 'direzione' && !app.session.office) {
-      let d = ''; try { d = localStorage.getItem('ntx-last-backup') || ''; } catch { /* facoltativo */ }
-      const days = d ? Math.floor((Date.now() - new Date(d)) / 864e5) : null;
-      st.items.push({ key: 'backup', label: 'Backup dei dati (settimanale)', state: d && days < 7 ? 'ok' : 'warn',
-        detail: d ? (days < 7 ? `fatto ${days === 0 ? 'oggi' : days === 1 ? 'ieri' : days + ' giorni fa'}` : `ultimo ${days} giorni fa: scaricalo da Aggiorna dati`) : 'mai fatto da questo computer: scaricalo da Aggiorna dati' });
-      if (st.level === 'ok' && !(d && days < 7)) st.level = 'warn';
-    }
-    const todo = st.items.filter(i => i.state === 'later').length;   // 09/11: non più "tutto caricato" alle 6 del mattino
-    const title = st.level === 'ok' && todo ? `Dati RADIX di oggi: in regola, ${todo === 1 ? '1 caricamento da fare' : todo + ' caricamenti da fare'}` : TITLE[st.level];
-    fill(box,
-      h('div', { class: 'ds-head' }, h('h2', { class: 'ds-title ds-' + st.level }, title),
-        h('div', { class: 'ds-actions' }, h('button', { type: 'button', class: 'btn', onclick: () => app.help?.('datioggi') }, 'Istruzioni'),
-          link ? h('a', { class: 'btn', href: '#/dati' }, 'Aggiorna dati') : null)),
-      h('ul', { class: 'ds-list' }, st.items.map(i => h('li', { class: 'ds-' + i.state },
-        h('span', { class: 'ds-dot', 'aria-hidden': 'true' }, ICON[i.state]), h('strong', {}, i.label), h('small', {}, i.detail)))));
-  }).catch(() => fill(box, h('p', { class: 'muted' }, 'Registro dei caricamenti non disponibile.')));
-  return box;
-}
-
-return { dataStatusCard };
-})();
 __m["js/core/dir-follower.js"] = (function () {
 // Clienti direzionali: chi li segue davvero (07/11/2026, Tommaso). Ci sono direzionali che segue lui, altri che segue Marco
 // (rapporti di molti anni) e altri dell'ufficio (clienti altoatesini storici). Finché finivano tutti nella Bacheca di Tommaso,
@@ -3989,7 +3890,8 @@ function lineExtra(l) {
     // 02/11 (errore visto su W14 PLAN: 60 pz/Pal stampato "6pz/Pal"): si tolgono gli zeri finali SOLO dopo la virgola
     const pq = l.palletQuantity % 1 ? n(l.palletQuantity, 3).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '') : n(l.palletQuantity, 0);
     out.push(`(${pq}${UL[l.unit] || l.unit.toLowerCase()}/Pal)`);
-    out.push(Math.abs(pal - Math.round(pal)) < 1e-6 ? `${Math.round(pal)} ${Math.round(pal) === 1 ? 'bancale' : 'bancali'}` : `circa ${n(pal, 1)} bancali`);
+    // 17/11: sotto un decimo di bancale niente riga «circa 0,0 bancali»
+    if (pal >= 0.05) out.push(Math.abs(pal - Math.round(pal)) < 1e-6 ? `${Math.round(pal)} ${Math.round(pal) === 1 ? 'bancale' : 'bancali'}` : `circa ${n(pal, 1)} bancali`);
   }
   if (l.unitNote) out.push(l.unitNote);   // prezzi per unità scelti dall'agente (02/11)
   if (l.pickup) out.push(`Ritiro a cura del cliente presso ${l.pickup.label}`);   // 13/11: resto ritirato in deposito
@@ -7999,7 +7901,6 @@ return { viewQuotes, outcomeDialog, resolveOutcome, orderDialog, viewQuoteEditor
 })();
 __m["js/views/home.js"] = (function () {
 const { goalsCard } = __m["js/views/goals-card.js"];
-const { dataStatusCard } = __m["js/views/data-status-card.js"];
 const { h, fill, eur, dateIt, today, telLinks } = __m["js/ui.js"];
 const { openActions } = __m["js/views/actions.js"];
 const { startNewQuote, pickCustomer } = __m["js/views/quotes.js"];
@@ -8141,7 +8042,7 @@ async function homeDirection(app, { head, foot, customers, quotes, actions, note
 
   // 03/11: messaggi (Assistenza dei commerciali e domande all'ufficio) sotto l'Andamento, solo per chi risponde all'assistenza (Tommaso)
   const msgs = isAssistDesk(app.session) && app.store.threads ? [h('h2', { class: 'section-title' }, 'Messaggi'), await directionMessages(app)] : null;
-  return h('div', { class: 'page home-dir' }, head, dataStatusCard(app), todayCard, h('h2', { class: 'section-title' }, 'Andamento'), trendCard, msgs, foot);
+  return h('div', { class: 'page home-dir' }, head, todayCard, h('h2', { class: 'section-title' }, 'Andamento'), trendCard, msgs, foot);
 }
 
 // Andamento (Direzione: tutta la rete; agente: il suo portafoglio, perché i dati arrivano già filtrati)
@@ -9623,6 +9524,105 @@ async function viewStock(app) {
 
 return { unitLabel, stockRows, filterStock, viewStock };
 })();
+__m["js/core/data-status.js"] = (function () {
+// Semaforo "Dati RADIX di oggi" (07/11/2026, richiesta Tommaso: rafforzare i caricamenti a mano di Irina).
+// Caso del 06/11: mancava l'Excel delle offerte aperte e 6 PDF su 7 sono rimasti fuori senza che nessuno se ne accorgesse.
+// Routine (05/11): ogni giorno lavorativo la mattina Excel offerte aperte + ordini aperti, la sera i PDF delle offerte;
+// ogni lunedì giacenze; il fatturato dopo la fatturazione del venerdì (09/11). Qui si confronta il registro dei caricamenti (hub_imports) con la routine.
+
+const pad = n => String(n).padStart(2, '0');
+const localDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+// lunedì della settimana di d (data locale)
+function mondayOf(d) { const m = new Date(d); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return localDate(m); }
+// venerdì più recente (oggi compreso): 09/11 Tommaso, si fattura il venerdì → il fatturato si carica il venerdì sera (o nel fine settimana)
+function fridayOf(d) { const m = new Date(d); m.setDate(m.getDate() - ((m.getDay() + 2) % 7)); return localDate(m); }
+
+/**
+ * @param log righe del registro: { kind, at (ISO), summary }
+ * @param now Date (ora locale del dispositivo)
+ * @returns { workday, items: [{ key, label, state: 'ok'|'warn'|'missing'|'later', detail }], level }
+ */
+function dataStatus(log = [], now = new Date()) {
+  const day = localDate(now), hour = now.getHours() + now.getMinutes() / 60, dow = now.getDay();
+  const workday = dow >= 1 && dow <= 5, monday = mondayOf(now);
+  const last = kind => log.filter(r => r.kind === kind && r.at).sort((a, b) => String(b.at).localeCompare(String(a.at)))[0] || null;
+  const dayOf = r => (r ? localDate(new Date(r.at)) : '');
+  const items = [];
+  const daily = (key, label, kind, by) => {
+    const r = last(kind), done = dayOf(r) === day;
+    items.push({ key, label, state: done ? 'ok' : !workday ? 'later' : hour >= by ? 'missing' : 'later',
+      detail: done ? 'caricato alle ' + new Date(r.at).toTimeString().slice(0, 5) : !workday ? 'non serve nel fine settimana' : hour >= by ? 'manca il caricamento di oggi' : 'da caricare in mattinata', at: r?.at || null });
+  };
+  daily('offerte', 'Offerte aperte (Excel)', 'offerte', 11);
+  daily('ordini', 'Ordini aperti (Excel)', 'ordini', 11);
+  // PDF delle offerte: la sera; se alcuni PDF erano di offerte non ancora nell'app, va ricaricato dopo l'Excel
+  {
+    const r = last('righe offerte'), done = dayOf(r) === day, off = last('offerte');
+    const missingOffers = done ? Number(r.summary?.notInApp || 0) : 0;
+    const noExcel = done && workday && dayOf(off) !== day;
+    let state = 'later', detail = !workday ? 'non serve nel fine settimana' : 'da caricare in serata';
+    if (done && missingOffers) { state = 'warn'; detail = `${missingOffers} PDF di offerte non ancora nell'app: carica l'Excel delle offerte aperte e ricarica i PDF`; }
+    else if (done && noExcel) { state = 'warn'; detail = 'caricati, ma l\'Excel delle offerte aperte di oggi manca: le offerte nuove restano senza righe'; }
+    else if (done) { state = 'ok'; detail = `caricati alle ${new Date(r.at).toTimeString().slice(0, 5)} · righe su ${r.summary?.offers ?? 0} offerte`; }
+    else if (workday && hour >= 18) { state = 'missing'; detail = 'mancano i PDF delle offerte di oggi'; }
+    else if (workday && hour >= 16) { state = 'warn'; detail = 'da caricare stasera'; }
+    items.push({ key: 'pdf', label: 'PDF delle offerte (sera)', state, detail, at: r?.at || null });
+  }
+  // settimanale: giacenze dal lunedì della settimana
+  {
+    const r = last('giacenze'), done = r && dayOf(r) >= monday;
+    items.push({ key: 'giacenze', label: 'Giacenze (lunedì)', state: done ? 'ok' : dow === 1 && hour < 12 ? 'later' : 'warn',
+      detail: done ? 'caricate ' + (dayOf(r) === day ? 'oggi' : 'il ' + dayOf(r).split('-').reverse().join('/')) : r ? 'ultimo il ' + dayOf(r).split('-').reverse().join('/') + ': da caricare questa settimana' : 'mai caricate dall\'app', at: r?.at || null });
+  }
+  // settimanale: fatturato dopo la fatturazione del venerdì (09/11: prima era il lunedì)
+  {
+    const r = last('fatturato'), friday = fridayOf(now), done = r && dayOf(r) >= friday, weekend = dow === 5 || dow === 6 || dow === 0;
+    items.push({ key: 'fatturato', label: 'Fatturato per cliente (venerdì)', state: done ? 'ok' : weekend ? 'later' : 'warn',
+      detail: done ? 'caricato ' + (dayOf(r) === day ? 'oggi' : 'il ' + dayOf(r).split('-').reverse().join('/')) + ' · fatture di venerdì ' + friday.split('-').reverse().join('/')
+        : weekend ? 'da caricare dopo la fatturazione del venerdì' : (r ? 'ultimo il ' + dayOf(r).split('-').reverse().join('/') + ': ' : '') + 'mancano le fatture di venerdì ' + friday.split('-').reverse().join('/'), at: r?.at || null });
+  }
+  const level = items.some(i => i.state === 'missing') ? 'missing' : items.some(i => i.state === 'warn') ? 'warn' : 'ok';
+  return { workday, items, level };
+}
+
+return { dataStatus };
+})();
+__m["js/views/data-status-card.js"] = (function () {
+// Riquadro "Dati RADIX di oggi" (07/11/2026): semaforo dei caricamenti per chi carica i dati (Tommaso, Irina).
+const { h, fill } = __m["js/ui.js"];
+const { dataStatus } = __m["js/core/data-status.js"];
+const canUpdateData = s => !!s?.canImport && !s.preview;   // come in data-update.js (qui senza import, per non creare un giro di moduli)
+
+const ICON = { ok: '✓', warn: '!', missing: '✕', later: '…' };
+const TITLE = { ok: 'Dati RADIX di oggi: tutto caricato', warn: 'Dati RADIX di oggi: c\'è qualcosa da sistemare', missing: 'Dati RADIX di oggi: manca un caricamento' };
+
+function dataStatusCard(app, { link = true } = {}) {
+  if (!canUpdateData(app.session) || !app.store.importLog) return null;
+  const box = h('section', { class: 'card ds-card', 'aria-live': 'polite' }, h('p', { class: 'muted' }, 'Controllo i caricamenti di oggi…'));
+  app.store.importLog().then(log => {
+    const st = dataStatus(log, new Date());
+    // 07/11: per Tommaso anche il backup settimanale (ricordato su questo computer)
+    if (app.session.role === 'direzione' && !app.session.office) {
+      let d = ''; try { d = localStorage.getItem('ntx-last-backup') || ''; } catch { /* facoltativo */ }
+      const days = d ? Math.floor((Date.now() - new Date(d)) / 864e5) : null;
+      st.items.push({ key: 'backup', label: 'Backup dei dati (settimanale)', state: d && days < 7 ? 'ok' : 'warn',
+        detail: d ? (days < 7 ? `fatto ${days === 0 ? 'oggi' : days === 1 ? 'ieri' : days + ' giorni fa'}` : `ultimo ${days} giorni fa: scaricalo da Aggiorna dati`) : 'mai fatto da questo computer: scaricalo da Aggiorna dati' });
+      if (st.level === 'ok' && !(d && days < 7)) st.level = 'warn';
+    }
+    const todo = st.items.filter(i => i.state === 'later').length;   // 09/11: non più "tutto caricato" alle 6 del mattino
+    const title = st.level === 'ok' && todo ? `Dati RADIX di oggi: in regola, ${todo === 1 ? '1 caricamento da fare' : todo + ' caricamenti da fare'}` : TITLE[st.level];
+    fill(box,
+      h('div', { class: 'ds-head' }, h('h2', { class: 'ds-title ds-' + st.level }, title),
+        h('div', { class: 'ds-actions' }, h('button', { type: 'button', class: 'btn', onclick: () => app.help?.('datioggi') }, 'Istruzioni'),
+          link ? h('a', { class: 'btn', href: '#/dati' }, 'Aggiorna dati') : null)),
+      h('ul', { class: 'ds-list' }, st.items.map(i => h('li', { class: 'ds-' + i.state },
+        h('span', { class: 'ds-dot', 'aria-hidden': 'true' }, ICON[i.state]), h('strong', {}, i.label), h('small', {}, i.detail)))));
+  }).catch(() => fill(box, h('p', { class: 'muted' }, 'Registro dei caricamenti non disponibile.')));
+  return box;
+}
+
+return { dataStatusCard };
+})();
 __m["js/views/office.js"] = (function () {
 // Home dell'Ufficio (02/11/2026, decisioni di Tommaso nel documento "Versione Ufficio"): Christian e Irina lavorano tutto il giorno
 // su RADIX dal PC, quindi l'app per loro è il PONTE tra HUB e RADIX.
@@ -9890,7 +9890,7 @@ async function viewOfficeHome(app) {
   const timer = setInterval(() => { if (!box.isConnected) { clearInterval(timer); setTitle(0); return; } load().catch(() => {}); }, POLL_MS);
   return h('div', { class: 'page office' },
     h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Ufficio'), h('p', { class: 'muted' }, 'Il ponte tra HUB e RADIX: quello che nasce nell\'app e va portato in RADIX. Si aggiorna da solo ogni minuto e suona quando arriva qualcosa.')), bell),
-    isOffice(app.session) ? dataStatusCard(app) : null, tiles, box);   // 07/11: Tommaso lo vede solo nella sua Home
+    dataStatusCard(app), tiles, box);   // 17/11 (Tommaso): lo stato dei dati RADIX sta in Ufficio per tutti, non più nella Home della Direzione
 }
 
 return { isOffice, canSeeOfficeDesk, radixCustomerText, waitText, chime, weekNotes, NOTES_FROM, notesToReport, noteRadixText, fixRadixText, todaysQuotes, viewOfficeHome };
