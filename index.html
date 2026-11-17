@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="16974524ede7">
+<meta name="ntx-build" content="8eba8eba9e2c">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1042,7 +1042,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 @media (max-width:700px){.o2o-tiles{grid-template-columns:repeat(2,1fr)}}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"16974524ede7"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"8eba8eba9e2c"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -5922,10 +5922,16 @@ const BRENNERO = { name: 'Passo del Brennero', lat: 47.0026, lon: 11.5058 };
 const CORRIDORS = [
   { id: 'valsugana', label: 'Trento e Valsugana', provinces: ['BL'], maxLat: 46.35,   // Feltrino, Valbelluna, Alpago (non Cadore/Cortina)
     via: [{ name: 'Valsugana (Borgo Valsugana)', lat: 46.0517, lon: 11.4557 }] },
+  // 17/11 (Tommaso, Policell → Trissino: app 649 km, Google 708): dopo il Brennero il calcolo auto usciva dall'A22 a Rovereto e
+  // scendeva dal Pian delle Fugazze (SS46), passo di montagna non da bilico. Il bilico fa A22 fino a Verona e A4 verso est:
+  // con la tappa sull'A4 a Soave 707 km. Solo Vicentino a ovest del Brenta: per Bassano e Marostica la Valsugana va bene.
+  { id: 'verona-a4', label: 'A22 fino a Verona e A4', provinces: ['VI'], maxLon: 11.6,
+    via: [{ name: 'A4 a Soave verso est', lat: 45.4060, lon: 11.2400, bearing: 90 }] },
 ];
-function corridorFor(prov, destLat = null) {
+function corridorFor(prov, destLat = null, destLon = null) {
   const p = String(prov || '').trim().toUpperCase();
-  return CORRIDORS.find(c => c.provinces.includes(p) && (destLat === null || destLat === undefined || !c.maxLat || destLat <= c.maxLat)) || null;
+  const ok = (v, max) => v === null || v === undefined || !max || v <= max;
+  return CORRIDORS.find(c => c.provinces.includes(p) && ok(destLat, c.maxLat) && ok(destLon, c.maxLon)) || null;
 }
 // Tappe obbligate: Brennero + eventuale corridoio
 // Tappe prima del Brennero per luogo di carico (02/11, Christian: Staudacher→Vignole app 457 km, Google 498; stessa
@@ -5938,7 +5944,7 @@ function corridorFor(prov, destLat = null) {
 // il bilico fa A1 → Salisburgo → A8 → A93 Rosenheim–Kufstein → Innsbruck. Punto sulla linea di Google preso da Tommaso, sull'A93 verso sud.
 const ORIGIN_VIA = { 'St. Leonhard Strasse 25, 86483 Balzhausen, Germany': [{ name: 'A7 tra Memmingen e Kempten', lat: 47.836873, lon: 10.281599, bearing: 180 }],
   'Gewerbestrasse 10, 3375 Krummnussbaum, Austria': [{ name: 'A93 tra Rosenheim e Kufstein', lat: 47.719848, lon: 12.141661, bearing: 160 }] };
-const routeVia = (prov, destLat, origin) => [...(ORIGIN_VIA[origin] || []), BRENNERO, ...(corridorFor(prov, destLat)?.via || [])];
+const routeVia = (prov, destLat, origin, destLon = null) => [...(ORIGIN_VIA[origin] || []), BRENNERO, ...(corridorFor(prov, destLat, destLon)?.via || [])];
 
 // Luoghi di carico con tariffa a km (indirizzi dal listino)
 const ORIGINS = {
@@ -6299,9 +6305,9 @@ async function kmViaBrennero(originAddress, destAddress, fetchImpl = globalThis.
   // luogo di carico con coordinate note (es. Staudacher): niente ricerca dell'indirizzo
   const known = Object.values(ORIGINS).find(o => o.address === originAddress && o.lat);
   const [a, b] = [known ? { lat: known.lat, lon: known.lon } : await geocode(originAddress, fetchImpl), await geocodeFirst([destAddress, ...alternatives], fetchImpl)];
-  const cor = corridorFor(prov, b.lat);
+  const cor = corridorFor(prov, b.lat, b.lon);
   const k = 'r7:' + originAddress.toLowerCase() + '>' + destAddress.toLowerCase() + (cor ? '>' + cor.id : ''); const c = cacheGet(k); if (c) return c;
-  const way = [a, ...routeVia(prov, b.lat, originAddress), b];
+  const way = [a, ...routeVia(prov, b.lat, originAddress, b.lon), b];
   const pts = way.map(p => `${p.lon.toFixed(5)},${p.lat.toFixed(5)}`).join(';');
   // direzione obbligata sulle tappe in autostrada (es. A7 verso sud): evita di agganciare la carreggiata opposta
   const bear = way.some(p => p.bearing !== undefined) ? '&bearings=' + way.map(p => p.bearing !== undefined ? `${p.bearing},60` : '').join(';') : '';
@@ -6318,7 +6324,7 @@ __m["js/views/transport-panel.js"] = (function () {
 // Riquadro "Trasporto e carico" dell'offerta: regole del listino, km via Brennero, riempimento del mezzo,
 // incidenza per m² / m³ / bancale, quantità consigliate per mezzo carico e carico completo.
 const { h, fill, eur, num, toast } = __m["js/ui.js"];
-const { planTransport, googleMapsUrl, fillSummary, transportVerdict, corridorFor, ORIGIN_VIA, partialMap } = __m["js/core/logistics.js"];
+const { planTransport, googleMapsUrl, fillSummary, transportVerdict, corridorFor, CORRIDORS, ORIGIN_VIA, partialMap } = __m["js/core/logistics.js"];
 const { canSetDepotPrice, splitForPickup, PICKUP_SPLIT_MAX_PCT, depotPriceFor } = __m["js/core/product-fixes.js"];
 const { kmViaBrennero, addressVariants } = __m["js/core/route.js"];
 const { lineAmount } = __m["js/core/pricing.js"];
@@ -6473,7 +6479,7 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
         h('a', { class: 'btn small', href: googleMapsUrl(reg.origin.address, destText(), { prov: q.delivery.prov, corridor: q.logistics.corridor }), target: '_blank', rel: 'noopener' }, 'Google Maps ↗'),
         reg.rates.walkingfloor && reg.rates.centinato ? h('select', { disabled: locked, 'aria-label': 'Tipo di mezzo', onchange: e => { q.logistics.vehicleType = e.target.value; mark(); redraw(); } },
           h('option', { value: 'centinato', selected: q.logistics.vehicleType !== 'walkingfloor' }, 'Centinato 2,10 €/km'), h('option', { value: 'walkingfloor', selected: q.logistics.vehicleType === 'walkingfloor' }, 'Walking floor 3,10 €/km')) : null),
-      h('small', { class: 'muted' }, (c => 'Percorso con passaggio dal Brennero' + (c ? ', poi ' + c.label + ' (percorso del bilico)' : '') + '. ')(corridorFor(q.delivery.prov)), q.logistics.km[reg.origin.address] && q.logistics.kmSource ? `Km: ${q.logistics.kmSource}.` : '')) : null;
+      h('small', { class: 'muted' }, (c => 'Percorso con passaggio dal Brennero' + (c ? ', poi ' + c.label + ' (percorso del bilico)' : '') + '. ')(q.logistics.corridor !== undefined ? CORRIDORS.find(x => x.id === q.logistics.corridor) : corridorFor(q.delivery.prov)), q.logistics.km[reg.origin.address] && q.logistics.kmSource ? `Km: ${q.logistics.kmSource}.` : '')) : null;
 
     return h('div', { class: 'tp-group' },
       h('div', { class: 'tp-head' }, h('strong', {}, reg.label), h('small', { class: 'muted' }, `Listino pag. ${reg.page}`)),
