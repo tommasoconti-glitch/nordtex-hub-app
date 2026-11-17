@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="c90eed719deb">
+<meta name="ntx-build" content="3926f48f8f6e">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1042,7 +1042,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 @media (max-width:700px){.o2o-tiles{grid-template-columns:repeat(2,1fr)}}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"c90eed719deb"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"3926f48f8f6e"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3915,9 +3915,15 @@ function manualKmRows(amount, k, fullVehicles) {
     { code, qty: 1, price: c2(amount - each * (k - 1)), amount: c2(amount - each * (k - 1)) }].filter(Boolean);
 }
 // 13/11 (Tommaso): ultimo mezzo con doppio scarico a prezzo ridotto → mezzi pieni N88079 a prezzo intero + mezzo parziale N14126 al suo prezzo
-function partialRows(cost, k) {
-  // 13/11 ore 5 (Tommaso: «l'offerta deve essere su una riga unica, partono due bilici quindi si mette 2»): una riga N14126 × mezzi,
-  // prezzo medio a mezzo con 3 decimali (come nel documento), importo = trasporto esatto
+function partialRows(cost, k, pct, perVehicle) {
+  // 13/11 ore 5 (Tommaso: «l'offerta deve essere su una riga unica»): una riga N14126.
+  // 17/11 (Tommaso: «segna due quando è 1,5 e divide il totale per 2»): quantità = mezzi pieni + percentuale dell'ultimo
+  // (es. 1 + 60% = 1,60) e prezzo = un mezzo intero; se i conti non tornano al centesimo, come prima (mezzi × prezzo medio).
+  const per = Number(perVehicle), p = Number(pct);
+  if (per > 0 && p > 0 && p < 100) {
+    const qty = c3(k - 1 + p / 100), price = c3(per);
+    if (Math.abs(qty * price - cost) <= 0.0051) return [{ code: FREIGHT_PARTIAL, qty, price, amount: c2(cost) }];
+  }
   return oneKmRow(cost, k, FREIGHT_PARTIAL);
 }
 // 13/11 (Tommaso): la riga del trasporto va sotto il prodotto a cui si riferisce, non in fondo.
@@ -3945,7 +3951,7 @@ function freightRowsRaw(q, freight) {
   const e = q.transportEstimate;
   if (freight > 0 && e && !(q.freightAuto && Math.abs((e.amount ?? NaN) - freight) < 0.005)) {
     const kp = Array.isArray(e.parts) && e.parts.length ? (e.parts.length === 1 && e.parts[0].kind === 'km' ? e.parts[0] : null) : (e.vehicles >= 1 ? e : null);
-    if (kp && kp.partialPct) { const r = partialRows(freight, kp.vehicles); return (r || one).map(x => ({ ...x, label: freightLabel(q) })); }
+    if (kp && kp.partialPct) { const r = partialRows(freight, kp.vehicles, kp.partialPct, kp.perVehicle); return (r || one).map(x => ({ ...x, label: freightLabel(q) })); }
     if (kp && kp.vehicles >= 1 && kp.vehicles <= 20) return manualKmRows(freight, kp.vehicles, kp.fullVehicles).map(x => ({ ...x, label: freightLabel(q) }));
     return one;
   }
@@ -3954,7 +3960,7 @@ function freightRowsRaw(q, freight) {
     const rows = [];
     for (const p of e.parts) {
       let r = null;
-      if (p.kind === 'km' && p.vehicles >= 1) r = p.partialPct ? partialRows(p.cost, p.vehicles) : kmRows(p.cost, p.vehicles, p.fullVehicles);
+      if (p.kind === 'km' && p.vehicles >= 1) r = p.partialPct ? partialRows(p.cost, p.vehicles, p.partialPct, p.perVehicle) : kmRows(p.cost, p.vehicles, p.fullVehicles);
       else if (p.kind === 'pallet' && p.pallets > 0 && Math.abs(p.pallets * p.perPallet - p.cost) < 0.005) r = [{ code: FREIGHT_PARTIAL, qty: p.pallets, price: p.perPallet, amount: c2(p.cost) }];
       if (!r) r = [{ code: FREIGHT_PARTIAL, qty: 1, price: p.cost, amount: c2(p.cost) }];
       const label = freightLabel(q, e.parts.length > 1 ? p : { ...p, label: '' });
