@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="430905276ebc">
+<meta name="ntx-build" content="870caec6c1c6">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1025,9 +1025,18 @@ h1 + .fix-note{margin:-4px 0 4px}
 .citem2 .cname { flex: 1 1 auto; }
 .chips .chip.ph b { margin-left: 6px; }
 :root[data-scheme="dark"] .ph-ok{background:#1f3a2a;color:#9fd8b4} :root[data-scheme="dark"] .ph-warn{background:#3d3118;color:#f0c674} :root[data-scheme="dark"] .ph-dorm{background:#43291a;color:#f1a774} :root[data-scheme="dark"] .ph-bad{background:#45202a;color:#f2a0ad} :root[data-scheme="dark"] .ph-muted,:root[data-scheme="dark"] .ph-dark{background:#333;color:#ccc} :root[data-scheme="dark"] .ph-info{background:#1f2f48;color:#a9c6f2}
+/* 17/11 Telefonata con il commerciale */
+.call-page .card h2{margin-bottom:6px} .call-btns{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.call-btns .btn.sel{background:var(--ink,#2b2a2c);color:#fff;border-color:var(--ink,#2b2a2c)}
+.call-act{border:1px solid var(--line,#e5e5e2);border-radius:10px;padding:10px 12px;margin:10px 0} .call-act.late{border-left:3px solid #c0392b}
+.call-hd{display:flex;gap:8px;align-items:center;flex-wrap:wrap} .call-area:empty{display:none} .call-area{margin-top:4px}
+.call-kpi{border-bottom:1px solid var(--line,#eee);padding:8px 0} .call-kpi input{width:100%}
+.call-more summary{cursor:pointer;color:var(--muted,#777);margin-top:8px} .call-save{margin-top:12px}
+:root[data-scheme="dark"] .call-btns .btn.sel{background:#e9e9e9;color:#111}
+.call-date input{width:auto;display:inline-block;padding:4px 8px;margin-left:4px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"430905276ebc"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"870caec6c1c6"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -11991,6 +12000,77 @@ function buildXlsx(sheets, date = new Date()) {
 
 return { sheetName, buildXlsx };
 })();
+__m["js/core/call.js"] = (function () {
+// «Telefonata» con il commerciale (17/11/2026, Tommaso): durante la telefonata del lunedì (fascia 1) o ogni 2-3 settimane (fascia 2)
+// si verifica ogni azione aperta: fatta? se no perché e come si prosegue, con la nuova scadenza. Lo storico dei passaggi resta
+// scritto nell'esito dell'azione, una riga per telefonata, così non serve cambiare il database.
+// Funzioni pure: le usano la pagina della telefonata e i test.
+
+const REASONS = ['prezzo', 'tempo', 'cliente non disponibile', 'concorrenza', 'prodotto', 'altro'];
+const addDays = (iso, n) => new Date(new Date(iso + 'T12:00:00Z').getTime() + n * 864e5).toISOString().slice(0, 10);
+const it = iso => iso ? iso.split('-').reverse().join('/') : '';
+
+/** Prossima telefonata: fascia 1 dopo 7 giorni, fascia 2 dopo 14, fascia 3 nessuna */
+const nextCallDate = (fascia, date) => fascia === 1 ? addDays(date, 7) : fascia === 2 ? addDays(date, 14) : null;
+
+/** Azioni da verificare: aperte, scadute o in scadenza entro la prossima telefonata; quelle senza scadenza in fondo */
+function callActions(actions, label, date, fascia) {
+  const until = nextCallDate(fascia, date) || addDays(date, 14);
+  const open = (actions || []).filter(a => a.label === label && !a.doneOn);
+  const due = open.filter(a => a.due && a.due <= until).sort((a, b) => a.due.localeCompare(b.due));
+  const later = open.filter(a => a.due && a.due > until).sort((a, b) => a.due.localeCompare(b.due));
+  const none = open.filter(a => !a.due);
+  return { due, later, none, until };
+}
+
+/** Quante volte un'azione è stata segnata «non fatta» nelle telefonate */
+const postponements = result => (String(result || '').match(/^\[\d{4}-\d{2}-\d{2}\] non fatta/gm) || []).length;
+
+/** Il cliente scritto davanti all'azione («CLIENTE: cosa fare»), per il passo successivo */
+const actionPrefix = title => { const t = String(title || ''); const i = t.indexOf(':'); return i > 0 && i < 80 ? t.slice(0, i).trim() : ''; };
+
+/**
+ * Applica l'esito di una telefonata a un'azione.
+ * check: { state: 'fatta' | 'non fatta' | 'in corso', note, reason, next, newDue, nextTitle, nextDue }
+ * Restituisce { action (aggiornata), newAction (o null), line (riga per l'esito dell'incontro) } oppure lancia un errore leggibile.
+ */
+function applyCheck(a, check, date) {
+  const s = check?.state; if (!s) return null;
+  const note = String(check.note || '').trim(), next = String(check.next || '').trim(), reason = check.reason || '';
+  const name = a.title.length > 70 ? a.title.slice(0, 67) + '…' : a.title;
+  let log, upd = { ...a }, newAction = null, line;
+  if (s === 'fatta') {
+    log = `[${date}] fatta` + (note ? ': ' + note : '');
+    upd.doneOn = date;
+    line = `✓ ${name}` + (note ? ' — ' + note : '');
+    const nt = String(check.nextTitle || '').trim();
+    if (nt) { const p = actionPrefix(a.title); newAction = { label: a.label, title: p && !nt.toUpperCase().startsWith(p.toUpperCase() + ':') ? `${p}: ${nt}` : nt, due: check.nextDue || null, tactic: a.tactic || null }; }
+  } else if (s === 'non fatta') {
+    if (!reason && !note) throw new Error(`«${name}»: scrivi perché non è stata fatta`);
+    if (!next) throw new Error(`«${name}»: scrivi come si prosegue`);
+    if (!check.newDue) throw new Error(`«${name}»: metti la nuova scadenza`);
+    if (check.newDue < date) throw new Error(`«${name}»: la nuova scadenza è già passata`);
+    log = `[${date}] non fatta · ${[reason, note].filter(Boolean).join(': ')} → ${next} (nuova scadenza ${check.newDue})`;
+    upd.due = check.newDue;
+    line = `✗ ${name} — ${[reason, note].filter(Boolean).join(': ')}; si prosegue: ${next}, entro ${it(check.newDue)}`;
+  } else if (s === 'in corso') {
+    log = `[${date}] in corso` + (note ? ': ' + note : '');
+    if (check.newDue) upd.due = check.newDue;
+    line = `↻ ${name}` + (note ? ' — ' + note : '') + (check.newDue && check.newDue !== a.due ? ` (nuova scadenza ${it(check.newDue)})` : '');
+  } else throw new Error('Stato non valido');
+  upd.result = [String(a.result || '').trim(), log].filter(Boolean).join('\n');
+  return { action: upd, newAction, line };
+}
+
+/** Testo dell'incontro: esito scritto + riepilogo automatico delle verifiche e dei KPI commentati */
+function callSummary(outcome, lines, kpiLines = []) {
+  return [String(outcome || '').trim(),
+    lines.length ? 'Azioni verificate:\n' + lines.join('\n') : '',
+    kpiLines.length ? 'KPI:\n' + kpiLines.join('\n') : ''].filter(Boolean).join('\n\n');
+}
+
+return { REASONS, nextCallDate, callActions, postponements, actionPrefix, applyCheck, callSummary };
+})();
 __m["js/views/strategy.js"] = (function () {
 // "Strategia" (08/11/2026, Tommaso): un'unica sezione con il gestionale della Direzione, a finestre che si aprono e si chiudono.
 // Fasce della rete, chi sentire questa settimana, incontri (esito scritto a mano; l'intervista si registra con Plaud) e azioni con scadenza.
@@ -12005,6 +12085,7 @@ const { radixOfferDue } = __m["js/data/model.js"];
 const { targetEditor } = __m["js/views/target-card.js"];
 const { buildNetworkSheets, exportFileName, agentOf, actionCustomer, actionTitle } = __m["js/core/network-export.js"];
 const { buildXlsx } = __m["js/core/xlsx-write.js"];
+const { REASONS, nextCallDate, callActions, postponements, applyCheck, callSummary } = __m["js/core/call.js"];
 // 17/11 «Scheda rete»: file Excel per la chat Rete (telefonate del lunedì, affiancamenti). Solo Tommaso, non chi ha la sola lettura.
 async function exportNetwork(app, d, label = null, btn = null) {
   if (btn) { btn.disabled = true; btn.textContent = 'Preparo il file…'; }
@@ -12212,9 +12293,9 @@ async function load(app) {
   return { net, rows, nums, customers, strat, measures };
 }
 
-async function viewStrategy(app, label) {
+async function viewStrategy(app, label, sub) {
   if (!canSeeStrategy(app.session)) { app.go('home'); return h('div'); }
-  const el = label ? await viewAgent(app, label) : await viewMain(app);
+  const el = label && sub === 'telefonata' && !app.session.strategyViewer ? await callPage(app, label) : label ? await viewAgent(app, label) : await viewMain(app);
   // 08/11 sera: chi ha la condivisione in sola lettura vede tutto ma non trova i pulsanti che modificano
   if (app.session.strategyViewer) { el.classList.add('ss-readonly'); el.prepend(h('p', { class: 'ss-ro-banner' }, 'Sola lettura · Sales strategy di Tommaso Conti, condivisa con la Direzione e con Meridian. Le modifiche le fa solo lui.')); }
   return el;
@@ -12235,7 +12316,8 @@ async function viewMain(app) {
         h('small', { class: 'muted' }, r.last ? ' ultimo contatto ' + dateIt(r.last) : ' mai sentito'),
         r.open ? h('small', { class: r.late ? 'bad-text' : 'muted' }, ` · ${r.open} azioni aperte` + (r.late ? `, ${r.late} scadute` : '')) : null),
       glanceLine(d, r), numsLine(r.label),
-      h('div', { class: 'actions' }, h('button', { class: 'btn small primary', onclick: () => meetingDialog(app, d, r, refresh) }, 'Registra incontro'),
+      h('div', { class: 'actions' }, h('a', { class: 'btn small primary', href: '#/strategia/' + encodeURIComponent(r.label) + '/telefonata' }, '📞 Telefonata'),
+        h('button', { class: 'btn small', onclick: () => meetingDialog(app, d, r, refresh) }, 'Registra incontro'),
         h('a', { class: 'btn small', href: '#/strategia/' + encodeURIComponent(r.label) }, 'Scheda')))))
       : emptyState(d.rows.some(r => r.fascia) ? 'Nessuno da sentire: la rete di questa settimana è coperta.' : 'Assegna le fasce in "Rete e fasce": da lì nasce il calendario.'));
 
@@ -12575,7 +12657,8 @@ async function viewAgent(app, label) {
     g?.agentNote ? h('p', { class: 'st-out' }, h('strong', {}, `Osservazioni di ${first}`), h('small', { class: 'muted' }, g.agentNoteAt ? ' · ' + dateIt(g.agentNoteAt) : ''), h('br'), g.agentNote) : null);
   const targetLine = r.state === 'scoperta' ? null : await targetEditor(app, label, first, refresh);   // 17/11 obiettivo annuale: visibile solo dopo «presentato»
   const exp = exportButton(app, d, label);
-  return h('div', { class: 'page' }, headCard(app, d, r, refresh), exp ? h('p', { class: 'ss-export' }, exp) : null, targetLine, goalsLine,
+  const callBtn = app.session.strategyViewer || r.state === 'scoperta' ? null : h('a', { class: 'btn small primary', href: '#/strategia/' + encodeURIComponent(label) + '/telefonata' }, '📞 Telefonata');
+  return h('div', { class: 'page' }, headCard(app, d, r, refresh), exp || callBtn ? h('p', { class: 'ss-export' }, callBtn, ' ', exp) : null, targetLine, goalsLine,
     foldCards(h('div', { class: 'section-body ss-body' }, photoCard(r), kpiCard(app, d, r, refresh), agentTacticsCard(d, r), clientsCard(app, r, refresh), actCard, await diaryCard(app, d, r, d.customers), meridianCard(app, d, r, d.customers, refresh)), 'ntx-ss-agent'));
 }
 
@@ -12612,30 +12695,21 @@ async function photoDialog(app, r, refresh) {
   if (ok) { toast('Fotografia salvata'); refresh(); }
 }
 
-async function meetingDialog(app, d, r, refresh, preKind = 'intervista') {
-  const date = h('input', { type: 'date', value: today() });
-  const kind = sel(KINDS.map(k => [k, k]), preKind);
-  const outcome = h('textarea', { rows: 5, placeholder: 'Esito: cosa è emerso, cosa ha fatto delle azioni precedenti, notizie di mercato…' });
-  const plaud = h('input', { type: 'text', placeholder: 'Titolo o data della registrazione Plaud (facoltativo)' });
-  const prev = openActions(d.net.actions, today(), r.label);
-  const prevBox = prev.map(a => ({ a, done: h('input', { type: 'checkbox' }), res: h('input', { type: 'text', placeholder: 'Esito dell\'azione' }) }));
+// 17/11 (Tommaso): ogni nuova azione dice su quale cliente è («CLIENTE: cosa fare»), oppure che riguarda più clienti o la zona
+function newActionsBlock(d, r, n = 2) {
   const lines = h('div', { class: 'st-new' });
-  // 17/11 (Tommaso): ogni azione dice su quale cliente è («Cliente: cosa fare»), oppure che riguarda più clienti o la zona
   const mine = d.customers.filter(c => agentOf(c.assignee) === agentOf(r.label) && !c.isTest).sort((a, b) => a.name.localeCompare(b.name, 'it'));
   const dlId = 'st-cli-' + Math.random().toString(36).slice(2, 8);
   const dl = h('datalist', { id: dlId }, mine.map(c => h('option', { value: `${c.name} · ${c.id}` })));
   const addLine = () => lines.append(h('div', { class: 'st-line' }, h('input', { type: 'text', class: 'st-cli', list: dlId, placeholder: 'Cliente (scrivi e scegli)' }),
     h('label', { class: 'st-zone' }, h('input', { type: 'checkbox', class: 'st-zonebox' }), ' più clienti / zona'),
     h('input', { type: 'text', class: 'st-title', placeholder: 'Cosa fare (es. presentare listino dedicato)' }), h('input', { type: 'date', class: 'st-due' }), tacticSelect(d, r, null)));
-  addLine(); addLine();
-  const body = h('div', { class: 'form' }, h('div', { class: 'st-pair' }, field('Data', date), field('Tipo', kind)), field('Esito', outcome), field('Registrazione', plaud),
-    prev.length ? [h('h4', {}, 'Azioni della volta scorsa: le ha fatte?'), h('ul', { class: 'checks st-prev' }, prevBox.map(x => h('li', {}, h('label', {}, x.done, ' ' + x.a.title, x.a.due ? h('small', { class: 'muted' }, ' · entro ' + dateIt(x.a.due)) : null), x.res)))] : null,
-    h('h4', {}, 'Nuove azioni'), h('p', { class: 'muted small' }, 'Per ogni azione scegli il cliente, oppure spunta «più clienti / zona» se riguarda più clienti.'), dl, lines, h('button', { class: 'btn small', type: 'button', onclick: addLine }, '+ azione'));
-  const ok = await modal('Incontro con ' + r.name, body, [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
-    if (!date.value) throw new Error('Manca la data');
-    if (!outcome.value.trim()) throw new Error('Scrivi l\'esito dell\'incontro');
-    const news = [...lines.querySelectorAll('.st-line')].map(row => ({ row, ti: row.querySelector('.st-title').value.trim(), cli: row.querySelector('.st-cli').value.trim(), zone: row.querySelector('.st-zonebox').checked }))
-      .filter(x => x.ti || x.cli);
+  for (let i = 0; i < n; i++) addLine();
+  const el = h('div', {}, h('p', { class: 'muted small' }, 'Per ogni azione scegli il cliente, oppure spunta «più clienti / zona» se riguarda più clienti.'), dl, lines,
+    h('button', { class: 'btn small', type: 'button', onclick: addLine }, '+ azione'));
+  const collect = () => {
+    const news = [...lines.querySelectorAll('.st-line')].map(row => ({ row, ti: row.querySelector('.st-title').value.trim(), cli: row.querySelector('.st-cli').value.trim(), zone: row.querySelector('.st-zonebox').checked,
+      due: row.querySelector('.st-due').value || null, tactic: row.querySelector('.ss-tsel').value || null })).filter(x => x.ti || x.cli);
     for (const x of news) {
       if (!x.ti) throw new Error('Scrivi cosa fare per ' + x.cli);
       if (x.zone) { x.title = x.ti; continue; }
@@ -12643,9 +12717,30 @@ async function meetingDialog(app, d, r, refresh, preKind = 'intervista') {
       if (!c) throw new Error(x.cli ? `«${x.cli}» non è tra i clienti di ${r.name}: sceglilo dall'elenco o spunta «più clienti / zona»` : `Azione «${x.ti}»: scegli il cliente o spunta «più clienti / zona»`);
       x.title = actionTitle(c.name, x.ti);
     }
+    return news;
+  };
+  return { el, collect };
+}
+
+async function meetingDialog(app, d, r, refresh, preKind = 'intervista') {
+  const date = h('input', { type: 'date', value: today() });
+  const kind = sel(KINDS.map(k => [k, k]), preKind);
+  const outcome = h('textarea', { rows: 5, placeholder: 'Esito: cosa è emerso, cosa ha fatto delle azioni precedenti, notizie di mercato…' });
+  const plaud = h('input', { type: 'text', placeholder: 'Titolo o data della registrazione Plaud (facoltativo)' });
+  const prev = openActions(d.net.actions, today(), r.label);
+  const prevBox = prev.map(a => ({ a, done: h('input', { type: 'checkbox' }), res: h('input', { type: 'text', placeholder: 'Esito dell\'azione' }) }));
+  const na = newActionsBlock(d, r);
+  const body = h('div', { class: 'form' }, h('div', { class: 'st-pair' }, field('Data', date), field('Tipo', kind)), field('Esito', outcome), field('Registrazione', plaud),
+    prev.length ? [h('h4', {}, 'Azioni della volta scorsa: le ha fatte?'), h('ul', { class: 'checks st-prev' }, prevBox.map(x => h('li', {}, h('label', {}, x.done, ' ' + x.a.title, x.a.due ? h('small', { class: 'muted' }, ' · entro ' + dateIt(x.a.due)) : null), x.res)))] : null,
+    h('h4', {}, 'Nuove azioni'), na.el);
+  const ok = await modal('Incontro con ' + r.name, body, [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
+    if (!date.value) throw new Error('Manca la data');
+    if (!outcome.value.trim()) throw new Error('Scrivi l\'esito dell\'incontro');
+    const news = na.collect();
     const meetingId = await app.store.saveDirMeeting({ label: r.label, date: date.value, kind: kind.value, outcome: outcome.value.trim(), plaud: plaud.value.trim() });
-    for (const x of prevBox) if (x.done.checked || x.res.value.trim()) await app.store.saveDirAction({ ...x.a, doneOn: x.done.checked ? date.value : null, result: x.res.value.trim() });
-    for (const x of news) await app.store.saveDirAction({ label: r.label, meetingId, title: x.title, due: x.row.querySelector('.st-due').value || null, tactic: x.row.querySelector('.ss-tsel').value || null });
+    for (const x of prevBox) if (x.done.checked || x.res.value.trim()) await app.store.saveDirAction({ ...x.a, doneOn: x.done.checked ? date.value : null,
+      result: [String(x.a.result || '').trim(), `[${date.value}] ${x.done.checked ? 'fatta' : 'in corso'}` + (x.res.value.trim() ? ': ' + x.res.value.trim() : '')].filter(Boolean).join('\n') });
+    for (const x of news) await app.store.saveDirAction({ label: r.label, meetingId, title: x.title, due: x.due, tactic: x.tactic });
     return true;
   } }]);
   if (ok) { toast('Incontro registrato'); refresh(); }
@@ -12658,6 +12753,103 @@ async function closeAction(app, a, refresh) {
     [{ label: 'Annulla', value: null }, { label: 'Elimina', run: async () => { await app.store.removeDirAction(a.id); return true; } },
       { label: 'Segna fatta', primary: true, run: async () => { await app.store.saveDirAction({ ...a, doneOn: today(), result: res.value.trim() }); return true; } }]);
   if (ok) refresh();
+}
+
+// ===== 17/11 Telefonata (Tommaso): una pagina da scorrere mentre parli con il commerciale =====
+// KPI del mese, azioni da verificare (fatta? se no perché e come si prosegue), cose da dirsi, esito e nuove azioni: un solo «Salva».
+async function callPage(app, label) {
+  const d = await load(app), r = d.rows.find(x => x.label === label);
+  if (!r) return h('div', { class: 'page' }, h('p', {}, 'Commerciale non trovato.'), h('a', { href: '#/strategia' }, '← Sales strategy'));
+  const back = () => app.go('strategia/' + encodeURIComponent(label));
+  const date = h('input', { type: 'date', value: today() });
+  const t = today(), first = r.name.split(' ').slice(-1)[0];
+  const ca = callActions(d.net.actions, label, t, r.fascia);
+  const tName = id => tById(d, id)?.nome || '';
+
+  // 1. KPI del mese
+  const mk = monthKey(), kpis = ((r.scores?.kpi || {})[mk] || []).map(x => ({ ...x }));
+  const kpiRows = kpis.map(x => {
+    const note = h('input', { type: 'text', placeholder: 'commento (facoltativo)', value: x.c || '' });
+    const btns = ['fatto', 'non fatto', ''].map(st => { const b = h('button', { type: 'button', class: 'btn small' + ((x.st || '') === st ? ' sel' : '') }, st || 'in corso');
+      b.onclick = () => { x.st = st; btns.forEach(o => o.classList.remove('sel')); b.classList.add('sel'); }; return b; });
+    return { x, note, el: h('div', { class: 'call-kpi' }, h('div', {}, h('strong', {}, x.t), x.target ? h('small', { class: 'muted' }, ' · obiettivo: ' + x.target) : null), h('div', { class: 'call-btns' }, ...btns), note) };
+  });
+  const kpiCardEl = h('section', { class: 'card' }, h('h2', {}, `1 · KPI di ${monthName(mk)}`),
+    kpiRows.length ? kpiRows.map(k => k.el) : emptyState('Nessun KPI per questo mese: si impostano nella scheda del commerciale.'));
+
+  // 2. Azioni da verificare
+  const checks = [];
+  const actBox = a => {
+    const c = { a, state: null };
+    const reason = h('select', {}, h('option', { value: '' }, '— motivo —'), REASONS.map(x => h('option', { value: x }, x)));
+    const note = h('input', { type: 'text' }), next = h('input', { type: 'text', placeholder: 'Come si prosegue' }), newDue = h('input', { type: 'date' });
+    const nextTitle = h('input', { type: 'text', placeholder: 'Passo successivo (facoltativo: diventa una nuova azione sullo stesso cliente)' }), nextDue = h('input', { type: 'date' });
+    const area = h('div', { class: 'call-area' });
+    const show = st => { c.state = st; area.replaceChildren();
+      if (st === 'fatta') { note.placeholder = 'Esito (es. ordine di 4.200 € il 18/2)'; area.append(field('Esito', note), h('div', { class: 'st-pair' }, field('Passo successivo', nextTitle), field('Entro', nextDue))); }
+      if (st === 'non fatta') { note.placeholder = 'Perché, in breve'; area.append(h('div', { class: 'st-pair' }, field('Motivo', reason), field('Perché', note)), h('div', { class: 'st-pair' }, field('Come si prosegue', next), field('Nuova scadenza', newDue))); }
+      if (st === 'in corso') { note.placeholder = 'A che punto è'; area.append(h('div', { class: 'st-pair' }, field('A che punto', note), field('Nuova scadenza (se cambia)', newDue))); }
+    };
+    const btns = [['fatta', '✓ Fatta'], ['non fatta', '✗ Non fatta'], ['in corso', '↻ In corso']].map(([st, l]) => { const b = h('button', { type: 'button', class: 'btn small' }, l);
+      b.onclick = () => { btns.forEach(o => o.classList.remove('sel')); if (c.state === st) { c.state = null; area.replaceChildren(); return; } b.classList.add('sel'); show(st); }; return b; });
+    c.read = () => ({ state: c.state, note: note.value, reason: reason.value, next: next.value, newDue: newDue.value || null, nextTitle: nextTitle.value, nextDue: nextDue.value || null });
+    checks.push(c);
+    const rv = postponements(a.result), last = String(a.result || '').trim().split('\n').pop();
+    return h('div', { class: 'call-act' + (a.due && a.due < t ? ' late' : '') },
+      h('div', { class: 'call-hd' }, tagChip(d, a.tactic), h('strong', {}, a.title),
+        a.due ? h('span', { class: 'badge ' + (a.due < t ? 'bad' : 'warn') }, (a.due < t ? 'scaduta il ' : 'entro ') + dateIt(a.due)) : h('span', { class: 'badge muted' }, 'senza scadenza'),
+        rv ? h('span', { class: 'badge bad' }, rv === 1 ? '1 rinvio' : rv + ' rinvii') : null),
+      last ? h('small', { class: 'muted' }, 'Ultimo passaggio: ' + last.replace(/(\d{4})-(\d{2})-(\d{2})/g, '$3/$2/$1').replace(/^\[([^\]]+)\]/, '$1')) : null,
+      h('div', { class: 'call-btns' }, ...btns), area);
+  };
+  const others = [...ca.later, ...ca.none];
+  const actCardEl = h('section', { class: 'card' }, h('h2', {}, `2 · Azioni da verificare · ${ca.due.length}`),
+    h('p', { class: 'muted' }, `Scadute o in scadenza entro la prossima telefonata (${dateIt(ca.until)}). Per ognuna: è stata fatta? Se no, perché e come si prosegue.`),
+    ca.due.length ? ca.due.map(actBox) : emptyState('Nessuna azione in scadenza.'),
+    others.length ? h('details', { class: 'call-more' }, h('summary', {}, `Altre ${others.length} azioni aperte (scadenza più avanti o senza scadenza)`), others.map(actBox)) : null);
+
+  // 3. Cose da dirsi: offerte RADIX da sentire sui suoi clienti
+  const rx = app.store.radixOffers ? await app.store.radixOffers().catch(() => []) : [];
+  const mineIds = new Set(d.customers.filter(c => agentOf(c.assignee) === agentOf(label)).map(c => c.id));
+  const toCall = rx.filter(o => radixOfferOpen(o) && mineIds.has(o.customerId)).map(o => ({ o, due: radixOfferDue(o) })).filter(x => x.due && x.due <= t).sort((a, b) => a.due.localeCompare(b.due));
+  const name = id => d.customers.find(c => c.id === id)?.name || id;
+  const talkCard = h('section', { class: 'card' }, h('h2', {}, `3 · Cose da dirsi`),
+    h('h3', { class: 'st-h3' }, `Offerte RADIX da sentire · ${toCall.length}`),
+    toCall.length ? h('ul', { class: 'st-list' }, toCall.slice(0, 8).map(({ o, due }) => h('li', { class: 'st-row' }, h('div', { class: 'st-main' },
+      h('strong', {}, name(o.customerId)), h('small', { class: 'muted' }, ` · ${o.id} del ${dateIt(o.date)}` + (o.total ? ' · ' + eur(o.total) : '') + ` · da sentire dal ${dateIt(due)}`)))))
+      : emptyState('Nessuna offerta RADIX da sentire.'),
+    toCall.length > 8 ? h('p', { class: 'muted' }, `… e altre ${toCall.length - 8}: sono nella Home, «Offerte RADIX da sentire».`) : null);
+
+  // 4. Esito e nuove azioni
+  const outcome = h('textarea', { rows: 4, placeholder: 'Cosa è emerso, notizie di mercato, impegni presi…' });
+  const plaud = h('input', { type: 'text', placeholder: 'Titolo o data della registrazione Plaud (facoltativo)' });
+  const na = newActionsBlock(d, r, 1);
+  const nc = nextCallDate(r.fascia, t);
+  const save = async btn => {
+    try {
+      btn.disabled = true;
+      const day = date.value || t; if (!outcome.value.trim() && !checks.some(c => c.state)) throw new Error('Scrivi l\'esito della telefonata o verifica almeno un\'azione');
+      const res = checks.filter(c => c.state).map(c => applyCheck(c.a, c.read(), day));
+      const news = na.collect();
+      const kpiLines = kpiRows.filter(k => k.note.value.trim() || (k.x.st || '') !== (((r.scores?.kpi || {})[mk] || []).find(o => o.t === k.x.t)?.st || '')).map(k => `${k.x.t}: ${k.x.st || 'in corso'}` + (k.note.value.trim() ? ' — ' + k.note.value.trim() : ''));
+      const meetingId = await app.store.saveDirMeeting({ label, date: day, kind: 'telefonata', outcome: callSummary(outcome.value, res.map(x => x.line), kpiLines) || 'Telefonata', plaud: plaud.value.trim() });
+      for (const x of res) { await app.store.saveDirAction(x.action); if (x.newAction) await app.store.saveDirAction({ ...x.newAction, meetingId }); }
+      for (const x of news) await app.store.saveDirAction({ label, meetingId, title: x.title, due: x.due, tactic: x.tactic });
+      if (kpiRows.length) { const all = { ...(r.scores?.kpi || {}) }; all[mk] = kpiRows.map(k => ({ ...k.x, c: k.note.value.trim() })); await saveScores(app, r, { kpi: all }); }
+      toast(`Telefonata con ${first} registrata` + (res.length ? ` · ${res.length} azioni verificate` : '')); back();
+    } catch (e) { toast(e.message, 'error'); btn.disabled = false; }
+  };
+  const saveBtn = h('button', { class: 'btn primary' }, 'Salva telefonata'); saveBtn.onclick = () => save(saveBtn);
+  const endCard = h('section', { class: 'card' }, h('h2', {}, '4 · Esito e nuove azioni'),
+    h('div', { class: 'form' }, field('Esito della telefonata', outcome), field('Registrazione', plaud), h('h4', {}, 'Nuove azioni'), na.el),
+    h('div', { class: 'actions call-save' }, h('button', { class: 'btn', onclick: back }, 'Annulla'), saveBtn),
+    nc ? h('p', { class: 'muted' }, `Prossima telefonata: ${dateIt(nc)} (fascia ${r.fascia}).`) : null);
+
+  return h('div', { class: 'page call-page' },
+    h('header', { class: 'page-head' }, h('div', {}, h('a', { href: '#/strategia/' + encodeURIComponent(label), class: 'link' }, '← ' + r.name),
+      h('h1', {}, `Telefonata · ${r.name} `, fChip(r.fascia)),
+      h('p', { class: 'muted call-date' }, (r.last ? 'ultimo contatto ' + dateIt(r.last) : 'mai sentito') + ' · telefonata del ', date))),
+    kpiCardEl, actCardEl, talkCard, endCard);
 }
 
 return { canSeeStrategy, viewStrategy, lastPhoto, BUDGET_QUESTIONS, MERIDIAN_TPL_LABEL };
