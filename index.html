@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="a24ab4c7b57d">
+<meta name="ntx-build" content="25c278600fe0">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -987,8 +987,19 @@ h1 + .fix-note{margin:-4px 0 4px}
 .depot-price{display:flex;flex-direction:column;gap:4px;align-items:flex-start;margin:4px 0;font-size:.85rem}
 .depot-price .check{display:flex;gap:6px;align-items:flex-start}
 
+/* 17/11 Home: obiettivo annuale del commerciale e offerte RADIX da sentire per commerciale */
+.target-card .kpis { margin-top: .5rem; }
+.target-bar { height: 8px; background: var(--line, #e5e5e2); border-radius: 4px; overflow: hidden; margin-top: .4rem; }
+.target-bar i { display: block; height: 100%; background: var(--accent, #b8c22a); }
+.rx-agents .rx-agent { border-top: 1px solid var(--line, #eee); }
+.rx-agents .rx-agent > summary { display: grid; grid-template-columns: 1fr auto auto auto; gap: .9rem; align-items: center; padding: .6rem 0; cursor: pointer; list-style: none; }
+.rx-agents .rx-agent > summary::-webkit-details-marker { display: none; }
+.rx-agents .rx-agent > summary span:nth-child(2), .rx-agents .rx-agent > summary span:nth-child(3) { text-align: right; font-variant-numeric: tabular-nums; }
+.rx-agents .rx-agent[open] > summary strong { color: var(--brand, #D40E41); }
+@media (max-width: 640px) { .rx-agents .rx-agent > summary { grid-template-columns: 1fr auto; } .rx-agents .rx-agent > summary .due { grid-column: 1 / -1; justify-self: start; } }
+
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a24ab4c7b57d"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"25c278600fe0"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -2018,6 +2029,9 @@ function createLocalStore({ data, kv }) {
     },
     async changeLog() { return []; },
     // 08/11 SS → Home dell'agente (in locale resta in questo browser)
+    async agentTarget(label) { const t = (await col('agentTargets')).find(x => x.label === label) || null;
+      return t && session?.role !== 'direzione' && !t.shownAt ? null : t; },
+    async saveAgentTarget(t) { const a = await col('agentTargets'); const i = a.findIndex(x => x.label === t.label); const r = { ...t, year: t.year || 2027, updatedAt: new Date().toISOString() }; if (i >= 0) a[i] = r; else a.push(r); await save('agentTargets'); },
     async agentGoals(label) { return (await col('agentGoals')).find(g => g.label === label) || null; },
     async saveAgentGoals(g) { const a = await col('agentGoals'); const i = a.findIndex(x => x.label === g.label); const old = a[i];
       const r = { ...g, status: g.status || 'proposta', updatedAt: new Date().toISOString(), seenAt: old?.seenAt || null, agentNote: old?.agentNote || '', agentNoteAt: old?.agentNoteAt || null }; if (i >= 0) a[i] = r; else a.push(r); await save('agentGoals'); },
@@ -2433,6 +2447,18 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     async saveAgentGoals(g) {
       return api('/rest/v1/hub_agent_goals?on_conflict=agent_label', { method: 'POST', prefer: 'resolution=merge-duplicates',
         body: { agent_label: g.label, month: g.month, kpi: g.kpi, actions: g.actions, clients: g.clients, message: g.message || '', status: g.status || 'proposta', agreed_at: g.agreedAt || null, updated_at: new Date().toISOString() } });
+    },
+    // 17/11 obiettivo annuale (migrazione 20261117050000): il commerciale riceve la riga solo se Tommaso l'ha segnata presentata
+    async agentTarget(label) {
+      if (!label) return null;
+      const r = await api('/rest/v1/hub_agent_target?select=*&agent_label=eq.' + encodeURIComponent(label)).catch(() => null);
+      const t = r?.[0]; if (!t) return null;
+      const n = v => v == null ? null : Number(v);
+      return { label: t.agent_label, year: t.year, quota: n(t.quota), base: n(t.base), growth: n(t.growth), marginAvg: n(t.margin_avg), marginMin: n(t.margin_min), note: t.note || '', shownAt: t.shown_at, updatedAt: t.updated_at };
+    },
+    async saveAgentTarget(t) {
+      return api('/rest/v1/hub_agent_target?on_conflict=agent_label', { method: 'POST', prefer: 'resolution=merge-duplicates',
+        body: { agent_label: t.label, year: t.year || 2027, quota: t.quota, base: t.base, growth: t.growth, margin_avg: t.marginAvg, margin_min: t.marginMin, note: t.note || '', shown_at: t.shownAt || null, updated_at: new Date().toISOString() } });
     },
     async goalsSeen() { return api('/rest/v1/rpc/hub_goals_seen', { method: 'POST', body: {} }).catch(() => null); },
     async goalsComment(note) { return api('/rest/v1/rpc/hub_goals_comment', { method: 'POST', body: { p_note: note } }); },
@@ -2960,95 +2986,70 @@ function commentBox(app, g) {
 
 return { GOAL_QUESTIONS, goalsCard };
 })();
-__m["js/core/dir-follower.js"] = (function () {
-// Clienti direzionali: chi li segue davvero (07/11/2026, Tommaso). Ci sono direzionali che segue lui, altri che segue Marco
-// (rapporti di molti anni) e altri dell'ufficio (clienti altoatesini storici). Finché finivano tutti nella Bacheca di Tommaso,
-// i loro follow-up non li faceva nessuno. Qui: chi segue il cliente (predefinito Tommaso, come prima) e chi è l'utente collegato.
-const DIR_FOLLOWERS = ['Tommaso', 'Marco', 'Ufficio'];
-const isDirCustomer = c => !!c && (c.assignee === 'Direzionale' || c.attribution === 'Direzionale');
-const followerOf = c => (isDirCustomer(c) ? (DIR_FOLLOWERS.includes(c.dirFollower) ? c.dirFollower : 'Tommaso') : null);
-// etichetta per raggruppare: agente, oppure "Direzionale · Marco"
-const ownerLabel = c => (isDirCustomer(c) ? 'Direzionale · ' + followerOf(c) : c?.assignee || '');
-// l'utente collegato, tra quelli che seguono i direzionali (null per gli agenti e per Meridian)
-function myFollower(s) {
-  if (!s || s.role !== 'direzione' || s.readOnly) return null;
-  if (s.office || /^(commerciale|logistica)@/i.test(s.email || '')) return 'Ufficio';
-  if (/ferrari/i.test(s.name || '') || /^marco\.ferrari@/i.test(s.email || '')) return 'Marco';
-  if (/tommaso/i.test(s.name || '')) return 'Tommaso';
-  return null;
+__m["js/views/target-card.js"] = (function () {
+// 17/11/2026 (Tommaso, controllo Home): obiettivo annuale del commerciale nella sua Home.
+// Regola: "non voglio che chi ha ora l'HUB possa vedere gli obiettivi senza che gliene abbia parlato".
+// Il commerciale vede il riquadro solo dopo che Tommaso, nella Sales strategy, segna «Obiettivo presentato»
+// (nel database: shown_at; senza, la riga non arriva nemmeno al browser del commerciale).
+const { h, dateIt, toast, modal, field } = __m["js/ui.js"];
+const e0 = n => n == null ? '—' : Math.round(n).toLocaleString('it-IT') + ' €';
+const pc = n => n == null ? '—' : n.toLocaleString('it-IT') + '%';
+
+/** Riquadro per la Home del commerciale (o per l'anteprima della Direzione). null se non c'è o non è stato presentato. */
+async function targetCard(app, { ytd = null } = {}) {
+  const s = app.session;
+  if (s.role === 'direzione' && !s.preview) return null;
+  const label = s.assignee;   // in anteprima la Direzione ha l'assegnazione del commerciale
+  const t = app.store.agentTarget ? await app.store.agentTarget(label).catch(() => null) : null;
+  if (!t || !t.quota) return null;
+  if (!t.shownAt && !s.preview) return null;
+  const started = new Date().getFullYear() >= (t.year || 2027);
+  const done = started && ytd != null ? Math.max(0, Math.min(100, Math.round(ytd / t.quota * 100))) : 0;
+  const k = (lab, val, sub, extra) => h('div', { class: 'kpi' }, h('small', {}, lab), h('strong', {}, val), sub ? h('span', {}, sub) : null, extra || null);
+  return h('section', { class: 'card target-card' },
+    h('h2', {}, `Il mio obiettivo ${t.year || 2027}`),
+    s.preview && !t.shownAt ? h('p', { class: 'alert warn' }, 'Anteprima: il commerciale non lo vede finché non lo segni come presentato nella Sales strategy.') : null,
+    h('div', { class: 'kpis' },
+      k(`Fatturato ${t.year || 2027} da inizio anno`, started && ytd != null ? e0(ytd) : '—', started ? 'fatture RADIX dei clienti del tuo portafoglio' : `si conta dal 1° gennaio ${t.year || 2027}`),
+      k('Quota', e0(t.quota), t.base != null ? `base ${t.year - 1 || 2026} ${e0(t.base)}${t.growth ? ' + crescita ' + e0(t.growth) : ''}` : null,
+        h('div', { class: 'target-bar', title: done + '% della quota' }, h('i', { style: `width:${done}%` }))),
+      t.marginAvg != null ? k('Margine medio sul prodotto', pc(t.marginAvg), `premio solo da qui in su${t.marginMin != null ? ' · nessuna vendita sotto il ' + pc(t.marginMin) : ''}`) : null),
+    t.note ? h('p', { class: 'fine' }, t.note) : null,
+    h('small', { class: 'muted' }, 'Concordato con la Direzione' + (t.shownAt ? ' il ' + dateIt(t.shownAt) : '') + '. La base si ricalcola sul consuntivo di dicembre.'));
 }
 
-return { DIR_FOLLOWERS, isDirCustomer, followerOf, ownerLabel, myFollower };
-})();
-__m["js/core/recover-reminders.js"] = (function () {
-const { ownerLabel } = __m["js/core/dir-follower.js"];
-// A2 "follow-up automatici" (07/11/2026, decisione Tommaso: "3 a settimana").
-// Clienti "Da recuperare" (e persi con acquisti 2024) non sentiti da 60 giorni (nessuna nota nell'app né in RADIX): per ogni agente i 3 con più fatturato passato.
-// Direzionali: 3 per chi li segue (Tommaso, Marco, Ufficio: core/dir-follower.js).
-// Quando l'agente registra una nota il cliente esce per 60 giorni ed entra il successivo. Nessun dato salvato: si calcola ogni volta.
-const RECOVER_DAYS = 60, RECOVER_PER_AGENT = 3;
-
-const iso = d => d.toISOString().slice(0, 10);
-// scadenza: il venerdì di questa settimana (sabato e domenica → venerdì successivo)
-function weekFriday(today) {
-  const d = new Date(today + 'T12:00:00'), dow = d.getDay();
-  d.setDate(d.getDate() + (dow === 6 ? 6 : dow === 0 ? 5 : 5 - dow));
-  return iso(d);
+/** Riga nella scheda Sales strategy del commerciale: valori e interruttore «presentato». */
+async function targetEditor(app, label, first, refresh) {
+  if (!app.store.agentTarget) return null;
+  const t = await app.store.agentTarget(label).catch(() => null);
+  const shown = !!t?.shownAt;
+  const save = async patch => { await app.store.saveAgentTarget({ ...(t || { label, year: 2027 }), ...patch }); refresh(); };
+  const toggle = async () => {
+    if (!shown && !(await modal('Obiettivo presentato', h('p', {}, `Da adesso ${first} vede nella sua Home quota, base e soglie di margine. Confermi di avergliene già parlato?`),
+      [{ label: 'Annulla', value: false }, { label: 'Sì, mostralo', primary: true, value: true }]))) return;
+    await save({ shownAt: shown ? null : new Date().toISOString() });
+    toast(shown ? `Obiettivo nascosto a ${first}` : `Obiettivo visibile nella Home di ${first}`);
+  };
+  const edit = async () => {
+    const num = v => h('input', { type: 'number', step: 'any', inputmode: 'decimal', value: v ?? '' });
+    const f = { quota: num(t?.quota), base: num(t?.base), growth: num(t?.growth), marginAvg: num(t?.marginAvg), marginMin: num(t?.marginMin) };
+    const note = h('textarea', { rows: 2, placeholder: 'Nota per il commerciale (facoltativa)' }, t?.note || '');
+    const val = e => e.value === '' ? null : Number(e.value);
+    const ok = await modal(`Obiettivo 2027 · ${first}`, h('div', { class: 'form' },
+      field('Quota (€)', f.quota), field('Base 2026 (€)', f.base), field('Crescita (€)', f.growth),
+      field('Margine medio per il premio (%)', f.marginAvg), field('Minimo per singola vendita (%)', f.marginMin), field('Nota', note)),
+      [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => { await save({ quota: val(f.quota), base: val(f.base), growth: val(f.growth), marginAvg: val(f.marginAvg), marginMin: val(f.marginMin), note: note.value.trim() }); return true; } }]);
+    if (ok) toast('Obiettivo salvato');
+  };
+  return h('div', { class: 'ss-goals ss-target' },
+    h('p', {}, h('strong', {}, 'Obiettivo 2027: '),
+      t?.quota ? `quota ${e0(t.quota)}${t.base != null ? ' · base ' + e0(t.base) : ''}${t.marginAvg != null ? ' · margine ' + pc(t.marginAvg) : ''} · ` : 'non impostato · ',
+      h('span', { class: 'badge ' + (shown ? 'ok' : 'muted') }, shown ? `presentato il ${dateIt(t.shownAt)}: ${first} lo vede` : `nascosto: ${first} non lo vede`), ' ',
+      h('button', { class: 'btn small', onclick: () => edit().catch(e => toast(e.message, 'error')) }, 'Modifica'), ' ',
+      t?.quota ? h('button', { class: 'btn small' + (shown ? '' : ' primary'), onclick: () => toggle().catch(e => toast(e.message, 'error')) }, shown ? 'Nascondi' : 'Segna presentato') : null));
 }
 
-/**
- * @param customers clienti visibili { id, name, status, assignee, rev2024, rev2025, rev2026 }
- * @param lastContact Map id cliente → 'AAAA-MM-GG' dell'ultima nota (app o RADIX)
- * @returns [{ customer, due, last, title }]
- */
-function recoverReminders(customers, lastContact, today, { days = RECOVER_DAYS, perAgent = RECOVER_PER_AGENT } = {}) {
-  const lim = iso(new Date(new Date(today + 'T12:00:00').getTime() - days * 864e5)), due = weekFriday(today);
-  // 08/11 (Tommaso, caso Moretti 45.700 € nel 2024 escluso e Rasom 1.200 € dentro): contano anche i persi che compravano nel 2024,
-  // ordinati per fatturato 2024 + 2025
-  const rev = c => (c.rev2025 || 0) + (c.rev2024 || 0);
-  const by = new Map();
-  for (const c of customers) {
-    if (!(c.status === 'Da recuperare' || (c.status === 'Perso' && (c.rev2024 || 0) > 0)) || c.isTest || /^EX_/.test(c.assignee || '')) continue;   // aree scoperte: nessuno a cui darli
-    const last = lastContact.get(c.id) || '';
-    if (last >= lim) continue;
-    const k = ownerLabel(c) || 'Direzionale · Tommaso'; if (!by.has(k)) by.set(k, []); by.get(k).push({ c, last });
-  }
-  const out = [];
-  for (const list of by.values()) for (const { c, last } of list.sort((a, b) => rev(b.c) - rev(a.c) || a.c.name.localeCompare(b.c.name)).slice(0, perAgent))
-    out.push({ customer: c, due, last: last || null, title: `Da recuperare, nessuna nota da ${days} giorni:` });
-  return out;
-}
-
-return { RECOVER_DAYS, weekFriday, recoverReminders };
-})();
-__m["js/views/actions.js"] = (function () {
-const { dueState, quoteReminders } = __m["js/data/model.js"];
-const { recoverReminders, RECOVER_DAYS } = __m["js/core/recover-reminders.js"];
-// Follow-up aperti visibili all'utente, ordinati per scadenza:
-// note cliente + follow-up assegnati dalla Direzione + promemoria automatici delle offerte inviate (richiamo 7 gg, esito 30 gg)
-async function openActions(app) {
-  const [notes, posts, quotes, sends] = await Promise.all([app.store.notes(), app.store.posts ? app.store.posts() : [], app.store.quotes(),
-    app.store.quoteSends ? app.store.quoteSends().catch(() => []) : []]);
-  const isDir = app.session.role === 'direzione';
-  const mine = isDir ? notes : notes.filter(n => n.authorId === app.session.userId || app.store.customer(n.customerId));
-  const fromNotes = mine.flatMap(n => n.actions.filter(a => !a.done).map(a => ({ ...a, note: n, state: dueState(a) })));
-  const assigned = posts.filter(p => p.kind === 'follow-up' && !p.doneAt).map(p => ({ id: p.id, title: p.title, due: p.due, assigned: p, state: dueState({ due: p.due }),
-    note: { id: null, customerId: p.customerId, authorName: p.authorName } }));
-  const myQuotes = isDir || app.session.preview ? quotes : quotes.filter(q => q.ownerId === app.session.userId);
-  const fromQuotes = quoteReminders(myQuotes, notes, sends).map(r => ({ id: 'q:' + r.quote.id + ':' + r.kind, title: r.title, due: r.due, quoteReminder: r,
-    state: r.kind === 'esito' ? 'scaduto' : dueState({ due: r.due }), note: { id: null, customerId: r.quote.customerId, authorName: r.quote.ownerName || '' } }));
-  // 07/11 A2 (Tommaso: "3 a settimana"): clienti da recuperare non sentiti da 60 giorni, 3 per agente, contano anche le note RADIX
-  const t = new Date().toISOString().slice(0, 10), lim = new Date(Date.now() - RECOVER_DAYS * 864e5).toISOString().slice(0, 10);
-  const [customers, rxNotes] = await Promise.all([app.customers ? app.customers().catch(() => []) : [], app.store.radixNotes ? app.store.radixNotes({ since: lim }).catch(() => []) : []]);
-  const last = new Map(), seen = (id, d) => { if (id && d && !(last.get(id) >= d)) last.set(id, d); };
-  for (const n of notes) seen(n.customerId, String(n.createdAt || '').slice(0, 10));
-  for (const n of rxNotes) seen(n.customerId, n.date);
-  const fromRecover = recoverReminders(customers, last, t).map(r => ({ id: 'r:' + r.customer.id, title: r.title, due: r.due, recover: r, state: dueState({ due: r.due }),
-    note: { id: null, customerId: r.customer.id, authorName: r.customer.assignee || '' } }));
-  return fromNotes.concat(assigned, fromQuotes, fromRecover).sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
-}
-
-return { openActions };
+return { targetCard, targetEditor };
 })();
 __m["js/views/change-log-ui.js"] = (function () {
 // A4 (07/11/2026): "Storico modifiche" in fondo a scheda cliente, offerta dell'app e offerta RADIX. Solo Direzione.
@@ -4495,6 +4496,96 @@ async function applyReminderRules(app, offers = []) {
 }
 
 return { radixOfferOpen, dueState, radixOfferDialog, offerNoteText, mentionsOffer, linesSummary, radixOfferRow, radixOffersPanel, radixOffersCard, radixFuLine, radixFollowupBlock, viewRadixOffer, forecastSelect, forecastMonthInput, reminderDialog, reminderBadge, applyReminderRules };
+})();
+__m["js/core/dir-follower.js"] = (function () {
+// Clienti direzionali: chi li segue davvero (07/11/2026, Tommaso). Ci sono direzionali che segue lui, altri che segue Marco
+// (rapporti di molti anni) e altri dell'ufficio (clienti altoatesini storici). Finché finivano tutti nella Bacheca di Tommaso,
+// i loro follow-up non li faceva nessuno. Qui: chi segue il cliente (predefinito Tommaso, come prima) e chi è l'utente collegato.
+const DIR_FOLLOWERS = ['Tommaso', 'Marco', 'Ufficio'];
+const isDirCustomer = c => !!c && (c.assignee === 'Direzionale' || c.attribution === 'Direzionale');
+const followerOf = c => (isDirCustomer(c) ? (DIR_FOLLOWERS.includes(c.dirFollower) ? c.dirFollower : 'Tommaso') : null);
+// etichetta per raggruppare: agente, oppure "Direzionale · Marco"
+const ownerLabel = c => (isDirCustomer(c) ? 'Direzionale · ' + followerOf(c) : c?.assignee || '');
+// l'utente collegato, tra quelli che seguono i direzionali (null per gli agenti e per Meridian)
+function myFollower(s) {
+  if (!s || s.role !== 'direzione' || s.readOnly) return null;
+  if (s.office || /^(commerciale|logistica)@/i.test(s.email || '')) return 'Ufficio';
+  if (/ferrari/i.test(s.name || '') || /^marco\.ferrari@/i.test(s.email || '')) return 'Marco';
+  if (/tommaso/i.test(s.name || '')) return 'Tommaso';
+  return null;
+}
+
+return { DIR_FOLLOWERS, isDirCustomer, followerOf, ownerLabel, myFollower };
+})();
+__m["js/core/recover-reminders.js"] = (function () {
+const { ownerLabel } = __m["js/core/dir-follower.js"];
+// A2 "follow-up automatici" (07/11/2026, decisione Tommaso: "3 a settimana").
+// Clienti "Da recuperare" (e persi con acquisti 2024) non sentiti da 60 giorni (nessuna nota nell'app né in RADIX): per ogni agente i 3 con più fatturato passato.
+// Direzionali: 3 per chi li segue (Tommaso, Marco, Ufficio: core/dir-follower.js).
+// Quando l'agente registra una nota il cliente esce per 60 giorni ed entra il successivo. Nessun dato salvato: si calcola ogni volta.
+const RECOVER_DAYS = 60, RECOVER_PER_AGENT = 3;
+
+const iso = d => d.toISOString().slice(0, 10);
+// scadenza: il venerdì di questa settimana (sabato e domenica → venerdì successivo)
+function weekFriday(today) {
+  const d = new Date(today + 'T12:00:00'), dow = d.getDay();
+  d.setDate(d.getDate() + (dow === 6 ? 6 : dow === 0 ? 5 : 5 - dow));
+  return iso(d);
+}
+
+/**
+ * @param customers clienti visibili { id, name, status, assignee, rev2024, rev2025, rev2026 }
+ * @param lastContact Map id cliente → 'AAAA-MM-GG' dell'ultima nota (app o RADIX)
+ * @returns [{ customer, due, last, title }]
+ */
+function recoverReminders(customers, lastContact, today, { days = RECOVER_DAYS, perAgent = RECOVER_PER_AGENT } = {}) {
+  const lim = iso(new Date(new Date(today + 'T12:00:00').getTime() - days * 864e5)), due = weekFriday(today);
+  // 08/11 (Tommaso, caso Moretti 45.700 € nel 2024 escluso e Rasom 1.200 € dentro): contano anche i persi che compravano nel 2024,
+  // ordinati per fatturato 2024 + 2025
+  const rev = c => (c.rev2025 || 0) + (c.rev2024 || 0);
+  const by = new Map();
+  for (const c of customers) {
+    if (!(c.status === 'Da recuperare' || (c.status === 'Perso' && (c.rev2024 || 0) > 0)) || c.isTest || /^EX_/.test(c.assignee || '')) continue;   // aree scoperte: nessuno a cui darli
+    const last = lastContact.get(c.id) || '';
+    if (last >= lim) continue;
+    const k = ownerLabel(c) || 'Direzionale · Tommaso'; if (!by.has(k)) by.set(k, []); by.get(k).push({ c, last });
+  }
+  const out = [];
+  for (const list of by.values()) for (const { c, last } of list.sort((a, b) => rev(b.c) - rev(a.c) || a.c.name.localeCompare(b.c.name)).slice(0, perAgent))
+    out.push({ customer: c, due, last: last || null, title: `Da recuperare, nessuna nota da ${days} giorni:` });
+  return out;
+}
+
+return { RECOVER_DAYS, weekFriday, recoverReminders };
+})();
+__m["js/views/actions.js"] = (function () {
+const { dueState, quoteReminders } = __m["js/data/model.js"];
+const { recoverReminders, RECOVER_DAYS } = __m["js/core/recover-reminders.js"];
+// Follow-up aperti visibili all'utente, ordinati per scadenza:
+// note cliente + follow-up assegnati dalla Direzione + promemoria automatici delle offerte inviate (richiamo 7 gg, esito 30 gg)
+async function openActions(app) {
+  const [notes, posts, quotes, sends] = await Promise.all([app.store.notes(), app.store.posts ? app.store.posts() : [], app.store.quotes(),
+    app.store.quoteSends ? app.store.quoteSends().catch(() => []) : []]);
+  const isDir = app.session.role === 'direzione';
+  const mine = isDir ? notes : notes.filter(n => n.authorId === app.session.userId || app.store.customer(n.customerId));
+  const fromNotes = mine.flatMap(n => n.actions.filter(a => !a.done).map(a => ({ ...a, note: n, state: dueState(a) })));
+  const assigned = posts.filter(p => p.kind === 'follow-up' && !p.doneAt).map(p => ({ id: p.id, title: p.title, due: p.due, assigned: p, state: dueState({ due: p.due }),
+    note: { id: null, customerId: p.customerId, authorName: p.authorName } }));
+  const myQuotes = isDir || app.session.preview ? quotes : quotes.filter(q => q.ownerId === app.session.userId);
+  const fromQuotes = quoteReminders(myQuotes, notes, sends).map(r => ({ id: 'q:' + r.quote.id + ':' + r.kind, title: r.title, due: r.due, quoteReminder: r,
+    state: r.kind === 'esito' ? 'scaduto' : dueState({ due: r.due }), note: { id: null, customerId: r.quote.customerId, authorName: r.quote.ownerName || '' } }));
+  // 07/11 A2 (Tommaso: "3 a settimana"): clienti da recuperare non sentiti da 60 giorni, 3 per agente, contano anche le note RADIX
+  const t = new Date().toISOString().slice(0, 10), lim = new Date(Date.now() - RECOVER_DAYS * 864e5).toISOString().slice(0, 10);
+  const [customers, rxNotes] = await Promise.all([app.customers ? app.customers().catch(() => []) : [], app.store.radixNotes ? app.store.radixNotes({ since: lim }).catch(() => []) : []]);
+  const last = new Map(), seen = (id, d) => { if (id && d && !(last.get(id) >= d)) last.set(id, d); };
+  for (const n of notes) seen(n.customerId, String(n.createdAt || '').slice(0, 10));
+  for (const n of rxNotes) seen(n.customerId, n.date);
+  const fromRecover = recoverReminders(customers, last, t).map(r => ({ id: 'r:' + r.customer.id, title: r.title, due: r.due, recover: r, state: dueState({ due: r.due }),
+    note: { id: null, customerId: r.customer.id, authorName: r.customer.assignee || '' } }));
+  return fromNotes.concat(assigned, fromQuotes, fromRecover).sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
+}
+
+return { openActions };
 })();
 __m["js/views/fiscal.js"] = (function () {
 // 02/11 (versione Ufficio): campi "dati per l'ordine" del cliente nuovo — P.IVA, SDI/PEC, pagamento, banca.
@@ -7901,6 +7992,8 @@ return { viewQuotes, outcomeDialog, resolveOutcome, orderDialog, viewQuoteEditor
 })();
 __m["js/views/home.js"] = (function () {
 const { goalsCard } = __m["js/views/goals-card.js"];
+const { targetCard } = __m["js/views/target-card.js"];
+const { radixFuLine } = __m["js/views/radix-offers.js"];
 const { h, fill, eur, dateIt, today, telLinks } = __m["js/ui.js"];
 const { openActions } = __m["js/views/actions.js"];
 const { startNewQuote, pickCustomer } = __m["js/views/quotes.js"];
@@ -7938,8 +8031,9 @@ async function viewHome(app) {
   const rxDue = rxAll.filter(o => ['scaduto', 'oggi'].includes(dueState(o))).sort((a, b) => radixOfferDue(a).localeCompare(radixOfferDue(b)));
   const rxItem = o => { const c = o.customerId ? app.store.customer(o.customerId) : null; const d = o.nextFollowup || o.followup;
     return h('li', { class: 'todo' }, h('a', { href: '#/rxofferta/' + encodeURIComponent(o.id), class: 'todo-main' },
-      h('span', { class: 'due ' + (d < today() ? 'scaduto' : 'oggi') }, d < today() ? dateIt(d) : 'oggi'),
-      h('span', { class: 'todo-text' }, h('strong', {}, c?.name || o.customerLabel), h('small', { class: 'muted' }, [o.total ? eur(o.total) : '', o.subject, 'offerta ' + o.id].filter(Boolean).join(' · ')))),
+      // 17/11: la data in rosso diceva poco: ora «da sentire dal …» e la data dell'offerta nel dettaglio
+      h('span', { class: 'due ' + (d < today() ? 'scaduto' : 'oggi') }, d < today() ? 'da sentire dal ' + dateIt(d) : 'da sentire oggi'),
+      h('span', { class: 'todo-text' }, h('strong', {}, c?.name || o.customerLabel), h('small', { class: 'muted' }, [o.total ? eur(o.total) : '', o.subject, 'offerta ' + o.id + (o.date ? ' del ' + dateIt(o.date) : '')].filter(Boolean).join(' · ')))),
       c?.phone ? h('span', { class: 'todo-tel' }, telLinks(c.phone.split(';')[0])) : null); };
   const upcoming = actions.filter(a => !a.recover && a.state !== 'scaduto' && a.state !== 'oggi').slice(0, 5);
   // 07/11 A2: stessa regola della Bacheca (3 per agente, contano anche le note RADIX)
@@ -7955,7 +8049,8 @@ async function viewHome(app) {
     c.phone ? h('span', { class: 'todo-tel' }, telLinks(c.phone.split(';')[0])) : null);
 
   const goals = await goalsCard(app);   // 08/11: obiettivi del mese dalla SS di Tommaso, per primi
-  return h('div', { class: 'page' }, head, goals, salesSection(customers),   // 04/11: il fatturato è la prima cosa che vedono (sul telefono si scorre poco)
+  const target = await targetCard(app);   // 17/11: obiettivo annuale, solo dopo che Tommaso l'ha presentato
+  return h('div', { class: 'page' }, head, target, goals, salesSection(customers),   // 04/11: il fatturato è la prima cosa che vedono (sul telefono si scorre poco)
     h('section', { class: 'card' }, h('h2', {}, 'Da fare oggi'),
       toOrder.length ? h('ul', { class: 'todo-list' }, toOrder.map(q => h('li', { class: 'todo' }, h('a', { href: '#/offerta/' + q.id, class: 'todo-main' },
         h('span', { class: 'due oggi' }, 'ordine'), h('span', { class: 'todo-text' }, h('strong', {}, 'Passa l\'ordine all\'ufficio'), h('small', { class: 'muted' }, `${q.number} · ${q.customer?.name || ''} · ${eur(q.total || 0)}`)))))) : null,
@@ -7990,15 +8085,14 @@ function salesSection(customers) {
     h('div', { class: 'ps-grid' },
       y('2026' + (f.asOf ? ' al ' + dateIt(f.asOf).slice(0, 5) : ''), f.y2026, `${f.buyers2026} clienti su ${f.customers}`),
       y('2025', f.y2025, `${f.buyers2025} clienti`), y('2024', f.y2024, null)),
+    h('details', { class: 'fold-in' }, h('summary', {}, 'Primi clienti e come si calcola'),
     f.moved.customers && (f.moved.y2024 || f.moved.y2025 || f.moved.y2026) ? h('p', { class: 'ps-moved' },
       `Di cui ${f.moved.customers} ${f.moved.customers === 1 ? 'cliente affidato' : 'clienti affidati'} a te con le nuove assegnazioni (prima ${f.moved.from.join(' o ')}): `,
       h('strong', {}, `2026 ${e0(f.moved.y2026)} · 2025 ${e0(f.moved.y2025)} · 2024 ${e0(f.moved.y2024)}`)) : null,
-    h('p', { class: 'fine' }, h('strong', {}, 'Versione Beta: i dati possono contenere errori. '), 'Se qualcosa non torna, segnalalo con "Scrivi a Tommaso".'),
-    h('details', { class: 'fold-in' }, h('summary', {}, 'Primi clienti del 2026 e come si calcola'),
       f.top.length ? h('ul', { class: 'todo-list' }, f.top.map(c => h('li', { class: 'todo' }, h('a', { href: '#/agenda/' + c.id, class: 'todo-main' },
         h('span', { class: 'todo-text' }, h('strong', {}, c.name), h('small', { class: 'muted' }, [c.city, '2026 ' + e0(c.rev2026), c.rev2025 ? '2025 ' + e0(c.rev2025) : '', c.changedVsRadix ? 'affidato con le nuove assegnazioni' : ''].filter(Boolean).join(' · '))))))) : null,
       h('p', { class: 'fine' }, 'Perché può essere diverso dai tuoi numeri: è il fatturato di tutti i clienti che oggi sono nel tuo portafoglio, per cliente e non per agente. Comprende quindi anche gli acquisti dei clienti che ti sono stati affidati di recente (prima direzionali o di altri agenti), fatti quando non li seguivi tu, e gli ordini passati da altri canali. Non è il fatturato su cui si calcolano le tue provvigioni.'),
-      h('p', { class: 'fine' }, 'Fonte: fatturato RADIX (imponibile delle fatture). 2025 e 2024 sono anni interi; il 2026 è fino alla data indicata, quindi non va confrontato con un anno intero.')));
+      h('p', { class: 'fine' }, 'Fonte: fatturato RADIX (imponibile delle fatture). 2025 e 2024 sono anni interi; il 2026 è fino alla data indicata, quindi non va confrontato con un anno intero. Se qualcosa non torna, segnalalo con «Assistenza».')));
 }
 
 // "+ Nuova nota" dalla Home (richiesta Tommaso 01/11): scegli il cliente, scrivi/detta/registra, poi si apre la sua scheda
@@ -8015,7 +8109,6 @@ async function homeDirection(app, { head, foot, customers, quotes, actions, note
   const d7 = day(7), d14 = day(14), d30 = day(30), d60 = day(60), month = t.slice(0, 7);
   const rxNotes = app.store.radixNotes ? await app.store.radixNotes({ since: d60.slice(0, 10) }).catch(() => []) : [];
   const sum = (xs, f) => xs.reduce((a, x) => a + (f(x) || 0), 0);
-  const cname = id => app.store.customer(id)?.name || '';
 
   // --- OGGI
   const openOrders = orders.filter(o => o.status === 'Da inserire' || o.status === 'In lavorazione');
@@ -8024,10 +8117,8 @@ async function homeDirection(app, { head, foot, customers, quotes, actions, note
   const topAgents = Object.entries(byAgent).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} ${v}`).join(' · ');
   const noOutcome = quotes.filter(q => q.status === 'Inviata' && (q.sentAt || q.updatedAt || '') < d30);
   const rxTodo = rxNotes.filter(n => n.appointment && !n.ok && n.group !== 'Prezzi' && n.appointment >= d30.slice(0, 10) && n.appointment <= t);
-  const bigRx = rxFollow.slice().sort((a, b) => (b.total || 0) - (a.total || 0)).slice(0, 2).map(o => `${cname(o.customerId) || o.customerLabel.split(',')[0]} ${eur(o.total || 0)}`).join(' · ');
   const rows = [
     [openOrders.length, 'Ordini da inserire in RADIX', openOrders.filter(o => o.status === 'In lavorazione').length ? `${openOrders.filter(o => o.status === 'In lavorazione').length} già in lavorazione` : 'Offerte accettate passate all\'ufficio', '#/ordini', 'warn'],
-    [rxFollow.length, 'Offerte RADIX da sentire', `${eur(sum(rxFollow, o => o.total))}${bigRx ? ' · le più grandi: ' + bigRx : ''}`, '#/preventivi/radix', 'bad'],
     [late.length, 'Follow-up scaduti o di oggi', topAgents || 'della rete', '#/bacheca', 'bad'],
     [noOutcome.length, 'Offerte inviate senza esito da oltre 30 giorni', eur(sum(noOutcome, q => q.total)), '#/preventivi', 'warn'],
     ((exp) => [exp.length, 'Offerte in scadenza di validità', exp.length ? `entro 7 giorni · ${eur(sum(exp, o => o.total))}` : '', '#/preventivi', 'warn'])(rxOpen.filter(o => isExpiring(validityInfo(o.validUntil, t)))),
@@ -8039,10 +8130,11 @@ async function homeDirection(app, { head, foot, customers, quotes, actions, note
       : h('p', { class: 'today-ok' }, '✓ Tutto in ordine: niente di scaduto.'));
 
   const trendCard = await trendSection(app, { customers, quotes, notes, rxOpen, rxNotes });
+  const rxAgents = rxByAgent(app, rxFollow, () => app.go('home'));
 
   // 03/11: messaggi (Assistenza dei commerciali e domande all'ufficio) sotto l'Andamento, solo per chi risponde all'assistenza (Tommaso)
   const msgs = isAssistDesk(app.session) && app.store.threads ? [h('h2', { class: 'section-title' }, 'Messaggi'), await directionMessages(app)] : null;
-  return h('div', { class: 'page home-dir' }, head, todayCard, h('h2', { class: 'section-title' }, 'Andamento'), trendCard, msgs, foot);
+  return h('div', { class: 'page home-dir' }, head, todayCard, rxAgents, h('h2', { class: 'section-title' }, 'Andamento'), trendCard, msgs, foot);
 }
 
 // Andamento (Direzione: tutta la rete; agente: il suo portafoglio, perché i dati arrivano già filtrati)
@@ -8055,6 +8147,9 @@ async function trendSection(app, { customers, quotes, notes, rxOpen, rxNotes = n
   const wonApp = quotes.filter(q => q.status === 'Accettata' && String(q.outcome?.at || q.updatedAt || '').slice(0, 7) === month);
   const rxAll = app.store.radixOffers ? await app.store.radixOffers().catch(() => []) : [];
   const wonRx = rxAll.filter(o => o.outcome === 'Accettata' && String(o.outcomeAt || '').slice(0, 7) === month);
+  // 17/11: «Accettate nel mese» restava a zero (l'esito si segna di rado): al suo posto gli ordini del mese arrivati da RADIX
+  const rxOrd = app.store.radixOrders ? await app.store.radixOrders({ all: true }).catch(() => []) : [];
+  const ordMonth = rxOrd.filter(o => String(o.date || '').slice(0, 7) === month);
   const acts = (from, to) => notes.filter(n => n.createdAt >= from && n.createdAt < to).length + rxNotes.filter(n => n.date >= from.slice(0, 10) && n.date < to.slice(0, 10)).length;
   const a7 = acts(d7, '9999'), aPrev = acts(d14, d7);
   const recover = customers.filter(c => c.status === 'Da recuperare');
@@ -8064,10 +8159,28 @@ async function trendSection(app, { customers, quotes, notes, rxOpen, rxNotes = n
   const tile = (label, value, sub, href) => h('a', { class: 'kpi', href }, h('small', {}, label), h('strong', {}, value), sub ? h('span', {}, sub) : null);
   return h('section', { class: 'kpis trend' },
     tile('Offerte aperte', eur(sum(openQ, q => q.total) + sum(rxOpen, o => o.total)), `${openQ.length + rxOpen.length} offerte`, '#/preventivi' + (openQ.length ? '' : '/radix')),
-    tile('Accettate nel mese', eur(sum(wonApp, q => q.total) + sum(wonRx, o => o.total)), `${wonApp.length + wonRx.length} offerte`, '#/preventivi'),
+    rxOrd.length ? tile('Ordini del mese', eur(sum(ordMonth, o => o.total)), `${ordMonth.length} ordini in RADIX`, app.session.role === 'direzione' ? '#/ordini' : '#/preventivi')
+      : tile('Accettate nel mese', eur(sum(wonApp, q => q.total) + sum(wonRx, o => o.total)), `${wonApp.length + wonRx.length} offerte`, '#/preventivi'),
     tile('Attività ultimi 7 giorni', a7.toLocaleString('it-IT'), trend, app.session.role === 'direzione' ? '#/rete' : '#/agenda'),
     tile('Clienti da recuperare sentiti', `${recTouched} su ${recover.length}`, 'negli ultimi 60 giorni', '#/agenda/stato/Da recuperare'));
 
+}
+
+// 17/11 (Tommaso, controllo Home): le offerte RADIX da sentire non più come un numero unico per tutta la rete,
+// ma divise per commerciale (titolare del cliente nell'HUB), ordinate per valore; un clic apre l'elenco di quel commerciale.
+function rxByAgent(app, rxFollow, refresh) {
+  if (!rxFollow.length) return null;
+  const t = today(), days = d => Math.max(0, Math.round((new Date(t) - new Date(d)) / 864e5));
+  const g = new Map();
+  for (const o of rxFollow) { const c = o.customerId ? app.store.customer(o.customerId) : null; const k = c?.assignee || 'Senza commerciale';
+    const x = g.get(k) || { k, n: 0, v: 0, old: '9999', list: [] }; x.n++; x.v += o.total || 0; const d = radixOfferDue(o) || o.date || t; if (d < x.old) x.old = d; x.list.push(o); g.set(k, x); }
+  const rows = [...g.values()].sort((a, b) => b.v - a.v);
+  return h('section', { class: 'card rx-agents' }, h('h2', {}, `Offerte RADIX da sentire · ${rxFollow.length}`),
+    h('p', { class: 'fine' }, `${eur(rows.reduce((a, r) => a + r.v, 0))} in tutto · per commerciale, dalla più grande · tocca un nome per vedere le sue offerte`),
+    rows.map(r => h('details', { class: 'rx-agent' },
+      h('summary', {}, h('strong', {}, r.k), h('span', {}, `${r.n} ${r.n === 1 ? 'offerta' : 'offerte'}`), h('span', {}, eur(r.v)),
+        h('span', { class: 'due ' + (days(r.old) > 30 ? 'scaduto' : 'oggi') }, `la più vecchia da ${days(r.old)} giorni`)),
+      h('ul', { class: 'checks' }, r.list.sort((a, b) => (b.total || 0) - (a.total || 0)).map(o => radixFuLine(app, o, refresh))))));
 }
 
 return { viewHome, openActions };
@@ -11585,6 +11698,7 @@ const { COMUNI_GEO } = __m["js/data/comuni-geo-data.js"];
 const { foldCards } = __m["js/views/direction.js"];
 const { radixOfferOpen } = __m["js/views/radix-offers.js"];
 const { radixOfferDue } = __m["js/data/model.js"];
+const { targetEditor } = __m["js/views/target-card.js"];
 const canSeeStrategy = s => !!s?.canStrategy && !s.preview && !s.readOnly;
 
 const STATES = ['attivo', 'in uscita', 'scoperta'];
@@ -12128,7 +12242,8 @@ async function viewAgent(app, label) {
     pending ? h('p', {}, h('span', { class: 'badge muted' }, g ? 'modifiche non ancora inviate' : 'bozza, solo tua'), ' ', sendBtn,
       g ? h('small', { class: 'muted' }, ` · inviandole tornano "proposta da concordare"`) : null) : null,
     g?.agentNote ? h('p', { class: 'st-out' }, h('strong', {}, `Osservazioni di ${first}`), h('small', { class: 'muted' }, g.agentNoteAt ? ' · ' + dateIt(g.agentNoteAt) : ''), h('br'), g.agentNote) : null);
-  return h('div', { class: 'page' }, headCard(app, d, r, refresh), goalsLine,
+  const targetLine = r.state === 'scoperta' ? null : await targetEditor(app, label, first, refresh);   // 17/11 obiettivo annuale: visibile solo dopo «presentato»
+  return h('div', { class: 'page' }, headCard(app, d, r, refresh), targetLine, goalsLine,
     foldCards(h('div', { class: 'section-body ss-body' }, photoCard(r), kpiCard(app, d, r, refresh), agentTacticsCard(d, r), clientsCard(app, r, refresh), actCard, await diaryCard(app, d, r, d.customers), meridianCard(app, d, r, d.customers, refresh)), 'ntx-ss-agent'));
 }
 
