@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="213021f46a52">
+<meta name="ntx-build" content="83df2c9ae2e9">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1053,7 +1053,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .link-pick:hover { background: var(--hover, #f4f4f4); }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"213021f46a52"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"83df2c9ae2e9"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1694,7 +1694,7 @@ function unifiedOffers({ quotes = [], radix = [], reminders = [], customer = () 
     const open = q.status === 'Bozza' || q.status === 'Inviata';
     const vu = q.createdAt ? addDays(String(q.createdAt).slice(0, 10), q.validDays || 30) : null;
     return { key: 'q:' + q.id, origin: 'app', id: q.id, number: q.number, customerId: q.customerId, customerName: q.customer?.name || customer(q.customerId)?.name || '',
-      subject: (q.lines || []).slice(0, 2).map(l => l.description || l.radixCode).filter(Boolean).join(', '), total: q.total ?? null, who: q.ownerName || '',
+      subject: (q.lines || []).slice(0, 2).map(l => l.description || l.radixCode).filter(Boolean).join(', '), total: q.total ?? null, who: customer(q.customerId)?.assignee || q.ownerName || '', madeBy: q.ownerName || '',   // 17/11: «segue» = commerciale del cliente, come per RADIX (Forniture Edili di Fattorini fatte da Tommaso)
       state: open ? 'aperta' : q.status === 'Accettata' ? 'accettata' : q.status === 'Annullata' ? 'annullata' : 'persa', label: q.status, due: open ? (due.get(q.id) || null) : null,
       validity: open ? validityInfo(vu, today) : null, date: String(q.createdAt || q.updatedAt || '').slice(0, 10), raw: q };
   });
@@ -7287,7 +7287,7 @@ async function offersList(app, { onNew }) {
       o.expired ? h('small', { class: 'of-valid muted' }, 'Se il cliente è ancora interessato, richiamalo e chiedi all\'ufficio di rinnovarla; altrimenti tocca «Com\'è andata?» e segnala «Persa».') : null,
       stateText(o) ? h('span', { class: 'of-state' }, stateText(o)) : null,
       !o.expired && validText(o.validity) ? h('small', { class: 'of-valid ' + (o.validity.days < 0 || o.validity.days <= 2 ? 'bad-text' : o.validity.days <= 7 ? 'warn-text' : 'muted') }, validText(o.validity)) : null,
-      h('small', { class: 'muted' }, [`Offerta ${o.number || 'bozza'}`, o.origin === 'radix' ? 'fatta dall\'ufficio in RADIX' : 'fatta nell\'app', 'il ' + dateIt(o.date), isDir && o.who ? 'segue ' + o.who : null].filter(Boolean).join(' · ')),
+      h('small', { class: 'muted' }, [`Offerta ${o.number || 'bozza'}`, o.origin === 'radix' ? 'fatta dall\'ufficio in RADIX' : 'fatta nell\'app' + (isDir && o.madeBy && o.madeBy !== o.who ? ' da ' + o.madeBy : ''), 'il ' + dateIt(o.date), isDir && o.who ? 'segue ' + o.who : null].filter(Boolean).join(' · ')),
       o.origin === 'radix' && o.state === 'aperta' ? reminderBadge(o.raw, app, reload, all.filter(x => x.origin === 'radix').map(x => x.raw)) : null,
       o.origin === 'radix' && o.raw.outcomeNote ? h('small', { class: 'rx-note' }, `Ultima nota: “${o.raw.outcomeNote}” — ${o.raw.outcomeByName || ''}`) : null);
     const side = h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, o.total ? eur(o.total) : '—'),
