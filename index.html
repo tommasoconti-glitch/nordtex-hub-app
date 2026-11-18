@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="d980f04b300b">
+<meta name="ntx-build" content="4468078afdd9">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -792,7 +792,8 @@ a.rx-main.plain{color:inherit;text-decoration:none} a.rx-main.plain:hover .rx-cu
 .pick-note>span{display:flex;flex-direction:column;gap:2px}.pick-note-body{white-space:pre-wrap}
 .quote-notes .card-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.quote-notes .card-head .row{display:flex;gap:8px}
 .tabbar.tabbar-6 small{font-size:.6rem;letter-spacing:-.01em} .tabbar.tabbar-6 .ico{font-size:1.05rem}   /* 04/11: 6 voci per gli agenti (Giacenze) */
-.lines .qty-unit{display:block;width:92px;margin:4px 0 0 auto;padding:4px 6px;font-size:.8rem} .lines .qty-eq{display:block;white-space:nowrap}   /* 04/11: quantità in bancali, m³, pannelli */
+.lines .qty-unit{display:block;width:auto;min-width:92px;max-width:190px;margin:4px 0 0 auto;padding:4px 6px;font-size:.8rem} .lines .qty-eq{display:block;white-space:nowrap}   /* 04/11: quantità in bancali, m³, pannelli */
+.lines .cover-ctl{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;align-items:center;margin-top:4px;max-width:220px;margin-left:auto} .lines .cover-ctl select{padding:3px 4px;font-size:.8rem} .lines .cover-ctl .qty.small{width:56px} .lines .cover-ctl small{flex-basis:100%;text-align:right;white-space:normal;font-size:.72rem}   /* 18/11: m² posati */
 .ps-card{padding-bottom:10px} .ps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 4px} .ps-year{display:flex;flex-direction:column;min-width:0} .ps-year small{color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em} .ps-year strong{font-size:1.15rem;white-space:nowrap} .ps-year span{font-size:.72rem;color:var(--muted)} .ps-year:first-child strong{font-size:1.3rem}   /* 04/11 fatturato portafoglio in Home */
 @media (max-width:400px){.ps-year strong,.ps-year:first-child strong{font-size:1rem}} .ps-year strong{overflow-wrap:anywhere}
 .ps-moved{font-size:.82rem;margin:6px 0 2px;color:var(--muted)} .ps-moved strong{color:var(--text,inherit);white-space:normal}
@@ -1053,7 +1054,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .link-pick:hover { background: var(--hover, #f4f4f4); }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"d980f04b300b"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"4468078afdd9"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -6705,11 +6706,70 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
 
 return { stockFor, fillText, transportPanel };
 })();
+__m["js/core/coverage.js"] = (function () {
+// 18/11 (Tommaso): prezzo e quantità AL M² per i prodotti che si stendono (collanti, rasanti, intonaci, finiture, pitture, primer, granulati).
+// Dati di consumo dal listino n.05 (p.coverage, caricati con 18_consumi_m2.sql); niente valori inventati: senza p.coverage l'articolo non ha il m².
+// p.coverage = { pack: quantità (kg o litri) in 1 unità di vendita, packUnit: 'kg'|'l', page, uses: [{ name, per, value, def, min, max, note }] }
+//   per = 'm2'   → value kg (o l) per m², fisso
+//   per = 'mm'   → value per m² per ogni mm di spessore (def = spessore proposto)
+//   per = 'cm'   → value per m² per ogni cm di spessore
+//   per = 'mano' → value per m² per ogni mano (def = mani proposte)
+// La rete e gli accessori restano voci a parte.
+
+const PER_LABEL = { mm: 'mm', cm: 'cm', mano: 'mani' };
+const dec = (n, d = 2) => Number(n).toLocaleString('it-IT', { maximumFractionDigits: d });
+
+function coverageUses(p) {
+  const c = p?.coverage;
+  if (!c || !(c.pack > 0) || !Array.isArray(c.uses)) return [];
+  return c.uses.filter(u => u && u.value > 0 && ['m2', 'mm', 'cm', 'mano'].includes(u.per));
+}
+
+// scelta della riga: { i: indice dell'uso, n: spessore o mani }; valori mancanti → uso 0 e spessore proposto
+function coverChoice(p, pick = {}) {
+  const uses = coverageUses(p); if (!uses.length) return null;
+  const i = Number.isInteger(pick?.i) && uses[pick.i] ? pick.i : 0, u = uses[i];
+  const n = u.per === 'm2' ? 1 : (pick?.n > 0 && pick.i === i ? Number(pick.n) : (u.def > 0 ? u.def : 1));
+  return { i, n, use: u };
+}
+
+// unità di vendita per 1 m² (es. sacchi/m²); null se l'articolo non ha consumi
+function unitsPerM2(p, pick) {
+  const ch = coverChoice(p, pick); if (!ch) return null;
+  const amount = ch.use.value * (ch.use.per === 'm2' ? 1 : ch.n);   // kg (o l) per m²
+  return amount / p.coverage.pack;
+}
+
+// "rasatura 4 mm", "incollaggio", "2 mani"
+function coverLabel(p, pick) {
+  const ch = coverChoice(p, pick); if (!ch) return '';
+  const uses = coverageUses(p), u = ch.use;
+  const what = uses.length > 1 || u.per === 'm2' ? u.name : '';
+  const amount = u.per === 'm2' ? '' : `${dec(ch.n, 1)} ${u.per === 'mano' ? (ch.n === 1 ? 'mano' : 'mani') : PER_LABEL[u.per]}`;
+  return [what, amount].filter(Boolean).join(' ');
+}
+
+// riga di spiegazione: "consumo 1,3 kg/m² per mm × 4 mm = 5,2 kg/m² · 1 sacco ogni 4,81 m² (listino pag. 121)"
+function coverExplain(p, pick) {
+  const ch = coverChoice(p, pick); if (!ch) return '';
+  const c = p.coverage, u = ch.use, pu = c.packUnit || 'kg';
+  const amount = u.value * (u.per === 'm2' ? 1 : ch.n);
+  const base = u.per === 'm2' ? `consumo ${dec(u.value, 3)} ${pu}/m²` : `consumo ${dec(u.value, 3)} ${pu}/m² per ${u.per === 'mano' ? 'mano' : u.per} × ${dec(ch.n, 1)} = ${dec(amount, 2)} ${pu}/m²`;
+  const per = unitsPerM2(p, pick);
+  const cover = per > 0 && c.pack !== 1 ? ` · 1 confezione ogni ${dec(1 / per, 2)} m²` : '';
+  return `${base}${cover}${u.note ? ' (' + u.note + ')' : ''}${c.page ? ` · listino pag. ${c.page}` : ''}`;
+}
+
+const coverUnitWord = per => PER_LABEL[per] || '';
+
+return { coverageUses, coverChoice, unitsPerM2, coverLabel, coverExplain, coverUnitWord };
+})();
 __m["js/core/conversions.js"] = (function () {
 // Conversioni di massima per articolo: pezzi ↔ m² ↔ m³ ↔ kg ↔ bancale ↔ carico.
 // Fonti, in ordine di affidabilità: valori dichiarati nel listino (note Master), dati Master (bancale, peso bancale,
 // bancali/carico), calcoli da dimensioni/spessore/densità. Ogni valore porta la sua fonte; le stime sono segnalate.
 const { regimeFor, loadCapacity } = __m["js/core/logistics.js"];
+const { unitsPerM2, coverLabel } = __m["js/core/coverage.js"];
 const unit = s => ({ MQ: 'M2', MC: 'M3', SA: 'SACCO', SC: 'SACCO' }[String(s ?? '').toUpperCase().trim()] || String(s ?? '').toUpperCase().trim());
 const pos = v => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
 const dec = s => Number(String(s).replace(/\./g, '').replace(',', '.'));
@@ -6855,7 +6915,7 @@ function quantityEquivalents(p, qty) {
 
 // 04/11 (richiesta rete): la quantità di riga si può scrivere anche in bancali, carichi, m³, m², pannelli/pezzi, rotoli.
 // La riga resta nell'unità di vendita (prezzo e RADIX): factor = unità di vendita per 1 unità scelta. Solo conversioni note dai dati.
-function entryUnits(p) {
+function entryUnits(p, cover = null) {
   if (!p) return [];
   const per = perSaleUnit(p), v = per.values, su = per.unit, pal = palletInfo(p, per);
   const out = [{ key: su, label: ul(su), factor: 1 }];
@@ -6873,10 +6933,14 @@ function entryUnits(p) {
   // 12/11 (Tommaso): anche a carico completo. Listino pag. 43 e RADIX N88308: 22 BigBag da 3 m³ = 66 m³ per autoarticolato.
   // Per i BigBag da 1,5 m³ il carico non è documentato: niente unità «carico» finché l'ufficio non lo conferma.
   if (bag && Number(bag[1].replace(',', '.')) === 3) add('CARICO', 'carichi', 66);
+  // 18/11 (Tommaso): m² posati per i prodotti con consumo a listino (collanti, rasanti, intonaci, pitture…);
+  // spessore/mani e uso (incollaggio, rasatura) scelti sulla riga; sacchi e confezioni arrotondati per eccesso
+  const m2c = unitsPerM2(p, cover);
+  if (m2c > 0) out.push({ key: 'M2C', label: 'm² ' + (coverLabel(p, cover) || 'posati'), factor: m2c, whole: !['KG', 'M3', 'M2', 'ML'].includes(su), cover: true });
   return out;
 }
 // quantità in unità di vendita da quella scritta (3 decimali, come RADIX)
-const fromEntry = (value, factor) => Math.round(value * factor * 1000) / 1000;
+const fromEntry = (value, factor, whole = false) => whole ? Math.ceil(value * factor - 1e-9) : Math.round(value * factor * 1000) / 1000;
 const toEntry = (qty, factor) => Math.round(qty / factor * 1000) / 1000;
 
 return { UNIT_LABEL, notesFacts, perSaleUnit, palletInfo, conversionLines, quantityEquivalents, entryUnits, fromEntry, toEntry };
@@ -6885,6 +6949,7 @@ __m["js/core/unit-prices.js"] = (function () {
 // Prezzo per unità di misura (richiesta Tommaso 02/11/2026): dal prezzo netto di riga ricava €/kg, €/sacco, €/m², €/m³,
 // €/pannello, €/pezzo, €/m² di muro, €/bancale, €/carico completo; con il trasporto di questa offerta o a carico completo.
 const { perSaleUnit, palletInfo, UNIT_LABEL } = __m["js/core/conversions.js"];
+const { unitsPerM2, coverLabel } = __m["js/core/coverage.js"];
 const { planTransport } = __m["js/core/logistics.js"];
 // densità di posa consigliate per gli sfusi (listino n.05 pag. 7 e 26-27): il prezzo al m³ dipende dalla densità
 const BULK_DENSITY = { floc: [35, 45], timberfloc: [32, 42], zell: [35, 45], 'Naturtex flow': [33, 45] };
@@ -6899,7 +6964,7 @@ function packOf(p) {
 }
 
 // Unità disponibili per un articolo: q = quante unità di vendita ci sono in 1 unità mostrata
-function unitOptions(p) {
+function unitOptions(p, cover = null) {
   const per = perSaleUnit(p), v = per.values, su = per.unit, pal = palletInfo(p, per), out = [];
   const add = (key, label, q, note = '') => { if (q > 0 && Number.isFinite(q) && !out.some(o => o.key === key)) out.push({ key, label, q, note }); };
   add('base', ul(su), 1);
@@ -6913,6 +6978,8 @@ function unitOptions(p) {
     for (const d of [a, mid, b]) add('m3d' + d, `m³ a ${d} kg/m³`, d, 'densità di posa');
   }
   if (su !== 'KG' && v.kg && per.source.kg !== 'stima densità') add('kg', 'kg', 1 / v.kg);
+  const m2c = unitsPerM2(p, cover);   // 18/11: m² posato con il consumo del listino
+  if (m2c > 0) add('m2c', 'm² ' + (coverLabel(p, cover) || 'posato'), m2c, 'consumo da listino');
   if (pal.qty) add('pallet', 'bancale', pal.qty);
   const full = fullLoadQty(p, pal);
   if (full) add('load', `carico completo (${Math.round(full / pal.qty)} bancali)`, full);
@@ -6945,8 +7012,8 @@ function effectiveBasis(basis, offerTpu, net, fullPerUnit) {
 }
 
 // prezzi per le unità: net = prezzo netto per unità di vendita; tpu = trasporto per unità di vendita (null = escluso)
-function unitPrices(p, net, tpu = null) {
-  return unitOptions(p).map(o => ({ ...o, price: net * o.q, withTransport: tpu === null ? null : (net + tpu) * o.q }));
+function unitPrices(p, net, tpu = null, cover = null) {
+  return unitOptions(p, cover).map(o => ({ ...o, price: net * o.q, withTransport: tpu === null ? null : (net + tpu) * o.q }));
 }
 const eu = n => n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 // riga per il documento dell'offerta
@@ -7511,6 +7578,7 @@ const { mailtoUrl, quoteMailBody, quoteMailIntro, openMailto } = __m["js/core/ma
 const { quoteMargin, quoteCommission, unitCost } = __m["js/core/margins.js"];
 const { transportPanel, stockFor } = __m["js/views/transport-panel.js"];
 const { conversionLines, quantityEquivalents, entryUnits, fromEntry, toEntry } = __m["js/core/conversions.js"];
+const { coverageUses, coverChoice, coverExplain, coverUnitWord } = __m["js/core/coverage.js"];
 const { unitPrices, fullLoadTransport, offerTransportPerUnit, unitPriceNote, fullLoadQty, effectiveBasis, deliveredPrice } = __m["js/core/unit-prices.js"];
 const { purchaseHint } = __m["js/core/price-history.js"];
 const { planTransport, regimeFor, lineLoad, loadCapacity, partialMap } = __m["js/core/logistics.js"];
@@ -7693,14 +7761,29 @@ async function viewQuoteEditor(app, id, customerId) {
   const selectAll = el => setTimeout(() => { try { el.setSelectionRange(0, el.value.length); } catch { el.select(); } }, 0);
   // 04/11: quantità scritta in bancali, carichi, m³, pannelli…; la riga resta nell'unità di vendita (l.qty), l.entryUnit ricorda la scelta
   const qtyCell = (l, live) => {
-    const us = entryUnits(byId.get(l.productId));
+    const p = byId.get(l.productId);
+    const us = entryUnits(p, l.cover);
     if (us.length < 2) return [numIn(l.qty, v => { l.qty = v > 0 ? v : l.qty; }, { 'aria-label': 'Quantità', class: 'qty' }, live), h('small', {}, l.unit)];
     const u = us.find(x => x.key === l.entryUnit) || us[0];
     const sel = h('select', { class: 'qty-unit', 'aria-label': 'Unità della quantità', disabled: locked,
-      onchange: e => { l.entryUnit = e.target.value === us[0].key ? undefined : e.target.value; mark(); drawLines(); } },
+      onchange: e => { l.entryUnit = e.target.value === us[0].key ? undefined : e.target.value; delete l.entryQty; mark(); drawLines(); } },
       us.map(x => h('option', { value: x.key, selected: x.key === u.key }, x.label)));
-    return [numIn(u.factor === 1 ? l.qty : toEntry(l.qty, u.factor), v => { if (v > 0) l.qty = fromEntry(v, u.factor); }, { 'aria-label': 'Quantità in ' + u.label, class: 'qty' }, live), sel,
-      u.factor === 1 ? null : h('small', { class: 'qty-eq' }, '= ' + num(l.qty, 3) + ' ' + String(l.unit).toLowerCase().replace('m2', 'm²').replace('m3', 'm³'))];
+    // 18/11: m² posati → sacchi interi; si ricorda il valore scritto (100 m² restano 100 anche se diventano 21 sacchi)
+    const shown = u.factor === 1 ? l.qty : (u.cover && l.entryQty > 0 && fromEntry(l.entryQty, u.factor, u.whole) === l.qty ? l.entryQty : toEntry(l.qty, u.factor));
+    const input = numIn(shown, v => { if (v > 0) { l.qty = fromEntry(v, u.factor, u.whole); if (u.cover) l.entryQty = v; else delete l.entryQty; } }, { 'aria-label': 'Quantità in ' + u.label, class: 'qty' }, live);
+    const unitWord = String(l.unit).toLowerCase().replace('m2', 'm²').replace('m3', 'm³').replace('sacco', 'sacchi');
+    const eq = u.factor === 1 ? null : h('small', { class: 'qty-eq' }, '= ' + num(l.qty, 3) + ' ' + unitWord + (u.cover ? ` · ${eur(lineNet(l) * u.factor)}/m² netto` : ''));
+    return [input, sel, u.cover ? coverCtl(l, p) : null, eq];
+  };
+  // 18/11 (Tommaso): uso (incollaggio, rasatura…) e spessore o mani per il calcolo al m²; il dato del listino resta visibile
+  const coverCtl = (l, p) => {
+    const uses = coverageUses(p), ch = coverChoice(p, l.cover); if (!ch) return null;
+    const set = pick => { l.cover = pick; const u = entryUnits(p, l.cover).find(x => x.key === 'M2C'); if (u && l.entryQty > 0) l.qty = fromEntry(l.entryQty, u.factor, u.whole); mark(); drawLines(); };
+    return h('div', { class: 'cover-ctl' },
+      uses.length > 1 ? h('select', { 'aria-label': 'Uso', disabled: locked, onchange: e => { const i = Number(e.target.value); set({ i, n: coverageUses(p)[i].def }); } },
+        uses.map((x, i) => h('option', { value: i, selected: i === ch.i }, x.name))) : null,
+      ch.use.per === 'm2' ? null : h('label', { class: 'cover-n' }, numIn(ch.n, v => { if (v > 0) set({ i: ch.i, n: v }); }, { 'aria-label': 'Spessore o mani', class: 'qty small' }), ' ' + coverUnitWord(ch.use.per)),
+      h('small', { class: 'muted' }, coverExplain(p, l.cover)));
   };
   const numIn = (value, onset, attrs = {}, live = null) => {
     let t = null;
@@ -7753,7 +7836,7 @@ async function viewQuoteEditor(app, id, customerId) {
     const eb = effectiveBasis(l.unitPick.basis, offerTpu, net, full?.perUnit ?? null);   // 11/11: quantità piccola → carico completo
     const basis = eb.basis;
     const tpu = basis === 'offer' ? offerTpu : basis === 'full' ? full?.perUnit ?? null : null;
-    const rows = unitPrices(p, net, tpu);
+    const rows = unitPrices(p, net, tpu, l.cover);
     if (rows.length < 2) return null;
     const note = unitPriceNote(rows, l.unitPick.keys, basis);
     if ((l.unitNote || '') !== note) { l.unitNote = note; mark(); }
