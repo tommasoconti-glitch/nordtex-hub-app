@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="4468078afdd9">
+<meta name="ntx-build" content="11744afab27b">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1054,7 +1054,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .link-pick:hover { background: var(--hover, #f4f4f4); }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"4468078afdd9"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"11744afab27b"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1193,7 +1193,7 @@ const DISCOUNT_MAX_LABEL = '50+15+5 (59,63%)';
 
 const UNITS = new Set(['M2', 'M3', 'PZ', 'ML', 'CONF', 'ROTOLO', 'KG', 'SACCO', 'BIGBAG']);
 const txt = x => String(x ?? '').trim();
-const normUnit = x => ({ MQ: 'M2', MC: 'M3', SA: 'SACCO', SC: 'SACCO' }[txt(x).toUpperCase()] || txt(x).toUpperCase());
+const normUnit = x => ({ MQ: 'M2', MC: 'M3', SA: 'SACCO', SC: 'SACCO', RO: 'ROTOLO', RT: 'ROTOLO' }[txt(x).toUpperCase()] || txt(x).toUpperCase());
 const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
 
 // Livello di affidabilità del prezzo di un articolo del Master.
@@ -3963,7 +3963,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const fmtN = (v, d) => { const [i, f] = Math.abs(Number(v)).toFixed(d).split('.'); return (Number(v) < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : ''); };
 const n = fmtN;
 const dotDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}.${String(x.getMonth() + 1).padStart(2, '0')}.${x.getFullYear()}`; };
-const UM = { M2: 'MQ', M3: 'M3', PZ: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CF', ROTOLO: 'RT', SACCO: 'SA', BIGBAG: 'BB' };
+const UM = { M2: 'MQ', M3: 'M3', PZ: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CF', ROTOLO: 'RO', SACCO: 'SA', BIGBAG: 'BB' };
 const UL = { M2: 'm²', M3: 'm³', ML: 'ml', PZ: 'pz', KG: 'kg' };
 const discText = d => d.filter(x => x).map(x => n(x, x % 1 ? 1 : 0)).join('+');
 // 02/11 (richiesta Tommaso, come nella vecchia app offerte): sconti nascosti nel documento → colonna Prezzo = prezzo netto, colonna Sconto % assente
@@ -4121,7 +4121,7 @@ function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
   const rows = docSequence(q, t.freight).map(({ line: l, freight: f }) => f
     ? row(esc(f.label), f.code, 'NR', n(f.qty, 2), n(f.price, 3), hideDiscounts(q) ? null : '', n(f.amount, 2))
     : row([esc(l.description), ...lineExtra(l).map(esc)].join('<br>'), l.radixCode || l.listCode || '', UM[l.unit] || l.unit,
-      l.unit === 'PZ' || l.unit === 'SACCO' ? n(l.qty, 0) : n(l.qty, 3), n(docPrice(q, l), 3), hideDiscounts(q) ? null : discText(l.discounts), n(lineAmount(l), 2)));
+      ['PZ', 'SACCO', 'ROTOLO', 'BIGBAG'].includes(l.unit) ? n(l.qty, 0) : n(l.qty, 3), n(docPrice(q, l), 3), hideDiscounts(q) ? null : discText(l.discounts), n(lineAmount(l), 2)));
   if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), hideDiscounts(q) ? null : '', n(t.extras, 2)));
   if (t.euroPallets) rows.push(row(esc(EURO_PALLET.label), EURO_PALLET.code, 'NR', n(t.euroPalletCount, 2), n(EURO_PALLET.price, 3), hideDiscounts(q) ? null : '', n(t.euroPallets, 2)));
   if (t.bigBagPallets) rows.push(row(esc(BIGBAG_PALLET.label), BIGBAG_PALLET.code, 'NR', n(t.bigBagPalletCount, 2), n(BIGBAG_PALLET.price, 3), hideDiscounts(q) ? null : '', n(t.bigBagPallets, 2)));
@@ -5971,7 +5971,7 @@ function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
   const wrap = s => wrapText(s, descW, 8.5);
   const freightRow = f => row(wrap(f.label), { code: f.code, um: 'NR', qty: n(f.qty, 2), price: hideDiscounts(q) ? '' : n(f.price, 3), disc: hideDiscounts(q) ? n(f.price, 3) : '', amount: n(f.amount, 2) });
   for (const { line: l, freight: f } of docSequence(q, t.freight)) if (f) freightRow(f); else row([...wrap(l.description), ...lineExtra(l).flatMap(wrap)],
-    { code: l.radixCode || l.listCode || '', um: UM[l.unit] || l.unit, qty: l.unit === 'PZ' || l.unit === 'SACCO' ? n(l.qty, 0) : n(l.qty, 3), price: hideDiscounts(q) ? '' : n(l.listPrice, 3), disc: hideDiscounts(q) ? n(docPrice(q, l), 3) : discText(l.discounts), amount: n(lineAmount(l), 2) });
+    { code: l.radixCode || l.listCode || '', um: UM[l.unit] || l.unit, qty: ['PZ', 'SACCO', 'ROTOLO', 'BIGBAG'].includes(l.unit) ? n(l.qty, 0) : n(l.qty, 3), price: hideDiscounts(q) ? '' : n(l.listPrice, 3), disc: hideDiscounts(q) ? n(docPrice(q, l), 3) : discText(l.discounts), amount: n(lineAmount(l), 2) });
   if (t.extras) row(wrap(q.extrasLabel || 'Altri addebiti'), { code: '', um: 'NR', qty: '1,00', price: hideDiscounts(q) ? '' : n(t.extras, 3), disc: hideDiscounts(q) ? n(t.extras, 3) : '', amount: n(t.extras, 2) });
   if (t.euroPallets) row(wrap(EURO_PALLET.label), { code: EURO_PALLET.code, um: 'NR', qty: n(t.euroPalletCount, 2), price: hideDiscounts(q) ? '' : n(EURO_PALLET.price, 3), disc: hideDiscounts(q) ? n(EURO_PALLET.price, 3) : '', amount: n(t.euroPallets, 2) });
   if (t.bigBagPallets) row(wrap(BIGBAG_PALLET.label), { code: BIGBAG_PALLET.code, um: 'NR', qty: n(t.bigBagPalletCount, 2), price: hideDiscounts(q) ? '' : n(BIGBAG_PALLET.price, 3), disc: hideDiscounts(q) ? n(BIGBAG_PALLET.price, 3) : '', amount: n(t.bigBagPallets, 2) });
@@ -6009,11 +6009,13 @@ __m["js/core/margins.js"] = (function () {
 // Costo: "Prezzo acquisto RADIX" del Master (storico, attualità da verificare), usato solo se nella stessa unità di vendita.
 // Provvigione: regole impostate dalla Direzione (percentuale per fascia di sconto, generale o per agente).
 const { lineNet, lineAmount, totalDiscount, round2 } = __m["js/core/pricing.js"];
-const unit = s => ({ MQ: 'M2', MC: 'M3', SA: 'SACCO', SC: 'SACCO' }[String(s ?? '').toUpperCase().trim()] || String(s ?? '').toUpperCase().trim());
+const unit = s => ({ MQ: 'M2', MC: 'M3', SA: 'SACCO', SC: 'SACCO', RO: 'ROTOLO', RT: 'ROTOLO' }[String(s ?? '').toUpperCase().trim()] || String(s ?? '').toUpperCase().trim());
 
 function unitCost(p) {
   if (!p || !(p.purchasePrice > 0)) return { cost: null, reason: 'Prezzo di acquisto non disponibile' };
-  if (unit(p.purchaseUnit) !== unit(p.saleUnit)) return { cost: null, reason: `Costo in ${p.purchaseUnit}, vendita in ${p.saleUnit}: serve conversione` };
+  // 18/11: in RADIX molti sacchi, rotoli e BigBag hanno il costo «a pezzo»: 1 pz = 1 confezione
+  const pack = new Set(['PZ', 'SACCO', 'ROTOLO', 'BIGBAG']), a = unit(p.purchaseUnit), b = unit(p.saleUnit);
+  if (a !== b && !(pack.has(a) && pack.has(b))) return { cost: null, reason: `Costo in ${p.purchaseUnit}, vendita in ${p.saleUnit}: serve conversione` };
   return { cost: p.purchasePrice, reason: '' };
 }
 
@@ -6138,7 +6140,7 @@ const M3_ZONES = [[0, 'TS GO UD PN VE TV BL PD VR TN BZ MN'], [2, 'VI RO BS BG C
 const NORTH = ['Piemonte', "Valle d'Aosta", 'Lombardia', 'Liguria', 'Trentino-Alto Adige', 'Veneto', 'Friuli-Venezia Giulia', 'Emilia-Romagna'];
 
 const up = s => String(s ?? '').toUpperCase();
-const unit = s => ({ MQ: 'M2', MC: 'M3', SA: 'SACCO', SC: 'SACCO' }[up(s).trim()] || up(s).trim());
+const unit = s => ({ MQ: 'M2', MC: 'M3', SA: 'SACCO', SC: 'SACCO', RO: 'ROTOLO', RT: 'ROTOLO' }[up(s).trim()] || up(s).trim());
 
 // Regola di trasporto dell'articolo (null = nessuna tariffa nel listino: quotazione ufficio)
 // 06/11 (Tommaso): blocchi rettificati con "collante incluso" (Staudacher e Leipfinger Bader): su ogni mezzo un bancale è la colla,
@@ -6752,7 +6754,7 @@ function coverLabel(p, pick) {
 // riga di spiegazione: "consumo 1,3 kg/m² per mm × 4 mm = 5,2 kg/m² · 1 sacco ogni 4,81 m² (listino pag. 121)"
 function coverExplain(p, pick) {
   const ch = coverChoice(p, pick); if (!ch) return '';
-  const c = p.coverage, u = ch.use, pu = c.packUnit || 'kg';
+  const c = p.coverage, u = ch.use, pu = ({ m2: 'm²' })[c.packUnit] || c.packUnit || 'kg';
   const amount = u.value * (u.per === 'm2' ? 1 : ch.n);
   const base = u.per === 'm2' ? `consumo ${dec(u.value, 3)} ${pu}/m²` : `consumo ${dec(u.value, 3)} ${pu}/m² per ${u.per === 'mano' ? 'mano' : u.per} × ${dec(ch.n, 1)} = ${dec(amount, 2)} ${pu}/m²`;
   const per = unitsPerM2(p, pick);
@@ -6770,7 +6772,7 @@ __m["js/core/conversions.js"] = (function () {
 // bancali/carico), calcoli da dimensioni/spessore/densità. Ogni valore porta la sua fonte; le stime sono segnalate.
 const { regimeFor, loadCapacity } = __m["js/core/logistics.js"];
 const { unitsPerM2, coverLabel } = __m["js/core/coverage.js"];
-const unit = s => ({ MQ: 'M2', MC: 'M3', SA: 'SACCO', SC: 'SACCO' }[String(s ?? '').toUpperCase().trim()] || String(s ?? '').toUpperCase().trim());
+const unit = s => ({ MQ: 'M2', MC: 'M3', SA: 'SACCO', SC: 'SACCO', RO: 'ROTOLO', RT: 'ROTOLO' }[String(s ?? '').toUpperCase().trim()] || String(s ?? '').toUpperCase().trim());
 const pos = v => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
 const dec = s => Number(String(s).replace(/\./g, '').replace(',', '.'));
 const UNIT_LABEL = { M2: 'm²', M3: 'm³', ML: 'ml', PZ: 'pz', KG: 'kg', CONF: 'conf.', ROTOLO: 'rotoli', SACCO: 'sacchi', BIGBAG: 'BigBag', L: 'l' };
@@ -6967,7 +6969,7 @@ function packOf(p) {
 function unitOptions(p, cover = null) {
   const per = perSaleUnit(p), v = per.values, su = per.unit, pal = palletInfo(p, per), out = [];
   const add = (key, label, q, note = '') => { if (q > 0 && Number.isFinite(q) && !out.some(o => o.key === key)) out.push({ key, label, q, note }); };
-  add('base', ul(su), 1);
+  add('base', ({ SACCO: 'sacco', ROTOLO: 'rotolo', BIGBAG: 'BigBag' })[su] || ul(su), 1);
   const pk = packOf(p);
   if (pk && su === 'KG' && pk.unit === 'kg') add('pack', `${pk.name} da ${String(pk.qty).replace('.', ',')} kg`, pk.qty);
   if (su === 'M2' && v.pz) add('panel', 'pannello', 1 / v.pz);
@@ -7769,9 +7771,9 @@ async function viewQuoteEditor(app, id, customerId) {
       onchange: e => { l.entryUnit = e.target.value === us[0].key ? undefined : e.target.value; delete l.entryQty; mark(); drawLines(); } },
       us.map(x => h('option', { value: x.key, selected: x.key === u.key }, x.label)));
     // 18/11: m² posati → sacchi interi; si ricorda il valore scritto (100 m² restano 100 anche se diventano 21 sacchi)
-    const shown = u.factor === 1 ? l.qty : (u.cover && l.entryQty > 0 && fromEntry(l.entryQty, u.factor, u.whole) === l.qty ? l.entryQty : toEntry(l.qty, u.factor));
+    const shown = u.factor === 1 ? l.qty : (u.cover && l.entryQty > 0 && fromEntry(l.entryQty, u.factor, u.whole) === l.qty ? l.entryQty : u.cover ? String(Math.round(toEntry(l.qty, u.factor) * 100) / 100).replace('.', ',') : toEntry(l.qty, u.factor));
     const input = numIn(shown, v => { if (v > 0) { l.qty = fromEntry(v, u.factor, u.whole); if (u.cover) l.entryQty = v; else delete l.entryQty; } }, { 'aria-label': 'Quantità in ' + u.label, class: 'qty' }, live);
-    const unitWord = String(l.unit).toLowerCase().replace('m2', 'm²').replace('m3', 'm³').replace('sacco', 'sacchi');
+    const one = Math.abs(l.qty - 1) < 1e-9, unitWord = ({ SACCO: one ? 'sacco' : 'sacchi', ROTOLO: one ? 'rotolo' : 'rotoli', BIGBAG: 'BigBag' })[l.unit] || String(l.unit).toLowerCase().replace('m2', 'm²').replace('m3', 'm³');
     const eq = u.factor === 1 ? null : h('small', { class: 'qty-eq' }, '= ' + num(l.qty, 3) + ' ' + unitWord + (u.cover ? ` · ${eur(lineNet(l) * u.factor)}/m² netto` : ''));
     return [input, sel, u.cover ? coverCtl(l, p) : null, eq];
   };
