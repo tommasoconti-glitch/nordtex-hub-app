@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="f28dcf638759">
+<meta name="ntx-build" content="d980f04b300b">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1053,7 +1053,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .link-pick:hover { background: var(--hover, #f4f4f4); }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f28dcf638759"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"d980f04b300b"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1192,7 +1192,7 @@ const DISCOUNT_MAX_LABEL = '50+15+5 (59,63%)';
 
 const UNITS = new Set(['M2', 'M3', 'PZ', 'ML', 'CONF', 'ROTOLO', 'KG', 'SACCO', 'BIGBAG']);
 const txt = x => String(x ?? '').trim();
-const normUnit = x => ({ MQ: 'M2', MC: 'M3' }[txt(x).toUpperCase()] || txt(x).toUpperCase());
+const normUnit = x => ({ MQ: 'M2', MC: 'M3', SA: 'SACCO', SC: 'SACCO' }[txt(x).toUpperCase()] || txt(x).toUpperCase());
 const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
 
 // Livello di affidabilità del prezzo di un articolo del Master.
@@ -3962,7 +3962,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const fmtN = (v, d) => { const [i, f] = Math.abs(Number(v)).toFixed(d).split('.'); return (Number(v) < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : ''); };
 const n = fmtN;
 const dotDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}.${String(x.getMonth() + 1).padStart(2, '0')}.${x.getFullYear()}`; };
-const UM = { M2: 'MQ', M3: 'M3', PZ: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CF', ROTOLO: 'RT', SACCO: 'SC', BIGBAG: 'BB' };
+const UM = { M2: 'MQ', M3: 'M3', PZ: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CF', ROTOLO: 'RT', SACCO: 'SA', BIGBAG: 'BB' };
 const UL = { M2: 'm²', M3: 'm³', ML: 'ml', PZ: 'pz', KG: 'kg' };
 const discText = d => d.filter(x => x).map(x => n(x, x % 1 ? 1 : 0)).join('+');
 // 02/11 (richiesta Tommaso, come nella vecchia app offerte): sconti nascosti nel documento → colonna Prezzo = prezzo netto, colonna Sconto % assente
@@ -4120,7 +4120,7 @@ function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
   const rows = docSequence(q, t.freight).map(({ line: l, freight: f }) => f
     ? row(esc(f.label), f.code, 'NR', n(f.qty, 2), n(f.price, 3), hideDiscounts(q) ? null : '', n(f.amount, 2))
     : row([esc(l.description), ...lineExtra(l).map(esc)].join('<br>'), l.radixCode || l.listCode || '', UM[l.unit] || l.unit,
-      l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), n(docPrice(q, l), 3), hideDiscounts(q) ? null : discText(l.discounts), n(lineAmount(l), 2)));
+      l.unit === 'PZ' || l.unit === 'SACCO' ? n(l.qty, 0) : n(l.qty, 3), n(docPrice(q, l), 3), hideDiscounts(q) ? null : discText(l.discounts), n(lineAmount(l), 2)));
   if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), hideDiscounts(q) ? null : '', n(t.extras, 2)));
   if (t.euroPallets) rows.push(row(esc(EURO_PALLET.label), EURO_PALLET.code, 'NR', n(t.euroPalletCount, 2), n(EURO_PALLET.price, 3), hideDiscounts(q) ? null : '', n(t.euroPallets, 2)));
   if (t.bigBagPallets) rows.push(row(esc(BIGBAG_PALLET.label), BIGBAG_PALLET.code, 'NR', n(t.bigBagPalletCount, 2), n(BIGBAG_PALLET.price, 3), hideDiscounts(q) ? null : '', n(t.bigBagPallets, 2)));
@@ -5970,7 +5970,7 @@ function quotePdf(q, { header = '', footer = '', now = new Date() } = {}) {
   const wrap = s => wrapText(s, descW, 8.5);
   const freightRow = f => row(wrap(f.label), { code: f.code, um: 'NR', qty: n(f.qty, 2), price: hideDiscounts(q) ? '' : n(f.price, 3), disc: hideDiscounts(q) ? n(f.price, 3) : '', amount: n(f.amount, 2) });
   for (const { line: l, freight: f } of docSequence(q, t.freight)) if (f) freightRow(f); else row([...wrap(l.description), ...lineExtra(l).flatMap(wrap)],
-    { code: l.radixCode || l.listCode || '', um: UM[l.unit] || l.unit, qty: l.unit === 'PZ' ? n(l.qty, 0) : n(l.qty, 3), price: hideDiscounts(q) ? '' : n(l.listPrice, 3), disc: hideDiscounts(q) ? n(docPrice(q, l), 3) : discText(l.discounts), amount: n(lineAmount(l), 2) });
+    { code: l.radixCode || l.listCode || '', um: UM[l.unit] || l.unit, qty: l.unit === 'PZ' || l.unit === 'SACCO' ? n(l.qty, 0) : n(l.qty, 3), price: hideDiscounts(q) ? '' : n(l.listPrice, 3), disc: hideDiscounts(q) ? n(docPrice(q, l), 3) : discText(l.discounts), amount: n(lineAmount(l), 2) });
   if (t.extras) row(wrap(q.extrasLabel || 'Altri addebiti'), { code: '', um: 'NR', qty: '1,00', price: hideDiscounts(q) ? '' : n(t.extras, 3), disc: hideDiscounts(q) ? n(t.extras, 3) : '', amount: n(t.extras, 2) });
   if (t.euroPallets) row(wrap(EURO_PALLET.label), { code: EURO_PALLET.code, um: 'NR', qty: n(t.euroPalletCount, 2), price: hideDiscounts(q) ? '' : n(EURO_PALLET.price, 3), disc: hideDiscounts(q) ? n(EURO_PALLET.price, 3) : '', amount: n(t.euroPallets, 2) });
   if (t.bigBagPallets) row(wrap(BIGBAG_PALLET.label), { code: BIGBAG_PALLET.code, um: 'NR', qty: n(t.bigBagPalletCount, 2), price: hideDiscounts(q) ? '' : n(BIGBAG_PALLET.price, 3), disc: hideDiscounts(q) ? n(BIGBAG_PALLET.price, 3) : '', amount: n(t.bigBagPallets, 2) });
@@ -6008,7 +6008,7 @@ __m["js/core/margins.js"] = (function () {
 // Costo: "Prezzo acquisto RADIX" del Master (storico, attualità da verificare), usato solo se nella stessa unità di vendita.
 // Provvigione: regole impostate dalla Direzione (percentuale per fascia di sconto, generale o per agente).
 const { lineNet, lineAmount, totalDiscount, round2 } = __m["js/core/pricing.js"];
-const unit = s => ({ MQ: 'M2', MC: 'M3' }[String(s ?? '').toUpperCase().trim()] || String(s ?? '').toUpperCase().trim());
+const unit = s => ({ MQ: 'M2', MC: 'M3', SA: 'SACCO', SC: 'SACCO' }[String(s ?? '').toUpperCase().trim()] || String(s ?? '').toUpperCase().trim());
 
 function unitCost(p) {
   if (!p || !(p.purchasePrice > 0)) return { cost: null, reason: 'Prezzo di acquisto non disponibile' };
@@ -6137,7 +6137,7 @@ const M3_ZONES = [[0, 'TS GO UD PN VE TV BL PD VR TN BZ MN'], [2, 'VI RO BS BG C
 const NORTH = ['Piemonte', "Valle d'Aosta", 'Lombardia', 'Liguria', 'Trentino-Alto Adige', 'Veneto', 'Friuli-Venezia Giulia', 'Emilia-Romagna'];
 
 const up = s => String(s ?? '').toUpperCase();
-const unit = s => ({ MQ: 'M2', MC: 'M3' }[up(s).trim()] || up(s).trim());
+const unit = s => ({ MQ: 'M2', MC: 'M3', SA: 'SACCO', SC: 'SACCO' }[up(s).trim()] || up(s).trim());
 
 // Regola di trasporto dell'articolo (null = nessuna tariffa nel listino: quotazione ufficio)
 // 06/11 (Tommaso): blocchi rettificati con "collante incluso" (Staudacher e Leipfinger Bader): su ogni mezzo un bancale è la colla,
@@ -6497,7 +6497,7 @@ const { kmViaBrennero, addressVariants } = __m["js/core/route.js"];
 const { lineAmount } = __m["js/core/pricing.js"];
 const { DEPOTS, RADIX_DEPOTS } = __m["js/core/quote-doc.js"];
 const eu = (n, d = 2) => { if (n === null || n === undefined) return '—'; const [i, f] = Math.abs(Number(n)).toFixed(d).split('.'); return (n < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : '') + ' €'; };   // 1.452,00 €
-const qtyFmt = (n, u) => `${num(n, u === 'PZ' || u === 'SA' ? 0 : 2)} ${({ M2: 'm²', M3: 'm³', ML: 'ml' }[u] || (u || '').toLowerCase())}`;
+const qtyFmt = (n, u) => `${num(n, u === 'PZ' || u === 'SA' || u === 'SACCO' ? 0 : 2)} ${({ M2: 'm²', M3: 'm³', ML: 'ml', SACCO: 'sacchi' }[u] || (u || '').toLowerCase())}`;
 
 function stockFor(stock, radixCode) {
   if (!stock || !radixCode) return [];
@@ -6710,7 +6710,7 @@ __m["js/core/conversions.js"] = (function () {
 // Fonti, in ordine di affidabilità: valori dichiarati nel listino (note Master), dati Master (bancale, peso bancale,
 // bancali/carico), calcoli da dimensioni/spessore/densità. Ogni valore porta la sua fonte; le stime sono segnalate.
 const { regimeFor, loadCapacity } = __m["js/core/logistics.js"];
-const unit = s => ({ MQ: 'M2', MC: 'M3' }[String(s ?? '').toUpperCase().trim()] || String(s ?? '').toUpperCase().trim());
+const unit = s => ({ MQ: 'M2', MC: 'M3', SA: 'SACCO', SC: 'SACCO' }[String(s ?? '').toUpperCase().trim()] || String(s ?? '').toUpperCase().trim());
 const pos = v => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
 const dec = s => Number(String(s).replace(/\./g, '').replace(',', '.'));
 const UNIT_LABEL = { M2: 'm²', M3: 'm³', ML: 'ml', PZ: 'pz', KG: 'kg', CONF: 'conf.', ROTOLO: 'rotoli', SACCO: 'sacchi', BIGBAG: 'BigBag', L: 'l' };
