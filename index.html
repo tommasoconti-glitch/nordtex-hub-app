@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="c46c41bf8972">
+<meta name="ntx-build" content="6fd8db22aab7">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1054,7 +1054,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .link-pick:hover { background: var(--hover, #f4f4f4); }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"c46c41bf8972"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"6fd8db22aab7"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -7665,6 +7665,22 @@ async function orderDialog(app, q) {
   return true;
 }
 
+// 19/11: offerta HUB accettata con l'ordine già fatto in RADIX (Direzione/Ufficio): un passaggio solo, niente email all'ufficio
+async function alreadyInRadix(app, q) {
+  const ref = h('input', { placeholder: 'es. OCDIR 2026-433', 'aria-label': 'Numero ordine RADIX' });
+  const ok = await modal(`Ordine già inserito in RADIX · ${q.number}`, h('div', { class: 'form' },
+    h('p', { class: 'muted' }, 'Scrivi il numero dell\'ordine RADIX: l\'offerta si chiude con il suo ordine e non va tra le cose da fare dell\'ufficio.'),
+    field('N° ordine RADIX', ref)),
+    [{ label: 'Annulla', value: false }, { label: 'Conferma', primary: true, run: async () => {
+      const r = ref.value.trim(); if (!r) throw new Error('Indica il numero d\'ordine RADIX');
+      const o = await app.store.requestOrder(q, { notes: 'Ordine già inserito in RADIX: ' + r });
+      await app.store.updateOrder(o.id, { status: 'Inserito', radixRef: r, officeNote: 'Ordine già inserito in RADIX' });
+      return true;
+    } }]);
+  if (ok) toast('Offerta chiusa con l\'ordine RADIX ' + ref.value.trim());
+  return !!ok;
+}
+
 // Prima di una nuova offerta l'agente chiude le offerte senza esito da oltre 30 giorni
 async function outcomeGate(app) {
   if (app.session.role === 'direzione') return true;
@@ -8239,7 +8255,10 @@ async function viewQuoteEditor(app, id, customerId) {
   const orderBox = () => {
     if (!q.id || q.status !== 'Accettata') return null;
     if (!order) return isOwner && !app.session.preview ? h('div', { class: 'order-box todo' }, h('strong', {}, 'Offerta accettata: passa l\'ordine all\'ufficio'),
-      h('button', { class: 'btn small primary', onclick: askOrder }, 'Passa l\'ordine all\'ufficio')) : h('div', { class: 'order-box' }, 'Ordine non ancora passato all\'ufficio');
+      h('button', { class: 'btn small primary', onclick: askOrder }, 'Passa l\'ordine all\'ufficio'),
+      // 19/11 (Tommaso, caso Sacchi OFF-2026-0008): ordine già inserito in RADIX → si scrive il numero e l'offerta si chiude, senza richiesta all'ufficio
+      isDir ? h('button', { class: 'btn small', onclick: async () => { try { if (await alreadyInRadix(app, q)) await refreshOrder(); } catch (e) { toast(e.message, 'error'); } } }, 'Ordine già inserito in RADIX') : null)
+      : h('div', { class: 'order-box' }, 'Ordine non ancora passato all\'ufficio');
     const info = h('div', {}, h('span', { class: 'badge ' + orderCls(order.status) }, 'Ordine: ' + order.status), order.radixRef ? h('strong', {}, ' · RADIX ' + order.radixRef) : null,
       h('small', { class: 'muted' }, ` · passato da ${order.requestedByName || '—'} il ${dateIt(order.requestedAt)}${order.deliveryDate ? ' · consegna ' + dateIt(order.deliveryDate) : ''}${order.handledByName ? ' · ufficio: ' + order.handledByName : ''}`),
       order.officeNote ? h('p', { class: 'muted' }, 'Ufficio: ' + order.officeNote) : null);
@@ -8378,7 +8397,7 @@ async function pickCustomer(app, { title, recentIds = [], recentLabel = 'Clienti
   });
 }
 
-return { viewQuotes, outcomeDialog, resolveOutcome, orderDialog, viewQuoteEditor, printQuote, startNewQuote, pickCustomer };
+return { viewQuotes, outcomeDialog, resolveOutcome, orderDialog, alreadyInRadix, viewQuoteEditor, printQuote, startNewQuote, pickCustomer };
 })();
 __m["js/views/home.js"] = (function () {
 const { goalsCard } = __m["js/views/goals-card.js"];
