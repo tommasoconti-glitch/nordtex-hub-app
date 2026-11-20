@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="ed7d166b3d6c">
+<meta name="ntx-build" content="802206b4b452">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1054,7 +1054,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 .link-pick:hover { background: var(--hover, #f4f4f4); }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"ed7d166b3d6c"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"802206b4b452"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -11563,280 +11563,6 @@ async function buildBackup(fetchTable, { by = '', now = new Date() } = {}) {
 
 return { BACKUP_TABLES, toCsv, buildBackup };
 })();
-__m["js/core/network-export.js"] = (function () {
-// «Scheda rete» (17/11/2026, richiesta della chat Rete di Tommaso): un file Excel con i dati per preparare le telefonate del lunedì
-// e gli affiancamenti. Solo Direzione. Niente margini, costi, provvigioni né obiettivi 2027: non servono alla scheda.
-// Funzione pura: riceve i dati già letti dall'HUB e restituisce i fogli.
-const { customerPhase } = __m["js/data/model.js"];
-// Le ex zone di Voghera sono di Battaglia (come nella Home della Direzione)
-const AGENT_ALIAS = { EX_AREA_GV_1: 'Battaglia Valerio', EX_AREA_GV_2: 'Battaglia Valerio' };
-const agentOf = label => AGENT_ALIAS[label] || label || '';
-const isRealAgent = l => !!l && l !== 'Direzionale' && !String(l).startsWith('__');
-const d10 = x => x ? String(x).slice(0, 10) : '';
-const num = x => x === null || x === undefined || x === '' || !Number.isFinite(Number(x)) ? '' : Math.round(Number(x) * 100) / 100;
-const addDays = (iso, n) => new Date(new Date(iso + 'T12:00:00Z').getTime() + n * 864e5).toISOString().slice(0, 10);
-const FERMI = ['calo', 'dormiente', 'perso'];
-const PHASE_RANK = { calo: 0, dormiente: 1, perso: 2 };
-
-/**
- * dati: { customers, net: { agents, meetings, actions }, tactics, quotes, radixOffers, notes, radixNotes, access, profiles }
- * opzioni: { agent (etichetta HUB o nome, facoltativo), today (AAAA-MM-GG), weeks (note recenti, default 4), lostSince (persi da includere) }
- */
-function buildNetworkSheets(dati, { agent = null, today = new Date().toISOString().slice(0, 10), weeks = 4, lostSince = '2022-01-01' } = {}) {
-  const { customers = [], net = {}, tactics = [], quotes = [], radixOffers = [], notes = [], radixNotes = [], access = [], profiles = [] } = dati;
-  const want = agent ? agentOf(agent) : null;
-  const keep = l => isRealAgent(l) && (!want || agentOf(l) === want);
-  const byId = new Map(customers.map(c => [c.id, c]));
-  const custAgent = id => byId.get(id)?.assignee || '';
-  const custName = id => byId.get(id)?.name || '';
-  const fasciaOf = new Map((net.agents || []).map(a => [agentOf(a.label), a.fascia]));
-  const tName = new Map(tactics.map(t => [t.id, t.nome || t.name || t.id]));
-  const now = new Date(today + 'T12:00:00');
-
-  // ultimo contatto per cliente: note dell'HUB e note RADIX
-  const lastContact = new Map();
-  const seeContact = (id, date, what) => { if (!id || !date) return; const p = lastContact.get(id); if (!p || p.date < date) lastContact.set(id, { date, what }); };
-  for (const n of notes) seeContact(n.customerId, d10(n.createdAt), [n.kind, n.authorName].filter(Boolean).join(' · '));
-  for (const n of radixNotes) seeContact(n.customerId, d10(n.date), ['RADIX ' + (n.group || 'nota'), n.authorName].filter(Boolean).join(' · '));
-
-  // 1. Azioni di Sales strategy (e incontri). 17/11 (Tommaso): l'azione si scrive «Cliente: cosa fare»; il codice RADIX si ricava dal nome
-  // tra i clienti dello stesso commerciale (solo se il nome individua un cliente solo)
-  const norm = x => String(x || '').toUpperCase().replace(/\b(S\.?R\.?L\.?S?|S\.?N\.?C\.?|S\.?P\.?A\.?|S\.?A\.?S\.?)(?=\s|$)/g, ' ').replace(/[^A-Z0-9]+/g, ' ').trim();
-  const codeOf = (label, title) => {
-    const head = String(title || '').split(':')[0]; if (!head || head === title) return '';
-    const k = norm(head); if (k.length < 3) return '';
-    const mine = customers.filter(c => agentOf(c.assignee) === agentOf(label));
-    const hit = mine.filter(c => norm(c.name) === k); if (hit.length === 1) return hit[0].id;
-    const part = mine.filter(c => norm(c.name).startsWith(k + ' ') || norm(c.name).startsWith(k)); return part.length === 1 ? part[0].id : '';
-  };
-  const actions = [['Commerciale', 'Fascia', 'Azione', 'Codice cliente', 'Tattica', 'Scadenza', 'Stato', 'Fatta il', 'Esito', 'Nata dall\'incontro del']];
-  const meetDate = new Map((net.meetings || []).map(m => [m.id, m.date]));
-  for (const a of (net.actions || []).filter(a => keep(a.label)).sort((x, y) => agentOf(x.label).localeCompare(agentOf(y.label)) || String(x.due || '9').localeCompare(String(y.due || '9')))) {
-    const state = a.doneOn ? 'fatta' : a.due && a.due < today ? 'scaduta' : 'aperta';
-    actions.push([agentOf(a.label), fasciaOf.get(agentOf(a.label)) ? 'F' + fasciaOf.get(agentOf(a.label)) : '', a.title, codeOf(a.label, a.title), a.tactic ? tName.get(a.tactic) || a.tactic : '', d10(a.due), state, d10(a.doneOn), a.result || '', d10(meetDate.get(a.meetingId))]);
-  }
-  const meetings = [['Data', 'Commerciale', 'Tipo', 'Esito', 'Registrazione Plaud']];
-  for (const m of (net.meetings || []).filter(m => keep(m.label))) meetings.push([d10(m.date), agentOf(m.label), m.kind || '', m.outcome || '', m.plaud || '']);
-
-  // 2. Offerte aperte (HUB e RADIX); l'ultimo follow-up dell'HUB è l'ultima nota collegata all'offerta
-  const lastQuoteNote = new Map();
-  for (const n of notes) if (n.quoteId) { const p = lastQuoteNote.get(n.quoteId); if (!p || p < d10(n.createdAt)) lastQuoteNote.set(n.quoteId, d10(n.createdAt)); }
-  const offers = [['Commerciale', 'Fonte', 'Numero', 'Data', 'Codice cliente', 'Cliente', 'Valore €', 'Stato', 'Ultimo follow-up', 'Da sentire dal', 'Nota follow-up']];
-  const offRows = [];
-  for (const q of quotes) {
-    if (!(q.status === 'Bozza' || q.status === 'Inviata')) continue;
-    const l = custAgent(q.customerId); if (!keep(l)) continue;
-    offRows.push([agentOf(l), 'HUB', q.number || '', d10(q.createdAt), q.customerId || '', custName(q.customerId) || q.customer?.name || '', num(q.total), q.status, lastQuoteNote.get(q.id) || '', '', '']);
-  }
-  for (const o of radixOffers) {
-    if (!(o.outcome === 'Da seguire' || o.outcome === 'Sentito')) continue;
-    const l = custAgent(o.customerId); if (!keep(l)) continue;
-    offRows.push([agentOf(l), 'RADIX', o.id, d10(o.date), o.customerId || '', custName(o.customerId) || o.customerLabel || '', num(o.total), o.outcome, d10(o.outcomeAt), d10(o.nextFollowup || o.followup), o.outcomeNote || '']);
-  }
-  offRows.sort((a, b) => a[0].localeCompare(b[0]) || String(a[3]).localeCompare(String(b[3])));
-  offers.push(...offRows);
-
-  // 3. Clienti fermi: in calo (6-12 mesi), dormienti (1-2 anni), persi da più di 2 anni ma con acquisti dal 2022
-  const stopped = [['Commerciale', 'Codice', 'Cliente', 'Città', 'Prov.', 'Tipologia', 'Fascia acquisti', 'Ultimo acquisto', 'Fatturato 2024 €', 'Fatturato 2025 €', 'Fatturato 2026 €', 'Ultimo contatto', 'Che contatto']];
-  const stRows = [];
-  for (const c of customers) {
-    if (c.isTest || !keep(c.assignee)) continue;
-    const ph = customerPhase(c, now); if (!FERMI.includes(ph.key)) continue;
-    if (ph.key === 'perso' && !(c.lastInvoice && c.lastInvoice >= lostSince)) continue;
-    const lc = lastContact.get(c.id);
-    stRows.push({ k: [agentOf(c.assignee), PHASE_RANK[ph.key], -(Number(c.rev2025 ?? c.inv2025) || 0)],
-      r: [agentOf(c.assignee), c.id, c.name, c.city || '', c.prov || '', c.typology || '', ph.text, d10(c.lastInvoice), num(c.rev2024 ?? c.inv2024), num(c.rev2025 ?? c.inv2025), num(c.rev2026 ?? c.inv2026), lc?.date || '', lc?.what || ''] });
-  }
-  stRows.sort((a, b) => a.k[0].localeCompare(b.k[0]) || a.k[1] - b.k[1] || a.k[2] - b.k[2]);
-  stopped.push(...stRows.map(x => x.r));
-
-  // 4. Note e attività delle ultime settimane, sui clienti del commerciale
-  const since = addDays(today, -7 * weeks);
-  const recent = [['Data', 'Commerciale', 'Codice cliente', 'Cliente', 'Fonte', 'Tipo', 'Autore', 'Esito', 'Testo', 'Impegni presi']];
-  const nRows = [];
-  for (const n of notes) {
-    const dt = d10(n.createdAt), l = custAgent(n.customerId); if (dt < since || !keep(l)) continue;
-    const imp = (n.actions || []).map(a => a.title + (a.due ? ' (entro ' + a.due + ')' : '') + (a.done ? ' ✓' : '')).join(' · ');
-    nRows.push([dt, agentOf(l), n.customerId, custName(n.customerId), 'HUB', n.kind || '', n.authorName || '', n.outcome || '', n.body || '', imp]);
-  }
-  for (const n of radixNotes) {
-    const dt = d10(n.date), l = custAgent(n.customerId); if (dt < since || !keep(l)) continue;
-    nRows.push([dt, agentOf(l), n.customerId, custName(n.customerId), 'RADIX', n.group || '', n.authorName || '', '', [n.subject, n.body].filter(Boolean).join(' — '), '']);
-  }
-  nRows.sort((a, b) => b[0].localeCompare(a[0]) || a[1].localeCompare(b[1]));
-  recent.push(...nRows);
-
-  // 5. Uso dell'app: un utente per commerciale (profili con zona assegnata)
-  const usage = [['Commerciale', 'Utente', 'Ultimo accesso', 'Ultima apertura dell\'app', 'Aperture ultimi 30 giorni', 'Giorni di uso ultimi 30']];
-  const zoneOf = new Map(profiles.map(p => [p.id, p.assignee_label]));
-  for (const a of access || []) {
-    const l = zoneOf.get(a.userId); if (!keep(l) || a.active === false) continue;
-    usage.push([agentOf(l), a.name || '', d10(a.lastSignIn), d10(a.lastOpen), num(a.opens30), num(a.days30)]);
-  }
-  usage.splice(1, usage.length, ...usage.slice(1).sort((a, b) => a[0].localeCompare(b[0])));
-
-  const info = [['NORDTEX HUB · Scheda rete'], ['Esportata il', today], ['Commerciale', want || 'tutta la rete'],
-    ['Fogli', 'Azioni (Sales strategy) · Incontri · Offerte aperte (HUB e RADIX) · Clienti fermi · Note ultime ' + weeks + ' settimane · Uso dell\'app'],
-    ['Clienti fermi', 'in calo = ultimo acquisto da 6 a 12 mesi; dormiente = da 1 a 2 anni; perso = oltre 2 anni, solo se ha comprato dal ' + lostSince.slice(0, 4)],
-    ['Codice cliente', 'codice RADIX in ogni foglio; nelle azioni si ricava dal nome scritto prima dei due punti («Cliente: cosa fare»), vuoto se il nome non individua un cliente solo'],
-    ['Ultimo contatto', 'nota più recente dell\'HUB o di RADIX sul cliente'],
-    ['Escluso', 'margini, costi d\'acquisto, provvigioni e obiettivi 2027'],
-    ['Riservatezza', 'Documento interno della Direzione commerciale: non inoltrare ai commerciali.']];
-
-  return [{ name: 'Leggimi', rows: info }, { name: 'Azioni', rows: actions }, { name: 'Incontri', rows: meetings }, { name: 'Offerte aperte', rows: offers },
-    { name: 'Clienti fermi', rows: stopped }, { name: 'Note recenti', rows: recent }, { name: 'Uso dell\'app', rows: usage }];
-}
-
-const exportFileName = (today, agent) => `NORDTEX_scheda_rete_${today}${agent ? '_' + agentOf(agent).replace(/[^A-Za-z0-9]+/g, '_') : ''}.xlsx`;
-
-// 17/11 regola delle azioni: «Cliente: cosa fare». Il cliente si sceglie dall'elenco («Nome · codice») o si scrive il nome esatto.
-function actionCustomer(list, text) {
-  const t = String(text || '').trim(); if (!t) return null;
-  const code = t.includes(' · ') ? t.split(' · ').pop().trim() : null;
-  if (code) { const c = list.find(x => String(x.id) === code); if (c) return c; }
-  const up = t.toUpperCase(), same = list.filter(x => String(x.name).toUpperCase() === up);
-  return same.length === 1 ? same[0] : null;
-}
-const actionTitle = (name, what) => String(what).toUpperCase().startsWith(String(name).toUpperCase() + ':') ? String(what) : `${name}: ${what}`;
-
-return { AGENT_ALIAS, agentOf, buildNetworkSheets, exportFileName, actionCustomer, actionTitle };
-})();
-__m["js/core/claude-export.js"] = (function () {
-// «Esporta per Claude» (18/11/2026, Tommaso): un file Excel fisso (HUB_export.xlsx) che Tommaso salva ogni giorno su OneDrive,
-// in NORDTEX OPERATIVO/05 RISERVATO DIREZIONE/Dati HUB, così la chat Quotidiano legge l'HUB senza connettore al database.
-// Escluso PER COSTRUZIONE: costi d'acquisto (hub_product_costs non si legge), margini, righe delle offerte, provvigioni, obiettivi,
-// dati fiscali e bancari (P.IVA, codice fiscale, IBAN/banca, SDI, PEC). Funzione pura: riceve i dati già letti dall'HUB.
-const { customerPhase } = __m["js/data/model.js"];
-const { agentOf } = __m["js/core/network-export.js"];
-const CLAUDE_EXPORT_NAME = 'HUB_export.xlsx';
-// 18/11 sera (chat Quotidiano): il foglio Clienti pesa da solo ~5 MB → file a parte, da esportare il lunedì
-const CLAUDE_CLIENTS_NAME = 'HUB_clienti.xlsx';
-const d10 = x => x ? String(x).slice(0, 10) : '';
-const num = x => x === null || x === undefined || x === '' || !Number.isFinite(Number(x)) ? '' : Math.round(Number(x) * 100) / 100;
-
-/**
- * dati: { customers, people (hub_contacts grezzi), notes, quotes, radixOffers, radixOrders }
- * opzioni: { now: Date, by: nome di chi esporta }
- */
-function buildClaudeSheets(dati, { now = new Date(), by = '', part = 'giorno' } = {}) {
-  const { customers = [], people = [], notes = [], quotes = [], radixOffers = [], radixOrders = [] } = dati;
-  const today = now.toISOString().slice(0, 10);
-  const list = customers.filter(c => !c.isTest);
-  const byCode = new Map(list.map(c => [c.id, c])), byUuid = new Map(list.map(c => [c.uuid, c]));
-  const agent = code => agentOf(byCode.get(code)?.assignee);
-  const label = code => byCode.get(code)?.assignee || '';
-  const uuid = code => byCode.get(code)?.uuid || '';
-  const cname = code => byCode.get(code)?.name || '';
-
-  // 1. Clienti (tutti tranne quelli in fase «contatto») e 2. Contatti (inseriti in HUB senza offerte)
-  const head = ['Codice', 'Nome', 'Commerciale', 'assignee_label', 'Fase', 'Stato', 'Tipologia', 'Città', 'Prov.', 'Telefono', 'Email', 'Origine', 'Ultimo acquisto', 'Fatturato 2024 €', 'Fatturato 2025 €', 'Fatturato 2026 €', 'Creato il', 'customer_id'];
-  const clienti = [head], contatti = [head];
-  for (const c of [...list].sort((a, b) => String(a.name).localeCompare(String(b.name)))) {
-    const ph = customerPhase(c, now);
-    (ph.key === 'contatto' ? contatti : clienti).push([c.id, c.name || '', agentOf(c.assignee), c.assignee || '', ph.text || ph.key, c.status || '', c.typology || '', c.city || '', c.prov || '', c.phone || '', c.email || '',
-      c.origin || '', d10(c.lastInvoice), num(c.rev2024 ?? c.inv2024), num(c.rev2025 ?? c.inv2025), num(c.rev2026 ?? c.inv2026), d10(c.createdAt), c.uuid || '']);
-  }
-
-  // 3. Persone di riferimento dei clienti (hub_contacts)
-  const persone = [['Codice cliente', 'Cliente', 'Nome', 'Ruolo', 'Telefono', 'Email', 'Note']];
-  for (const p of people) { const c = byUuid.get(p.customer_id); if (!c) continue; persone.push([c.id, c.name, p.name || '', p.role || '', p.phone || '', p.email || '', p.notes || '']); }
-
-  // 4. Note e 5. Azioni (le note sono le più recenti lette dall'HUB, al massimo 500)
-  const note = [['Data', 'Codice cliente', 'Cliente', 'Commerciale', 'assignee_label', 'Autore', 'Tipo', 'Esito', 'Testo', 'Offerta collegata', 'customer_id']];
-  const azioni = [['Azione', 'Codice cliente', 'Cliente', 'Commerciale', 'assignee_label', 'Scadenza', 'Stato', 'Fatta il', 'Dalla nota del', 'Autore della nota', 'customer_id']];
-  const qNum = new Map(quotes.map(q => [q.id, q.number]));
-  for (const n of notes) {
-    if (!byCode.has(n.customerId)) continue;
-    note.push([d10(n.createdAt), n.customerId, cname(n.customerId), agent(n.customerId), label(n.customerId), n.authorName || '', n.kind || '', n.outcome || '', n.body || '', n.quoteId ? qNum.get(n.quoteId) || 'offerta HUB' : n.radixOfferId || '', uuid(n.customerId)]);
-    for (const a of n.actions || []) azioni.push([a.title || '', n.customerId, cname(n.customerId), agent(n.customerId), label(n.customerId), d10(a.due),
-      a.done ? 'fatta' : a.due && a.due < today ? 'scaduta' : 'aperta', d10(a.doneAt), d10(n.createdAt), n.authorName || '', uuid(n.customerId)]);
-  }
-  const rank = { scaduta: 0, aperta: 1, fatta: 2 };
-  azioni.splice(1, azioni.length, ...azioni.slice(1).sort((a, b) => rank[a[6]] - rank[b[6]] || String(a[5] || '9').localeCompare(String(b[5] || '9'))));
-
-  // 6. Offerte dell'HUB (solo testata: niente righe, prezzi d'acquisto o margini)
-  const offHub = [['Numero', 'Data', 'Aggiornata il', 'Codice cliente', 'Cliente', 'Commerciale', 'assignee_label', 'Autore', 'Stato', 'Totale €', 'Cantiere', 'customer_id']];
-  for (const q of quotes) { if (q.customerId && !byCode.has(q.customerId)) continue;
-    offHub.push([q.number || '', d10(q.createdAt), d10(q.updatedAt), q.customerId || '', cname(q.customerId) || q.customer?.name || '', agent(q.customerId), label(q.customerId), q.ownerName || '', q.status || '', num(q.total), q.site || '', uuid(q.customerId)]); }
-
-  // 7. Offerte RADIX aperte e 8. Ordini RADIX aperti
-  const offRadix = [['Numero', 'Data', 'Valida fino al', 'Codice cliente', 'Cliente', 'Commerciale', 'assignee_label', 'Oggetto', 'Totale €', 'Esito', 'Nota esito', 'Prossimo follow-up', 'Probabilità %', 'Mese previsto', 'customer_id']];
-  for (const o of radixOffers) offRadix.push([o.id, d10(o.date), d10(o.validUntil), o.customerId || '', cname(o.customerId) || o.customerLabel || '', agent(o.customerId), label(o.customerId), o.subject || '', num(o.total),
-    o.outcome || '', o.outcomeNote || '', d10(o.nextFollowup || o.followup), o.forecastP || '', o.forecastMonth || '', uuid(o.customerId)]);
-  const ordRadix = [['Numero', 'Data', 'Consegna entro', 'Codice cliente', 'Cliente', 'Commerciale', 'assignee_label', 'Cantiere', 'Totale €', 'Stato RADIX', 'customer_id']];
-  for (const o of radixOrders) ordRadix.push([o.id, d10(o.date), d10(o.deliveryBy), o.customerId || '', cname(o.customerId) || o.customerLabel || '', agent(o.customerId), label(o.customerId), o.site || '', num(o.total), o.status || '', uuid(o.customerId)]);
-
-  const n = rows => rows.length - 1;   // prima della riga data
-  const iso = now.toISOString();
-  const stamp = now.toLocaleString('it-IT', { timeZone: 'Europe/Rome', dateStyle: 'short', timeStyle: 'short' });
-  const info = [['NORDTEX HUB · Esportazione per Claude'], ['Esportata il', stamp], ['Esportata il (ISO, UTC)', iso], ['Da', by],
-    ['Contenuto', `${n(contatti)} contatti · ${n(persone)} persone · ${n(note)} note · ${n(azioni)} azioni · ${n(offHub)} offerte HUB · ${n(offRadix)} offerte RADIX aperte · ${n(ordRadix)} ordini RADIX aperti`],
-    ['Clienti', 'nel file a parte ' + CLAUDE_CLIENTS_NAME + ' (stessa cartella, aggiornato il lunedì)'],
-    ['Note', 'le 500 note più recenti dell\'HUB (le note RADIX non sono incluse)'],
-    ['Escluso', 'costi d\'acquisto, margini, righe delle offerte, provvigioni, obiettivi 2027, dati fiscali e bancari'],
-    ['Riservatezza', 'Documento interno della Direzione commerciale: non inoltrare.']];
-
-  if (part === 'clienti') { clienti.unshift(['Esportato il ' + stamp, iso]); return [{ name: 'Clienti', rows: clienti }]; }
-  const sheets = [{ name: 'Leggimi', rows: info }, { name: 'Contatti', rows: contatti }, { name: 'Persone', rows: persone },
-    { name: 'Note', rows: note }, { name: 'Azioni', rows: azioni }, { name: 'Offerte HUB', rows: offHub }, { name: 'Offerte RADIX', rows: offRadix }, { name: 'Ordini RADIX', rows: ordRadix }];
-  // 18/11 (chat Quotidiano): prima riga di ogni foglio = data e ora dell'esportazione; le intestazioni sono nella riga 2
-  for (const sh of sheets.slice(1)) sh.rows.unshift(['Esportato il ' + stamp, iso]);
-  return sheets;
-}
-
-return { CLAUDE_EXPORT_NAME, CLAUDE_CLIENTS_NAME, buildClaudeSheets };
-})();
-__m["js/core/xlsx-write.js"] = (function () {
-// Scrittura di un .xlsx minimale (17/11/2026, esportazione «Scheda rete» per la chat Rete): nessuna libreria esterna.
-// Un .xlsx è uno zip di XML: si usa lo zip senza compressione già usato per la copia dei dati.
-// Celle: numeri come numeri, date AAAA-MM-GG come testo (leggibili ovunque), tutto il resto come testo in linea.
-const { zipStore } = __m["js/core/zip-write.js"];
-const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
-const colName = i => { let s = ''; i++; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
-// Nomi dei fogli: massimo 31 caratteri, senza : \ / ? * [ ]
-const sheetName = n => String(n || 'Foglio').replace(/[:\\/?*[\]]/g, ' ').slice(0, 31);
-
-function sheetXml(rows) {
-  const out = rows.map((r, ri) => '<row r="' + (ri + 1) + '">' + r.map((v, ci) => {
-    if (v === null || v === undefined || v === '') return '';
-    const ref = colName(ci) + (ri + 1), st = ri === 0 ? ' s="1"' : '';
-    if (typeof v === 'number' && Number.isFinite(v)) return `<c r="${ref}"${st}><v>${v}</v></c>`;
-    return `<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${esc(v)}</t></is></c>`;
-  }).join('') + '</row>').join('');
-  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-    + '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
-    + '<sheetData>' + out + '</sheetData></worksheet>';
-}
-
-/** sheets: [{ name, rows: [[intestazioni], [valori], …] }] → Uint8Array del file .xlsx */
-function buildXlsx(sheets, date = new Date()) {
-  const names = []; for (const s of sheets) { let n = sheetName(s.name), k = 2; while (names.includes(n)) n = sheetName(s.name).slice(0, 28) + ' ' + k++; names.push(n); }
-  const files = [
-    { name: '[Content_Types].xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
-      + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-      + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
-      + names.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') + '</Types>' },
-    { name: '_rels/.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
-    { name: 'xl/workbook.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'
-      + names.map((n, i) => `<sheet name="${esc(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</sheets></workbook>' },
-    { name: 'xl/_rels/workbook.xml.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-      + names.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')
-      + `<Relationship Id="rId${names.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
-    { name: 'xl/styles.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-      + '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
-      + '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'
-      + '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-      + '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>' },
-    ...sheets.map((s, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data: sheetXml(s.rows) })),
-  ];
-  return zipStore(files, date);
-}
-
-return { sheetName, buildXlsx };
-})();
 __m["js/views/data-update.js"] = (function () {
 // "Aggiorna dati" (richiesta Tommaso 02/11/2026): chi è abilitato carica le esportazioni RADIX direttamente dall'app.
 // Visibile solo agli abilitati (tabella private.hub_data_managers, oggi Tommaso; poi eventualmente Irina).
@@ -11849,8 +11575,6 @@ const { parseStockPdf, stockPreview } = __m["js/core/stock-import.js"];
 const { stockDepot } = __m["js/core/quote-doc.js"];
 const { dataStatusCard } = __m["js/views/data-status-card.js"];
 const { buildBackup } = __m["js/core/backup.js"];
-const { buildClaudeSheets, CLAUDE_EXPORT_NAME, CLAUDE_CLIENTS_NAME } = __m["js/core/claude-export.js"];
-const { buildXlsx } = __m["js/core/xlsx-write.js"];
 const canUpdateData = s => !!s?.canImport && !s.preview;
 
 async function sha256(buf) {
@@ -11882,7 +11606,7 @@ async function viewDataUpdate(app) {
   return h('div', { class: 'page du-page' },
     h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Aggiorna dati'),
       h('p', { class: 'muted' }, 'Carichi le esportazioni di RADIX: l\'app ti mostra cosa cambia e aggiorna solo quando confermi. Nessun dato si cancella.'))),
-    dsBox, backupCard(app), offersCard(app, loadLog), offerLinesCard(app, loadLog), radixOrdersCard(app, loadLog), claudeExportCard(app), stockCard(app, loadLog), salesCard(app, loadLog),
+    dsBox, backupCard(app), offersCard(app, loadLog), offerLinesCard(app, loadLog), radixOrdersCard(app, loadLog), stockCard(app, loadLog), salesCard(app, loadLog),
     h('section', { class: 'card' }, h('h2', {}, 'Ultimi caricamenti'), logBox),
     h('p', { class: 'fine muted' }, 'Note clienti RADIX (file PDF): per ora si aggiornano ancora con Claude. Anagrafica clienti nuovi: si creano dall\'app o con l\'aggiornamento completo.'));
 }
@@ -12167,41 +11891,6 @@ function backupCard(app) {
     info, h('div', { class: 'du-actions' }, h('button', { type: 'button', class: 'btn primary', onclick: go }, 'Scarica backup')), out);
 }
 
-// 18/11 «Esporta per Claude»: dopo offerte e ordini del giorno, un file fisso da salvare su OneDrive per la chat Quotidiano.
-// 18/11 sera: clienti in un file a parte (HUB_clienti.xlsx, il lunedì) perché il foglio pesa da solo ~5 MB.
-// Non legge hub_product_costs né le righe delle offerte (vedi core/claude-export.js).
-function claudeExportCard(app) {
-  const s = app.session; if (s.role !== 'direzione' || s.office) return null;
-  const out = h('div', { class: 'du-out' }), dest = 'OneDrive › NORDTEX OPERATIVO › 05 RISERVATO DIREZIONE › Dati HUB';
-  const save = (sheets, name) => { const a = h('a', { href: URL.createObjectURL(new Blob([buildXlsx(sheets)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })), download: name });
-    document.body.append(a); a.click(); setTimeout(() => a.remove(), 1000); };
-  const run = part => async e => {
-    const b = e.target; b.disabled = true; fill(out, h('p', { class: 'muted' }, part === 'clienti' ? 'Preparo il file dei clienti…' : 'Preparo il file: leggo note, offerte e ordini…'));
-    try {
-      const st = app.store, customers = await st.customers();
-      if (part === 'clienti') {
-        const sheets = buildClaudeSheets({ customers }, { by: s.name, part });
-        save(sheets, CLAUDE_CLIENTS_NAME);
-        fill(out, h('p', { class: 'du-ok' }, `✓ Scaricato ${CLAUDE_CLIENTS_NAME}: ${sheets[0].rows.length - 2} clienti. Salvalo in ${dest}, sostituendo quello della settimana scorsa.`));
-      } else {
-        const [people, notes, quotes, radixOffers, radixOrders] = await Promise.all([
-          st.backupTable ? st.backupTable('hub_contacts').catch(() => []) : [], st.notes().catch(() => []), st.quotes().catch(() => []),
-          st.radixOffers ? st.radixOffers().catch(() => []) : [], st.radixOrders ? st.radixOrders().catch(() => []) : []]);
-        const sheets = buildClaudeSheets({ customers, people, notes, quotes, radixOffers, radixOrders }, { by: s.name });
-        save(sheets, CLAUDE_EXPORT_NAME);
-        fill(out, h('p', { class: 'du-ok' }, '✓ Scaricato ' + CLAUDE_EXPORT_NAME + ': ' + sheets[0].rows.find(r => r[0] === 'Contenuto')[1] + `. Salvalo in ${dest}, sostituendo quello di ieri.`));
-      }
-    } catch (err) { fill(out, h('p', { class: 'bad-text' }, 'Esportazione non riuscita: ' + err.message)); }
-    b.disabled = false;
-  };
-  return h('section', { class: 'card' }, h('h2', {}, 'Esporta per Claude'),
-    h('p', {}, 'Due file che la chat Quotidiano legge da OneDrive, senza costi d\'acquisto, margini, righe delle offerte, provvigioni né dati fiscali.'),
-    steps([`Ogni giorno, dopo offerte e ordini: «Esporta per Claude» → ${CLAUDE_EXPORT_NAME} (contatti, persone, note, azioni, offerte e ordini aperti).`,
-      `Il lunedì, dopo il fatturato: anche «Esporta clienti per Claude» → ${CLAUDE_CLIENTS_NAME} (tutti i clienti).`,
-      `Salva in ${dest} e conferma la sostituzione del file precedente.`]),
-    h('div', { class: 'du-actions' }, h('button', { type: 'button', class: 'btn primary', onclick: run('giorno') }, '⬇ Esporta per Claude'),
-      h('button', { type: 'button', class: 'btn', onclick: run('clienti') }, '⬇ Esporta clienti per Claude')), out);
-}
 
 return { canUpdateData, viewDataUpdate, BACKUP_KEY, lastBackup };
 })();
@@ -12448,6 +12137,195 @@ function progressTo(measure, value, target) {
 }
 
 return { FASCE, KINDS, CRITERIA, MANUAL_CRITERIA, proximityScore, OVERNIGHT_KM, tripKind, TRIP_ICON, TRIP_LABEL, medianKm, F2_DAYS, mondayOf, displayName, lastContact, contactDue, openActions, networkRows, thisWeek, AREA_INDICATORS, areaScores, ZONE_RULE, zoneWeightScore, IMPROVE_RULE, improvementSignals, improvementScore, agentGlance, provincesOf, zoneExceptions, photoFlat, STRATEGY_LABEL, tacticState, tacticFor, tacticProgress, MEASURES, computeMeasures, progressTo };
+})();
+__m["js/core/network-export.js"] = (function () {
+// «Scheda rete» (17/11/2026, richiesta della chat Rete di Tommaso): un file Excel con i dati per preparare le telefonate del lunedì
+// e gli affiancamenti. Solo Direzione. Niente margini, costi, provvigioni né obiettivi 2027: non servono alla scheda.
+// Funzione pura: riceve i dati già letti dall'HUB e restituisce i fogli.
+const { customerPhase } = __m["js/data/model.js"];
+// Le ex zone di Voghera sono di Battaglia (come nella Home della Direzione)
+const AGENT_ALIAS = { EX_AREA_GV_1: 'Battaglia Valerio', EX_AREA_GV_2: 'Battaglia Valerio' };
+const agentOf = label => AGENT_ALIAS[label] || label || '';
+const isRealAgent = l => !!l && l !== 'Direzionale' && !String(l).startsWith('__');
+const d10 = x => x ? String(x).slice(0, 10) : '';
+const num = x => x === null || x === undefined || x === '' || !Number.isFinite(Number(x)) ? '' : Math.round(Number(x) * 100) / 100;
+const addDays = (iso, n) => new Date(new Date(iso + 'T12:00:00Z').getTime() + n * 864e5).toISOString().slice(0, 10);
+const FERMI = ['calo', 'dormiente', 'perso'];
+const PHASE_RANK = { calo: 0, dormiente: 1, perso: 2 };
+
+/**
+ * dati: { customers, net: { agents, meetings, actions }, tactics, quotes, radixOffers, notes, radixNotes, access, profiles }
+ * opzioni: { agent (etichetta HUB o nome, facoltativo), today (AAAA-MM-GG), weeks (note recenti, default 4), lostSince (persi da includere) }
+ */
+function buildNetworkSheets(dati, { agent = null, today = new Date().toISOString().slice(0, 10), weeks = 4, lostSince = '2022-01-01' } = {}) {
+  const { customers = [], net = {}, tactics = [], quotes = [], radixOffers = [], notes = [], radixNotes = [], access = [], profiles = [] } = dati;
+  const want = agent ? agentOf(agent) : null;
+  const keep = l => isRealAgent(l) && (!want || agentOf(l) === want);
+  const byId = new Map(customers.map(c => [c.id, c]));
+  const custAgent = id => byId.get(id)?.assignee || '';
+  const custName = id => byId.get(id)?.name || '';
+  const fasciaOf = new Map((net.agents || []).map(a => [agentOf(a.label), a.fascia]));
+  const tName = new Map(tactics.map(t => [t.id, t.nome || t.name || t.id]));
+  const now = new Date(today + 'T12:00:00');
+
+  // ultimo contatto per cliente: note dell'HUB e note RADIX
+  const lastContact = new Map();
+  const seeContact = (id, date, what) => { if (!id || !date) return; const p = lastContact.get(id); if (!p || p.date < date) lastContact.set(id, { date, what }); };
+  for (const n of notes) seeContact(n.customerId, d10(n.createdAt), [n.kind, n.authorName].filter(Boolean).join(' · '));
+  for (const n of radixNotes) seeContact(n.customerId, d10(n.date), ['RADIX ' + (n.group || 'nota'), n.authorName].filter(Boolean).join(' · '));
+
+  // 1. Azioni di Sales strategy (e incontri). 17/11 (Tommaso): l'azione si scrive «Cliente: cosa fare»; il codice RADIX si ricava dal nome
+  // tra i clienti dello stesso commerciale (solo se il nome individua un cliente solo)
+  const norm = x => String(x || '').toUpperCase().replace(/\b(S\.?R\.?L\.?S?|S\.?N\.?C\.?|S\.?P\.?A\.?|S\.?A\.?S\.?)(?=\s|$)/g, ' ').replace(/[^A-Z0-9]+/g, ' ').trim();
+  const codeOf = (label, title) => {
+    const head = String(title || '').split(':')[0]; if (!head || head === title) return '';
+    const k = norm(head); if (k.length < 3) return '';
+    const mine = customers.filter(c => agentOf(c.assignee) === agentOf(label));
+    const hit = mine.filter(c => norm(c.name) === k); if (hit.length === 1) return hit[0].id;
+    const part = mine.filter(c => norm(c.name).startsWith(k + ' ') || norm(c.name).startsWith(k)); return part.length === 1 ? part[0].id : '';
+  };
+  const actions = [['Commerciale', 'Fascia', 'Azione', 'Codice cliente', 'Tattica', 'Scadenza', 'Stato', 'Fatta il', 'Esito', 'Nata dall\'incontro del']];
+  const meetDate = new Map((net.meetings || []).map(m => [m.id, m.date]));
+  for (const a of (net.actions || []).filter(a => keep(a.label)).sort((x, y) => agentOf(x.label).localeCompare(agentOf(y.label)) || String(x.due || '9').localeCompare(String(y.due || '9')))) {
+    const state = a.doneOn ? 'fatta' : a.due && a.due < today ? 'scaduta' : 'aperta';
+    actions.push([agentOf(a.label), fasciaOf.get(agentOf(a.label)) ? 'F' + fasciaOf.get(agentOf(a.label)) : '', a.title, codeOf(a.label, a.title), a.tactic ? tName.get(a.tactic) || a.tactic : '', d10(a.due), state, d10(a.doneOn), a.result || '', d10(meetDate.get(a.meetingId))]);
+  }
+  const meetings = [['Data', 'Commerciale', 'Tipo', 'Esito', 'Registrazione Plaud']];
+  for (const m of (net.meetings || []).filter(m => keep(m.label))) meetings.push([d10(m.date), agentOf(m.label), m.kind || '', m.outcome || '', m.plaud || '']);
+
+  // 2. Offerte aperte (HUB e RADIX); l'ultimo follow-up dell'HUB è l'ultima nota collegata all'offerta
+  const lastQuoteNote = new Map();
+  for (const n of notes) if (n.quoteId) { const p = lastQuoteNote.get(n.quoteId); if (!p || p < d10(n.createdAt)) lastQuoteNote.set(n.quoteId, d10(n.createdAt)); }
+  const offers = [['Commerciale', 'Fonte', 'Numero', 'Data', 'Codice cliente', 'Cliente', 'Valore €', 'Stato', 'Ultimo follow-up', 'Da sentire dal', 'Nota follow-up']];
+  const offRows = [];
+  for (const q of quotes) {
+    if (!(q.status === 'Bozza' || q.status === 'Inviata')) continue;
+    const l = custAgent(q.customerId); if (!keep(l)) continue;
+    offRows.push([agentOf(l), 'HUB', q.number || '', d10(q.createdAt), q.customerId || '', custName(q.customerId) || q.customer?.name || '', num(q.total), q.status, lastQuoteNote.get(q.id) || '', '', '']);
+  }
+  for (const o of radixOffers) {
+    if (!(o.outcome === 'Da seguire' || o.outcome === 'Sentito')) continue;
+    const l = custAgent(o.customerId); if (!keep(l)) continue;
+    offRows.push([agentOf(l), 'RADIX', o.id, d10(o.date), o.customerId || '', custName(o.customerId) || o.customerLabel || '', num(o.total), o.outcome, d10(o.outcomeAt), d10(o.nextFollowup || o.followup), o.outcomeNote || '']);
+  }
+  offRows.sort((a, b) => a[0].localeCompare(b[0]) || String(a[3]).localeCompare(String(b[3])));
+  offers.push(...offRows);
+
+  // 3. Clienti fermi: in calo (6-12 mesi), dormienti (1-2 anni), persi da più di 2 anni ma con acquisti dal 2022
+  const stopped = [['Commerciale', 'Codice', 'Cliente', 'Città', 'Prov.', 'Tipologia', 'Fascia acquisti', 'Ultimo acquisto', 'Fatturato 2024 €', 'Fatturato 2025 €', 'Fatturato 2026 €', 'Ultimo contatto', 'Che contatto']];
+  const stRows = [];
+  for (const c of customers) {
+    if (c.isTest || !keep(c.assignee)) continue;
+    const ph = customerPhase(c, now); if (!FERMI.includes(ph.key)) continue;
+    if (ph.key === 'perso' && !(c.lastInvoice && c.lastInvoice >= lostSince)) continue;
+    const lc = lastContact.get(c.id);
+    stRows.push({ k: [agentOf(c.assignee), PHASE_RANK[ph.key], -(Number(c.rev2025 ?? c.inv2025) || 0)],
+      r: [agentOf(c.assignee), c.id, c.name, c.city || '', c.prov || '', c.typology || '', ph.text, d10(c.lastInvoice), num(c.rev2024 ?? c.inv2024), num(c.rev2025 ?? c.inv2025), num(c.rev2026 ?? c.inv2026), lc?.date || '', lc?.what || ''] });
+  }
+  stRows.sort((a, b) => a.k[0].localeCompare(b.k[0]) || a.k[1] - b.k[1] || a.k[2] - b.k[2]);
+  stopped.push(...stRows.map(x => x.r));
+
+  // 4. Note e attività delle ultime settimane, sui clienti del commerciale
+  const since = addDays(today, -7 * weeks);
+  const recent = [['Data', 'Commerciale', 'Codice cliente', 'Cliente', 'Fonte', 'Tipo', 'Autore', 'Esito', 'Testo', 'Impegni presi']];
+  const nRows = [];
+  for (const n of notes) {
+    const dt = d10(n.createdAt), l = custAgent(n.customerId); if (dt < since || !keep(l)) continue;
+    const imp = (n.actions || []).map(a => a.title + (a.due ? ' (entro ' + a.due + ')' : '') + (a.done ? ' ✓' : '')).join(' · ');
+    nRows.push([dt, agentOf(l), n.customerId, custName(n.customerId), 'HUB', n.kind || '', n.authorName || '', n.outcome || '', n.body || '', imp]);
+  }
+  for (const n of radixNotes) {
+    const dt = d10(n.date), l = custAgent(n.customerId); if (dt < since || !keep(l)) continue;
+    nRows.push([dt, agentOf(l), n.customerId, custName(n.customerId), 'RADIX', n.group || '', n.authorName || '', '', [n.subject, n.body].filter(Boolean).join(' — '), '']);
+  }
+  nRows.sort((a, b) => b[0].localeCompare(a[0]) || a[1].localeCompare(b[1]));
+  recent.push(...nRows);
+
+  // 5. Uso dell'app: un utente per commerciale (profili con zona assegnata)
+  const usage = [['Commerciale', 'Utente', 'Ultimo accesso', 'Ultima apertura dell\'app', 'Aperture ultimi 30 giorni', 'Giorni di uso ultimi 30']];
+  const zoneOf = new Map(profiles.map(p => [p.id, p.assignee_label]));
+  for (const a of access || []) {
+    const l = zoneOf.get(a.userId); if (!keep(l) || a.active === false) continue;
+    usage.push([agentOf(l), a.name || '', d10(a.lastSignIn), d10(a.lastOpen), num(a.opens30), num(a.days30)]);
+  }
+  usage.splice(1, usage.length, ...usage.slice(1).sort((a, b) => a[0].localeCompare(b[0])));
+
+  const info = [['NORDTEX HUB · Scheda rete'], ['Esportata il', today], ['Commerciale', want || 'tutta la rete'],
+    ['Fogli', 'Azioni (Sales strategy) · Incontri · Offerte aperte (HUB e RADIX) · Clienti fermi · Note ultime ' + weeks + ' settimane · Uso dell\'app'],
+    ['Clienti fermi', 'in calo = ultimo acquisto da 6 a 12 mesi; dormiente = da 1 a 2 anni; perso = oltre 2 anni, solo se ha comprato dal ' + lostSince.slice(0, 4)],
+    ['Codice cliente', 'codice RADIX in ogni foglio; nelle azioni si ricava dal nome scritto prima dei due punti («Cliente: cosa fare»), vuoto se il nome non individua un cliente solo'],
+    ['Ultimo contatto', 'nota più recente dell\'HUB o di RADIX sul cliente'],
+    ['Escluso', 'margini, costi d\'acquisto, provvigioni e obiettivi 2027'],
+    ['Riservatezza', 'Documento interno della Direzione commerciale: non inoltrare ai commerciali.']];
+
+  return [{ name: 'Leggimi', rows: info }, { name: 'Azioni', rows: actions }, { name: 'Incontri', rows: meetings }, { name: 'Offerte aperte', rows: offers },
+    { name: 'Clienti fermi', rows: stopped }, { name: 'Note recenti', rows: recent }, { name: 'Uso dell\'app', rows: usage }];
+}
+
+const exportFileName = (today, agent) => `NORDTEX_scheda_rete_${today}${agent ? '_' + agentOf(agent).replace(/[^A-Za-z0-9]+/g, '_') : ''}.xlsx`;
+
+// 17/11 regola delle azioni: «Cliente: cosa fare». Il cliente si sceglie dall'elenco («Nome · codice») o si scrive il nome esatto.
+function actionCustomer(list, text) {
+  const t = String(text || '').trim(); if (!t) return null;
+  const code = t.includes(' · ') ? t.split(' · ').pop().trim() : null;
+  if (code) { const c = list.find(x => String(x.id) === code); if (c) return c; }
+  const up = t.toUpperCase(), same = list.filter(x => String(x.name).toUpperCase() === up);
+  return same.length === 1 ? same[0] : null;
+}
+const actionTitle = (name, what) => String(what).toUpperCase().startsWith(String(name).toUpperCase() + ':') ? String(what) : `${name}: ${what}`;
+
+return { AGENT_ALIAS, agentOf, buildNetworkSheets, exportFileName, actionCustomer, actionTitle };
+})();
+__m["js/core/xlsx-write.js"] = (function () {
+// Scrittura di un .xlsx minimale (17/11/2026, esportazione «Scheda rete» per la chat Rete): nessuna libreria esterna.
+// Un .xlsx è uno zip di XML: si usa lo zip senza compressione già usato per la copia dei dati.
+// Celle: numeri come numeri, date AAAA-MM-GG come testo (leggibili ovunque), tutto il resto come testo in linea.
+const { zipStore } = __m["js/core/zip-write.js"];
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+const colName = i => { let s = ''; i++; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+// Nomi dei fogli: massimo 31 caratteri, senza : \ / ? * [ ]
+const sheetName = n => String(n || 'Foglio').replace(/[:\\/?*[\]]/g, ' ').slice(0, 31);
+
+function sheetXml(rows) {
+  const out = rows.map((r, ri) => '<row r="' + (ri + 1) + '">' + r.map((v, ci) => {
+    if (v === null || v === undefined || v === '') return '';
+    const ref = colName(ci) + (ri + 1), st = ri === 0 ? ' s="1"' : '';
+    if (typeof v === 'number' && Number.isFinite(v)) return `<c r="${ref}"${st}><v>${v}</v></c>`;
+    return `<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${esc(v)}</t></is></c>`;
+  }).join('') + '</row>').join('');
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    + '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
+    + '<sheetData>' + out + '</sheetData></worksheet>';
+}
+
+/** sheets: [{ name, rows: [[intestazioni], [valori], …] }] → Uint8Array del file .xlsx */
+function buildXlsx(sheets, date = new Date()) {
+  const names = []; for (const s of sheets) { let n = sheetName(s.name), k = 2; while (names.includes(n)) n = sheetName(s.name).slice(0, 28) + ' ' + k++; names.push(n); }
+  const files = [
+    { name: '[Content_Types].xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
+      + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+      + names.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') + '</Types>' },
+    { name: '_rels/.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+    { name: 'xl/workbook.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'
+      + names.map((n, i) => `<sheet name="${esc(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('') + '</sheets></workbook>' },
+    { name: 'xl/_rels/workbook.xml.rels', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + names.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')
+      + `<Relationship Id="rId${names.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
+    { name: 'xl/styles.xml', data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+      + '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
+      + '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'
+      + '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+      + '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>' },
+    ...sheets.map((s, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data: sheetXml(s.rows) })),
+  ];
+  return zipStore(files, date);
+}
+
+return { sheetName, buildXlsx };
 })();
 __m["js/core/call.js"] = (function () {
 // «Telefonata» con il commerciale (17/11/2026, Tommaso): durante la telefonata del lunedì (fascia 1) o ogni 2-3 settimane (fascia 2)
