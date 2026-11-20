@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="802206b4b452">
+<meta name="ntx-build" content="711ab6d9991c">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1052,9 +1052,14 @@ h1 + .fix-note{margin:-4px 0 4px}
 .link-results { display: grid; gap: 4px; }
 .link-pick { text-align: left; background: none; border: 1px solid var(--line, #ddd); border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit; }
 .link-pick:hover { background: var(--hover, #f4f4f4); }
+/* 20/11: pulsanti esito accanto a ogni offerta aperta */
+.oc-btns{display:inline-flex;gap:6px;flex-wrap:wrap}
+.btn.oc-win{background:var(--ok-bg);color:var(--ok);border-color:#a6d8b8;font-weight:600} .btn.oc-win:hover{background:#d3efdf}
+.btn.oc-lose{background:var(--bad-bg);color:var(--bad);border-color:#f4b5ae;font-weight:600} .btn.oc-lose:hover{background:#fad7d3}
+.act.win{background:var(--ok-bg);color:var(--ok);border-color:#a6d8b8} .act.lose{background:var(--bad-bg);color:var(--bad);border-color:#f4b5ae}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"802206b4b452"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"711ab6d9991c"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3452,6 +3457,551 @@ async function pickNoteForOffer(app, customerId, ref) {
 
 return { offerRef, parseRef, canLinkNote, offerChoices, offerSelect, noteOfferChip, linkNoteDialog, pickNoteForOffer };
 })();
+__m["js/core/outcome.js"] = (function () {
+// 20/11/2026 (Tommaso, dopo la mail di Christian «non lo trovo»): ovunque compare un'offerta aperta ci sono i pulsanti
+// «✓ Accettata» e «✗ Persa». Qui la logica pura (chi può, testo della nota RADIX), la parte grafica è in views/outcome-quick.js.
+const { ORDER_MARK } = __m["js/core/order-match.js"];
+// numero d'ordine RADIX come lo scrive l'ufficio: «OCDIR 2026 433» → «OCDIR-2026-433» (niente spazi: il numero si rilegge dalla nota)
+const normRadixRef = s => String(s || '').trim().toUpperCase().replace(/\s*-\s*/g, '-').replace(/\s+/g, '-');
+
+// nota salvata sull'offerta RADIX accettata: con il numero d'ordine diventa «Accettata · ordine già in RADIX» (l'ufficio non deve fare niente)
+function radixAcceptNote(ref, note) {
+  const r = normRadixRef(ref), n = String(note || '').trim();
+  return r ? `${ORDER_MARK}${r}` + (n ? ` — ${n}` : '') : n;
+}
+function radixLostNote(reason, note) {
+  const n = String(note || '').trim();
+  return [reason ? 'Motivo: ' + reason : '', n].filter(Boolean).join(' — ');
+}
+
+// offerta dell'app: si chiude dall'elenco se è aperta (bozza salvata o inviata) e chi guarda la segue o è Direzione/Ufficio
+function canCloseQuote(session, q) {
+  if (!session || session.preview || session.readOnly || !q?.id) return false;
+  if (!['Bozza', 'Inviata'].includes(q.status)) return false;
+  return session.role === 'direzione' || !q.ownerId || q.ownerId === session.userId;
+}
+// offerta RADIX: chi la vede la può chiudere (come «Com'è andata?»), solo se è ancora aperta
+function canCloseRadix(session, o) {
+  if (!session || session.preview || session.readOnly || !o) return false;
+  return o.outcome === 'Da seguire' || o.outcome === 'Sentito';
+}
+
+return { normRadixRef, radixAcceptNote, radixLostNote, canCloseQuote, canCloseRadix };
+})();
+__m["js/views/fiscal.js"] = (function () {
+// 02/11 (versione Ufficio): campi "dati per l'ordine" del cliente nuovo — P.IVA, SDI/PEC, pagamento, banca.
+// Facoltativi quando l'agente crea il cliente; obbligatori quando l'offerta diventa ordine (missingForOrder).
+const { h, field } = __m["js/ui.js"];
+const { paymentOptions } = __m["js/data/model.js"];
+function fiscalFields(app, c = {}, { withVat = true, payment = '' } = {}) {
+  const isDir = app.session.role === 'direzione';
+  const vat = withVat ? h('input', { placeholder: 'P.IVA (11 cifre)', inputmode: 'numeric', value: c.vat || '' }) : null;
+  const sdi = h('input', { placeholder: 'es. M5UXCR1 (0000000 se c\'è la PEC)', maxlength: 7, value: c.sdi || '', style: { textTransform: 'uppercase' } });
+  const pec = h('input', { type: 'email', placeholder: 'es. amministrazione@pec.it', value: c.pec || '' });
+  const { options } = paymentOptions({ isDir, customerTerms: c.paymentTerms });
+  const cur = c.paymentTerms || payment || '';
+  const pay = h('select', {}, h('option', { value: '' }, 'Pagamento…'),
+    [...new Set([...(cur && !options.includes(cur) ? [cur] : []), ...options])].filter(o => !/^da concordare$/i.test(o)).map(o => h('option', { value: o, selected: o === cur }, o)));
+  const bank = h('input', { placeholder: 'Banca e IBAN (es. Cassa Rurale … IT60X0542811101000000123456)', value: c.bank || '' });
+  const el = h('div', { class: 'form' },
+    withVat ? field('P.IVA', vat) : null,
+    h('div', { class: 'form two' }, field('Codice SDI', sdi), field('PEC', pec)),
+    h('div', { class: 'form two' }, field('Pagamento', pay), field('Banca / IBAN', bank)));
+  return { el, values: () => ({ ...(withVat ? { vat: vat.value } : {}), sdi: sdi.value, pec: pec.value, paymentTerms: pay.value, bank: bank.value }) };
+}
+
+return { fiscalFields };
+})();
+__m["js/core/quote-doc.js"] = (function () {
+// Documento offerta nel formato NORDTEX/RADIX (modello: offerte 1051, 1313, 1324 del 2026, Crystal Reports):
+// testata con logo, Deposito di uscita · Cantiere · Spett.le (codice cliente), barra "OFFERTA NR. … - data",
+// righe Descrizione/Codice/U.M./Quantità/Prezzo/Sconto %/Imp.netto, totali, condizioni, clausole, piè di pagina aziendale.
+// Modulo puro (stringa HTML con stili in linea): stampa/PDF nell'app ed email dalla funzione server.
+const { totals, lineAmount, lineNet, palletsFor, EURO_PALLET, BIGBAG_PALLET } = __m["js/core/pricing.js"];
+// Depositi NORDTEX: elenco e indirizzi dal sito nordtex.it (31/10/2026); telefoni di Lecco e Polymax dalle offerte RADIX
+const DEPOTS = {
+  diretta: { label: 'Consegna diretta dal produttore', lines: ['CONSEGNA DIRETTA'] },
+  SEDE: { label: 'Sede NORDTEX – Chiusa (BZ)', lines: ['SEDE NORDTEX', "PRATO DELL'OSPIZIO", '39043 CHIUSA (BZ)'], pickup: ['Sede NORDTEX', "Prato dell'Ospizio", 'IT-39043 Chiusa (BZ)'] },
+  LECCO: { label: 'Deposito Lecco – Fornaci Giussani (Inverigo CO)', lines: ['DEPOSITO LECCO -', 'FORNACI GIUSSANI', 'VIA ARISTIDE MAGNI 98', '22044 INVERIGO (CO)', 'Tel:031607100'],
+    pickup: ['Fornace Giussani', 'Via Aristide Magni, 98', 'IT-22044 Inverigo (CO)'] },
+  CASALE: { label: 'Deposito Piemonte – Savallo Autotrasporti (Casale Monferrato AL)', lines: ['DEPOSITO PIEMONTE -', 'SAVALLO AUTOTRASPORTI', 'STRADA VALENZA 7', '15033 CASALE MONFERRATO (AL)'],
+    pickup: ['Savallo Autotrasporti', 'Strada Valenza, 7', 'IT-15033 Casale Monferrato (AL)'] },
+  CASTELFRAN: { label: 'Deposito Veneto – Polymax Italia (Castelfranco Veneto TV)', lines: ['POLYMAX', 'VIA FUSINA 12', '31033 CASTELFRANCO', 'VENETO (TV)', 'Tel:0423493544', 'Fax:0423497841'],
+    pickup: ['Polymax', 'Via Fusina 12', 'IT-31033 Castelfranco Veneto (TV)'] },
+  TORRI: { label: 'Deposito Veneto – Loewenstark (Torri di Quartesolo VI)', lines: ['DEPOSITO VENETO -', 'LOEWENSTARK SRL', 'VIA CAMISANA 15', '36040 TORRI DI QUARTESOLO (VI)'],
+    pickup: ['Loewenstark srl', 'Via Camisana, 15', 'IT-36040 Torri di Quartesolo (VI)'] },
+  MARCHE: { label: 'Deposito Marche – SPEA Tecnologie Edili (Morrovalle MC)', lines: ['DEPOSITO MARCHE -', 'SPEA TECNOLOGIE EDILI SRL', 'CONTRADA SARROCCIANO', '62010 MORROVALLE (MC)'],
+    pickup: ['SPEA Tecnologie Edili srl', 'Contrada Sarrocciano', 'IT-62010 Morrovalle (MC)'] },
+};
+// 02/11: codici dei depositi in RADIX (elenco "Codice deposito") → deposito dell'offerta; gli altri solo per le giacenze
+const RADIX_DEPOTS = { CHIUSA: 'SEDE', LECCO: 'LECCO', CASALE: 'CASALE', CASTELFRAN: 'CASTELFRAN', VICENZA: 'TORRI', MACERATA: 'MARCHE' };
+const OTHER_STOCK = { 'DEL DOSSO': ['Deposito Sondrio (Piateda SO)', 'Piateda (SO)'], EDILLOGIST: ['Made Edil Logistica (Pogliano Milanese MI)', 'Pogliano Milanese (MI)'],
+  BIOISOLARE: ['Bioisolare (Malo VI)', 'Malo (VI)'], POLYMAX: ['Polymax radianti (Castelfranco Veneto TV)', 'Polymax radianti'] };
+// deposito delle giacenze → { label, place (nome corto), pickup }
+function stockDepot(code, name = '') {
+  const d = DEPOTS[RADIX_DEPOTS[code] || code];
+  if (d?.pickup) return { label: d.label, place: d.pickup[2].replace(/^IT-\d+\s*/, ''), pickup: d.pickup };
+  const o = OTHER_STOCK[code];
+  return { label: o ? o[0] : name || code, place: o ? o[1] : code, pickup: null };
+}
+const TRANSPORT_BY = ['DESTINATARIO', 'VETTORE', 'MITTENTE'];
+// 02/11 (offerta Casale di Tommaso): ritiro al deposito senza trasporto.
+// q.pickup = true/false scelto nell'offerta; offerte vecchie (q.pickup assente): ritiro se deposito con ritiro e trasporto a cura del destinatario.
+function isPickup(q) {
+  const d = DEPOTS[q.depot || 'diretta'];
+  if (!d?.pickup) return false;
+  if (q.pickup === true || q.pickup === false) return q.pickup;
+  return (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO';
+}
+// 13/11 (Tommaso): se addebitiamo il trasporto e non è un ritiro, il trasporto è «a cura» nostra → MITTENTE,
+// a meno che qualcuno l'abbia scelto a mano nell'offerta (q.transportByManual).
+function transportByFor(q) {
+  if (q.transportByManual) return q.transportBy || 'DESTINATARIO';
+  if (!isPickup(q) && Number(q.freight) > 0) return 'MITTENTE';
+  return q.transportBy || 'DESTINATARIO';
+}
+const CLAUSES = ['Quotazioni valide salvo variazioni imposte dal produttore/fornitore. Non si accettano resi.', 'Non ci assumiamo responsabilità per ritardi e danni nelle consegne dovute ai vettori.'];
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// formato numeri come RADIX: separatore migliaia sempre presente (2.577,25), decimali fissi
+const fmtN = (v, d) => { const [i, f] = Math.abs(Number(v)).toFixed(d).split('.'); return (Number(v) < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : ''); };
+const n = fmtN;
+const dotDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}.${String(x.getMonth() + 1).padStart(2, '0')}.${x.getFullYear()}`; };
+const UM = { M2: 'MQ', M3: 'M3', PZ: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CF', ROTOLO: 'RO', SACCO: 'SA', BIGBAG: 'BB' };
+const UL = { M2: 'm²', M3: 'm³', ML: 'ml', PZ: 'pz', KG: 'kg' };
+const discText = d => d.filter(x => x).map(x => n(x, x % 1 ? 1 : 0)).join('+');
+// 02/11 (richiesta Tommaso, come nella vecchia app offerte): sconti nascosti nel documento → colonna Prezzo = prezzo netto, colonna Sconto % assente
+const hideDiscounts = q => q.hideDiscounts === true;
+const docPrice = (q, l) => hideDiscounts(q) ? lineNet(l) : l.listPrice;
+const customerCode = q => (q.customerId && !String(q.customerId).startsWith('H-') ? String(q.customerId) : '');
+
+// Righe aggiuntive di descrizione, come in RADIX: "(30,78m²/Pal)" e "4 bancali"
+// 02/11 (prova con Christian): destinazione della merce sul documento = cantiere scritto nelle condizioni,
+// altrimenti l'indirizzo di consegna del riquadro trasporto se diverso dalla sede del cliente.
+function destinationLines(q) {
+  const site = String(q.site || '').trim();
+  if (site) return site.split('\n').map(s => s.trim()).filter(Boolean);
+  const d = q.delivery || {}, c = q.customer || {};
+  const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!d.city || (norm(d.street) === norm(c.street) && norm(d.city) === norm(c.city))) return [];
+  return [d.street, [d.cap, d.city, d.prov ? `(${d.prov})` : ''].filter(Boolean).join(' ')].filter(Boolean);
+}
+// riga del trasporto per il cliente: niente note interne ("inserito manualmente", dettagli di calcolo)
+const MEZZO = { centinato: 'con bilico centinato', walkingfloor: 'con walking floor', groupage: 'groupage con corriere' };
+function destCity(q) {
+  const dest = destinationLines(q);
+  return dest.length ? dest[dest.length - 1].replace(/^\d{5}\s+/, '') : [q.customer?.city, q.customer?.prov ? `(${q.customer.prov})` : ''].filter(Boolean).join(' ');
+}
+function freightLabel(q, part = null) {
+  const v = part ? (part.kind === 'pallet' ? 'groupage' : part.vehicle) : Object.keys(q.logistics?.km || {}).length ? q.logistics?.vehicleType : null;   // solo trasporti a km (laterizi, vetro cellulare)
+  const city = destCity(q);
+  return ['Servizio di trasporto', MEZZO[v] || '', part?.label ? `(${part.label})` : '', city ? `- consegna a ${city}` : ''].filter(Boolean).join(' ');
+}
+// 06/11 (segnalazione Tommaso, offerta laterizi su 3 bilici): la riga trasporto riportava "1,00 × 4.334,40" come se fosse un solo carico.
+// Trasporto calcolato dall'app: una riga per ogni trasporto (luogo di carico); a km quantità = mezzi e prezzo = costo di un mezzo;
+// groupage V600 quantità = bancali × prezzo a bancale. Codici RADIX (confermati da Tommaso 06/11): mezzi pieni N88079 «carico completo»,
+// mezzo non pieno e groupage N14126 «carico diretto parziale». Importo scritto a mano, stima diversa o conti che non tornano al centesimo:
+// una sola riga 1 × importo con N14126.
+const FREIGHT_FULL = 'N88079', FREIGHT_PARTIAL = 'N14126';
+const c2 = x => Math.round(x * 100) / 100;
+// 13/11 (Tommaso, Policell 99 m³ = 1 bilico pieno + 1 parziale allo stesso prezzo: "non mi piace" le due righe):
+// i mezzi a km costano uguale, pieni o no → UNA riga con la quantità dei mezzi. Codice N14126 se c'è un mezzo parziale, N88079 se tutti pieni.
+const kmCode = (k, fullVehicles) => (Math.max(0, Math.min(k, fullVehicles ?? 0)) < k ? FREIGHT_PARTIAL : FREIGHT_FULL);
+const c3 = x => Math.round(x * 1000) / 1000;
+function oneKmRow(amount, k, code) {
+  const price = c3(amount / k);
+  return Math.abs(price * k - amount) <= 0.0051 ? [{ code, qty: k, price, amount: c2(amount) }] : null;
+}
+function kmRows(cost, k, fullVehicles) {
+  const each = c2(cost / k);
+  if (Math.abs(each * k - cost) >= 0.005) return null;
+  return [{ code: kmCode(k, fullVehicles), qty: k, price: each, amount: c2(cost) }];
+}
+// 12/11 (Tommaso, laterizi su 2 bilici e mezzo: "segna sempre 1"): anche con l'importo scritto a mano, se il calcolo aveva un solo
+// trasporto a km con N mezzi, la riga si divide sui mezzi (carichi completi + carico parziale); i centesimi che avanzano vanno sull'ultimo.
+function manualKmRows(amount, k, fullVehicles) {
+  const each = c2(amount / k), code = kmCode(k, fullVehicles);
+  const one = oneKmRow(amount, k, code); if (one) return one;   // 13/11: riga unica, prezzo a 3 decimali
+  // i centesimi che non si dividono vanno su una riga a parte (stesso codice)
+  return [k > 1 && { code, qty: k - 1, price: each, amount: c2(each * (k - 1)) },
+    { code, qty: 1, price: c2(amount - each * (k - 1)), amount: c2(amount - each * (k - 1)) }].filter(Boolean);
+}
+// 13/11 (Tommaso): ultimo mezzo con doppio scarico a prezzo ridotto → mezzi pieni N88079 a prezzo intero + mezzo parziale N14126 al suo prezzo
+function partialRows(cost, k, pct, perVehicle) {
+  // 13/11 ore 5 (Tommaso: «l'offerta deve essere su una riga unica»): una riga N14126.
+  // 17/11 (Tommaso: «segna due quando è 1,5 e divide il totale per 2»): quantità = mezzi pieni + percentuale dell'ultimo
+  // (es. 1 + 60% = 1,60) e prezzo = un mezzo intero; se i conti non tornano al centesimo, come prima (mezzi × prezzo medio).
+  const per = Number(perVehicle), p = Number(pct);
+  if (per > 0 && p > 0 && p < 100) {
+    const qty = c3(k - 1 + p / 100), price = c3(per);
+    if (Math.abs(qty * price - cost) <= 0.0051) return [{ code: FREIGHT_PARTIAL, qty, price, amount: c2(cost) }];
+  }
+  return oneKmRow(cost, k, FREIGHT_PARTIAL);
+}
+// 13/11 (Tommaso): la riga del trasporto va sotto il prodotto a cui si riferisce, non in fondo.
+// after = indice dell'ultima riga d'offerta servita da quel trasporto (null = in fondo)
+function freightAfter(q, p) {
+  const own = Array.isArray(p?.lines) && p.lines.length ? Math.max(...p.lines) : null;
+  if (own !== null && own < (q.lines || []).length) return own;
+  const idx = (q.lines || []).map((l, i) => (l.pickup || l.depotPrice ? -1 : i)).filter(i => i >= 0);
+  return idx.length ? idx[idx.length - 1] : null;
+}
+function freightRows(q, freight) {
+  const parts = q.transportEstimate?.parts;
+  const single = Array.isArray(parts) && parts.length === 1 ? parts[0] : null;
+  return freightRowsRaw(q, freight).map(r => ({ ...r, after: r.after !== undefined ? r.after : freightAfter(q, single) }));
+}
+// righe d'offerta e righe del trasporto nell'ordine del documento
+function docSequence(q, freight) {
+  const fr = freight ? freightRows(q, freight) : [], out = [];
+  (q.lines || []).forEach((l, i) => { out.push({ line: l, index: i }); for (const f of fr) if (f.after === i) out.push({ freight: f }); });
+  for (const f of fr) if (f.after === null || f.after >= (q.lines || []).length) out.push({ freight: f });
+  return out;
+}
+function freightRowsRaw(q, freight) {
+  const one = [{ code: FREIGHT_PARTIAL, qty: 1, price: freight, amount: freight, label: freightLabel(q) }];
+  const e = q.transportEstimate;
+  if (freight > 0 && e && !(q.freightAuto && Math.abs((e.amount ?? NaN) - freight) < 0.005)) {
+    const kp = Array.isArray(e.parts) && e.parts.length ? (e.parts.length === 1 && e.parts[0].kind === 'km' ? e.parts[0] : null) : (e.vehicles >= 1 ? e : null);
+    if (kp && kp.partialPct) { const r = partialRows(freight, kp.vehicles, kp.partialPct, kp.perVehicle); return (r || one).map(x => ({ ...x, label: freightLabel(q) })); }
+    if (kp && kp.vehicles >= 1 && kp.vehicles <= 20) return manualKmRows(freight, kp.vehicles, kp.fullVehicles).map(x => ({ ...x, label: freightLabel(q) }));
+    return one;
+  }
+  if (!(freight > 0) || !q.freightAuto || !e || !(Math.abs((e.amount ?? NaN) - freight) < 0.005)) return one;
+  if (Array.isArray(e.parts) && e.parts.length) {
+    const rows = [];
+    for (const p of e.parts) {
+      let r = null;
+      if (p.kind === 'km' && p.vehicles >= 1) r = p.partialPct ? partialRows(p.cost, p.vehicles, p.partialPct, p.perVehicle) : kmRows(p.cost, p.vehicles, p.fullVehicles);
+      else if (p.kind === 'pallet' && p.pallets > 0 && Math.abs(p.pallets * p.perPallet - p.cost) < 0.005) r = [{ code: FREIGHT_PARTIAL, qty: p.pallets, price: p.perPallet, amount: c2(p.cost) }];
+      if (!r) r = [{ code: FREIGHT_PARTIAL, qty: 1, price: p.cost, amount: c2(p.cost) }];
+      const label = freightLabel(q, e.parts.length > 1 ? p : { ...p, label: '' });
+      rows.push(...r.map(x => ({ ...x, label, after: freightAfter(q, p) })));
+    }
+    return Math.abs(rows.reduce((s, x) => s + x.amount, 0) - freight) < 0.005 ? rows : one;
+  }
+  if (!(e.vehicles >= 1)) return one;   // offerte salvate prima delle righe per trasporto: un solo luogo di carico a km
+  const r = kmRows(freight, e.vehicles, e.fullVehicles);
+  return r ? r.map(x => ({ ...x, label: freightLabel(q) })) : one;
+}
+const customerLines = c => [c.name, c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' '), c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean);
+
+// 16/11 (Christian): negli articoli con bordo maschio/femmina la descrizione riporta «bordo a incastro M+F».
+// Per codice di listino, non per nome: nello stesso prodotto ci sono formati con bordo liscio.
+// Naturheld dall'estratto listino NH (Christian 16/11 sera): 110 WALL solo 1880×615; 140 solo 1880×615 (1250×600 liscio);
+// 180 tutti tranne 3000×1250 (liscio); 220 solo 2550×615 (1250×600 liscio); 110 ROOF, 160, 200 e 140 install senza incastro.
+// Altri marchi: righe del listino con il testo tecnico «(incastro)» (protect M 230 i, universal, universal dry/black, special dry 140, safe, floor).
+const TG = new Set(["25002001", "25002002", "25002003", "25002004", "25003001", "25003002", "25003003", "25003004", "25003005", "25003006", "25003007", "25003008", "25003009", "25004001", "25004002", "25004003", "25004004", "25004007", "25004008", "25004009", "25004010", "25005001", "25005004", "301668", "330561", "334121", "334122", "334123", "334180", "334273", "334274", "334275", "334276", "335244", "338431", "341344", "341345", "344668", "344670", "367943", "367949", "367950", "389781", "399305", "411038", "411876", "411900", "411901", "411913", "411917", "411919", "411921", "411940", "411966", "411968", "411970", "411972", "411975", "426980", "426984", "427013", "433507", "433513", "433514", "433515", "433550", "433551", "433553", "433556"]);
+const tongueGroove = l => !!l && TG.has(String(l.listCode || '').trim());
+
+function lineExtra(l) {
+  const out = [], pal = palletsFor(l);
+  if (tongueGroove(l)) out.push('bordo a incastro M+F');
+  if (l.palletQuantity > 0 && pal !== null) {
+    // 02/11 (errore visto su W14 PLAN: 60 pz/Pal stampato "6pz/Pal"): si tolgono gli zeri finali SOLO dopo la virgola
+    const pq = l.palletQuantity % 1 ? n(l.palletQuantity, 3).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '') : n(l.palletQuantity, 0);
+    out.push(`(${pq}${UL[l.unit] || l.unit.toLowerCase()}/Pal)`);
+    // 17/11: sotto un decimo di bancale niente riga «circa 0,0 bancali»
+    if (pal >= 0.05) out.push(Math.abs(pal - Math.round(pal)) < 1e-6 ? `${Math.round(pal)} ${Math.round(pal) === 1 ? 'bancale' : 'bancali'}` : `circa ${n(pal, 1)} bancali`);
+  }
+  if (l.unitNote) out.push(l.unitNote);   // prezzi per unità scelti dall'agente (02/11)
+  if (l.pickup) out.push(`Ritiro a cura del cliente presso ${l.pickup.label}`);   // 13/11: resto ritirato in deposito
+  return out;
+}
+
+function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
+  const t = totals(q);
+  const created = q.createdAt ? new Date(q.createdAt) : now;
+  const until = new Date(created.getTime() + (q.validDays || 30) * 864e5);
+  const c = q.customer || {}, depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
+  const F = 'font-family:Verdana,Arial,Helvetica,sans-serif;color:#000';
+  const cell = 'padding:5px 4px;vertical-align:top;font-size:8.5pt';
+  const num = cell + ';text-align:right;white-space:nowrap';
+  const head = (x, right) => `<th style="background:#c8c8c8;font-size:7.5pt;font-weight:bold;padding:3px 4px;text-align:${right ? 'right' : 'left'}">${x}</th>`;
+  const block = (title, lines) => `<td style="width:33%;vertical-align:top;font-size:8.5pt;line-height:1.45;padding-right:10px">${title ? `<div style="font-weight:bold;margin-bottom:6px">${title}</div>` : ''}${lines.filter(Boolean).map(esc).join('<br>')}</td>`;
+  const row = (desc, code, um, qty, price, disc, amount) => `<tr><td style="${cell};width:40%">${desc}</td><td style="${cell}">${esc(code)}</td><td style="${cell}">${esc(um)}</td>`
+    + `<td style="${num}">${qty}</td><td style="${num}">${price}</td>${disc === null ? '' : `<td style="${num};text-align:center">${disc}</td>`}<td style="${num}">${amount}</td></tr>`;
+  const site = String(q.site || '').trim();
+  const rows = docSequence(q, t.freight).map(({ line: l, freight: f }) => f
+    ? row(esc(f.label), f.code, 'NR', n(f.qty, 2), n(f.price, 3), hideDiscounts(q) ? null : '', n(f.amount, 2))
+    : row([esc(l.description), ...lineExtra(l).map(esc)].join('<br>'), l.radixCode || l.listCode || '', UM[l.unit] || l.unit,
+      ['PZ', 'SACCO', 'ROTOLO', 'BIGBAG'].includes(l.unit) ? n(l.qty, 0) : n(l.qty, 3), n(docPrice(q, l), 3), hideDiscounts(q) ? null : discText(l.discounts), n(lineAmount(l), 2)));
+  if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), hideDiscounts(q) ? null : '', n(t.extras, 2)));
+  if (t.euroPallets) rows.push(row(esc(EURO_PALLET.label), EURO_PALLET.code, 'NR', n(t.euroPalletCount, 2), n(EURO_PALLET.price, 3), hideDiscounts(q) ? null : '', n(t.euroPallets, 2)));
+  if (t.bigBagPallets) rows.push(row(esc(BIGBAG_PALLET.label), BIGBAG_PALLET.code, 'NR', n(t.bigBagPalletCount, 2), n(BIGBAG_PALLET.price, 3), hideDiscounts(q) ? null : '', n(t.bigBagPallets, 2)));
+  const notes = [];
+  if (t.bigBagPallets) notes.push(esc(BIGBAG_PALLET.note));
+  const pickup = isPickup(q);
+  if (pickup) notes.push(`Materiale disponibile per il ritiro presso:<br><b>${depot.pickup.map(esc).join('<br>')}</b><br><b>Prezzo franco partenza</b> dal deposito`);
+  if (t.freightPending && !pickup) notes.push('Trasporto: da definire.');   // ritiro al deposito: nessun trasporto
+  if (q.notes) notes.push(esc(q.notes).replace(/\n/g, '<br>'));
+  const noteRows = notes.map(x => `<tr><td colspan="${hideDiscounts(q) ? 6 : 7}" style="${cell};padding-top:8px">${x}</td></tr>`).join('');
+  const tot = (k, v, bold) => `<tr><td style="font-size:8.5pt;padding:2px 4px">${k}</td><td style="font-size:8.5pt;padding:2px 4px;text-align:right${bold ? ';font-weight:bold' : ''}">${v}</td></tr>`;
+  const brand = header ? `<img src="${header}" alt="NORDTEX – For a better living" style="width:100%;display:block">`
+    : `<div style="font:italic 900 22pt Arial,sans-serif;letter-spacing:2px"><span style="color:#D40E41">NORD</span><span style="color:#676568">TEX</span> <span style="font:italic 400 12pt Georgia,serif;color:#333;letter-spacing:0">For a better living</span></div>`;
+  const foot = footer ? `<img src="${footer}" alt="Nordtex Srl" style="width:100%;display:block;margin-top:28px">`
+    : `<div style="margin-top:28px;font-size:7.5pt;color:#666;line-height:1.4"><b style="color:#D40E41">Nordtex Srl</b> · Società unipersonale · Via Prati all'Ospizio 6, 39043 Chiusa (BZ) · Tel. 0472 847 110 · info@nordtex.it · www.nordtex.it<br>P.I/C.F/RI BZ: 02623660988 · REA BZ-0189070 · Codice SDI: T04ZHR3</div>`;
+  return `<div class="nt-doc" style="${F};max-width:780px;margin:0 auto;background:#fff">
+${brand}
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px"><tr>
+${block('Deposito di uscita', depot.lines)}${block(destinationLines(q).length ? 'Destinazione merce' : '', destinationLines(q))}
+<td style="width:34%;vertical-align:top;font-size:8.5pt;line-height:1.45"><div style="font-weight:bold;margin-bottom:6px">Spett.le<span style="float:right;font-weight:normal;font-size:7.5pt">${customerCode(q) ? '(' + esc(customerCode(q)) + ')' : ''}</span></div>${customerLines(c).map(esc).join('<br>')}</td>
+</tr></table>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px"><tr><td style="background:#c8c8c8;width:58%;text-align:center;font-weight:bold;font-size:10pt;padding:4px">OFFERTA NR. ${esc(q.number || 'BOZZA')} - ${dotDate(created)}</td><td></td></tr></table>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;border-collapse:collapse"><thead><tr>${head('Descrizione')}${head('Codice')}${head('U.M.')}${head('Quantità', 1)}${head(hideDiscounts(q) ? 'Prezzo netto' : 'Prezzo', 1)}${hideDiscounts(q) ? '' : head('Sconto %', 1)}${head('Imp.netto', 1)}</tr></thead>
+<tbody>${rows.join('')}${noteRows}</tbody></table>
+<table cellpadding="0" cellspacing="0" style="margin:14px 0 0 auto;width:42%;border-top:1px solid #000;border-collapse:collapse">
+${tot('Totale merce:', n(t.taxable, 2))}<tr><td colspan="2" style="height:10px"></td></tr>${tot('Totale imponibile:', n(t.taxable, 2))}${tot(`Totale iva${t.vatRate !== 22 ? ' (' + n(t.vatRate, 0) + '%)' : ''}:`, n(t.vat, 2))}${tot('Totale offerta:', n(t.total, 2), true)}</table>
+<div style="margin-top:40px;font-size:8.5pt;line-height:1.6">Prezzi al netto dell'IVA.<br>
+<table cellpadding="0" cellspacing="0" style="font-size:8.5pt"><tr><td style="padding-right:8px">Condizione di pagamento</td><td>: <b>${esc(q.payment || 'DA CONCORDARE')}</b></td></tr>
+<tr><td>Trasporto a cura</td><td>: <b>${esc(transportByFor(q))}</b></td></tr><tr><td>Validità</td><td>: <b>${dotDate(until)}</b></td></tr></table></div>
+<div style="margin-top:14px;font-size:8.5pt;font-weight:bold;text-decoration:underline;line-height:1.6">${CLAUSES.map(esc).join('<br>')}</div>
+<div style="margin-top:14px;font-size:8.5pt">Ringraziamo per la gradita richiesta e inviamo cordiali saluti</div>
+<div style="margin:6px 0 0 50%;font-weight:bold;font-size:10pt">NORDTEX SRL</div>
+${foot}
+</div>`;
+}
+
+function quoteFileName(q, now = new Date()) {
+  const d = q.createdAt ? new Date(q.createdAt) : now;
+  const clean = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+  return [clean(q.customer?.name), customerCode(q), (/^OFF-\d{4}-\d+$/.test(q.number || '') ? q.number : 'OFF-' + clean(q.number || 'BOZZA')), d.toISOString().slice(0, 10)].filter(Boolean).join('_');
+}
+
+// 04/11 (offerta di Nonini): "ritiro al deposito" solo se il materiale c'è in quel deposito secondo le giacenze RADIX.
+// Restituisce le righe che non si possono ritirare: assente nel deposito, non disponibile, o quantità oltre il disponibile
+// (confronto solo se l'unità di misura coincide). Servizi senza codice RADIX (trasporti, bancali) esclusi.
+const UM_EQ = { MQ: 'M2', M2: 'M2', MC: 'M3', M3: 'M3', PZ: 'PZ', NR: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CONF' };
+function pickupStockIssues(q, stock) {
+  const radix = Object.entries(RADIX_DEPOTS).find(([, k]) => k === q?.depot)?.[0];
+  const dep = radix && stock?.depots ? stock.depots.find(d => d.code === radix) : null;
+  const out = [];
+  for (const l of q?.lines || []) {
+    if (!l.radixCode || /trasport|bancal/i.test(l.description || '')) continue;
+    const it = dep?.items?.[l.radixCode];
+    const avail = it ? Number(it.available) || 0 : 0;
+    const same = it && UM_EQ[String(it.um || '').toUpperCase()] && UM_EQ[String(it.um).toUpperCase()] === UM_EQ[String(l.unit || '').toUpperCase()];
+    if (!dep) out.push({ line: l, reason: 'giacenze del deposito non disponibili' });
+    else if (!it) out.push({ line: l, reason: 'non presente in questo deposito' });
+    else if (avail <= 0) out.push({ line: l, reason: 'non disponibile (giacenza teorica ' + avail + ')' });
+    else if (same && avail < l.qty) out.push({ line: l, reason: `disponibili solo ${String(avail).replace('.', ',')} ${String(it.um).toLowerCase()} su ${String(l.qty).replace('.', ',')}` });
+  }
+  return { depotDate: dep?.date || null, issues: out };
+}
+
+return { DEPOTS, RADIX_DEPOTS, stockDepot, TRANSPORT_BY, isPickup, transportByFor, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, FREIGHT_FULL, freightRows, docSequence, customerLines, tongueGroove, lineExtra, quoteDocHtml, quoteFileName, pickupStockIssues };
+})();
+__m["js/core/mailto.js"] = (function () {
+const { totals } = __m["js/core/pricing.js"];
+const { DEPOTS, fmtN, isPickup } = __m["js/core/quote-doc.js"];
+// Email preparata nel programma di posta di chi invia (Outlook, Mail, Gmail…): mittente = la casella personale.
+// Regola Direzione 31/10/2026: offerte e comunicazioni partono dalla posta dell'agente / di Tommaso / di Marco / di Christian.
+// 02/11 (prova di Christian su PC con Outlook): Outlook per Windows non riconosce più indirizzi separati da virgola → su Windows ';'
+const mailSeparator = (ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '')) => /Windows/i.test(ua) ? ';' : ',';
+function mailtoUrl({ to = [], cc = [], bcc = [], subject = '', body = '' }, sep = mailSeparator()) {
+  const list = a => [].concat(a).filter(Boolean).map(s => String(s).trim()).filter(Boolean).join(sep);
+  const q = [];
+  if (list(cc)) q.push('cc=' + encodeURIComponent(list(cc)));
+  if (list(bcc)) q.push('bcc=' + encodeURIComponent(list(bcc)));
+  if (subject) q.push('subject=' + encodeURIComponent(subject));
+  if (body) q.push('body=' + encodeURIComponent(String(body).replace(/\r?\n/g, '\r\n')));
+  return 'mailto:' + list(to).split(sep).map(encodeURIComponent).join(sep) + (q.length ? '?' + q.join('&') : '');
+}
+// testo dell'email dell'offerta (solo testo: mailto non accetta formattazione né allegati; il PDF lo allega chi invia).
+// Niente firma: la aggiunge il programma di posta di chi invia (prova del 01/11: firma doppia in Outlook).
+const itDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`; };
+function quoteMailIntro(q, now = new Date()) {
+  return `Buongiorno,\n\ncome d'accordo vi inviamo in allegato la nostra offerta n. ${q.number} del ${itDate(q.createdAt || now)}.`;
+}
+function quoteMailSummary(q, now = new Date()) {
+  const t = totals(q);
+  const depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
+  const pickup = isPickup(q);
+  const until = new Date(new Date(q.createdAt || now).getTime() + (q.validDays || 30) * 864e5);
+  const transport = pickup ? `franco deposito (${depot.pickup[0]})` : t.freightPending ? 'da definire'
+    : t.freight > 0 ? `compreso nell'offerta (${fmtN(t.freight, 2)} €)` : 'compreso';
+  return ['RIEPILOGO', `• Totale imponibile: ${fmtN(t.taxable, 2)} € + IVA`, `• Trasporto: ${transport}`,
+    `• Pagamento: ${q.payment || 'DA CONCORDARE'}`, `• Validità: fino al ${itDate(until)}`].join('\n');
+}
+function quoteMailBody(q, intro, sheets = '', now = new Date()) {
+  return [String(intro || '').trim(), quoteMailSummary(q, now), sheets, 'Restiamo a disposizione per qualsiasi chiarimento.\nCordiali saluti']
+    .filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n');
+}
+
+// apre il programma di posta senza lasciare la pagina (link temporaneo, niente navigazione)
+function openMailto(url) {
+  const a = document.createElement('a'); a.href = url; a.rel = 'noopener'; a.style.display = 'none';
+  document.body.append(a); a.click(); a.remove();
+}
+
+return { mailSeparator, mailtoUrl, quoteMailIntro, quoteMailSummary, quoteMailBody, openMailto };
+})();
+__m["js/core/order-mail.js"] = (function () {
+// Email "ordine da inserire" per l'ufficio (offerta accettata dal cliente, decisione Direzione 01/11/2026).
+// Solo testo, pronto da ricopiare in RADIX: cliente con N° RADIX, righe con codice RADIX, quantità, sconti e netto.
+const { totals, lineNet, lineAmount } = __m["js/core/pricing.js"];
+const { DEPOTS } = __m["js/core/quote-doc.js"];
+const { ORDER_OFFICE_EMAIL } = __m["js/data/model.js"];
+const n2 = v => Number(v || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const nq = v => Number(v || 0).toLocaleString('it-IT', { maximumFractionDigits: 3 });
+const itDate = d => { if (!d) return ''; const x = new Date(String(d).length === 10 ? d + 'T12:00:00' : d); return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`; };
+const disc = ds => ds.filter(d => d > 0).map(d => n2(d).replace(/,00$/, '')).join('+') || '—';
+
+function orderMailSubject(q) {
+  return `ORDINE DA INSERIRE – ${q.customer?.name || ''} – offerta ${q.number}`;
+}
+
+function orderMailBody(q, o, senderName = '') {
+  const t = totals(q), c = q.customer || {};
+  const depot = (DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta).label;
+  const lines = q.lines.map((l, i) => [`${i + 1}) ${l.radixCode || l.listCode || l.productId} – ${l.description}`,
+    `   ${nq(l.qty)} ${String(l.unit || '').toLowerCase()} × listino ${n2(l.listPrice)} € · sconto ${disc(l.discounts)} · netto ${n2(lineNet(l))} € = ${n2(lineAmount(l))} €`].join('\n'));
+  return [
+    'Buongiorno,',
+    `il cliente ha accettato l'offerta ${q.number}: vi chiedo di inserire l'ordine in RADIX.`,
+    ['CLIENTE', `${c.name || ''}${c.number ? ' (N° cliente RADIX ' + c.number + ')' : ''}`, [c.street, [c.cap, c.city].filter(Boolean).join(' '), c.prov ? '(' + c.prov + ')' : ''].filter(Boolean).join(' '),
+      c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean).join('\n'),
+    ['ORDINE', o.customerRef ? `Riferimento ordine cliente: ${o.customerRef}` : '', o.deliveryDate ? `Consegna richiesta: ${itDate(o.deliveryDate)}` : 'Consegna richiesta: da concordare',
+      `Consegna a: ${o.deliveryAddress || 'sede del cliente'}`, o.siteContact ? `Referente per la consegna: ${o.siteContact}` : '',
+      `Deposito / partenza: ${depot} · trasporto a cura: ${q.transportBy || 'DESTINATARIO'}`].filter(Boolean).join('\n'),
+    ['ARTICOLI', ...lines].join('\n'),
+    ['IMPORTI', `Merce netta: ${n2(t.goods)} €`, t.extras ? `${q.extrasLabel || 'Altri addebiti'}: ${n2(t.extras)} €` : '', t.euroPallets ? `Bancali Euro V600 (${t.euroPalletCount} × 20 €): ${n2(t.euroPallets)} €` : '', t.bigBagPallets ? `Europallet per lo scarico dei BigBag (${t.bigBagPalletCount} × 15 €): ${n2(t.bigBagPallets)} €` : '',
+      `Trasporto: ${t.freightPending ? 'da definire' : n2(t.freight) + ' €'}`, `Imponibile: ${n2(t.taxable)} € + IVA ${n2(t.vatRate).replace(/,00$/, '')}%`,
+      `Pagamento: ${q.payment || 'DA CONCORDARE'}`].filter(Boolean).join('\n'),
+    o.notes ? 'NOTE PER L\'UFFICIO\n' + o.notes : '',
+    `L'offerta completa è nel NORDTEX HUB (offerta ${q.number}); quando è inserita, segnate nell'app il numero d'ordine RADIX.`,
+    'Grazie',   // 09/11: niente firma, la mette Outlook
+  ].filter(Boolean).join('\n\n');
+}
+
+const orderMailTo = () => [ORDER_OFFICE_EMAIL];
+
+return { orderMailSubject, orderMailBody, orderMailTo };
+})();
+__m["js/views/order-dialog.js"] = (function () {
+// Offerta accettata → richiesta d'ordine all'ufficio (spostata da quotes.js il 20/11/2026, stessa logica)
+const { h, eur, toast, modal, field } = __m["js/ui.js"];
+const { missingForOrder } = __m["js/data/model.js"];
+const { fiscalFields } = __m["js/views/fiscal.js"];
+const { isPickup, pickupStockIssues } = __m["js/core/quote-doc.js"];
+const { mailtoUrl, openMailto } = __m["js/core/mailto.js"];
+const { orderMailBody, orderMailSubject, orderMailTo } = __m["js/core/order-mail.js"];
+async function orderDialog(app, q) {
+  if (isPickup(q) && pickupStockIssues(q, app.store.stock || null).issues.length) throw new Error('Ordine non possibile: l\'offerta è con ritiro al deposito ma alcuni articoli non ci sono in quel deposito. Correggi l\'offerta (deposito, articoli o "Con trasporto") e salvala.');
+  const today = new Date().toISOString().slice(0, 10);
+  const date = h('input', { type: 'date', min: today });
+  const addr = h('textarea', { rows: 2, placeholder: 'Sede del cliente oppure indirizzo del cantiere' }, q.site || '');
+  const ref = h('input', { placeholder: 'es. conferma d\'ordine n. 125 del 03/11' });
+  const contact = h('input', { placeholder: 'es. Mario Rossi 333 1234567' });
+  const notes = h('textarea', { rows: 3, placeholder: 'es. scarico con gru, orari, bancali da rendere, accordi presi' });
+  // 02/11: cliente nuovo (nato nell'HUB) → l'ordine parte solo con P.IVA, SDI/PEC, pagamento e banca
+  const cust = (await app.customers()).find(c => c.id === q.customerId) || null;
+  const missing = missingForOrder(cust);
+  const fx = missing.length ? fiscalFields(app, cust, { payment: q.payment && !/^da concordare$/i.test(q.payment) ? q.payment : '' }) : null;
+  const rec = await modal(`Passa l'ordine all'ufficio · ${q.number}`, h('div', { class: 'form' },
+    h('p', { class: 'muted' }, `${q.customer?.name || ''} · ${eur(q.total || 0)}. L'ufficio riceve l'ordine nell'app e via email e lo inserisce in RADIX.`),
+    fx ? h('div', { class: 'alert warn' }, h('strong', {}, 'Cliente nuovo: completa i dati per l\'ordine'), h('div', {}, 'Mancano: ' + missing.join(', ') + '. Servono all\'ufficio per aprire il cliente in RADIX.'), fx.el) : null,
+    field('Consegna richiesta', date, 'Lascia vuoto se da concordare'), field('Consegna a', addr), field('Riferimento ordine del cliente', ref),
+    field('Referente per la consegna', contact), field('Note per l\'ufficio', notes)),
+    [{ label: 'Più tardi', value: false }, { label: 'Passa all\'ufficio', primary: true, run: async () => {
+      if (fx) { await app.store.updateCustomerFiscal(cust.id, fx.values()); app.invalidate(); }
+      const f = { deliveryDate: date.value || null, deliveryAddress: addr.value, customerRef: ref.value, siteContact: contact.value, notes: notes.value };
+      await app.store.requestOrder(q, f); return f;
+    } }]);
+  if (!rec || typeof rec !== 'object') return false;
+  openMailto(mailtoUrl({ to: orderMailTo(), subject: orderMailSubject(q), body: orderMailBody(q, rec, app.session.name) }));
+  toast('Ordine passato all\'ufficio: invia anche l\'email che si è aperta');
+  return true;
+}
+
+
+return { orderDialog };
+})();
+__m["js/views/outcome-quick.js"] = (function () {
+// 20/11/2026 (Tommaso: «rendiamo più facile e intuitivo il processo… in tutti i punti dove c'è l'offerta va implementato con accettata o persa»).
+// Pulsanti «✓ Accettata» e «✗ Persa» accanto a ogni offerta aperta (elenco Offerte, scheda cliente, Bacheca, scheda offerta),
+// per le offerte dell'app e per quelle RADIX. Direzione e Ufficio con «Accettata» possono scrivere subito il numero d'ordine RADIX:
+// l'offerta si chiude con il suo ordine in un passaggio solo.
+const { h, toast, modal, field } = __m["js/ui.js"];
+const { LOST_REASONS } = __m["js/data/model.js"];
+const { normRadixRef, radixAcceptNote, radixLostNote, canCloseQuote, canCloseRadix } = __m["js/core/outcome.js"];
+const { orderDialog } = __m["js/views/order-dialog.js"];
+const isStaff = app => app.session.role === 'direzione';
+
+async function acceptDialog(app, label, { withRef }) {
+  const note = h('textarea', { rows: 2, placeholder: 'Facoltativa, es. consegna a gennaio' });
+  const ref = h('input', { placeholder: 'es. OCDIR 2026-433', 'aria-label': 'Numero ordine RADIX' });
+  const res = await modal(`${label}: accettata`, h('div', { class: 'form' },
+    withRef ? field('N° ordine RADIX', ref, 'Se l\'ordine è già inserito in RADIX scrivi il numero: l\'offerta si chiude con il suo ordine. Se lo lasci vuoto, l\'ordine va all\'ufficio.')
+      : h('p', {}, 'Ottimo. Subito dopo passi l\'ordine all\'ufficio: lo inserisce in RADIX.'),
+    field('Nota', note)),
+    [{ label: 'Annulla', value: false }, { label: 'Conferma accettata', primary: true, run: async () => ({ ref: withRef ? normRadixRef(ref.value) : '', note: note.value.trim() }) }]);
+  return res && typeof res === 'object' ? res : null;
+}
+async function lostDialog(app, label) {
+  const reason = h('select', {}, h('option', { value: '' }, 'Scegli il motivo…'), LOST_REASONS.map(r => h('option', { value: r }, r)));
+  const note = h('textarea', { rows: 2, placeholder: 'es. concorrente e prezzo praticato, se noto' });
+  const res = await modal(`${label}: persa`, h('div', { class: 'form' }, field('Motivo', reason), field('Nota', note)),
+    [{ label: 'Annulla', value: false }, { label: 'Conferma persa', primary: true, run: async () => {
+      if (!reason.value) throw new Error('Indica il motivo'); return { reason: reason.value, note: note.value.trim() }; } }]);
+  return res && typeof res === 'object' ? res : null;
+}
+
+// offerta dell'app accettata: esito salvato, poi ordine (numero RADIX subito oppure «Passa l'ordine all'ufficio»)
+async function acceptQuote(app, q) {
+  const r = await acceptDialog(app, `Offerta ${q.number || ''}`, { withRef: isStaff(app) }); if (!r) return false;
+  q.status = 'Accettata'; q.outcome = { status: 'Accettata', reason: '', note: r.note, at: new Date().toISOString(), by: app.session.name };
+  Object.assign(q, await app.store.saveQuote(q));
+  if (r.ref) {
+    const o = await app.store.requestOrder(q, { notes: 'Ordine già inserito in RADIX: ' + r.ref });
+    await app.store.updateOrder(o.id, { status: 'Inserito', radixRef: r.ref, officeNote: 'Ordine già inserito in RADIX' });
+    toast(`Offerta ${q.number} accettata e chiusa con l'ordine RADIX ${r.ref}`);
+  } else {
+    toast(`Offerta ${q.number} accettata`);
+    await orderDialog(app, q).catch(e => toast(e.message, 'error'));
+  }
+  return true;
+}
+async function loseQuote(app, q) {
+  const r = await lostDialog(app, `Offerta ${q.number || ''}`); if (!r) return false;
+  q.status = 'Persa'; q.outcome = { status: 'Persa', reason: r.reason, note: r.note, at: new Date().toISOString(), by: app.session.name };
+  Object.assign(q, await app.store.saveQuote(q));
+  toast(`Offerta ${q.number} segnata persa`);
+  return true;
+}
+
+// offerta RADIX: l'esito si salva sull'offerta importata (come «Com'è andata?»)
+async function acceptRadix(app, o) {
+  const r = await acceptDialog(app, `Offerta RADIX ${o.id}`, { withRef: isStaff(app) }); if (!r) return false;
+  await app.store.setRadixOfferOutcome(o.id, { outcome: 'Accettata', note: radixAcceptNote(r.ref, r.note), next: null });
+  delete app.cache?.orderMatches;
+  toast(r.ref ? `Offerta accettata: ordine RADIX ${r.ref}, l'ufficio non deve fare niente` : 'Offerta accettata: l\'ufficio la trova tra gli ordini da inserire');
+  return true;
+}
+async function loseRadix(app, o) {
+  const r = await lostDialog(app, `Offerta RADIX ${o.id}`); if (!r) return false;
+  await app.store.setRadixOfferOutcome(o.id, { outcome: 'Persa', note: radixLostNote(r.reason, r.note), next: null });
+  delete app.cache?.orderMatches;
+  toast('Offerta segnata persa');
+  return true;
+}
+
+// i due pulsanti; kind 'app' (offerta dell'app) o 'radix'. style 'btn' (pulsanti piccoli) o 'act' (barra azioni della scheda offerta)
+function outcomeButtons(app, kind, x, onDone, { style = 'btn', before = null } = {}) {
+  const ok = kind === 'radix' ? canCloseRadix(app.session, x) : canCloseQuote(app.session, x);
+  if (!ok) return null;
+  const run = fn => async ev => { ev?.preventDefault?.(); ev?.stopPropagation?.(); if (before && !before()) return; try { if (await fn(app, x)) await onDone?.(); } catch (e) { toast(e.message, 'error'); } };
+  const [acc, lost] = kind === 'radix' ? [acceptRadix, loseRadix] : [acceptQuote, loseQuote];
+  if (style === 'act') return [
+    h('button', { class: 'act win', type: 'button', onclick: run(acc) }, h('span', { class: 'act-ico' }, '✓'), h('span', {}, 'Accettata')),
+    h('button', { class: 'act lose', type: 'button', onclick: run(lost) }, h('span', { class: 'act-ico' }, '✗'), h('span', {}, 'Persa'))];
+  return h('span', { class: 'oc-btns' },
+    h('button', { class: 'btn small oc-win', type: 'button', title: 'Il cliente ha confermato', onclick: run(acc) }, '✓ Accettata'),
+    h('button', { class: 'btn small oc-lose', type: 'button', title: 'Il cliente non la prende: indica il motivo', onclick: run(lost) }, '✗ Persa'));
+}
+
+return { acceptQuote, loseQuote, acceptRadix, loseRadix, outcomeButtons };
+})();
 __m["js/core/xlsx-read.js"] = (function () {
 // Lettura minima di un file Excel (.xlsx) nel browser, senza librerie esterne (02/11/2026, pagina "Aggiorna dati").
 // Un .xlsx è uno zip di XML: si legge l'indice dello zip, si decomprimono (DecompressionStream 'deflate-raw')
@@ -3908,330 +4458,6 @@ function matchOfferLines(parsed, offers) {
 
 return { OFFER_COLUMNS, normName, headIt, parseRadixOffers, offersPreview, ORDER_COLUMNS, parseRadixOrders, ordersPreview, decodeText, parseTsv, parseRadixSales, salesPreview, SERVICE_RX, parseRadixOfferLines, matchOfferLines };
 })();
-__m["js/core/quote-doc.js"] = (function () {
-// Documento offerta nel formato NORDTEX/RADIX (modello: offerte 1051, 1313, 1324 del 2026, Crystal Reports):
-// testata con logo, Deposito di uscita · Cantiere · Spett.le (codice cliente), barra "OFFERTA NR. … - data",
-// righe Descrizione/Codice/U.M./Quantità/Prezzo/Sconto %/Imp.netto, totali, condizioni, clausole, piè di pagina aziendale.
-// Modulo puro (stringa HTML con stili in linea): stampa/PDF nell'app ed email dalla funzione server.
-const { totals, lineAmount, lineNet, palletsFor, EURO_PALLET, BIGBAG_PALLET } = __m["js/core/pricing.js"];
-// Depositi NORDTEX: elenco e indirizzi dal sito nordtex.it (31/10/2026); telefoni di Lecco e Polymax dalle offerte RADIX
-const DEPOTS = {
-  diretta: { label: 'Consegna diretta dal produttore', lines: ['CONSEGNA DIRETTA'] },
-  SEDE: { label: 'Sede NORDTEX – Chiusa (BZ)', lines: ['SEDE NORDTEX', "PRATO DELL'OSPIZIO", '39043 CHIUSA (BZ)'], pickup: ['Sede NORDTEX', "Prato dell'Ospizio", 'IT-39043 Chiusa (BZ)'] },
-  LECCO: { label: 'Deposito Lecco – Fornaci Giussani (Inverigo CO)', lines: ['DEPOSITO LECCO -', 'FORNACI GIUSSANI', 'VIA ARISTIDE MAGNI 98', '22044 INVERIGO (CO)', 'Tel:031607100'],
-    pickup: ['Fornace Giussani', 'Via Aristide Magni, 98', 'IT-22044 Inverigo (CO)'] },
-  CASALE: { label: 'Deposito Piemonte – Savallo Autotrasporti (Casale Monferrato AL)', lines: ['DEPOSITO PIEMONTE -', 'SAVALLO AUTOTRASPORTI', 'STRADA VALENZA 7', '15033 CASALE MONFERRATO (AL)'],
-    pickup: ['Savallo Autotrasporti', 'Strada Valenza, 7', 'IT-15033 Casale Monferrato (AL)'] },
-  CASTELFRAN: { label: 'Deposito Veneto – Polymax Italia (Castelfranco Veneto TV)', lines: ['POLYMAX', 'VIA FUSINA 12', '31033 CASTELFRANCO', 'VENETO (TV)', 'Tel:0423493544', 'Fax:0423497841'],
-    pickup: ['Polymax', 'Via Fusina 12', 'IT-31033 Castelfranco Veneto (TV)'] },
-  TORRI: { label: 'Deposito Veneto – Loewenstark (Torri di Quartesolo VI)', lines: ['DEPOSITO VENETO -', 'LOEWENSTARK SRL', 'VIA CAMISANA 15', '36040 TORRI DI QUARTESOLO (VI)'],
-    pickup: ['Loewenstark srl', 'Via Camisana, 15', 'IT-36040 Torri di Quartesolo (VI)'] },
-  MARCHE: { label: 'Deposito Marche – SPEA Tecnologie Edili (Morrovalle MC)', lines: ['DEPOSITO MARCHE -', 'SPEA TECNOLOGIE EDILI SRL', 'CONTRADA SARROCCIANO', '62010 MORROVALLE (MC)'],
-    pickup: ['SPEA Tecnologie Edili srl', 'Contrada Sarrocciano', 'IT-62010 Morrovalle (MC)'] },
-};
-// 02/11: codici dei depositi in RADIX (elenco "Codice deposito") → deposito dell'offerta; gli altri solo per le giacenze
-const RADIX_DEPOTS = { CHIUSA: 'SEDE', LECCO: 'LECCO', CASALE: 'CASALE', CASTELFRAN: 'CASTELFRAN', VICENZA: 'TORRI', MACERATA: 'MARCHE' };
-const OTHER_STOCK = { 'DEL DOSSO': ['Deposito Sondrio (Piateda SO)', 'Piateda (SO)'], EDILLOGIST: ['Made Edil Logistica (Pogliano Milanese MI)', 'Pogliano Milanese (MI)'],
-  BIOISOLARE: ['Bioisolare (Malo VI)', 'Malo (VI)'], POLYMAX: ['Polymax radianti (Castelfranco Veneto TV)', 'Polymax radianti'] };
-// deposito delle giacenze → { label, place (nome corto), pickup }
-function stockDepot(code, name = '') {
-  const d = DEPOTS[RADIX_DEPOTS[code] || code];
-  if (d?.pickup) return { label: d.label, place: d.pickup[2].replace(/^IT-\d+\s*/, ''), pickup: d.pickup };
-  const o = OTHER_STOCK[code];
-  return { label: o ? o[0] : name || code, place: o ? o[1] : code, pickup: null };
-}
-const TRANSPORT_BY = ['DESTINATARIO', 'VETTORE', 'MITTENTE'];
-// 02/11 (offerta Casale di Tommaso): ritiro al deposito senza trasporto.
-// q.pickup = true/false scelto nell'offerta; offerte vecchie (q.pickup assente): ritiro se deposito con ritiro e trasporto a cura del destinatario.
-function isPickup(q) {
-  const d = DEPOTS[q.depot || 'diretta'];
-  if (!d?.pickup) return false;
-  if (q.pickup === true || q.pickup === false) return q.pickup;
-  return (q.transportBy || 'DESTINATARIO') === 'DESTINATARIO';
-}
-// 13/11 (Tommaso): se addebitiamo il trasporto e non è un ritiro, il trasporto è «a cura» nostra → MITTENTE,
-// a meno che qualcuno l'abbia scelto a mano nell'offerta (q.transportByManual).
-function transportByFor(q) {
-  if (q.transportByManual) return q.transportBy || 'DESTINATARIO';
-  if (!isPickup(q) && Number(q.freight) > 0) return 'MITTENTE';
-  return q.transportBy || 'DESTINATARIO';
-}
-const CLAUSES = ['Quotazioni valide salvo variazioni imposte dal produttore/fornitore. Non si accettano resi.', 'Non ci assumiamo responsabilità per ritardi e danni nelle consegne dovute ai vettori.'];
-
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-// formato numeri come RADIX: separatore migliaia sempre presente (2.577,25), decimali fissi
-const fmtN = (v, d) => { const [i, f] = Math.abs(Number(v)).toFixed(d).split('.'); return (Number(v) < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : ''); };
-const n = fmtN;
-const dotDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}.${String(x.getMonth() + 1).padStart(2, '0')}.${x.getFullYear()}`; };
-const UM = { M2: 'MQ', M3: 'M3', PZ: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CF', ROTOLO: 'RO', SACCO: 'SA', BIGBAG: 'BB' };
-const UL = { M2: 'm²', M3: 'm³', ML: 'ml', PZ: 'pz', KG: 'kg' };
-const discText = d => d.filter(x => x).map(x => n(x, x % 1 ? 1 : 0)).join('+');
-// 02/11 (richiesta Tommaso, come nella vecchia app offerte): sconti nascosti nel documento → colonna Prezzo = prezzo netto, colonna Sconto % assente
-const hideDiscounts = q => q.hideDiscounts === true;
-const docPrice = (q, l) => hideDiscounts(q) ? lineNet(l) : l.listPrice;
-const customerCode = q => (q.customerId && !String(q.customerId).startsWith('H-') ? String(q.customerId) : '');
-
-// Righe aggiuntive di descrizione, come in RADIX: "(30,78m²/Pal)" e "4 bancali"
-// 02/11 (prova con Christian): destinazione della merce sul documento = cantiere scritto nelle condizioni,
-// altrimenti l'indirizzo di consegna del riquadro trasporto se diverso dalla sede del cliente.
-function destinationLines(q) {
-  const site = String(q.site || '').trim();
-  if (site) return site.split('\n').map(s => s.trim()).filter(Boolean);
-  const d = q.delivery || {}, c = q.customer || {};
-  const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (!d.city || (norm(d.street) === norm(c.street) && norm(d.city) === norm(c.city))) return [];
-  return [d.street, [d.cap, d.city, d.prov ? `(${d.prov})` : ''].filter(Boolean).join(' ')].filter(Boolean);
-}
-// riga del trasporto per il cliente: niente note interne ("inserito manualmente", dettagli di calcolo)
-const MEZZO = { centinato: 'con bilico centinato', walkingfloor: 'con walking floor', groupage: 'groupage con corriere' };
-function destCity(q) {
-  const dest = destinationLines(q);
-  return dest.length ? dest[dest.length - 1].replace(/^\d{5}\s+/, '') : [q.customer?.city, q.customer?.prov ? `(${q.customer.prov})` : ''].filter(Boolean).join(' ');
-}
-function freightLabel(q, part = null) {
-  const v = part ? (part.kind === 'pallet' ? 'groupage' : part.vehicle) : Object.keys(q.logistics?.km || {}).length ? q.logistics?.vehicleType : null;   // solo trasporti a km (laterizi, vetro cellulare)
-  const city = destCity(q);
-  return ['Servizio di trasporto', MEZZO[v] || '', part?.label ? `(${part.label})` : '', city ? `- consegna a ${city}` : ''].filter(Boolean).join(' ');
-}
-// 06/11 (segnalazione Tommaso, offerta laterizi su 3 bilici): la riga trasporto riportava "1,00 × 4.334,40" come se fosse un solo carico.
-// Trasporto calcolato dall'app: una riga per ogni trasporto (luogo di carico); a km quantità = mezzi e prezzo = costo di un mezzo;
-// groupage V600 quantità = bancali × prezzo a bancale. Codici RADIX (confermati da Tommaso 06/11): mezzi pieni N88079 «carico completo»,
-// mezzo non pieno e groupage N14126 «carico diretto parziale». Importo scritto a mano, stima diversa o conti che non tornano al centesimo:
-// una sola riga 1 × importo con N14126.
-const FREIGHT_FULL = 'N88079', FREIGHT_PARTIAL = 'N14126';
-const c2 = x => Math.round(x * 100) / 100;
-// 13/11 (Tommaso, Policell 99 m³ = 1 bilico pieno + 1 parziale allo stesso prezzo: "non mi piace" le due righe):
-// i mezzi a km costano uguale, pieni o no → UNA riga con la quantità dei mezzi. Codice N14126 se c'è un mezzo parziale, N88079 se tutti pieni.
-const kmCode = (k, fullVehicles) => (Math.max(0, Math.min(k, fullVehicles ?? 0)) < k ? FREIGHT_PARTIAL : FREIGHT_FULL);
-const c3 = x => Math.round(x * 1000) / 1000;
-function oneKmRow(amount, k, code) {
-  const price = c3(amount / k);
-  return Math.abs(price * k - amount) <= 0.0051 ? [{ code, qty: k, price, amount: c2(amount) }] : null;
-}
-function kmRows(cost, k, fullVehicles) {
-  const each = c2(cost / k);
-  if (Math.abs(each * k - cost) >= 0.005) return null;
-  return [{ code: kmCode(k, fullVehicles), qty: k, price: each, amount: c2(cost) }];
-}
-// 12/11 (Tommaso, laterizi su 2 bilici e mezzo: "segna sempre 1"): anche con l'importo scritto a mano, se il calcolo aveva un solo
-// trasporto a km con N mezzi, la riga si divide sui mezzi (carichi completi + carico parziale); i centesimi che avanzano vanno sull'ultimo.
-function manualKmRows(amount, k, fullVehicles) {
-  const each = c2(amount / k), code = kmCode(k, fullVehicles);
-  const one = oneKmRow(amount, k, code); if (one) return one;   // 13/11: riga unica, prezzo a 3 decimali
-  // i centesimi che non si dividono vanno su una riga a parte (stesso codice)
-  return [k > 1 && { code, qty: k - 1, price: each, amount: c2(each * (k - 1)) },
-    { code, qty: 1, price: c2(amount - each * (k - 1)), amount: c2(amount - each * (k - 1)) }].filter(Boolean);
-}
-// 13/11 (Tommaso): ultimo mezzo con doppio scarico a prezzo ridotto → mezzi pieni N88079 a prezzo intero + mezzo parziale N14126 al suo prezzo
-function partialRows(cost, k, pct, perVehicle) {
-  // 13/11 ore 5 (Tommaso: «l'offerta deve essere su una riga unica»): una riga N14126.
-  // 17/11 (Tommaso: «segna due quando è 1,5 e divide il totale per 2»): quantità = mezzi pieni + percentuale dell'ultimo
-  // (es. 1 + 60% = 1,60) e prezzo = un mezzo intero; se i conti non tornano al centesimo, come prima (mezzi × prezzo medio).
-  const per = Number(perVehicle), p = Number(pct);
-  if (per > 0 && p > 0 && p < 100) {
-    const qty = c3(k - 1 + p / 100), price = c3(per);
-    if (Math.abs(qty * price - cost) <= 0.0051) return [{ code: FREIGHT_PARTIAL, qty, price, amount: c2(cost) }];
-  }
-  return oneKmRow(cost, k, FREIGHT_PARTIAL);
-}
-// 13/11 (Tommaso): la riga del trasporto va sotto il prodotto a cui si riferisce, non in fondo.
-// after = indice dell'ultima riga d'offerta servita da quel trasporto (null = in fondo)
-function freightAfter(q, p) {
-  const own = Array.isArray(p?.lines) && p.lines.length ? Math.max(...p.lines) : null;
-  if (own !== null && own < (q.lines || []).length) return own;
-  const idx = (q.lines || []).map((l, i) => (l.pickup || l.depotPrice ? -1 : i)).filter(i => i >= 0);
-  return idx.length ? idx[idx.length - 1] : null;
-}
-function freightRows(q, freight) {
-  const parts = q.transportEstimate?.parts;
-  const single = Array.isArray(parts) && parts.length === 1 ? parts[0] : null;
-  return freightRowsRaw(q, freight).map(r => ({ ...r, after: r.after !== undefined ? r.after : freightAfter(q, single) }));
-}
-// righe d'offerta e righe del trasporto nell'ordine del documento
-function docSequence(q, freight) {
-  const fr = freight ? freightRows(q, freight) : [], out = [];
-  (q.lines || []).forEach((l, i) => { out.push({ line: l, index: i }); for (const f of fr) if (f.after === i) out.push({ freight: f }); });
-  for (const f of fr) if (f.after === null || f.after >= (q.lines || []).length) out.push({ freight: f });
-  return out;
-}
-function freightRowsRaw(q, freight) {
-  const one = [{ code: FREIGHT_PARTIAL, qty: 1, price: freight, amount: freight, label: freightLabel(q) }];
-  const e = q.transportEstimate;
-  if (freight > 0 && e && !(q.freightAuto && Math.abs((e.amount ?? NaN) - freight) < 0.005)) {
-    const kp = Array.isArray(e.parts) && e.parts.length ? (e.parts.length === 1 && e.parts[0].kind === 'km' ? e.parts[0] : null) : (e.vehicles >= 1 ? e : null);
-    if (kp && kp.partialPct) { const r = partialRows(freight, kp.vehicles, kp.partialPct, kp.perVehicle); return (r || one).map(x => ({ ...x, label: freightLabel(q) })); }
-    if (kp && kp.vehicles >= 1 && kp.vehicles <= 20) return manualKmRows(freight, kp.vehicles, kp.fullVehicles).map(x => ({ ...x, label: freightLabel(q) }));
-    return one;
-  }
-  if (!(freight > 0) || !q.freightAuto || !e || !(Math.abs((e.amount ?? NaN) - freight) < 0.005)) return one;
-  if (Array.isArray(e.parts) && e.parts.length) {
-    const rows = [];
-    for (const p of e.parts) {
-      let r = null;
-      if (p.kind === 'km' && p.vehicles >= 1) r = p.partialPct ? partialRows(p.cost, p.vehicles, p.partialPct, p.perVehicle) : kmRows(p.cost, p.vehicles, p.fullVehicles);
-      else if (p.kind === 'pallet' && p.pallets > 0 && Math.abs(p.pallets * p.perPallet - p.cost) < 0.005) r = [{ code: FREIGHT_PARTIAL, qty: p.pallets, price: p.perPallet, amount: c2(p.cost) }];
-      if (!r) r = [{ code: FREIGHT_PARTIAL, qty: 1, price: p.cost, amount: c2(p.cost) }];
-      const label = freightLabel(q, e.parts.length > 1 ? p : { ...p, label: '' });
-      rows.push(...r.map(x => ({ ...x, label, after: freightAfter(q, p) })));
-    }
-    return Math.abs(rows.reduce((s, x) => s + x.amount, 0) - freight) < 0.005 ? rows : one;
-  }
-  if (!(e.vehicles >= 1)) return one;   // offerte salvate prima delle righe per trasporto: un solo luogo di carico a km
-  const r = kmRows(freight, e.vehicles, e.fullVehicles);
-  return r ? r.map(x => ({ ...x, label: freightLabel(q) })) : one;
-}
-const customerLines = c => [c.name, c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' '), c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean);
-
-// 16/11 (Christian): negli articoli con bordo maschio/femmina la descrizione riporta «bordo a incastro M+F».
-// Per codice di listino, non per nome: nello stesso prodotto ci sono formati con bordo liscio.
-// Naturheld dall'estratto listino NH (Christian 16/11 sera): 110 WALL solo 1880×615; 140 solo 1880×615 (1250×600 liscio);
-// 180 tutti tranne 3000×1250 (liscio); 220 solo 2550×615 (1250×600 liscio); 110 ROOF, 160, 200 e 140 install senza incastro.
-// Altri marchi: righe del listino con il testo tecnico «(incastro)» (protect M 230 i, universal, universal dry/black, special dry 140, safe, floor).
-const TG = new Set(["25002001", "25002002", "25002003", "25002004", "25003001", "25003002", "25003003", "25003004", "25003005", "25003006", "25003007", "25003008", "25003009", "25004001", "25004002", "25004003", "25004004", "25004007", "25004008", "25004009", "25004010", "25005001", "25005004", "301668", "330561", "334121", "334122", "334123", "334180", "334273", "334274", "334275", "334276", "335244", "338431", "341344", "341345", "344668", "344670", "367943", "367949", "367950", "389781", "399305", "411038", "411876", "411900", "411901", "411913", "411917", "411919", "411921", "411940", "411966", "411968", "411970", "411972", "411975", "426980", "426984", "427013", "433507", "433513", "433514", "433515", "433550", "433551", "433553", "433556"]);
-const tongueGroove = l => !!l && TG.has(String(l.listCode || '').trim());
-
-function lineExtra(l) {
-  const out = [], pal = palletsFor(l);
-  if (tongueGroove(l)) out.push('bordo a incastro M+F');
-  if (l.palletQuantity > 0 && pal !== null) {
-    // 02/11 (errore visto su W14 PLAN: 60 pz/Pal stampato "6pz/Pal"): si tolgono gli zeri finali SOLO dopo la virgola
-    const pq = l.palletQuantity % 1 ? n(l.palletQuantity, 3).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '') : n(l.palletQuantity, 0);
-    out.push(`(${pq}${UL[l.unit] || l.unit.toLowerCase()}/Pal)`);
-    // 17/11: sotto un decimo di bancale niente riga «circa 0,0 bancali»
-    if (pal >= 0.05) out.push(Math.abs(pal - Math.round(pal)) < 1e-6 ? `${Math.round(pal)} ${Math.round(pal) === 1 ? 'bancale' : 'bancali'}` : `circa ${n(pal, 1)} bancali`);
-  }
-  if (l.unitNote) out.push(l.unitNote);   // prezzi per unità scelti dall'agente (02/11)
-  if (l.pickup) out.push(`Ritiro a cura del cliente presso ${l.pickup.label}`);   // 13/11: resto ritirato in deposito
-  return out;
-}
-
-function quoteDocHtml(q, { header = '', footer = '', now = new Date() } = {}) {
-  const t = totals(q);
-  const created = q.createdAt ? new Date(q.createdAt) : now;
-  const until = new Date(created.getTime() + (q.validDays || 30) * 864e5);
-  const c = q.customer || {}, depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
-  const F = 'font-family:Verdana,Arial,Helvetica,sans-serif;color:#000';
-  const cell = 'padding:5px 4px;vertical-align:top;font-size:8.5pt';
-  const num = cell + ';text-align:right;white-space:nowrap';
-  const head = (x, right) => `<th style="background:#c8c8c8;font-size:7.5pt;font-weight:bold;padding:3px 4px;text-align:${right ? 'right' : 'left'}">${x}</th>`;
-  const block = (title, lines) => `<td style="width:33%;vertical-align:top;font-size:8.5pt;line-height:1.45;padding-right:10px">${title ? `<div style="font-weight:bold;margin-bottom:6px">${title}</div>` : ''}${lines.filter(Boolean).map(esc).join('<br>')}</td>`;
-  const row = (desc, code, um, qty, price, disc, amount) => `<tr><td style="${cell};width:40%">${desc}</td><td style="${cell}">${esc(code)}</td><td style="${cell}">${esc(um)}</td>`
-    + `<td style="${num}">${qty}</td><td style="${num}">${price}</td>${disc === null ? '' : `<td style="${num};text-align:center">${disc}</td>`}<td style="${num}">${amount}</td></tr>`;
-  const site = String(q.site || '').trim();
-  const rows = docSequence(q, t.freight).map(({ line: l, freight: f }) => f
-    ? row(esc(f.label), f.code, 'NR', n(f.qty, 2), n(f.price, 3), hideDiscounts(q) ? null : '', n(f.amount, 2))
-    : row([esc(l.description), ...lineExtra(l).map(esc)].join('<br>'), l.radixCode || l.listCode || '', UM[l.unit] || l.unit,
-      ['PZ', 'SACCO', 'ROTOLO', 'BIGBAG'].includes(l.unit) ? n(l.qty, 0) : n(l.qty, 3), n(docPrice(q, l), 3), hideDiscounts(q) ? null : discText(l.discounts), n(lineAmount(l), 2)));
-  if (t.extras) rows.push(row(esc(q.extrasLabel || 'Altri addebiti'), '', 'NR', '1,00', n(t.extras, 3), hideDiscounts(q) ? null : '', n(t.extras, 2)));
-  if (t.euroPallets) rows.push(row(esc(EURO_PALLET.label), EURO_PALLET.code, 'NR', n(t.euroPalletCount, 2), n(EURO_PALLET.price, 3), hideDiscounts(q) ? null : '', n(t.euroPallets, 2)));
-  if (t.bigBagPallets) rows.push(row(esc(BIGBAG_PALLET.label), BIGBAG_PALLET.code, 'NR', n(t.bigBagPalletCount, 2), n(BIGBAG_PALLET.price, 3), hideDiscounts(q) ? null : '', n(t.bigBagPallets, 2)));
-  const notes = [];
-  if (t.bigBagPallets) notes.push(esc(BIGBAG_PALLET.note));
-  const pickup = isPickup(q);
-  if (pickup) notes.push(`Materiale disponibile per il ritiro presso:<br><b>${depot.pickup.map(esc).join('<br>')}</b><br><b>Prezzo franco partenza</b> dal deposito`);
-  if (t.freightPending && !pickup) notes.push('Trasporto: da definire.');   // ritiro al deposito: nessun trasporto
-  if (q.notes) notes.push(esc(q.notes).replace(/\n/g, '<br>'));
-  const noteRows = notes.map(x => `<tr><td colspan="${hideDiscounts(q) ? 6 : 7}" style="${cell};padding-top:8px">${x}</td></tr>`).join('');
-  const tot = (k, v, bold) => `<tr><td style="font-size:8.5pt;padding:2px 4px">${k}</td><td style="font-size:8.5pt;padding:2px 4px;text-align:right${bold ? ';font-weight:bold' : ''}">${v}</td></tr>`;
-  const brand = header ? `<img src="${header}" alt="NORDTEX – For a better living" style="width:100%;display:block">`
-    : `<div style="font:italic 900 22pt Arial,sans-serif;letter-spacing:2px"><span style="color:#D40E41">NORD</span><span style="color:#676568">TEX</span> <span style="font:italic 400 12pt Georgia,serif;color:#333;letter-spacing:0">For a better living</span></div>`;
-  const foot = footer ? `<img src="${footer}" alt="Nordtex Srl" style="width:100%;display:block;margin-top:28px">`
-    : `<div style="margin-top:28px;font-size:7.5pt;color:#666;line-height:1.4"><b style="color:#D40E41">Nordtex Srl</b> · Società unipersonale · Via Prati all'Ospizio 6, 39043 Chiusa (BZ) · Tel. 0472 847 110 · info@nordtex.it · www.nordtex.it<br>P.I/C.F/RI BZ: 02623660988 · REA BZ-0189070 · Codice SDI: T04ZHR3</div>`;
-  return `<div class="nt-doc" style="${F};max-width:780px;margin:0 auto;background:#fff">
-${brand}
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px"><tr>
-${block('Deposito di uscita', depot.lines)}${block(destinationLines(q).length ? 'Destinazione merce' : '', destinationLines(q))}
-<td style="width:34%;vertical-align:top;font-size:8.5pt;line-height:1.45"><div style="font-weight:bold;margin-bottom:6px">Spett.le<span style="float:right;font-weight:normal;font-size:7.5pt">${customerCode(q) ? '(' + esc(customerCode(q)) + ')' : ''}</span></div>${customerLines(c).map(esc).join('<br>')}</td>
-</tr></table>
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px"><tr><td style="background:#c8c8c8;width:58%;text-align:center;font-weight:bold;font-size:10pt;padding:4px">OFFERTA NR. ${esc(q.number || 'BOZZA')} - ${dotDate(created)}</td><td></td></tr></table>
-<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:22px;border-collapse:collapse"><thead><tr>${head('Descrizione')}${head('Codice')}${head('U.M.')}${head('Quantità', 1)}${head(hideDiscounts(q) ? 'Prezzo netto' : 'Prezzo', 1)}${hideDiscounts(q) ? '' : head('Sconto %', 1)}${head('Imp.netto', 1)}</tr></thead>
-<tbody>${rows.join('')}${noteRows}</tbody></table>
-<table cellpadding="0" cellspacing="0" style="margin:14px 0 0 auto;width:42%;border-top:1px solid #000;border-collapse:collapse">
-${tot('Totale merce:', n(t.taxable, 2))}<tr><td colspan="2" style="height:10px"></td></tr>${tot('Totale imponibile:', n(t.taxable, 2))}${tot(`Totale iva${t.vatRate !== 22 ? ' (' + n(t.vatRate, 0) + '%)' : ''}:`, n(t.vat, 2))}${tot('Totale offerta:', n(t.total, 2), true)}</table>
-<div style="margin-top:40px;font-size:8.5pt;line-height:1.6">Prezzi al netto dell'IVA.<br>
-<table cellpadding="0" cellspacing="0" style="font-size:8.5pt"><tr><td style="padding-right:8px">Condizione di pagamento</td><td>: <b>${esc(q.payment || 'DA CONCORDARE')}</b></td></tr>
-<tr><td>Trasporto a cura</td><td>: <b>${esc(transportByFor(q))}</b></td></tr><tr><td>Validità</td><td>: <b>${dotDate(until)}</b></td></tr></table></div>
-<div style="margin-top:14px;font-size:8.5pt;font-weight:bold;text-decoration:underline;line-height:1.6">${CLAUSES.map(esc).join('<br>')}</div>
-<div style="margin-top:14px;font-size:8.5pt">Ringraziamo per la gradita richiesta e inviamo cordiali saluti</div>
-<div style="margin:6px 0 0 50%;font-weight:bold;font-size:10pt">NORDTEX SRL</div>
-${foot}
-</div>`;
-}
-
-function quoteFileName(q, now = new Date()) {
-  const d = q.createdAt ? new Date(q.createdAt) : now;
-  const clean = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
-  return [clean(q.customer?.name), customerCode(q), (/^OFF-\d{4}-\d+$/.test(q.number || '') ? q.number : 'OFF-' + clean(q.number || 'BOZZA')), d.toISOString().slice(0, 10)].filter(Boolean).join('_');
-}
-
-// 04/11 (offerta di Nonini): "ritiro al deposito" solo se il materiale c'è in quel deposito secondo le giacenze RADIX.
-// Restituisce le righe che non si possono ritirare: assente nel deposito, non disponibile, o quantità oltre il disponibile
-// (confronto solo se l'unità di misura coincide). Servizi senza codice RADIX (trasporti, bancali) esclusi.
-const UM_EQ = { MQ: 'M2', M2: 'M2', MC: 'M3', M3: 'M3', PZ: 'PZ', NR: 'PZ', ML: 'ML', KG: 'KG', CONF: 'CONF' };
-function pickupStockIssues(q, stock) {
-  const radix = Object.entries(RADIX_DEPOTS).find(([, k]) => k === q?.depot)?.[0];
-  const dep = radix && stock?.depots ? stock.depots.find(d => d.code === radix) : null;
-  const out = [];
-  for (const l of q?.lines || []) {
-    if (!l.radixCode || /trasport|bancal/i.test(l.description || '')) continue;
-    const it = dep?.items?.[l.radixCode];
-    const avail = it ? Number(it.available) || 0 : 0;
-    const same = it && UM_EQ[String(it.um || '').toUpperCase()] && UM_EQ[String(it.um).toUpperCase()] === UM_EQ[String(l.unit || '').toUpperCase()];
-    if (!dep) out.push({ line: l, reason: 'giacenze del deposito non disponibili' });
-    else if (!it) out.push({ line: l, reason: 'non presente in questo deposito' });
-    else if (avail <= 0) out.push({ line: l, reason: 'non disponibile (giacenza teorica ' + avail + ')' });
-    else if (same && avail < l.qty) out.push({ line: l, reason: `disponibili solo ${String(avail).replace('.', ',')} ${String(it.um).toLowerCase()} su ${String(l.qty).replace('.', ',')}` });
-  }
-  return { depotDate: dep?.date || null, issues: out };
-}
-
-return { DEPOTS, RADIX_DEPOTS, stockDepot, TRANSPORT_BY, isPickup, transportByFor, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, FREIGHT_FULL, freightRows, docSequence, customerLines, tongueGroove, lineExtra, quoteDocHtml, quoteFileName, pickupStockIssues };
-})();
-__m["js/core/mailto.js"] = (function () {
-const { totals } = __m["js/core/pricing.js"];
-const { DEPOTS, fmtN, isPickup } = __m["js/core/quote-doc.js"];
-// Email preparata nel programma di posta di chi invia (Outlook, Mail, Gmail…): mittente = la casella personale.
-// Regola Direzione 31/10/2026: offerte e comunicazioni partono dalla posta dell'agente / di Tommaso / di Marco / di Christian.
-// 02/11 (prova di Christian su PC con Outlook): Outlook per Windows non riconosce più indirizzi separati da virgola → su Windows ';'
-const mailSeparator = (ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '')) => /Windows/i.test(ua) ? ';' : ',';
-function mailtoUrl({ to = [], cc = [], bcc = [], subject = '', body = '' }, sep = mailSeparator()) {
-  const list = a => [].concat(a).filter(Boolean).map(s => String(s).trim()).filter(Boolean).join(sep);
-  const q = [];
-  if (list(cc)) q.push('cc=' + encodeURIComponent(list(cc)));
-  if (list(bcc)) q.push('bcc=' + encodeURIComponent(list(bcc)));
-  if (subject) q.push('subject=' + encodeURIComponent(subject));
-  if (body) q.push('body=' + encodeURIComponent(String(body).replace(/\r?\n/g, '\r\n')));
-  return 'mailto:' + list(to).split(sep).map(encodeURIComponent).join(sep) + (q.length ? '?' + q.join('&') : '');
-}
-// testo dell'email dell'offerta (solo testo: mailto non accetta formattazione né allegati; il PDF lo allega chi invia).
-// Niente firma: la aggiunge il programma di posta di chi invia (prova del 01/11: firma doppia in Outlook).
-const itDate = d => { const x = new Date(d); return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`; };
-function quoteMailIntro(q, now = new Date()) {
-  return `Buongiorno,\n\ncome d'accordo vi inviamo in allegato la nostra offerta n. ${q.number} del ${itDate(q.createdAt || now)}.`;
-}
-function quoteMailSummary(q, now = new Date()) {
-  const t = totals(q);
-  const depot = DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta;
-  const pickup = isPickup(q);
-  const until = new Date(new Date(q.createdAt || now).getTime() + (q.validDays || 30) * 864e5);
-  const transport = pickup ? `franco deposito (${depot.pickup[0]})` : t.freightPending ? 'da definire'
-    : t.freight > 0 ? `compreso nell'offerta (${fmtN(t.freight, 2)} €)` : 'compreso';
-  return ['RIEPILOGO', `• Totale imponibile: ${fmtN(t.taxable, 2)} € + IVA`, `• Trasporto: ${transport}`,
-    `• Pagamento: ${q.payment || 'DA CONCORDARE'}`, `• Validità: fino al ${itDate(until)}`].join('\n');
-}
-function quoteMailBody(q, intro, sheets = '', now = new Date()) {
-  return [String(intro || '').trim(), quoteMailSummary(q, now), sheets, 'Restiamo a disposizione per qualsiasi chiarimento.\nCordiali saluti']
-    .filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n');
-}
-
-// apre il programma di posta senza lasciare la pagina (link temporaneo, niente navigazione)
-function openMailto(url) {
-  const a = document.createElement('a'); a.href = url; a.rel = 'noopener'; a.style.display = 'none';
-  document.body.append(a); a.click(); a.remove();
-}
-
-return { mailSeparator, mailtoUrl, quoteMailIntro, quoteMailSummary, quoteMailBody, openMailto };
-})();
 __m["js/core/offer-reminder.js"] = (function () {
 // 09/11/2026 (Tommaso): sollecito via email al cliente per un'offerta aperta, agganciato alla scadenza dei prezzi.
 // La mail parte dalla casella di chi la manda (link mailto), così le risposte arrivano a lui; niente firma (la mette Outlook).
@@ -4332,6 +4558,7 @@ const { FORECAST_LEVELS, forecastLabel } = __m["js/core/forecast.js"];
 const { h, fill, eur, dateIt, today, toast, modal, field, emptyState } = __m["js/ui.js"];
 const { RADIX_OFFER_OUTCOMES, radixOfferDue, validityInfo, isExpiring, NOTE_OUTCOMES } = __m["js/data/model.js"];
 const { pickNoteForOffer } = __m["js/views/note-offers.js"];
+const { outcomeButtons } = __m["js/views/outcome-quick.js"];
 const { SERVICE_RX } = __m["js/core/radix-import.js"];
 const { mailtoUrl, openMailto } = __m["js/core/mailto.js"];
 const { reminderEmail, reminderEmailMany, firstEmail, plusWorkdays, answeredNote, reminderNoteText, REMINDER, canEmailReminder, reminderMarker, reminderInfo, lostNote, noAnswerText } = __m["js/core/offer-reminder.js"];
@@ -4437,8 +4664,8 @@ function row(app, o, refresh, { showCustomer = true } = {}) {
       h('small', { class: 'muted' }, [o.subject || 'senza oggetto', 'del ' + dateIt(o.date), o.radixAgent ? 'RADIX: ' + o.radixAgent.toLowerCase() : '', o.contact].filter(Boolean).join(' · ')),
       linesSummary(o.lines) ? h('small', { class: 'rx-items' }, '📦 ' + linesSummary(o.lines)) : null,
       o.outcomeNote ? h('small', { class: 'rx-note' }, `“${o.outcomeNote}” — ${o.outcomeByName || ''} ${o.outcomeAt ? dateIt(o.outcomeAt) : ''}`) : null),
-    h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, o.total ? eur(o.total) : '—'),
-      h('button', { class: 'btn small', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, 'Esito')));
+    h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, o.total ? eur(o.total) : '—'), outcomeButtons(app, 'radix', o, refresh),   // 20/11
+      app.session.preview ? null : h('button', { class: 'btn small', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, radixOfferOpen(o) ? 'Com\'è andata?' : 'Esito')));
 }
 
 const st8 = { filter: 'aperte', q: '' };
@@ -4482,7 +4709,8 @@ function radixFuLine(app, o, refresh) {
     return h('li', { class: 'rx-fu' },
       h('span', { class: 'due ' + st }, d === t ? 'oggi' : dateIt(d)),
       h('a', { href: '#/rxofferta/' + encodeURIComponent(o.id), class: 'rx-fu-main' }, h('strong', {}, c?.name || o.customerLabel), matchBadge(app, o.id), h('small', { class: 'muted' }, ` ${o.id}${o.subject ? ' · ' + o.subject : ''}${o.total ? ' · ' + eur(o.total) : ''}`)),
-      app.session.preview ? null : h('button', { class: 'link', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, 'Esito'));
+      outcomeButtons(app, 'radix', o, refresh),   // 20/11
+      app.session.preview ? null : h('button', { class: 'link', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, 'Com\'è andata?'));
 }
 
 async function radixFollowupBlock(app, refresh) {
@@ -4546,7 +4774,8 @@ async function viewRadixOffer(app, id) {
       matchBox(app, o, refresh),
       o.outcomeNote ? h('p', { class: 'rx-note' }, `Ultimo esito: “${o.outcomeNote}” — ${o.outcomeByName || ''} ${o.outcomeAt ? dateIt(o.outcomeAt) : ''}`) : null,
       h('div', { class: 'cactions' },
-        !app.session.preview ? h('button', { class: 'act primary', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, h('span', { class: 'act-ico' }, '✓'), h('span', {}, 'Esito')) : null,
+        outcomeButtons(app, 'radix', o, refresh, { style: 'act' }),   // 20/11: Accettata / Persa in un tocco
+        !app.session.preview ? h('button', { class: 'act' + (radixOfferOpen(o) ? '' : ' primary'), type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, h('span', { class: 'act-ico' }, '☏'), h('span', {}, radixOfferOpen(o) ? 'Sentito' : 'Esito')) : null,
         c && radixOfferOpen(o) && !app.session.preview ? (canEmailReminder(o)
           ? h('button', { class: 'act', type: 'button', onclick: async () => { if (await reminderDialog(app, o, c).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, h('span', { class: 'act-ico' }, '✉'), h('span', {}, 'Sollecito'))
           : h('button', { class: 'act', type: 'button', disabled: true, title: `Sopra ${'5.000'} € il sollecito per email solo quando i prezzi sono scaduti: finché l'offerta è valida, telefono o visita` }, h('span', { class: 'act-ico' }, '✉'), h('span', {}, 'Sollecito solo a voce'))) : null,
@@ -4794,30 +5023,6 @@ async function openActions(app) {
 }
 
 return { openActions };
-})();
-__m["js/views/fiscal.js"] = (function () {
-// 02/11 (versione Ufficio): campi "dati per l'ordine" del cliente nuovo — P.IVA, SDI/PEC, pagamento, banca.
-// Facoltativi quando l'agente crea il cliente; obbligatori quando l'offerta diventa ordine (missingForOrder).
-const { h, field } = __m["js/ui.js"];
-const { paymentOptions } = __m["js/data/model.js"];
-function fiscalFields(app, c = {}, { withVat = true, payment = '' } = {}) {
-  const isDir = app.session.role === 'direzione';
-  const vat = withVat ? h('input', { placeholder: 'P.IVA (11 cifre)', inputmode: 'numeric', value: c.vat || '' }) : null;
-  const sdi = h('input', { placeholder: 'es. M5UXCR1 (0000000 se c\'è la PEC)', maxlength: 7, value: c.sdi || '', style: { textTransform: 'uppercase' } });
-  const pec = h('input', { type: 'email', placeholder: 'es. amministrazione@pec.it', value: c.pec || '' });
-  const { options } = paymentOptions({ isDir, customerTerms: c.paymentTerms });
-  const cur = c.paymentTerms || payment || '';
-  const pay = h('select', {}, h('option', { value: '' }, 'Pagamento…'),
-    [...new Set([...(cur && !options.includes(cur) ? [cur] : []), ...options])].filter(o => !/^da concordare$/i.test(o)).map(o => h('option', { value: o, selected: o === cur }, o)));
-  const bank = h('input', { placeholder: 'Banca e IBAN (es. Cassa Rurale … IT60X0542811101000000123456)', value: c.bank || '' });
-  const el = h('div', { class: 'form' },
-    withVat ? field('P.IVA', vat) : null,
-    h('div', { class: 'form two' }, field('Codice SDI', sdi), field('PEC', pec)),
-    h('div', { class: 'form two' }, field('Pagamento', pay), field('Banca / IBAN', bank)));
-  return { el, values: () => ({ ...(withVat ? { vat: vat.value } : {}), sdi: sdi.value, pec: pec.value, paymentTerms: pay.value, bank: bank.value }) };
-}
-
-return { fiscalFields };
 })();
 __m["js/core/geo.js"] = (function () {
 // Sigla provincia -> regione (nomi come nelle tabelle trasporto del listino n.05)
@@ -5103,6 +5308,7 @@ const { dictationAvailable, startDictation } = __m["js/core/dictation.js"];
 const { recordingAvailable, startRecording, mmss } = __m["js/core/recorder.js"];
 const { radixOfferRow, radixOfferOpen, dueState: rxDueState } = __m["js/views/radix-offers.js"];
 const { openActions } = __m["js/views/actions.js"];
+const { outcomeButtons } = __m["js/views/outcome-quick.js"];
 const { CONTACT_KINDS, NOTE_OUTCOMES, STATUS_ORDER, STATUS_INFO, MANUAL_STATUSES, TYPOLOGIES, PHASES, PHASE_ORDER, WORK_PHASES, customerPhase, dueState, assigneeFor, canEditCustomer, EDIT_LABEL, LINK_CHOICES, linksFor, checkLink } = __m["js/data/model.js"];
 const { buildIndex, searchCustomers, highlight } = __m["js/core/search.js"];
 const { fiscalFields } = __m["js/views/fiscal.js"];
@@ -5395,7 +5601,7 @@ async function customerCard(app, c) {
   const quoteRow = q => h('li', { class: 'rx-offer' }, h('a', { href: '#/offerta/' + q.id, class: 'rx-main plain' },
       h('div', { class: 'rx-top' }, h('strong', {}, q.number), h('span', { class: 'badge ' + quoteCls(q.status) }, q.status)),
       h('small', { class: 'muted' }, `offerta dall'app · aggiornata ${dateIt(q.updatedAt)}${q.ownerName ? ' · ' + q.ownerName : ''}`)),
-    h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, eur(q.total))));
+    h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, eur(q.total)), outcomeButtons(app, 'app', q, refresh)));   // 20/11: esito dalla scheda cliente
   const recent = notes.slice(0, 3), older = notes.slice(3);
 
   return h('article', { class: 'ccard' },
@@ -7188,48 +7394,6 @@ function sheetLinksText(products) {
 
 return { sheetKeyFor, techSheetFor, sheetEntries, sheetLinksText };
 })();
-__m["js/core/order-mail.js"] = (function () {
-// Email "ordine da inserire" per l'ufficio (offerta accettata dal cliente, decisione Direzione 01/11/2026).
-// Solo testo, pronto da ricopiare in RADIX: cliente con N° RADIX, righe con codice RADIX, quantità, sconti e netto.
-const { totals, lineNet, lineAmount } = __m["js/core/pricing.js"];
-const { DEPOTS } = __m["js/core/quote-doc.js"];
-const { ORDER_OFFICE_EMAIL } = __m["js/data/model.js"];
-const n2 = v => Number(v || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const nq = v => Number(v || 0).toLocaleString('it-IT', { maximumFractionDigits: 3 });
-const itDate = d => { if (!d) return ''; const x = new Date(String(d).length === 10 ? d + 'T12:00:00' : d); return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`; };
-const disc = ds => ds.filter(d => d > 0).map(d => n2(d).replace(/,00$/, '')).join('+') || '—';
-
-function orderMailSubject(q) {
-  return `ORDINE DA INSERIRE – ${q.customer?.name || ''} – offerta ${q.number}`;
-}
-
-function orderMailBody(q, o, senderName = '') {
-  const t = totals(q), c = q.customer || {};
-  const depot = (DEPOTS[q.depot || 'diretta'] || DEPOTS.diretta).label;
-  const lines = q.lines.map((l, i) => [`${i + 1}) ${l.radixCode || l.listCode || l.productId} – ${l.description}`,
-    `   ${nq(l.qty)} ${String(l.unit || '').toLowerCase()} × listino ${n2(l.listPrice)} € · sconto ${disc(l.discounts)} · netto ${n2(lineNet(l))} € = ${n2(lineAmount(l))} €`].join('\n'));
-  return [
-    'Buongiorno,',
-    `il cliente ha accettato l'offerta ${q.number}: vi chiedo di inserire l'ordine in RADIX.`,
-    ['CLIENTE', `${c.name || ''}${c.number ? ' (N° cliente RADIX ' + c.number + ')' : ''}`, [c.street, [c.cap, c.city].filter(Boolean).join(' '), c.prov ? '(' + c.prov + ')' : ''].filter(Boolean).join(' '),
-      c.vat ? 'P.IVA ' + c.vat : ''].filter(Boolean).join('\n'),
-    ['ORDINE', o.customerRef ? `Riferimento ordine cliente: ${o.customerRef}` : '', o.deliveryDate ? `Consegna richiesta: ${itDate(o.deliveryDate)}` : 'Consegna richiesta: da concordare',
-      `Consegna a: ${o.deliveryAddress || 'sede del cliente'}`, o.siteContact ? `Referente per la consegna: ${o.siteContact}` : '',
-      `Deposito / partenza: ${depot} · trasporto a cura: ${q.transportBy || 'DESTINATARIO'}`].filter(Boolean).join('\n'),
-    ['ARTICOLI', ...lines].join('\n'),
-    ['IMPORTI', `Merce netta: ${n2(t.goods)} €`, t.extras ? `${q.extrasLabel || 'Altri addebiti'}: ${n2(t.extras)} €` : '', t.euroPallets ? `Bancali Euro V600 (${t.euroPalletCount} × 20 €): ${n2(t.euroPallets)} €` : '', t.bigBagPallets ? `Europallet per lo scarico dei BigBag (${t.bigBagPalletCount} × 15 €): ${n2(t.bigBagPallets)} €` : '',
-      `Trasporto: ${t.freightPending ? 'da definire' : n2(t.freight) + ' €'}`, `Imponibile: ${n2(t.taxable)} € + IVA ${n2(t.vatRate).replace(/,00$/, '')}%`,
-      `Pagamento: ${q.payment || 'DA CONCORDARE'}`].filter(Boolean).join('\n'),
-    o.notes ? 'NOTE PER L\'UFFICIO\n' + o.notes : '',
-    `L'offerta completa è nel NORDTEX HUB (offerta ${q.number}); quando è inserita, segnate nell'app il numero d'ordine RADIX.`,
-    'Grazie',   // 09/11: niente firma, la mette Outlook
-  ].filter(Boolean).join('\n\n');
-}
-
-const orderMailTo = () => [ORDER_OFFICE_EMAIL];
-
-return { orderMailSubject, orderMailBody, orderMailTo };
-})();
 __m["js/views/quote-cancel.js"] = (function () {
 // 03/11/2026 (Tommaso, dopo l'offerta Sacchi con lo spessore sbagliato): eliminare o annullare un'offerta.
 // Bozza → si elimina (come prima). Inviata o Persa → non si cancella (il numero è già stato comunicato al cliente e la numerazione resta
@@ -7289,6 +7453,7 @@ const { radixOfferDialog, linesSummary, reminderBadge, applyReminderRules, remin
 const { canEmailReminder, reminderInfo } = __m["js/core/offer-reminder.js"];
 const { quoteCls } = __m["js/views/agenda.js"];
 const { trashAction, trashQuote } = __m["js/views/quote-cancel.js"];
+const { outcomeButtons } = __m["js/views/outcome-quick.js"];
 const st = { filter: null, q: '', who: '', origin: '' };   // 05/11: filter null = scelta automatica (Da richiamare se ce ne sono, altrimenti Aperte)
 // Urgenza a colpo d'occhio (01/11 sera, Tommaso: "far capire l'urgenza di intervento, non per forza scritta"):
 // rosso = subito (contatto scaduto o validità entro 2 giorni), arancio = questa settimana, verde = più avanti
@@ -7369,9 +7534,11 @@ async function offersList(app, { onNew }) {
       h('small', { class: 'muted' }, [`Offerta ${o.number || 'bozza'}`, o.origin === 'radix' ? 'fatta dall\'ufficio in RADIX' : 'fatta nell\'app' + (isDir && o.madeBy && o.madeBy !== o.who ? ' da ' + o.madeBy : ''), 'il ' + dateIt(o.date), isDir && o.who ? 'segue ' + o.who : null].filter(Boolean).join(' · ')),
       o.origin === 'radix' && o.state === 'aperta' ? reminderBadge(o.raw, app, reload, all.filter(x => x.origin === 'radix').map(x => x.raw)) : null,
       o.origin === 'radix' && o.raw.outcomeNote ? h('small', { class: 'rx-note' }, `Ultima nota: “${o.raw.outcomeNote}” — ${o.raw.outcomeByName || ''}`) : null);
-    const side = h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, o.total ? eur(o.total) : '—'),
+    // 20/11 (Tommaso, mail di Christian): «✓ Accettata» e «✗ Persa» su ogni offerta aperta, dell'app e RADIX
+    const oc = o.state === 'aperta' ? outcomeButtons(app, o.origin, o.raw, async () => { if (o.origin === 'app') quotes.splice(0, quotes.length, ...await app.store.quotes()); await reload(); }) : null;
+    const side = h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, o.total ? eur(o.total) : '—'), oc,
       o.origin === 'radix' && o.state === 'aperta' && !app.session.preview ? h('div', { class: 'row', style: { gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' } },
-        h('button', { class: 'btn small primary', type: 'button', title: 'Hai sentito il cliente? Registra com\'è andata', onclick: async () => { if (await radixOfferDialog(app, o.raw).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, 'Com\'è andata?'),
+        h('button', { class: 'btn small', type: 'button', title: 'Hai sentito il cliente ma non ha ancora deciso? Registra la telefonata e il prossimo contatto', onclick: async () => { if (await radixOfferDialog(app, o.raw).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, 'Com\'è andata?'),
         // 09/11 (Tommaso): sollecito direttamente dall'elenco, senza aprire l'offerta (scadute e da richiamare)
         c && canEmailReminder(o.raw, t) && !(reminderInfo(o.raw, t) && !reminderInfo(o.raw, t).overdue)
           ? h('button', { class: 'btn small', type: 'button', title: 'Sollecito via email (anche per le altre offerte aperte del cliente)', onclick: async () => { if (await reminderDialog(app, o.raw, c).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, '✉ Sollecito') : null)
@@ -7592,6 +7759,8 @@ const { orderMailBody, orderMailSubject, orderMailTo } = __m["js/core/order-mail
 const { ORDER_STATES } = __m["js/data/model.js"];
 const { offersList } = __m["js/views/offers-list.js"];
 const { cancelDialog } = __m["js/views/quote-cancel.js"];
+const { outcomeButtons } = __m["js/views/outcome-quick.js"];
+const { orderDialog } = __m["js/views/order-dialog.js"];
 const { askOfficeCard } = __m["js/views/messages.js"];
 const { showsAssist } = __m["js/core/messages.js"];
 const IMAGES = { header: OFFER_HEADER, footer: OFFER_FOOTER };
@@ -7637,34 +7806,7 @@ async function resolveOutcome(app, q, choice) {
   toast(choice === 'trattativa' ? `Ti ricordo l'esito tra ${QUOTE_SNOOZE_DAYS} giorni` : `Offerta ${choice.toLowerCase()}`);
   return true;
 }
-// Offerta accettata → richiesta d'ordine all'ufficio (registrata nell'app) + email pronta per commerciale@ (01/11/2026)
-async function orderDialog(app, q) {
-  if (isPickup(q) && pickupStockIssues(q, app.store.stock || null).issues.length) throw new Error('Ordine non possibile: l\'offerta è con ritiro al deposito ma alcuni articoli non ci sono in quel deposito. Correggi l\'offerta (deposito, articoli o "Con trasporto") e salvala.');
-  const today = new Date().toISOString().slice(0, 10);
-  const date = h('input', { type: 'date', min: today });
-  const addr = h('textarea', { rows: 2, placeholder: 'Sede del cliente oppure indirizzo del cantiere' }, q.site || '');
-  const ref = h('input', { placeholder: 'es. conferma d\'ordine n. 125 del 03/11' });
-  const contact = h('input', { placeholder: 'es. Mario Rossi 333 1234567' });
-  const notes = h('textarea', { rows: 3, placeholder: 'es. scarico con gru, orari, bancali da rendere, accordi presi' });
-  // 02/11: cliente nuovo (nato nell'HUB) → l'ordine parte solo con P.IVA, SDI/PEC, pagamento e banca
-  const cust = (await app.customers()).find(c => c.id === q.customerId) || null;
-  const missing = missingForOrder(cust);
-  const fx = missing.length ? fiscalFields(app, cust, { payment: q.payment && !/^da concordare$/i.test(q.payment) ? q.payment : '' }) : null;
-  const rec = await modal(`Passa l'ordine all'ufficio · ${q.number}`, h('div', { class: 'form' },
-    h('p', { class: 'muted' }, `${q.customer?.name || ''} · ${eur(q.total || 0)}. L'ufficio riceve l'ordine nell'app e via email e lo inserisce in RADIX.`),
-    fx ? h('div', { class: 'alert warn' }, h('strong', {}, 'Cliente nuovo: completa i dati per l\'ordine'), h('div', {}, 'Mancano: ' + missing.join(', ') + '. Servono all\'ufficio per aprire il cliente in RADIX.'), fx.el) : null,
-    field('Consegna richiesta', date, 'Lascia vuoto se da concordare'), field('Consegna a', addr), field('Riferimento ordine del cliente', ref),
-    field('Referente per la consegna', contact), field('Note per l\'ufficio', notes)),
-    [{ label: 'Più tardi', value: false }, { label: 'Passa all\'ufficio', primary: true, run: async () => {
-      if (fx) { await app.store.updateCustomerFiscal(cust.id, fx.values()); app.invalidate(); }
-      const f = { deliveryDate: date.value || null, deliveryAddress: addr.value, customerRef: ref.value, siteContact: contact.value, notes: notes.value };
-      await app.store.requestOrder(q, f); return f;
-    } }]);
-  if (!rec || typeof rec !== 'object') return false;
-  openMailto(mailtoUrl({ to: orderMailTo(), subject: orderMailSubject(q), body: orderMailBody(q, rec, app.session.name) }));
-  toast('Ordine passato all\'ufficio: invia anche l\'email che si è aperta');
-  return true;
-}
+// orderDialog: spostata in order-dialog.js (20/11) per poterla usare dai pulsanti «Accettata» senza dipendenze circolari
 
 // 19/11: offerta HUB accettata con l'ordine già fatto in RADIX (Direzione/Ufficio): un passaggio solo, niente email all'ufficio
 async function alreadyInRadix(app, q) {
@@ -8279,7 +8421,10 @@ async function viewQuoteEditor(app, id, customerId) {
       outcomeBanner(), orderBox(),
       q.outcome ? h('p', { class: 'muted' }, `Esito: ${q.outcome.status}${q.outcome.reason ? ' – ' + q.outcome.reason : ''}${q.outcome.note ? ' (' + q.outcome.note + ')' : ''} · ${q.outcome.by || ''}`) : null,
       directChannel ? h('p', { class: 'info-text' }, `Canale alternativo (${directChannel}): la vendita diretta a imprese o privati va condivisa con la Direzione e le condizioni autorizzate prima dell'invio (Condizioni agenti 2026).`) : null),
-    h('div', { class: 'actions' }, statusSel, forecastBox(), saveBtn,
+    h('div', { class: 'actions' },
+      // 20/11 (Christian «non lo trovo»): esito con due pulsanti ben visibili, il menu dello stato resta per gli altri casi
+      outcomeButtons(app, 'app', q, () => { dirty = false; app.go('offerta/' + q.id); }, { before: () => { if (dirty) { toast('Prima salva le modifiche all\'offerta', 'error'); return false; } return true; } }),
+      statusSel, forecastBox(), saveBtn,
       // 06/11 (Tommaso): accanto a Salva. Offerta nuova non salvata → «Annulla» (esce senza salvare); bozza salvata → «Elimina»
       !q.id ? h('button', { class: 'btn ghost', onclick: async () => {
         if ((dirty || q.lines.length) && !await modal('Annullare l\'offerta?', h('p', {}, 'L\'offerta non è stata salvata: uscendo si perdono i prodotti inseriti.'), [{ label: 'Resta', value: false }, { label: 'Esci senza salvare', primary: true, value: true }])) return;
@@ -8398,7 +8543,7 @@ async function pickCustomer(app, { title, recentIds = [], recentLabel = 'Clienti
   });
 }
 
-return { viewQuotes, outcomeDialog, resolveOutcome, orderDialog, alreadyInRadix, viewQuoteEditor, printQuote, startNewQuote, pickCustomer };
+return { viewQuotes, outcomeDialog, resolveOutcome, alreadyInRadix, viewQuoteEditor, printQuote, startNewQuote, pickCustomer };
 })();
 __m["js/views/home.js"] = (function () {
 const { goalsCard } = __m["js/views/goals-card.js"];
