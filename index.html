@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="2d57985b3220">
+<meta name="ntx-build" content="bdf929d93cac">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -584,7 +584,7 @@ button.kpi{font:inherit;text-align:left;cursor:pointer;border:0} .kpi.on{outline
 .urg-dot{width:12px;height:12px;border-radius:50%;flex:none;display:inline-block;margin-top:5px}
 .urg-dot.subito{background:var(--bad,#D40E41);box-shadow:0 0 0 3px var(--bad-bg,#fbe3e8)} .urg-dot.settimana{background:#e09a00;box-shadow:0 0 0 3px var(--warn-bg,#fdf1d8)} .urg-dot.dopo{background:#2e9e5b;box-shadow:0 0 0 3px #e5f4ea}
 .offers-list .rx-offer{gap:10px;justify-content:flex-start} .offers-list .rx-main{flex:1}
-.offers-list .rx-offer.urg-subito{background:linear-gradient(90deg,var(--bad-bg,#fbe3e8) 0,transparent 40%)}
+.offers-list .rx-offer.urg-subito{background:none}   /* 21/11: niente sfondo rosso su tutte le righe, resta il pallino */
 .urg-head{display:flex;align-items:center;gap:8px;padding:14px 0 6px;border-bottom:2px solid var(--line);list-style:none}
 .urg-head .urg-dot{margin-top:0} .urg-head strong{font-size:.95rem} .urg-head small{color:var(--muted);margin-left:auto}
 .urg-head.subito{border-bottom-color:var(--bad,#D40E41)} .urg-head.settimana{border-bottom-color:#e09a00} .urg-head.dopo{border-bottom-color:#2e9e5b}
@@ -1120,9 +1120,16 @@ h1 + .fix-note{margin:-4px 0 4px}
 /* 21/11: «+ Crea cliente nuovo» nella scelta del cliente */
 .pick-new{display:flex;flex-direction:column;gap:8px;margin-top:6px;padding-top:10px;border-top:1px dashed var(--line)} .pick-new .btn{justify-content:center;min-height:46px;white-space:normal;text-align:center}
 @media (max-width:760px){ .shell:has(.tab-plus) .quote-dock{bottom:calc(80px + env(safe-area-inset-bottom))} .shell:has(.tab-plus) .page.editor{padding-bottom:110px} }   /* il «+» non tocca la barra del totale dell'offerta */
+.offers-list .of-call.due{background:none;padding-left:0}   /* 21/11: il ritardo resta in rosso, senza la fascia */
+/* 21/11: barra dell'offerta sul computer: lo stato non si allunga più, i pulsanti stanno su una riga ordinata */
+@media (min-width:761px){
+  .page.editor .page-head .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-start;width:100%}
+  .page.editor .page-head .actions>select{width:auto;flex:none;min-width:120px}
+  .page.editor .page-head .actions .fc-line{margin-right:6px}
+}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"2d57985b3220"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"bdf929d93cac"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -4728,7 +4735,7 @@ function row(app, o, refresh, { showCustomer = true } = {}) {
       linesSummary(o.lines) ? h('small', { class: 'rx-items' }, '📦 ' + linesSummary(o.lines)) : null,
       o.outcomeNote ? h('small', { class: 'rx-note' }, `“${o.outcomeNote}” — ${o.outcomeByName || ''} ${o.outcomeAt ? dateIt(o.outcomeAt) : ''}`) : null),
     h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, o.total ? eur(o.total) : '—'), outcomeButtons(app, 'radix', o, refresh),   // 20/11
-      app.session.preview ? null : h('button', { class: 'btn small', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, radixOfferOpen(o) ? 'Com\'è andata?' : 'Esito')));
+      app.session.preview ? null : h('button', { class: 'btn small', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, radixOfferOpen(o) ? '📞 Sentito' : 'Esito')));
 }
 
 const st8 = { filter: 'aperte', q: '' };
@@ -4773,7 +4780,7 @@ function radixFuLine(app, o, refresh) {
       h('span', { class: 'due ' + st }, d === t ? 'oggi' : dateIt(d)),
       h('a', { href: '#/rxofferta/' + encodeURIComponent(o.id), class: 'rx-fu-main' }, h('strong', {}, c?.name || o.customerLabel), matchBadge(app, o.id), h('small', { class: 'muted' }, ` ${o.id}${o.subject ? ' · ' + o.subject : ''}${o.total ? ' · ' + eur(o.total) : ''}`)),
       outcomeButtons(app, 'radix', o, refresh),   // 20/11
-      app.session.preview ? null : h('button', { class: 'link', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, 'Com\'è andata?'));
+      app.session.preview ? null : h('button', { class: 'link', type: 'button', onclick: async () => { if (await radixOfferDialog(app, o).catch(e => { toast(e.message, 'error'); return false; })) refresh(); } }, '📞 Sentito'));
 }
 
 async function radixFollowupBlock(app, refresh) {
@@ -7583,7 +7590,7 @@ async function offersList(app, { onNew }) {
       h('span', { class: 'of-what' }, items ? '📦 ' + items : o.subject || 'Contenuto: apri l\'offerta'),
       o.expired ? h('span', { class: 'of-call due scaduto' }, o.validity && o.validity.days < 0 ? `⏱ Scaduta il ${o.validity.label.split(' il ')[1] || ''}` : '⏱ Non più aperta in RADIX') : callText(o) ? h('span', { class: 'of-call due ' + dueCls }, callText(o)) : null,
       o.expired && orderAfter(o) ? h('small', { class: 'of-valid' }, `Probabile ordine: c'è un ordine RADIX del cliente del ${dateIt(orderAfter(o).date)} (${orderAfter(o).id})`) : null,
-      o.expired ? h('small', { class: 'of-valid muted' }, 'Se il cliente è ancora interessato, richiamalo e chiedi all\'ufficio di rinnovarla; altrimenti tocca «Com\'è andata?» e segnala «Persa».') : null,
+      o.expired ? h('small', { class: 'of-valid muted' }, 'Se il cliente è ancora interessato, richiamalo e chiedi all\'ufficio di rinnovarla; altrimenti tocca «✗ Persa».') : null,
       stateText(o) ? h('span', { class: 'of-state' }, stateText(o)) : null,
       !o.expired && validText(o.validity) ? h('small', { class: 'of-valid ' + (o.validity.days < 0 || o.validity.days <= 2 ? 'bad-text' : o.validity.days <= 7 ? 'warn-text' : 'muted') }, validText(o.validity)) : null,
       h('small', { class: 'muted' }, [`Offerta ${o.number || 'bozza'}`, o.origin === 'radix' ? 'fatta dall\'ufficio in RADIX' : 'fatta nell\'app' + (isDir && o.madeBy && o.madeBy !== o.who ? ' da ' + o.madeBy : ''), 'il ' + dateIt(o.date), isDir && o.who ? 'segue ' + o.who : null].filter(Boolean).join(' · ')),
@@ -7593,7 +7600,7 @@ async function offersList(app, { onNew }) {
     const oc = o.state === 'aperta' ? outcomeButtons(app, o.origin, o.raw, async () => { if (o.origin === 'app') quotes.splice(0, quotes.length, ...await app.store.quotes()); await reload(); }) : null;
     const side = h('div', { class: 'rx-side' }, h('span', { class: 'rx-tot' }, o.total ? eur(o.total) : '—'), oc,
       o.origin === 'radix' && o.state === 'aperta' && !app.session.preview ? h('div', { class: 'row', style: { gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' } },
-        h('button', { class: 'btn small', type: 'button', title: 'Hai sentito il cliente ma non ha ancora deciso? Registra la telefonata e il prossimo contatto', onclick: async () => { if (await radixOfferDialog(app, o.raw).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, 'Com\'è andata?'),
+        h('button', { class: 'btn small', type: 'button', title: 'Hai sentito il cliente ma non ha ancora deciso? Registra la telefonata e il prossimo contatto', onclick: async () => { if (await radixOfferDialog(app, o.raw).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, '📞 Sentito'),
         // 09/11 (Tommaso): sollecito direttamente dall'elenco, senza aprire l'offerta (scadute e da richiamare)
         c && canEmailReminder(o.raw, t) && !(reminderInfo(o.raw, t) && !reminderInfo(o.raw, t).overdue)
           ? h('button', { class: 'btn small', type: 'button', title: 'Sollecito via email (anche per le altre offerte aperte del cliente)', onclick: async () => { if (await reminderDialog(app, o.raw, c).catch(e => { toast(e.message, 'error'); return false; })) reload(); } }, '✉ Sollecito') : null)
@@ -7616,7 +7623,7 @@ async function offersList(app, { onNew }) {
     counter.textContent = `${rows.length} ${rows.length === 1 ? 'offerta' : 'offerte'} · ${eur(sum(rows))}`;
     // con le offerte aperte l'elenco è diviso per urgenza, ogni gruppo con colore, numero e valore
     const grouped = ['sentire', 'scadenza', 'chiamare'].includes(st.filter);   // Aperte: elenco semplice per data, non per urgenza
-    const hint = { ordine: 'Offerte aperte con un ordine RADIX dello stesso cliente entro 30 giorni: aprile e conferma «Sì, accettata» o «No, non è questo». Prima le probabili.', chiamare: 'Clienti da richiamare oggi o già in ritardo, e offerte con i prezzi in scadenza. Dopo la telefonata tocca «Com\'è andata?».', aperte: 'Tutte le offerte ancora aperte, dalla più recente.', scadute: 'Offerte con i prezzi scaduti o non più aperte in RADIX, senza un esito registrato: da recuperare o da chiudere.', chiuse: 'Offerte accettate o perse.', recenti: 'Offerte fatte negli ultimi 7 giorni, di qualunque stato, dalla più recente.' }[st.filter];
+    const hint = { ordine: 'Offerte aperte con un ordine RADIX dello stesso cliente entro 30 giorni: aprile e conferma «Sì, accettata» o «No, non è questo». Prima le probabili.', chiamare: 'Clienti da richiamare oggi o già in ritardo, e offerte con i prezzi in scadenza. Dopo la telefonata tocca «📞 Sentito», «✓ Accettata» o «✗ Persa».', aperte: 'Tutte le offerte ancora aperte, dalla più recente.', scadute: 'Offerte con i prezzi scaduti o non più aperte in RADIX, senza un esito registrato: da recuperare o da chiudere.', chiuse: 'Offerte accettate o perse.', recenti: 'Offerte fatte negli ultimi 7 giorni, di qualunque stato, dalla più recente.' }[st.filter];
     fill(tabHint, hint || '');
     const body = !rows.length ? [h('li', {}, emptyState(all.length ? 'Nessuna offerta con questi filtri.' : 'Nessuna offerta. Tocca “+ Nuova offerta” e scegli il cliente.'))]
       : grouped ? URG.flatMap(([k, l]) => { const g = rows.filter(o => urgency(o, t) === k); return g.length ? [h('li', { class: 'urg-head ' + k }, h('span', { class: 'urg-dot ' + k }), h('strong', {}, l), h('small', {}, `${g.length} · ${eur(sum(g))}`)), ...g.slice(0, 200).map(row)] : []; })
@@ -8621,6 +8628,33 @@ async function pickCustomer(app, { title, recentIds = [], recentLabel = 'Clienti
 
 return { viewQuotes, outcomeDialog, resolveOutcome, alreadyInRadix, viewQuoteEditor, printQuote, startNewQuote, pickCustomer };
 })();
+__m["js/core/company-photo.js"] = (function () {
+// 21/11 (Tommaso): Fotografia dell'azienda con i dati dell'HUB finché non arrivano quelli di Meridian.
+// Fonte: fatturato RADIX per cliente già nell'HUB (imponibile delle fatture). Matrial e Steldo sono intercompany: esclusi (piano 2027).
+// Il confronto con lo stesso periodo dell'anno prima non si fa: l'HUB ha il 2025 solo come anno intero.
+const isIntercompany = c => /\b(MATRIAL|STELDO)\b/i.test(String(c?.name || ''));
+
+function hubPhoto(customers, year = '2026') {
+  const list = (customers || []).filter(c => !c.isTest && !isIntercompany(c));
+  const prev = String(Number(year) - 1);
+  const n = v => Number(v) || 0;
+  const round = v => Math.round(v * 100) / 100;
+  const asOf = list.reduce((m, c) => (c.salesAsOf && c.salesAsOf > m ? c.salesAsOf : m), '');
+  const newOnes = list.filter(c => String(c.firstInvoice || '').slice(0, 4) === year);
+  return {
+    asOf,
+    revenue: round(list.reduce((s, c) => s + n(c['rev' + year]), 0)),
+    revenuePrevYear: round(list.reduce((s, c) => s + n(c['rev' + prev]), 0)),
+    active: list.filter(c => n(c['rev' + year]) > 0).length,
+    activePrevYear: list.filter(c => n(c['rev' + prev]) > 0).length,
+    newCustomers: newOnes.length,
+    newRevenue: round(newOnes.reduce((s, c) => s + n(c['rev' + year]), 0)),
+    excluded: round((customers || []).filter(isIntercompany).reduce((s, c) => s + n(c['rev' + year]), 0)),
+  };
+}
+
+return { isIntercompany, hubPhoto };
+})();
 __m["js/views/home.js"] = (function () {
 const { goalsCard } = __m["js/views/goals-card.js"];
 const { targetCard } = __m["js/views/target-card.js"];
@@ -8634,6 +8668,7 @@ const { radixOfferDue, validityInfo, isExpiring } = __m["js/data/model.js"];
 const { isAssistDesk } = __m["js/core/messages.js"];
 const { directionMessages } = __m["js/views/messages.js"];
 const { portfolioSales } = __m["js/core/purchases.js"];
+const { hubPhoto } = __m["js/core/company-photo.js"];
 
 const greeting = () => { const hr = new Date().getHours(); return hr < 13 ? 'Buongiorno' : hr < 18 ? 'Buon pomeriggio' : 'Buonasera'; };
 
@@ -8781,7 +8816,7 @@ async function homeDirection(app, { head, foot, quick, customers, quotes, action
   const trendCard = await trendSection(app, { customers, quotes, notes, rxOpen, rxNotes, photo: true });
   const rxAgents = rxByAgent(app, rxFollow, () => app.go('home'));
   const rxOrd = app.store.radixOrders ? await app.store.radixOrders({ all: true }).catch(() => []) : [];
-  const photo = companyPhoto(app, { rxOpen, quotes, ordMonth: rxOrd.length ? rxOrd.filter(o => String(o.date || '').slice(0, 7) === t.slice(0, 7)) : null });
+  const photo = companyPhoto(app, { customers, rxOpen, quotes, ordMonth: rxOrd.length ? rxOrd.filter(o => String(o.date || '').slice(0, 7) === t.slice(0, 7)) : null });
 
   // 03/11: messaggi (Assistenza dei commerciali e domande all'ufficio) sotto l'Andamento, solo per chi risponde all'assistenza (Tommaso)
   const msgs = isAssistDesk(app.session) && app.store.threads ? [h('h2', { class: 'section-title' }, 'Messaggi'), await directionMessages(app)] : null;
@@ -8849,21 +8884,28 @@ function rxByAgent(app, rxFollow, refresh) {
 
 // 17/11 Fotografia dell'azienda (Tommaso: dati globali, da Meridian, perimetro dato da noi): il riquadro c'è già,
 // i numeri arrivano quando Meridian li manda ogni notte. Fino ad allora: offerte aperte e ordini del mese dall'HUB, il resto «in arrivo».
-function companyPhoto(app, { rxOpen, quotes, ordMonth }) {
+function companyPhoto(app, { customers, rxOpen, quotes, ordMonth }) {
   const sum = (xs, f) => xs.reduce((a, x) => a + (f(x) || 0), 0);
   const openQ = quotes.filter(q => q.status === 'Bozza' || q.status === 'Inviata');
-  const m = app.store.companyPhoto || null;   // da Meridian (quando collegato)
+  const m = app.store.companyPhoto || null;   // da Meridian (quando collegato): ha la precedenza sui dati dell'HUB
+  const hp = hubPhoto(customers);   // 21/11: intanto i dati dell'HUB (fatture RADIX per cliente, esclusi Matrial e Steldo)
   const k = (lab, val, sub, cls = '') => h('div', { class: 'kpi ' + cls }, h('small', {}, lab), h('strong', {}, val), sub ? h('span', {}, sub) : null);
   const wait = 'in arrivo da Meridian';
+  const e0 = v => Math.round(v).toLocaleString('it-IT') + ' €';
+  const src = `fatture RADIX al ${hp.asOf ? dateIt(hp.asOf) : '—'} · esclusi Matrial e Steldo`;
   return h('section', { class: 'card photo-card' }, h('h2', {}, 'Fotografia dell\'azienda'),
-    h('p', { class: 'fine' }, 'Da inizio anno, confrontata con lo stesso periodo dell\'anno prima · azienda globale' + (m?.asOf ? ' · dati Meridian del ' + dateIt(m.asOf) : '')),
+    h('p', { class: 'fine' }, m ? 'Da inizio anno, confrontata con lo stesso periodo dell\'anno prima · azienda globale' + (m.asOf ? ' · dati Meridian del ' + dateIt(m.asOf) : '')
+      : 'Anno 2026 da inizio anno, con i dati dell\'HUB · il 2025 è l\'anno intero, non lo stesso periodo · con Meridian arriverà il confronto sullo stesso periodo'),
     h('div', { class: 'kpis photo-3' },
-      k('Fatturato azienda', m?.revenue != null ? eur(m.revenue) : '—', m?.revenue != null ? `${m.revenueVsPy >= 0 ? '▲' : '▼'} ${Math.abs(m.revenueVsPy).toLocaleString('it-IT')}% vs anno prima` : wait),
-      k('Margine sul prodotto', m?.margin != null ? m.margin.toLocaleString('it-IT') + '%' : '—', 'obiettivo 21,5% · trasporti esclusi' + (m?.margin != null ? '' : ' · ' + wait)),
+      m?.revenue != null ? k('Fatturato azienda', eur(m.revenue), `${m.revenueVsPy >= 0 ? '▲' : '▼'} ${Math.abs(m.revenueVsPy).toLocaleString('it-IT')}% vs anno prima`)
+        : k('Fatturato azienda 2026', e0(hp.revenue), `2025 intero ${e0(hp.revenuePrevYear)} · ${src}`),
+    k('Margine sul prodotto', m?.margin != null ? m.margin.toLocaleString('it-IT') + '%' : '—', 'obiettivo 21,5% · trasporti esclusi' + (m?.margin != null ? '' : ' · ' + wait)),
       k('Saldo trasporti', m?.freight != null ? eur(m.freight) : '—', 'ricavi trasporto meno vettori · ' + (m?.freight != null ? 'obiettivo almeno a pari' : 'in attesa della soluzione con Basaglia'))),
     h('div', { class: 'kpis' },
-      k('Clienti attivi', m?.activeCustomers != null ? m.activeCustomers.toLocaleString('it-IT') : '—', m?.activeCustomers != null ? '' : wait),
-      k('Clienti nuovi', m?.newCustomers != null ? m.newCustomers.toLocaleString('it-IT') : '—', m?.newCustomers != null ? '' : wait),
+      m?.activeCustomers != null ? k('Clienti attivi', m.activeCustomers.toLocaleString('it-IT'), '')
+        : k('Clienti attivi 2026', hp.active.toLocaleString('it-IT'), `con almeno una fattura · nel 2025 intero ${hp.activePrevYear.toLocaleString('it-IT')}`),
+      m?.newCustomers != null ? k('Clienti nuovi', m.newCustomers.toLocaleString('it-IT'), '')
+        : k('Clienti nuovi 2026', hp.newCustomers.toLocaleString('it-IT'), `prima fattura nel 2026 · ${e0(hp.newRevenue)}`),
       k('Ordini del mese', ordMonth ? eur(sum(ordMonth, o => o.total)) : '—', ordMonth ? `${ordMonth.length} ordini in RADIX` : 'ordini RADIX non caricati'),
       k('Offerte aperte', eur(sum(openQ, q => q.total) + sum(rxOpen, o => o.total)), `${openQ.length + rxOpen.length} offerte`)),
     h('div', { class: 'kpi photo-plan' }, h('small', {}, 'Piano 2027 · crescita della rete'), h('div', { class: 'target-bar' }, h('i', { style: 'width:0%' })),
@@ -10872,7 +10914,7 @@ const HELP = {
     steps: [
       'In alto quattro schede: Da richiamare (clienti da chiamare oggi o in ritardo, prezzi in scadenza), Aperte (dalla più recente), Scadute (prezzi scaduti o offerta non più aperta in RADIX: da recuperare o chiudere), Chiuse. Gli altri filtri sono in «Altri filtri».',
       'Il pallino colorato dice l\'urgenza; "sentire il …" è la data del prossimo contatto.',
-      'Offerte RADIX (fatte dall\'ufficio): dopo la telefonata tocca «Com\'è andata?» per segnare Sentito, Accettata o Persa (con nota): diventa anche una nota nella storia del cliente. Le offerte RADIX non si cancellano: si chiudono come Accettata o Persa.',
+      'Offerte RADIX (fatte dall\'ufficio): dopo la telefonata tocca «✓ Accettata», «✗ Persa» oppure «📞 Sentito» se il cliente non ha ancora deciso (con nota e prossimo contatto): diventa anche una nota nella storia del cliente. Le offerte RADIX non si cancellano: si chiudono come Accettata o Persa.',
       'Offerte RADIX: sotto il cliente compaiono gli articoli (📦); aprendo l\'offerta, "Cosa c\'è in questa offerta" mostra articoli, quantità, prezzo netto e valore. Se l\'ufficio ha caricato il PDF dell\'offerta, il pulsante "PDF RADIX" apre il documento originale. Nella ricerca puoi scrivere anche il nome di un prodotto.',
       'Cestino 🗑 accanto ad "Apri": una bozza si elimina; un\'offerta inviata si ANNULLA con il motivo (resta in archivio, esce da aperte e statistiche).',
     ],
