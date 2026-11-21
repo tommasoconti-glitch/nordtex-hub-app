@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="6140c283a1a0">
+<meta name="ntx-build" content="56b4bf982b4c">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1057,9 +1057,67 @@ h1 + .fix-note{margin:-4px 0 4px}
 .btn.oc-win{background:var(--ok-bg);color:var(--ok);border-color:#a6d8b8;font-weight:600} .btn.oc-win:hover{background:#d3efdf}
 .btn.oc-lose{background:var(--bad-bg);color:var(--bad);border-color:#f4b5ae;font-weight:600} .btn.oc-lose:hover{background:#fad7d3}
 .act.win{background:var(--ok-bg);color:var(--ok);border-color:#a6d8b8} .act.lose{background:var(--bad-bg);color:var(--bad);border-color:#f4b5ae}
+/* 20/11: scarico dal cliente / in cantiere */
+.tp-cust{margin:2px 0 6px;font-size:.9rem} .tp-red-acts{gap:6px;flex-wrap:wrap;margin-top:8px}
+
+/* 21/11 (Marco) Telefono: nota e offerta con pochi tasti grandi. Stessa app su computer e telefono. */
+.phone-quick{display:none}
+.phone-fold>summary{display:none}
+.pq-btn{display:flex;align-items:center;gap:14px;width:100%;text-align:left;border:1px solid var(--line);border-radius:16px;padding:16px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer;min-height:76px}
+.pq-btn.pq-note{background:var(--nt-grey-dark,#4b4a4d);border-color:transparent;color:#fff}
+.pq-ico{flex:none;width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:800;background:var(--nt-lime-soft,#f2f3d1);color:var(--ink)}
+.pq-note .pq-ico{background:rgba(255,255,255,.14)}
+.pq-txt{display:flex;flex-direction:column;gap:2px} .pq-txt strong{font-size:1.2rem} .pq-txt small{font-size:.88rem;opacity:.85}
+.pq-sub{margin:10px 0 0;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.pq-cust{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);min-height:56px}
+.pq-cust:hover{text-decoration:none} .pq-cust span:first-child{display:flex;flex-direction:column;min-width:0} .pq-cust small{color:var(--muted)}
+.tab-plus{display:none}
+/* foglio del «+» */
+.sheet-back{align-items:flex-end;padding:0}
+.sheet{background:var(--surface);color:var(--ink);width:min(560px,100%);border-radius:18px 18px 0 0;padding:14px 16px calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px;box-shadow:0 -10px 40px rgba(0,0,0,.2)}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;font-size:1.05rem}
+/* finestra della nota */
+.nq-chips{display:flex;flex-wrap:wrap;gap:8px}
+.nq-chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:8px 16px;font:inherit;font-size:.95rem;cursor:pointer;min-height:40px}
+.modal:has(.note-form) .modal-foot .btn.primary{background:var(--nt-grey-dark,#4b4a4d);border-color:transparent}
+.nq-chip.on{background:var(--nt-grey-dark,#4b4a4d);border-color:transparent;color:#fff;font-weight:600}
+.nq-label{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.nq-recall{display:flex;flex-direction:column;gap:8px} .nq-recall-more{display:flex;flex-direction:column;gap:6px}
+.nq-more>summary{font-size:.85rem;color:var(--muted);font-weight:600}
+.voice-big{flex-direction:column;justify-content:center;text-align:center;gap:4px;border:0;padding:6px 0}
+.mic-big{width:96px;height:96px;border-radius:50%;border:0;background:var(--nt-red,#D40E41);color:#fff;font-size:2.4rem;cursor:pointer;box-shadow:0 8px 22px rgba(212,14,65,.3);display:flex;align-items:center;justify-content:center}
+.mic-big.on{font-size:1rem;font-weight:700;animation:micpulse 1.4s ease-in-out infinite}
+.mic-big:disabled{opacity:.6}
+@keyframes micpulse{0%,100%{box-shadow:0 0 0 0 rgba(212,14,65,.45)}50%{box-shadow:0 0 0 14px rgba(212,14,65,0)}}
+.mic-cap{font-size:1.05rem;margin-top:6px}
+.voice-big .rec-time{font-weight:700;color:var(--nt-red,#D40E41)}
+.voice-big .dict-live{max-width:100%;white-space:normal}
+@media (max-width:760px){
+  .phone-quick{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+  .page-head .head-actions{display:none}
+  .phone-fold>summary{display:block;list-style:none;margin:6px 0 12px;padding:12px 0;font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;cursor:pointer}
+  .phone-fold>summary::-webkit-details-marker{display:none} .phone-fold>summary::before{content:'▸ '} .phone-fold[open]>summary::before{content:'▾ '} .phone-fold>summary small{text-transform:none;letter-spacing:0;font-weight:400}
+  .tab-plus{display:flex;align-items:center;justify-content:center;flex:none;width:58px;height:58px;margin-top:-24px;border-radius:50%;border:0;background:var(--nt-red,#D40E41);color:#fff;font-size:2rem;line-height:1;cursor:pointer;box-shadow:0 6px 18px rgba(212,14,65,.35);align-self:flex-start}
+  .tabbar.tabbar-7 small{font-size:.56rem} .tabbar.tabbar-7 .tab-plus{width:52px;height:52px}
+  /* la nota occupa tutto lo schermo, con «Salva nota» grande in fondo */
+  .modal-back:has(.note-form){padding:0;align-items:stretch}
+  .modal:has(.note-form){width:100%;max-height:none;height:100%;border-radius:0}
+  .modal:has(.note-form) .modal-foot{padding:10px 14px calc(10px + env(safe-area-inset-bottom))}
+  .modal:has(.note-form) .modal-foot .btn{min-height:52px;font-size:1.05rem;flex:1} .modal:has(.note-form) .modal-foot .btn.primary{flex:2}
+  .note-form textarea{font-size:16px}
+  /* scelta del cliente: righe grandi */
+  .modal-back:has(.modal.pick){padding:0;align-items:stretch}
+  .modal.pick{width:100%;max-height:none;height:100%;border-radius:0}
+  .modal.pick input[type=search]{font-size:17px;min-height:48px}
+  .modal.pick .pick-item{border:1px solid var(--line);border-radius:14px;padding:12px 14px;min-height:58px;justify-content:center;background:var(--surface)}
+  .modal.pick .pick-item:first-of-type{border-top:1px solid var(--line)}
+  .modal.pick .pick-item strong{font-size:1.02rem}
+}
+:root[data-scheme="dark"] .pq-btn.pq-note,:root[data-scheme="dark"] .nq-chip.on{background:#5a5e64}
+.phone-fold[open]>summary small{display:none}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"6140c283a1a0"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"56b4bf982b4c"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -5300,6 +5358,39 @@ async function radixOrdersSection(app) {
 
 return { isBlocked, radixOrderRow, STALE_DAYS, staleReasons, radixOrdersSection };
 })();
+__m["js/core/note-quick.js"] = (function () {
+// 21/11 (Marco, nota dal telefono): «Ricontattare» con scelte rapide al posto di data e campo testo
+const RECALL = [
+  { id: 'no', label: 'No' },
+  { id: '1w', label: '1 sett.', days: 7 },
+  { id: '2w', label: '2 sett.', days: 14 },
+  { id: '1m', label: '1 mese', months: 1 },
+  { id: 'date', label: '📅', title: 'Scegli la data' },
+];
+
+// data ISO (YYYY-MM-DD) del richiamo partendo da `base` (oggi); null se «No» o «📅» senza data
+function recallDate(id, base, picked = '') {
+  if (id === 'date') return picked || null;
+  const r = RECALL.find(x => x.id === id);
+  if (!r || (!r.days && !r.months)) return null;
+  const [y, m, d] = base.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (r.days) dt.setUTCDate(dt.getUTCDate() + r.days);
+  if (r.months) { const day = dt.getUTCDate(); dt.setUTCDate(1); dt.setUTCMonth(dt.getUTCMonth() + r.months);
+    const last = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth() + 1, 0)).getUTCDate(); dt.setUTCDate(Math.min(day, last)); }
+  return dt.toISOString().slice(0, 10);
+}
+
+// il follow-up da salvare con la nota: niente se «No»; titolo di default se non scritto
+function recallAction(id, base, picked, title) {
+  const due = recallDate(id, base, picked);
+  const t = String(title || '').trim();
+  if (id === 'no' || (!due && !t)) return [];
+  return [{ title: t || 'Ricontattare il cliente', due }];
+}
+
+return { RECALL, recallDate, recallAction };
+})();
 __m["js/views/agenda.js"] = (function () {
 const { changeLogCard } = __m["js/views/change-log-ui.js"];
 const { followerSelect } = __m["js/views/dir-follower-ui.js"];
@@ -5314,6 +5405,7 @@ const { buildIndex, searchCustomers, highlight } = __m["js/core/search.js"];
 const { fiscalFields } = __m["js/views/fiscal.js"];
 const { radixOrderRow } = __m["js/views/radix-orders.js"];
 const { purchaseSummary, SALES_YEARS } = __m["js/core/purchases.js"];
+const { RECALL, recallDate, recallAction } = __m["js/core/note-quick.js"];
 const { offerChoices, offerSelect, parseRef, noteOfferChip, linkNoteDialog, canLinkNote } = __m["js/views/note-offers.js"];
 // 01/11 sera (Tommaso: "si può migliorare?"): all'apertura solo i clienti su cui lavorare (attivi, da recuperare, potenziali),
 // in ordine "da seguire prima"; la ricerca cerca sempre in tutti i clienti.
@@ -5674,26 +5766,47 @@ function callDialog(c, phones) {
 
 const quoteCls = s => ({ Bozza: 'muted', Inviata: 'warn', Accettata: 'ok', Persa: 'bad' }[s] || 'muted');
 
+// 21/11 (Marco, «sul telefono pochi tasti e chiari»): stessa finestra su computer e telefono, più semplice.
+// Tipo di contatto a pulsanti, un solo microfono grande («Tocca e parla»), Ricontattare a scelte rapide,
+// esito e offerta collegata in «Altri dettagli» (chiusi). Nessuna funzione tolta: la dettatura resta accanto al testo.
+const KIND_SHORT = { Videochiamata: 'Video' };
 async function noteDialog(app, c, preset = {}) {
-  const kind = h('select', {}, CONTACT_KINDS.map(k => h('option', { selected: k === preset.kind }, k)));
-  const outcome = h('select', {}, NOTE_OUTCOMES.map(k => h('option', {}, k)));
-  const body = h('textarea', { rows: 5, placeholder: 'Cosa è emerso, prodotti di interesse, cantieri, concorrenza…' }, preset.body || '');
-  const fu = h('input', { placeholder: 'es. richiamare per offerta fibra', value: preset.fu || '' });
-  const due = h('input', { type: 'date', min: today(), value: preset.due && preset.due >= today() ? preset.due : '' });
-  const voice = app.store.saveNoteAudio && recordingAvailable() ? voiceRecorder() : null;
+  let kindVal = CONTACT_KINDS.includes(preset.kind) ? preset.kind : CONTACT_KINDS[0];
+  const kinds = h('div', { class: 'nq-chips', role: 'radiogroup', 'aria-label': 'Tipo di contatto' });
+  const drawKinds = () => fill(kinds, CONTACT_KINDS.map(k => h('button', { type: 'button', class: 'nq-chip' + (k === kindVal ? ' on' : ''), role: 'radio', 'aria-checked': String(k === kindVal), title: k,
+    onclick: () => { kindVal = k; drawKinds(); } }, KIND_SHORT[k] || k)));
+  drawKinds();
+  const outcome = h('select', {}, NOTE_OUTCOMES.map(k => h('option', { selected: k === preset.outcome }, k)));
+  const body = h('textarea', { rows: 4, placeholder: 'Cosa è emerso, prodotti di interesse, cantieri, concorrenza…', 'aria-label': 'Nota' }, preset.body || '');
+  const fu = h('input', { placeholder: 'Cosa fare (facoltativo), es. mandare offerta fibra', 'aria-label': 'Cosa fare', value: preset.fu || '' });
+  const due = h('input', { type: 'date', min: today(), 'aria-label': 'Data del richiamo', value: preset.due && preset.due >= today() ? preset.due : '' });
+  let recall = due.value || preset.fu ? 'date' : 'no';   // follow-up già proposto (es. dalla Bacheca): resta com'era
+  const recallBox = h('div', { class: 'nq-recall' });
+  const drawRecall = () => fill(recallBox,
+    h('div', { class: 'nq-chips', role: 'radiogroup', 'aria-label': 'Ricontattare' }, RECALL.map(r => h('button', { type: 'button', class: 'nq-chip' + (r.id === recall ? ' on' : ''), role: 'radio', 'aria-checked': String(r.id === recall), title: r.title || r.label, 'aria-label': r.title || r.label,
+      onclick: () => { recall = r.id; drawRecall(); if (r.id === 'date') { due.focus(); due.showPicker?.(); } } }, r.label))),
+    recall === 'no' ? null : h('div', { class: 'nq-recall-more' }, recall === 'date' ? due : h('small', { class: 'muted' }, 'Entro il ' + dateIt(recallDate(recall, today()))), fu));
+  drawRecall();
+  const voice = app.store.saveNoteAudio && recordingAvailable() ? voiceRecorder({ big: true }) : null;
   // 03/11: la nota si può collegare a un'offerta del cliente (app o RADIX)
   const choices = app.store.linkNote ? await offerChoices(app, c.id).catch(() => []) : [];
   const offSel = choices.length ? offerSelect(choices, preset.offer || '') : null;
-  const res = await modal('Nuova nota — ' + c.name, h('div', { class: 'form' }, field('Tipo di contatto', kind), field('Esito', outcome),
-    offSel ? field('Offerta (facoltativo)', offSel, 'La nota compare anche nella pagina dell\'offerta.') : null,
-    h('div', { class: 'field' }, h('div', { class: 'note-head' }, h('span', {}, 'Nota'), dictateButton(body)), body),
-    voice ? voice.el : null,
-    h('fieldset', {}, h('legend', {}, 'Follow-up (facoltativo)'), field('Cosa fare', fu), field('Entro il', due))),
+  // senza registrazione (versione locale o browser senza microfono) il pulsante grande detta nel testo
+  const bigDictate = voice ? null : dictateButton(body, { big: true });
+  const res = await modal('Nuova nota — ' + c.name, h('div', { class: 'form note-form' },
+    kinds,
+    voice ? voice.el : bigDictate,
+    h('div', { class: 'field' }, h('div', { class: 'note-head' }, h('span', {}, voice ? 'oppure scrivi qui' : 'Nota'), voice ? dictateButton(body) : null), body),
+    h('div', { class: 'field' }, h('span', { class: 'nq-label' }, 'Ricontattare'), recallBox),
+    h('details', { class: 'fold-in nq-more', open: !!preset.offer || !!preset.outcome }, h('summary', {}, offSel ? 'Altri dettagli (esito, offerta collegata)' : 'Altri dettagli (esito)'),
+      h('div', { class: 'form' }, field('Esito', outcome), offSel ? field('Offerta (facoltativo)', offSel, 'La nota compare anche nella pagina dell\'offerta.') : null))),
   [{ label: 'Annulla', value: false }, { label: 'Salva nota', primary: true, run: async () => {
     if (voice?.recording()) throw new Error('Prima ferma la registrazione');
+    if (recall === 'date' && !due.value && !fu.value.trim()) throw new Error('Scegli la data del richiamo, oppure tocca «No»');
     const blob = voice?.blob();
     const text = body.value.trim() || (blob ? 'Nota vocale' : '');
-    const n = await app.store.addNote({ customerId: c.id, kind: kind.value, outcome: outcome.value, body: text, actions: fu.value ? [{ title: fu.value, due: due.value || null }] : [] });
+    if (!text) throw new Error('Scrivi o registra la nota');
+    const n = await app.store.addNote({ customerId: c.id, kind: kindVal, outcome: outcome.value, body: text, actions: recallAction(recall, today(), due.value, fu.value) });
     if (offSel?.value) await app.store.linkNote(n.id, parseRef(offSel.value)).catch(e => toast('Nota salvata, ma non collegata all\'offerta: ' + e.message, 'error'));
     if (blob) {
       try { await app.store.saveNoteAudio(n.id, blob); }
@@ -5724,13 +5837,15 @@ async function deleteNoteDialog(app, n) {
 // Registratore nella finestra della nota: Registra → Ferma → ascolto di prova / Rifai.
 // Durante la registrazione si aggiorna SOLO il contatore: il pulsante "Ferma" resta lo stesso elemento
 // (ridisegnarlo a ogni secondo faceva perdere il tocco sull'iPhone).
-function voiceRecorder() {
+function voiceRecorder({ big = false } = {}) {
   let rec = null, blob = null, url = null, starting = false;
-  const box = h('div', { class: 'voice' });
+  const box = h('div', { class: 'voice' + (big ? ' voice-big' : '') });
   const time = h('span', { class: 'rec-time' });
-  const stopBtn = h('button', { type: 'button', class: 'btn small rec on', onclick: () => { stopBtn.disabled = true; stopBtn.textContent = 'Chiudo…'; rec?.stop(); } }, '■ Ferma');
-  const showIdle = () => fill(box, h('button', { type: 'button', class: 'btn small rec', onclick: start }, '● Registra nota vocale'), h('small', { class: 'muted' }, 'Parli, l\'audio resta salvato e arriva anche scritto.'));
-  const showRec = () => { stopBtn.disabled = false; stopBtn.textContent = '■ Ferma'; time.textContent = '● 0:00'; fill(box, stopBtn, time, h('small', { class: 'muted' }, 'massimo 10 minuti')); };
+  const stopBtn = h('button', { type: 'button', class: big ? 'mic-big on' : 'btn small rec on', 'aria-label': 'Ferma la registrazione', onclick: () => { stopBtn.disabled = true; stopBtn.textContent = 'Chiudo…'; rec?.stop(); } }, '■ Ferma');
+  const showIdle = () => big
+    ? fill(box, h('button', { type: 'button', class: 'mic-big', 'aria-label': 'Registra la nota a voce', onclick: start }, '🎤'), h('strong', { class: 'mic-cap' }, 'Tocca e parla'), h('small', { class: 'muted' }, 'l\'audio resta salvato e arriva anche scritto'))
+    : fill(box, h('button', { type: 'button', class: 'btn small rec', onclick: start }, '● Registra nota vocale'), h('small', { class: 'muted' }, 'Parli, l\'audio resta salvato e arriva anche scritto.'));
+  const showRec = () => { stopBtn.disabled = false; stopBtn.textContent = '■ Ferma'; time.textContent = '● 0:00'; fill(box, stopBtn, time, h('small', { class: 'muted' }, big ? 'tocca per fermare · massimo 10 minuti' : 'massimo 10 minuti')); };
   const showDone = () => {
     if (url) URL.revokeObjectURL(url); url = URL.createObjectURL(blob);
     fill(box, h('audio', { controls: true, src: url, preload: 'metadata' }), h('button', { type: 'button', class: 'link', onclick: () => { blob = null; showIdle(); } }, 'Elimina e rifai'),
@@ -5784,22 +5899,24 @@ async function transcriptDialog(app, n, text) {
 }
 
 // Pulsante "Detta": il telefono scrive mentre parli (gratis). Se non disponibile, indica il microfono della tastiera.
-function dictateButton(textarea) {
+function dictateButton(textarea, { big = false } = {}) {
   const live = h('small', { class: 'dict-live' });
   let session = null;
-  const btn = h('button', { type: 'button', class: 'btn small dict-btn', onclick: () => {
+  const idle = big ? '🎤' : '🎤 Detta';
+  const btn = h('button', { type: 'button', class: big ? 'mic-big dict-btn' : 'btn small dict-btn', 'aria-label': 'Detta la nota', onclick: () => {
     if (session) { session.stop(); return; }
     if (!dictationAvailable()) { keyboardHint(); return; }
     session = startDictation(textarea, {
       onInterim: t => { live.textContent = t; },
       onState: (st, msg) => {
         if (st === 'ascolto') { btn.classList.add('on'); btn.textContent = '■ Ferma'; live.textContent = 'In ascolto… parla pure'; return; }
-        btn.classList.remove('on'); btn.textContent = '🎤 Detta'; live.textContent = ''; session = null;
+        btn.classList.remove('on'); btn.textContent = idle; live.textContent = ''; session = null;
         if (st === 'errore') { if (msg === 'no-speech') toast('Non ho sentito niente: riprova', 'error'); else if (msg !== 'aborted') keyboardHint(); }
       } });
-  } }, '🎤 Detta');
+  } }, idle);
   const keyboardHint = () => { toast('Su questo dispositivo usa il microfono 🎤 della tastiera per dettare'); textarea.focus(); };
-  return h('span', { class: 'dict' }, live, btn);
+  return big ? h('div', { class: 'voice voice-big' }, btn, h('strong', { class: 'mic-cap' }, 'Tocca e parla'), live, h('small', { class: 'muted' }, 'scrive mentre parli, oppure scrivi qui sotto'))
+    : h('span', { class: 'dict' }, live, btn);
 }
 
 async function contactDialog(app, c, p = {}) {
@@ -6696,6 +6813,46 @@ async function kmViaBrennero(originAddress, destAddress, fetchImpl = globalThis.
 
 return { geocode, geocodeFirst, addressVariants, kmViaBrennero };
 })();
+__m["js/core/delivery.js"] = (function () {
+// 20/11/2026 (Tommaso, facendo le offerte): nel trasporto una scelta chiara «Scarico dal cliente» / «Scarico in cantiere»
+// e l'indirizzo del cantiere con il ricalcolo dei km e del trasporto. Prima il cantiere si scriveva nelle Condizioni
+// (solo testo per il PDF) e il trasporto restava calcolato sulla sede del cliente: due indirizzi che potevano non tornare.
+const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const customerAddress = c => ({ street: c?.street || '', cap: c?.cap || '', city: c?.city || '', prov: String(c?.prov || '').toUpperCase() });
+const sameAddress = (a, b) => norm(a?.street) === norm(b?.street) && norm(a?.city) === norm(b?.city);
+
+// modo di scarico: quello scelto; per le offerte vecchie si deduce (cantiere scritto o indirizzo diverso dalla sede)
+function deliveryMode(q) {
+  const m = q?.delivery?.mode; if (m === 'cliente' || m === 'cantiere') return m;
+  if (String(q?.site || '').trim()) return 'cantiere';
+  if (q?.delivery?.city && !sameAddress(q.delivery, q.customer)) return 'cantiere';
+  return 'cliente';
+}
+// testo del cantiere per PDF, email d'ordine e ufficio: «Nome cantiere» + «Via, CAP Località (PV)»
+function siteText(d) {
+  const addr = [d?.street, [d?.cap, d?.city, d?.prov ? `(${String(d.prov).toUpperCase()})` : ''].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  return [String(d?.siteName || '').trim(), addr].filter(Boolean).join('\n');
+}
+// cambia modo: aggiorna indirizzo di consegna e testo del cantiere; i km si ricalcolano (km azzerati)
+function setDeliveryMode(q, mode) {
+  q.logistics = q.logistics || { km: {}, vehicleType: 'centinato' };
+  if (mode === 'cliente') {
+    q.delivery = { ...customerAddress(q.customer), mode: 'cliente' };
+    q.site = '';
+  } else {
+    const prev = q.delivery || {};
+    const wasCustomer = !prev.mode || prev.mode === 'cliente' || sameAddress(prev, q.customer);
+    q.delivery = wasCustomer ? { street: '', cap: '', city: '', prov: '', siteName: '', mode: 'cantiere' } : { ...prev, mode: 'cantiere' };
+    q.site = siteText(q.delivery);
+  }
+  q.logistics.km = {}; delete q.logistics.kmSource; delete q.logistics.corridor;
+  return q;
+}
+// cantiere completo per calcolare i km: località e provincia
+const siteComplete = d => !!(String(d?.city || '').trim() && /^[A-Z]{2}$/.test(String(d?.prov || '').trim().toUpperCase()));
+
+return { customerAddress, sameAddress, deliveryMode, siteText, setDeliveryMode, siteComplete };
+})();
 __m["js/views/transport-panel.js"] = (function () {
 // Riquadro "Trasporto e carico" dell'offerta: regole del listino, km via Brennero, riempimento del mezzo,
 // incidenza per m² / m³ / bancale, quantità consigliate per mezzo carico e carico completo.
@@ -6705,6 +6862,9 @@ const { canSetDepotPrice, splitForPickup, PICKUP_SPLIT_MAX_PCT, depotPriceFor } 
 const { kmViaBrennero, addressVariants } = __m["js/core/route.js"];
 const { lineAmount } = __m["js/core/pricing.js"];
 const { DEPOTS, RADIX_DEPOTS } = __m["js/core/quote-doc.js"];
+const { deliveryMode, setDeliveryMode, siteText, siteComplete } = __m["js/core/delivery.js"];
+const { mailtoUrl, openMailto } = __m["js/core/mailto.js"];
+const { ORDER_OFFICE_EMAIL } = __m["js/data/model.js"];
 const eu = (n, d = 2) => { if (n === null || n === undefined) return '—'; const [i, f] = Math.abs(Number(n)).toFixed(d).split('.'); return (n < 0 ? '-' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (f ? ',' + f : '') + ' €'; };   // 1.452,00 €
 const qtyFmt = (n, u) => `${num(n, u === 'PZ' || u === 'SA' || u === 'SACCO' ? 0 : 2)} ${({ M2: 'm²', M3: 'm³', ML: 'ml', SACCO: 'sacchi' }[u] || (u || '').toLowerCase())}`;
 
@@ -6721,13 +6881,32 @@ function fillText(fs) {
   return `${fs.full} ${fs.full === 1 ? 'mezzo pieno' : 'mezzi pieni'} + 1 al ${fs.lastPct}%${last}`;
 }
 
-function transportPanel(app, q, byId, { locked, mark, onApply }) {
+function transportPanel(app, q, byId, { locked, mark, onApply, onEditFreight = null }) {
   q.delivery = q.delivery || { street: q.customer.street || '', cap: q.customer.cap || '', city: q.customer.city || '', prov: q.customer.prov || '' };
   q.logistics = q.logistics || { km: {}, vehicleType: 'centinato' };
   const box = h('div', { class: 'tp' });
   const destText = () => [q.delivery.street, [q.delivery.cap, q.delivery.city].filter(Boolean).join(' '), q.delivery.prov, 'Italia'].filter(Boolean).join(', ');
-  const inp = (key, ph, attrs = {}) => h('input', { value: q.delivery[key] || '', placeholder: ph, disabled: locked, ...attrs, onchange: e => { q.delivery[key] = key === 'prov' ? e.target.value.trim().toUpperCase() : e.target.value; q.logistics.km = {}; mark(); redraw(); } });
-  const addr = h('div', { class: 'tp-addr' }, h('small', {}, 'Consegna a'), h('div', { class: 'form three-a' }, inp('street', 'Via'), inp('cap', 'CAP', { inputmode: 'numeric' }), inp('city', 'Località'), inp('prov', 'Prov.', { maxlength: 2 })));
+  // 20/11 (Tommaso): scelta «Scarico dal cliente» / «Scarico in cantiere»; il cantiere ricalcola km e trasporto
+  if (!q.delivery.mode) q.delivery.mode = deliveryMode(q);
+  const inp = (key, ph, attrs = {}) => h('input', { value: q.delivery[key] || '', placeholder: ph, disabled: locked, ...attrs, onchange: e => {
+    q.delivery[key] = key === 'prov' ? e.target.value.trim().toUpperCase() : e.target.value;
+    if (key !== 'siteName') { q.logistics.km = {}; delete q.logistics.kmSource; delete q.logistics.corridor; }
+    q.site = siteText(q.delivery); mark(); redraw(); } });
+  const modeBtn = (m, label) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(q.delivery.mode === m), class: 'useg' + (q.delivery.mode === m ? ' on' : ''), disabled: locked,
+    onclick: () => { if (q.delivery.mode === m) return; setDeliveryMode(q, m); mark(); redraw(); } }, label);
+  const addrBox = () => {
+    const c = q.customer || {}, site = q.delivery.mode === 'cantiere';
+    const manual = !(q.freight === null || q.freight === undefined || q.freightAuto);
+    return h('div', { class: 'tp-addr' },
+      h('div', { class: 'useg-row', role: 'radiogroup', 'aria-label': 'Dove si scarica' }, modeBtn('cliente', 'Scarico dal cliente'), modeBtn('cantiere', 'Scarico in cantiere')),
+      site ? [h('div', { class: 'form' }, h('input', { value: q.delivery.siteName || '', placeholder: 'Nome o riferimento del cantiere (facoltativo), es. Palazzine via Roma', disabled: locked, 'aria-label': 'Nome del cantiere',
+          onchange: e => { q.delivery.siteName = e.target.value; q.site = siteText(q.delivery); mark(); } })),
+        h('div', { class: 'form three-a' }, inp('street', 'Via del cantiere'), inp('cap', 'CAP', { inputmode: 'numeric' }), inp('city', 'Località'), inp('prov', 'Prov.', { maxlength: 2 })),
+        !siteComplete(q.delivery) ? h('small', { class: 'warn-text' }, '⚠ Scrivi località e provincia del cantiere: km e trasporto si ricalcolano da soli.') : null]
+      : h('p', { class: 'tp-cust' }, h('small', {}, 'Consegna a: '), [c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' ')].filter(Boolean).join(', ') || 'indirizzo del cliente non indicato'),
+      manual ? h('small', { class: 'warn-text' }, `⚠ Il trasporto in offerta è scritto a mano (${eu(q.freight)}): se cambi lo scarico, aggiornalo tu in Condizioni.`) : null);
+  };
+  let addr = addrBox();
   let lastPlan = null;
   const tried = new Set(), kmErrors = new Map();
   let open = false; try { open = localStorage.getItem('ntx-tp-open') === '1'; } catch { /* facoltativo */ }
@@ -6750,7 +6929,7 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
   }
   // km calcolati da soli appena c'è l'indirizzo (una volta per luogo di carico e destinazione)
   function autoKmAll(plan) {
-    if (locked || !q.delivery.city) return;
+    if (locked || !q.delivery.city || (q.delivery.mode === 'cantiere' && !siteComplete(q.delivery))) return;
     for (const g of plan.groups) if (g.regime.kind === 'km' && !q.logistics.km[g.regime.origin.address]) {
       const key = g.regime.origin.address + '>' + destText(); if (tried.has(key)) continue; tried.add(key); autoKm(g, true);
     }
@@ -6777,6 +6956,15 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
       if (q.freight !== v.amount || q.freightNote !== note || JSON.stringify(q.transportEstimate?.parts ?? null) !== JSON.stringify(parts)) { q.freight = v.amount; q.freightAuto = true; q.freightNote = note; q.transportEstimate = { amount: v.amount, source: plan.source, at: new Date().toISOString(), level: v.level, vehicles, fullVehicles, parts }; mark(); onApply('freight'); }
     } else if (q.freightAuto && q.freight !== null) { q.freight = null; q.freightNote = ''; q.transportEstimate = null; mark(); onApply('freight'); }
   }
+  // mail all'ufficio per la quotazione del trasporto: cliente, scarico, articoli e quantità
+  function askOffice(plan) {
+    const c = q.customer || {}, site = q.delivery.mode === 'cantiere';
+    const where = site ? 'Scarico in cantiere: ' + (siteText(q.delivery).replace(/\n/g, ' – ') || 'indirizzo da completare') : 'Scarico dal cliente: ' + [c.street, [c.cap, c.city, c.prov ? `(${c.prov})` : ''].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    const rows = q.lines.filter(l => !l.pickup && !l.depotPrice).map(l => `- ${l.description}: ${num(l.qty, 2)} ${String(l.unit || '').toLowerCase()}`);
+    const noRate = plan?.office?.length ? ['', 'Senza tariffa nel listino: ' + plan.office.map(o => o.description).join('; ')] : [];
+    const body = ['Ciao,', '', `mi serve il prezzo del trasporto per l'offerta ${q.number || '(non ancora salvata)'} a ${c.name || ''}.`, '', where, '', 'Articoli:', ...rows, ...noRate, '', 'Grazie', app.session.name || ''].join('\n');
+    openMailto(mailtoUrl({ to: [ORDER_OFFICE_EMAIL], subject: `Quotazione trasporto${q.number ? ' – offerta ' + q.number : ''} – ${c.name || ''}`, body }));
+  }
   const unitLbl = u => ({ M2: 'm²', M3: 'm³', ML: 'ml' }[u] || String(u || '').toLowerCase());
   function verdictBox(plan, v) {
     const g0 = plan.groups.find(g => g.cost !== null && g.lines.length) || null, l0 = g0?.lines[0];
@@ -6787,7 +6975,11 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
     const body = {
       green: [h('strong', {}, v.amount === 0 ? 'Trasporto compreso nel prezzo' : `Trasporto ${eu(v.amount)}`), v.amount === 0 ? '' : per, h('div', { class: 'muted' }, 'Calcolato dal listino n.05 e inserito nell\'offerta.')],
       yellow: [h('strong', {}, v.amount === 0 ? 'Trasporto compreso nel prezzo (da confermare)' : `Trasporto stimato ${eu(v.amount)}`), v.amount === 0 ? '' : per, h('div', { class: 'muted' }, 'Inserito nell\'offerta come stima da confermare: ' + v.reasons.join('; '))],
-      red: [h('strong', {}, 'Trasporto da quotare: telefona all\'ufficio commerciale (0472 847 110)'), h('div', { class: 'muted' }, v.reasons.join('; '))],
+      red: [h('strong', {}, 'Trasporto da quotare dall\'ufficio (0472 847 110)'), h('div', { class: 'muted' }, v.reasons.join('; ')),
+        h('div', { class: 'row tp-red-acts' },   // 20/11 (Tommaso: «come faccio a inserire il prezzo del trasporto o a contattare l'ufficio»)
+          onEditFreight && !locked ? h('button', { class: 'btn small primary', type: 'button', onclick: () => onEditFreight() }, '✎ Scrivi il trasporto') : null,
+          h('button', { class: 'btn small', type: 'button', onclick: () => askOffice(plan) }, '✉ Chiedi all\'ufficio'),
+          h('a', { class: 'btn small', href: 'tel:+390472847110' }, '☎ Chiama'))],
       km: [h('strong', {}, kmErr ? 'Km non calcolati' : 'Calcolo dei km in corso…'), h('div', { class: 'muted' }, kmErr ? kmErr + '. Inserisci i km sola andata nei dettagli (c\'è il collegamento a Google Maps).' : 'Percorso dal produttore al cliente con passaggio dal Brennero.')],
     }[v.level];
     const icon = { green: '🟢', yellow: '🟡', red: '🔴', km: '⏳' }[v.level];
@@ -6884,6 +7076,7 @@ function transportPanel(app, q, byId, { locked, mark, onApply }) {
   }
 
   function redraw() {
+    addr = addrBox();
     if (q.pickup === true) {   // 02/11: ritiro al deposito, nessun trasporto
       const d = DEPOTS[q.depot || 'diretta'];
       fill(box, h('p', { class: 'alert info' }, `Ritiro al deposito${d?.pickup ? ' ' + d.pickup[0] + ' – ' + d.pickup[2].replace(/^IT-\d+\s*/, '') : ''}: nessun trasporto in offerta. `,
@@ -8461,7 +8654,7 @@ async function viewQuoteEditor(app, id, customerId) {
       q.id && (isOwner || isDir) && ['Inviata', 'Persa'].includes(q.status) ? h('button', { class: 'btn ghost', onclick: () => cancelDialog(app, q).then(ok => { if (ok) app.go('offerta/' + q.id); }).catch(e => toast(e.message, 'error')) }, 'Annulla offerta') : null,
       null));
   // 11/11: quando cambia il trasporto si ridisegnano anche le righe, così il «Prezzo per unità» segue i km
-  tp = transportPanel(app, q, byId, { locked, mark, onApply: what => { if (what === 'qty') drawLines(); else { freightIn.value = q.freight ?? ''; freightNote.textContent = q.freightNote; drawTotals(); drawLines(); } drawPickup(); } });
+  tp = transportPanel(app, q, byId, { locked, mark, onEditFreight: () => { freightIn.scrollIntoView({ behavior: 'smooth', block: 'center' }); setTimeout(() => freightIn.focus(), 350); }, onApply: what => { if (what === 'qty') drawLines(); else { freightIn.value = q.freight ?? ''; freightNote.textContent = q.freightNote; drawTotals(); drawLines(); } drawPickup(); } });
   let head = header();
   drawLines();
   // 12/11: DOM append scrive «null» come testo (si vedeva sotto il trasporto per la Direzione): si passano solo nodi e testi veri
@@ -8489,7 +8682,7 @@ async function viewQuoteEditor(app, id, customerId) {
           cond('Deposito di uscita', depotSel), cond('Consegna', pickupSel), cond('Trasporto a cura', byBox)),
         pickupHint,
         viewerIsDir ? cond('Rif. RADIX (offerta ufficiale / ordine, a cura dell\'ufficio)', txtIn('radixRef', { placeholder: 'es. OFF 1324 del 29/10 – ORD 815' })) : null,
-        cond('Cantiere (facoltativo)', h('textarea', { rows: 2, disabled: locked, placeholder: 'es. EDILIZIA VIGONOVO\nVia La Croce 16, 33074 Vigonovo (PN)', onchange: e => { q.site = e.target.value; mark(); } }, q.site || '')),
+        // 20/11: il cantiere non si scrive più qui: si sceglie nel riquadro «Trasporto e carico» (Scarico in cantiere), così km e trasporto tornano
         cond('Note', notesIn)),
       h('section', { class: 'card' }, h('h2', {}, 'Riepilogo'), totBox)), dock].filter(x => x !== null && x !== undefined));
   if (q.number) changeLogCard(app, { entity: 'offerta', rowId: q.number }).then(c => { if (c) root.insertBefore(c, dock); }).catch(() => {});   // 07/11 A4
@@ -8596,7 +8789,8 @@ async function viewHome(app) {
     h('div', { class: 'head-actions' }, h('button', { class: 'btn', onclick: () => startNewNote(app) }, '+ Nuova nota'), h('button', { class: 'btn primary', onclick: () => startNewQuote(app) }, '+ Nuova offerta')));
   const foot = h('p', { class: 'fine' }, `Oggi ${dateIt(today())} · Dati RADIX (clienti, fatturato) al ${asOf ? dateIt(asOf) : '31/10/2026'}${app.store.stock?.depots?.[0]?.date ? ' · giacenze al ' + dateIt(app.store.stock.depots[0].date) : ''} · Archivio ${app.store.mode === 'locale' ? 'locale su questo dispositivo' : 'condiviso'}`);
 
-  if (isDir) return homeDirection(app, { head, foot, customers, quotes, actions, notes, orders, rxOpen, rxFollow });
+  const quick = phoneQuick(app, { notes, quotes });
+  if (isDir) return homeDirection(app, { head, foot, quick, customers, quotes, actions, notes, orders, rxOpen, rxFollow });
 
   // Agente: la Home è "cosa fare oggi" (01/11): follow-up e promemoria offerte scaduti o di oggi, poi clienti da recuperare da sentire
   const urgent = actions.filter(a => !a.recover && (a.state === 'scaduto' || a.state === 'oggi'));
@@ -8624,7 +8818,7 @@ async function viewHome(app) {
 
   const goals = await goalsCard(app);   // 08/11: obiettivi del mese dalla SS di Tommaso, per primi
   const target = await targetCard(app);   // 17/11: obiettivo annuale, solo dopo che Tommaso l'ha presentato
-  return h('div', { class: 'page' }, head, target, goals, salesSection(customers),   // 04/11: il fatturato è la prima cosa che vedono (sul telefono si scorre poco)
+  return h('div', { class: 'page' }, head, quick, target, goals, salesSection(customers),   // 04/11: il fatturato è la prima cosa che vedono (sul telefono si scorre poco)
     h('section', { class: 'card' }, h('h2', {}, 'Da fare oggi'),
       toOrder.length ? h('ul', { class: 'todo-list' }, toOrder.map(q => h('li', { class: 'todo' }, h('a', { href: '#/offerta/' + q.id, class: 'todo-main' },
         h('span', { class: 'due oggi' }, 'ordine'), h('span', { class: 'todo-text' }, h('strong', {}, 'Passa l\'ordine all\'ufficio'), h('small', { class: 'muted' }, `${q.number} · ${q.customer?.name || ''} · ${eur(q.total || 0)}`)))))) : null,
@@ -8669,6 +8863,23 @@ function salesSection(customers) {
       h('p', { class: 'fine' }, 'Fonte: fatturato RADIX (imponibile delle fatture). 2025 e 2024 sono anni interi; il 2026 è fino alla data indicata, quindi non va confrontato con un anno intero. Se qualcosa non torna, segnalalo con «Assistenza».')));
 }
 
+const isPhone = () => { try { return matchMedia('(max-width:760px)').matches; } catch { return false; } };
+
+// 21/11 (Marco, «sul telefono pochi tasti e chiari»): due pulsanti grandi e gli ultimi clienti toccati. Si vede solo sul telefono.
+function phoneQuick(app, { notes, quotes }) {
+  const me = app.session.userId;
+  const seen = [...notes.filter(n => n.authorId === me).map(n => [n.createdAt, n.customerId]),
+    ...quotes.filter(q => q.ownerId === me).map(q => [q.updatedAt || q.createdAt, q.customerId])]
+    .filter(([d, id]) => d && id).sort((a, b) => String(b[0]).localeCompare(String(a[0])));
+  const last = [...new Set(seen.map(x => x[1]))].map(id => app.store.customer(id)).filter(Boolean).slice(0, 3);
+  const big = (cls, ico, title, sub, onclick) => h('button', { type: 'button', class: 'pq-btn ' + cls, onclick }, h('span', { class: 'pq-ico', 'aria-hidden': 'true' }, ico), h('span', { class: 'pq-txt' }, h('strong', {}, title), h('small', {}, sub)));
+  return h('section', { class: 'phone-quick' },
+    big('pq-note', '📝', 'Nuova nota', 'visita o telefonata, anche a voce', () => startNewNote(app)),
+    big('pq-quote', '€', 'Nuova offerta', 'prodotti, trasporto, PDF', () => startNewQuote(app)),
+    last.length ? [h('h3', { class: 'pq-sub' }, 'Ultimi clienti'), last.map(c => h('a', { class: 'pq-cust', href: '#/agenda/' + c.id },
+      h('span', {}, h('strong', {}, c.name), h('small', {}, [c.city, c.prov ? '(' + c.prov + ')' : ''].filter(Boolean).join(' '))), h('span', { class: 'more-go', 'aria-hidden': 'true' }, '›')))] : null);
+}
+
 // "+ Nuova nota" dalla Home (richiesta Tommaso 01/11): scegli il cliente, scrivi/detta/registra, poi si apre la sua scheda
 async function startNewNote(app) {
   const mine = (await app.store.notes().catch(() => [])).filter(n => n.authorId === app.session.userId).map(n => n.customerId);
@@ -8678,7 +8889,7 @@ async function startNewNote(app) {
 
 // Home Direzione (01/11 sera, "troppo caotica"): 1) OGGI = cosa richiede attenzione, solo le righe con qualcosa da fare;
 // 2) ANDAMENTO = 4 numeri che si muovono nella settimana; il resto (ordini, bacheca, rete, area manager) è nel menu.
-async function homeDirection(app, { head, foot, customers, quotes, actions, notes, orders, rxOpen, rxFollow }) {
+async function homeDirection(app, { head, foot, quick, customers, quotes, actions, notes, orders, rxOpen, rxFollow }) {
   const t = today(), day = n => new Date(Date.now() - n * 864e5).toISOString();
   const d7 = day(7), d14 = day(14), d30 = day(30), d60 = day(60), month = t.slice(0, 7);
   const rxNotes = app.store.radixNotes ? await app.store.radixNotes({ since: d60.slice(0, 10) }).catch(() => []) : [];
@@ -8710,7 +8921,11 @@ async function homeDirection(app, { head, foot, customers, quotes, actions, note
 
   // 03/11: messaggi (Assistenza dei commerciali e domande all'ufficio) sotto l'Andamento, solo per chi risponde all'assistenza (Tommaso)
   const msgs = isAssistDesk(app.session) && app.store.threads ? [h('h2', { class: 'section-title' }, 'Messaggi'), await directionMessages(app)] : null;
-  return h('div', { class: 'page home-dir' }, head, photo, rxAgents, todayCard, h('h2', { class: 'section-title' }, 'Andamento'), trendCard, msgs, foot);
+  // 21/11 (Marco): sul telefono la Direzione vede prima i due pulsanti e gli ultimi clienti; la fotografia e i numeri si aprono a richiesta.
+  // Sul computer la sezione è sempre aperta e il titolo non si vede.
+  const fold = h('details', { class: 'phone-fold', open: !isPhone() }, h('summary', {}, 'Fotografia dell\'azienda e numeri', h('small', {}, ' · tocca per aprire')),
+    photo, rxAgents, todayCard, h('h2', { class: 'section-title' }, 'Andamento'), trendCard, msgs);
+  return h('div', { class: 'page home-dir' }, head, quick, fold, foot);
 }
 
 // Andamento (Direzione: tutta la rete; agente: il suo portafoglio, perché i dati arrivano già filtrati)
@@ -8791,7 +9006,7 @@ function companyPhoto(app, { rxOpen, quotes, ordMonth }) {
       h('span', {}, '0 € su 265.016 € di crescita concordata · soglia di attenzione +5% · si attiva il 1/1/2027')));
 }
 
-return { viewHome, openActions };
+return { viewHome, startNewNote, openActions };
 })();
 __m["js/core/board-summary.js"] = (function () {
 // Bacheca della Direzione (07/11/2026, Tommaso: "il punto dolente, per la visione direzionale, è la bacheca").
@@ -13797,10 +14012,10 @@ const { watchTables } = __m["js/core/responsive.js"];
 const { previewStore, previewChoices, readOnlyStore, READ_ONLY_TEXT } = __m["js/core/preview.js"];
 const { createLocalStore, indexedDbKv } = __m["js/data/local-store.js"];
 const { createSupabaseStore } = __m["js/data/supabase-store.js"];
-const { viewHome } = __m["js/views/home.js"];
+const { viewHome, startNewNote } = __m["js/views/home.js"];
 const { viewAgenda, newCustomerDialog } = __m["js/views/agenda.js"];
 const { markContacts } = __m["js/data/model.js"];
-const { viewQuotes, viewQuoteEditor, pickCustomer } = __m["js/views/quotes.js"];
+const { viewQuotes, viewQuoteEditor, pickCustomer, startNewQuote } = __m["js/views/quotes.js"];
 const { viewBoard } = __m["js/views/board.js"];
 const { viewNetwork, viewManager } = __m["js/views/direction.js"];
 const { viewMaps } = __m["js/views/maps.js"];
@@ -13991,6 +14206,9 @@ function shell(active, content, key = active) {
   const bar = pv ? h('div', { class: 'preview-bar', role: 'status' }, h('span', {}, h('strong', {}, 'Anteprima '), app.session.assignee, h('small', {}, ' · sola lettura')),
     h('button', { class: 'btn small', onclick: () => app.stopPreview() }, 'Esci'))
     : app.session.readOnly ? h('div', { class: 'preview-bar', role: 'status' }, h('span', {}, h('strong', {}, 'Sola lettura '), h('small', {}, READ_ONLY_TEXT.replace('Profilo in sola lettura: ', '· ')))) : null;
+  // 21/11 (Marco): «+» al centro della barra in basso del telefono → Nuova nota / Nuova offerta da qualsiasi pagina
+  const plus = !office && !app.session.readOnly ? h('button', { type: 'button', class: 'tab-plus', 'aria-label': 'Nuova nota o nuova offerta', onclick: () => quickSheet() }, h('span', { 'aria-hidden': 'true' }, '+')) : null;
+  const withPlus = links => { if (!plus) return links; const i = Math.floor(links.length / 2); return [...links.slice(0, i), plus, ...links.slice(i)]; };
   return h('div', { class: 'shell' + (pv ? ' previewing' : '') },
     h('aside', { class: 'side' }, h('div', { class: 'brand' }, h('img', { class: 'logo-full', src: LOGO, alt: 'NORDTEX' }), h('img', { class: 'logo-mark', src: MARK_WHITE, alt: 'NORDTEX' }), h('img', { class: 'logo-mark-grey', src: MARK_GREY, alt: 'NORDTEX' }), h('span', { class: 'brand-sub' }, 'HUB commerciale')), h('nav', {}, nav), who),
     h('main', { class: 'main', id: 'main' }, bar,
@@ -14001,8 +14219,21 @@ function shell(active, content, key = active) {
       // 03/11: Assistenza (scrive a Tommaso) fissa su ogni pagina, tranne la costruzione dell'offerta (lì c'è "Chiedi all'ufficio")
       showsAssist(app.session) && key !== 'offerta' ? h('button', { class: 'assist-fab', type: 'button', title: 'Scrivi a Tommaso', onclick: () => app.session.preview ? toast('Anteprima: qui l\'agente scrive a Tommaso. In anteprima non si inviano messaggi.') : assistDialog(app, key).catch(e => toast(e.message, 'error')) },
         h('span', { 'aria-hidden': 'true' }, '💬'), h('span', { class: 'assist-label' }, 'Assistenza'), h('span', { class: 'assist-count', hidden: !app.navCounts?.assist }, app.navCounts?.assist || '')) : null),
-    h('nav', { class: 'tabbar' + (tabs.length > 5 ? ' tabbar-6' : '') }, tabs.map(n => h('a', { href: '#/' + n.id, class: tabActive(n.id) ? 'active' : '' }, h('span', { class: 'ico' }, n.icon), h('small', {}, n.label),
-      (n.id === 'altro' && app.navCounts?.ordini) || (n.id === 'bacheca' && app.navCounts?.bacheca) ? h('span', { class: 'tab-dot' + (n.id === 'bacheca' ? ' nav-badge-bacheca' : '') }) : null))));
+    h('nav', { class: 'tabbar' + (tabs.length + (plus ? 1 : 0) > 5 ? ' tabbar-6' : '') + (tabs.length + (plus ? 1 : 0) > 6 ? ' tabbar-7' : '') }, withPlus(tabs.map(n => h('a', { href: '#/' + n.id, class: tabActive(n.id) ? 'active' : '' }, h('span', { class: 'ico' }, n.icon), h('small', {}, n.label),
+      (n.id === 'altro' && app.navCounts?.ordini) || (n.id === 'bacheca' && app.navCounts?.bacheca) ? h('span', { class: 'tab-dot' + (n.id === 'bacheca' ? ' nav-badge-bacheca' : '') }) : null)))));
+}
+
+// Foglio del «+»: due pulsanti grandi, poi la scelta del cliente
+function quickSheet() {
+  const close = () => back.remove();
+  const go = fn => () => { close(); fn(app).catch(e => toast(e.message, 'error')); };
+  const big = (cls, ico, title, sub, fn) => h('button', { type: 'button', class: 'pq-btn ' + cls, onclick: go(fn) }, h('span', { class: 'pq-ico', 'aria-hidden': 'true' }, ico), h('span', { class: 'pq-txt' }, h('strong', {}, title), h('small', {}, sub)));
+  const back = h('div', { class: 'modal-back sheet-back', onclick: e => { if (e.target === back) close(); } },
+    h('div', { class: 'sheet', role: 'dialog', 'aria-label': 'Cosa vuoi fare?' },
+      h('div', { class: 'sheet-head' }, h('strong', {}, 'Cosa vuoi fare?'), h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Chiudi', onclick: close }, '✕')),
+      big('pq-note', '📝', 'Nuova nota', 'visita o telefonata, anche a voce', startNewNote),
+      big('pq-quote', '€', 'Nuova offerta', 'prodotti, trasporto, PDF', startNewQuote)));
+  document.body.append(back);
 }
 
 function signOut() { if (app.real) app.stopPreview(); app.store.signOut(); useSession(null); app.cache = {}; app.go(''); }
