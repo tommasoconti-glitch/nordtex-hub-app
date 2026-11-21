@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="f021db1595e0">
+<meta name="ntx-build" content="3c6d61403c43">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1131,9 +1131,16 @@ h1 + .fix-note{margin:-4px 0 4px}
 .ss-net .ss-next{display:flex;flex-direction:column;gap:4px} .ss-net .ss-next a{white-space:nowrap}
 .ss-tabs{margin-top:0} .ss-tabs .tab{text-decoration:none}
 .ss-agent .call-date{margin:0 0 4px}
+/* 21/11 Aggiornamento per il commerciale (PDF dalla Sales strategy) */
+#print-root .agent-report .ar-h{font:600 10.5pt 'NT Poppins',Inter,Arial,sans-serif;color:#4b4a4d;border-bottom:1.2pt solid #BCBF00;padding-bottom:1mm;margin:5mm 0 2mm}
+#print-root .agent-report .ar-msg{background:#f2f3d1;border-left:2pt solid #BCBF00;padding:2.5mm 3mm;margin:2mm 0}
+#print-root .agent-report td:first-child{width:auto} #print-root .agent-report .ar-late{color:#D40E41;font-weight:600}
+#print-root .agent-report .ar-st.fatto{color:#1f7a3f;font-weight:600} #print-root .agent-report .ar-st.non-fatto{color:#D40E41;font-weight:600}
+#print-root .agent-report ol{margin:1mm 0 0 5mm;padding:0} #print-root .agent-report li{margin:1mm 0}
+#print-root .agent-report .ar-goal{margin:1mm 0} #print-root .agent-report .ar-note{font-size:7.5pt;color:#676568;margin:1mm 0 0}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f021db1595e0"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"3c6d61403c43"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3248,9 +3255,9 @@ async function goalsCard(app) {
       return h('li', {}, h('span', { class: 'badge ' + cls }, lab), h('strong', {}, k.t), k.target ? h('small', { class: 'muted' }, ' · ' + k.target) : null, k.s ? h('span', { class: 'chip ss-tag' }, k.s) : null); }))] : null,
     g.actions.length ? [h('h3', { class: 'st-h3' }, 'Azioni'), h('ul', { class: 'goals-list' }, g.actions.map(a => h('li', {},
       a.due ? h('span', { class: 'due ' + (a.due < t ? 'scaduto' : a.due === t ? 'oggi' : '') }, 'entro ' + dateIt(a.due)) : null, h('span', {}, a.title), a.s ? h('span', { class: 'chip ss-tag' }, a.s) : null)))] : null,
-    g.clients.length ? [h('h3', { class: 'st-h3' }, `Clienti da intervistare per il budget 2027 · ${todo.length} da fare`),
+    g.clients.length ? [h('h3', { class: 'st-h3' }, `Clienti da seguire · ${todo.length} da fare`),
       h('ul', { class: 'goals-list' }, g.clients.map(c => h('li', {}, h('span', { class: 'badge ' + (c.st === 'fatta' ? 'ok' : 'warn') }, c.st === 'fatta' ? 'fatta' : 'da fare'), h('strong', {}, c.name), c.why ? h('small', { class: 'muted' }, ' · ' + c.why) : null))),
-      h('details', { class: 'fold-in' }, h('summary', {}, 'Le domande da fare ai clienti'), h('ol', { class: 'help-list' }, GOAL_QUESTIONS.map(q => h('li', {}, q))))] : null,
+      h('details', { class: 'fold-in' }, h('summary', {}, 'Domande utili ai clienti (budget)'), h('ol', { class: 'help-list' }, GOAL_QUESTIONS.map(q => h('li', {}, q))))] : null,
     commentBox(app, g),
     h('small', { class: 'muted' }, 'Aggiornato il ' + dateIt(g.updatedAt)));
 }
@@ -11003,12 +11010,13 @@ const HELP = {
     steps: ['Confronta i portafogli; da qui si attiva o disattiva l\'accesso di un utente.'],
     notes: [],
   },
-  strategia: { title: 'Sales strategy', intro: 'Il tuo gestionale per il metodo 2027 con la rete. Visibile solo a te: agenti, ufficio e Marco non lo vedono.',
-    steps: ['In "Rete e fasce" tocca un commerciale e assegna la fascia (1 = intervista ogni lunedì, 2 = ogni 2-3 settimane, 3 = segnalatore), i voti sui 4 criteri e le note.',
-      'Il lunedì apri "Questa settimana": ci sono i commerciali da sentire, prima chi è in ritardo, con i loro numeri.',
-      'Dopo l\'intervista (registrata con Plaud) tocca "Registra incontro": scrivi l\'esito, il riferimento della registrazione, segna le azioni della volta scorsa (fatta o no, con che esito) e le nuove azioni con scadenza.',
-      'In "Azioni aperte" segui tutte le azioni della rete; le scadute sono in rosso.'],
-    notes: ['Le finestre si aprono e si chiudono toccando il titolo; l\'app ricorda come le hai lasciate.', 'Le aree scoperte (Ex area) compaiono nella rete ma non nel calendario finché non hanno un commerciale.'] },
+  strategia: { title: 'Sales strategy', intro: 'Il tuo gestionale per seguire il piano 2027 con la rete: in alto il piano (obiettivo → strategie → tattiche), sotto un solo elenco dei commerciali. Agenti e ufficio non lo vedono; Marco Ferrari, Lorenzo e Marco Terzi in sola lettura.',
+    steps: ['In alto controlli il piano: obiettivo dell\'anno, strategie e le loro tattiche, con l\'avanzamento calcolato dai dati.',
+      'Sotto c\'è l\'elenco dei commerciali: in cima chi va sentito questa settimana (prima chi è in ritardo), poi per fascia. Tocca un nome per la sua scheda.',
+      'Nella scheda, «Fotografia»: obiettivo annuale, fotografia della zona, tattiche che lo riguardano, diario, domande per Meridian. «Fascia e voti» in alto per la fascia (1 = call ogni lunedì, 2 = ogni 2-3 settimane, 3 = segnalatore).',
+      '«Obiettivi e one to one»: KPI del mese, azioni e clienti da intervistare; li invii al commerciale con «Invia la proposta» e, quando siete d\'accordo, «Segna concordati». Sotto c\'è il one to one del mese (fascia 1 e 2): preparazione, durante, chiusura.',
+      '«Call del lunedì»: per ogni KPI fatto / non fatto / in corso, per ogni azione se è stata fatta e come si prosegue, poi esito e nuove azioni. I KPI si modificano anche da qui con «✎ Modifica KPI».'],
+    notes: ['Azioni e KPI si modificano sempre; si eliminano solo finché non sono concordati con il commerciale. Dopo si modificano o si chiudono.', 'Le finestre si aprono e si chiudono toccando il titolo; l\'app ricorda come le hai lasciate.', 'Le aree scoperte (Ex area) stanno in fondo all\'elenco finché non hanno un commerciale.', 'Fatturato del piano e numeri per commerciale escludono Matrial e Steldo (intercompany).'] },
   sistemi: { title: 'Sistemi', intro: 'Pacchetti e stratigrafie (in prova, visibile solo alla Direzione).', steps: [], notes: [] },
   profilo: {
     title: 'Profilo',
@@ -12757,6 +12765,65 @@ function networkOrder(rows) {
 
 return { accepted, networkOrder };
 })();
+__m["js/core/agent-report.js"] = (function () {
+// 21/11 (Tommaso): «Aggiornamento» da mandare al commerciale dopo la call o il one to one. Si rigenera ogni volta
+// dai dati del momento, quindi segue man mano KPI raggiunti e azioni fatte. Contiene solo quello che il commerciale
+// può vedere: KPI del mese, azioni, decisioni del one to one, clienti da seguire, messaggio. Niente fotografia,
+// voti, margini, obiettivi annuali, premi né il testo interno della call.
+const lastStep = r => String(r || '').trim().split('\n').pop().replace(/^\[(\d{4})-(\d{2})-(\d{2})\]\s*/, '$3/$2/$1 ').trim();
+
+function agentReportData({ scores = {}, actions = [], label, month, today, nextCall = null }) {
+  const kpi = ((scores.kpi || {})[month] || []).map(k => ({ t: k.t, target: k.target || '', st: k.st || 'in corso', c: k.c || '' }));
+  const mine = actions.filter(a => a.label === label);
+  const open = mine.filter(a => !a.doneOn).map(a => ({ title: a.title, due: a.due || null, late: !!(a.due && a.due < today), step: lastStep(a.result) }))
+    .sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'));
+  const done = mine.filter(a => a.doneOn && a.doneOn.startsWith(month)).map(a => ({ title: a.title, doneOn: a.doneOn, step: lastStep(a.result).replace(/^\d\d\/\d\d\/\d{4}\s*fatta:?\s*/, '') }))
+    .sort((a, b) => b.doneOn.localeCompare(a.doneOn));
+  const o = (scores.o2o || {})[month] || null;
+  const decisions = o && o.status === 'fatto' ? (o.points || []).filter(p => p.dec).map(p => ({ t: p.t, dec: p.dec })) : [];
+  const clients = (scores.clienti || []).map(c => ({ name: c.name, why: c.why || '', st: c.st === 'fatta' ? 'fatto' : 'da fare' }));
+  return { month, kpi, kpiDone: kpi.filter(k => k.st === 'fatto').length, open, done, decisions, o2oDate: o?.status === 'fatto' ? o.date : null,
+    nextO2o: o?.next || null, clients, message: scores.msg || '', nextCall };
+}
+
+return { agentReportData };
+})();
+__m["js/core/meridian-export.js"] = (function () {
+// 21/11 (Tommaso): «Esporta per Meridian». I commerciali lavorano in Meridian (copia dell'HUB); la Sales strategy resta
+// nell'HUB. Dopo call o one to one questo testo si incolla in Meridian per aggiornare il riquadro «Obiettivi del mese»
+// nella Home del commerciale. Blocchi fissi con gli stessi campi della tabella degli obiettivi (hub_agent_goals),
+// così si carica senza interpretazioni. Contiene solo quello che vede il commerciale: niente fotografia, voti,
+// margini, note interne; dell'obiettivo annuale solo quota/base/crescita e solo se già presentato (niente soglie premio).
+const clean = v => String(v ?? '').replace(/\s*[|\n\r]+\s*/g, ' / ').trim();
+
+function meridianUpdate({ name, label, report, goals = null, target = null, today }) {
+  const x = report;
+  const st = goals?.status === 'concordati' ? `concordati il ${String(goals.agreedAt || '').slice(0, 10)}` : goals ? 'proposta da concordare' : 'bozza non ancora inviata';
+  const rows = (title, head, list, f) => [`${title} (${head})`, ...(list.length ? list.map(o => '- ' + f(o).map(clean).join(' | ')) : ['- nessuno'])];
+  const tgt = target?.quota && target.shownAt ? [`OBIETTIVO ANNUALE ${target.year || 2027} (quota | base | crescita)`, '- ' + [target.quota, target.base ?? '', target.growth ?? ''].join(' | ')] : ['OBIETTIVO ANNUALE: non ancora presentato, non inserire'];
+  return [
+    '### AGGIORNAMENTO SALES STRATEGY NORDTEX → MERIDIAN ###',
+    'ISTRUZIONE: nella Home del commerciale indicato aggiorna il riquadro «Obiettivi del mese» sostituendo i dati di questo mese con quelli qui sotto. Non modificare altri dati. I campi vuoti restano vuoti. Importi in euro, date nel formato AAAA-MM-GG.',
+    `COMMERCIALE: ${clean(name)}`,
+    `CODICE AGENTE HUB: ${clean(label)}`,
+    `MESE: ${x.month}`,
+    `AGGIORNATO IL: ${today}`,
+    `STATO PROPOSTA: ${st}`,
+    `MESSAGGIO DELLA DIREZIONE: ${clean(x.message) || '-'}`,
+    ...rows('KPI DEL MESE', 'kpi | obiettivo | stato | commento', x.kpi, k => [k.t, k.target, k.st, k.c]),
+    ...rows('AZIONI APERTE', 'azione | entro | ultimo passaggio', x.open, a => [a.title, a.due || '', a.step]),
+    ...rows('AZIONI FATTE NEL MESE', 'azione | fatta il | esito', x.done, a => [a.title, a.doneOn, a.step]),
+    ...rows(`DECISIONI DEL ONE TO ONE${x.o2oDate ? ' DEL ' + x.o2oDate : ''}`, 'punto | decisione', x.decisions, p => [p.t, p.dec]),
+    ...rows('CLIENTI DA SEGUIRE', 'cliente | motivo | stato', x.clients, c => [c.name, c.why, c.st]),
+    ...tgt,
+    `PROSSIMA CALL: ${x.nextCall || '-'}`,
+    `PROSSIMO ONE TO ONE: ${x.nextO2o || '-'}`,
+    '### FINE AGGIORNAMENTO ###',
+  ].join('\n');
+}
+
+return { meridianUpdate };
+})();
 __m["js/views/strategy.js"] = (function () {
 // "Strategia" (08/11/2026, Tommaso): un'unica sezione con il gestionale della Direzione, a finestre che si aprono e si chiudono.
 // Fasce della rete, chi sentire questa settimana, incontri (esito scritto a mano; l'intervista si registra con Plaud) e azioni con scadenza.
@@ -12774,6 +12841,9 @@ const { buildXlsx } = __m["js/core/xlsx-write.js"];
 const { REASONS, nextCallDate, callActions, postponements, applyCheck, callSummary } = __m["js/core/call.js"];
 const { O2O_FASCE, o2oState, proposePoints, monthFacts, o2oMinutes } = __m["js/core/one2one.js"];
 const { accepted, networkOrder } = __m["js/core/ss-accept.js"];
+const { agentReportData } = __m["js/core/agent-report.js"];
+const { meridianUpdate } = __m["js/core/meridian-export.js"];
+const { OFFER_HEADER } = __m["js/brand-assets.js"];
 const { isIntercompany } = __m["js/core/company-photo.js"];
 // 17/11 «Scheda rete»: file Excel per la chat Rete (telefonate del lunedì, affiancamenti). Solo Tommaso, non chi ha la sola lettura.
 async function exportNetwork(app, d, label = null, btn = null) {
@@ -13124,12 +13194,64 @@ function headCard(app, d, r, refresh) {
 }
 
 // 21/11: la scheda del commerciale in tre linguette (Fotografia · One to one · Call del lunedì), stessa testata per tutte
-const SS_TABS = [['', 'Fotografia'], ['/one-to-one', 'One to one'], ['/telefonata', 'Call del lunedì']];
+const SS_TABS = [['', 'Fotografia'], ['/one-to-one', 'Obiettivi e one to one'], ['/telefonata', 'Call del lunedì']];
 function agentPage(app, d, r, tab, ...cards) {
   const refresh = () => app.go('strategia/' + encodeURIComponent(r.label) + tab);
   const tabs = h('div', { class: 'tabs ss-tabs', role: 'tablist' }, SS_TABS.filter(([k]) => !(k === '/telefonata' && (r.state === 'scoperta' || app.session.strategyViewer)))
     .map(([k, l]) => h('a', { role: 'tab', class: 'tab' + (tab === k ? ' on' : ''), 'aria-selected': String(tab === k), href: '#/strategia/' + encodeURIComponent(r.label) + k }, l)));
-  return h('div', { class: 'page call-page ss-agent' }, headCard(app, d, r, refresh), tabs, ...cards);
+  // 21/11: «Aggiornamento» in PDF da mandare al commerciale dopo call o one to one (si rigenera con i dati del momento)
+  const pdf = tab && !app.session.strategyViewer && r.state !== 'scoperta' ? h('p', { class: 'ss-export' }, h('button', { class: 'btn small primary', onclick: () => agentReport(app, d, r).catch(e => toast(e.message, 'error')) }, `📄 Aggiornamento per ${r.name.split(' ').slice(-1)[0]} (PDF)`), ' ',
+    h('button', { class: 'btn small', title: 'Testo da incollare in Meridian per aggiornare gli obiettivi del mese nella Home del commerciale', onclick: () => meridianDialog(app, d, r).catch(e => toast(e.message, 'error')) }, '📤 Esporta per Meridian'),
+    h('small', { class: 'muted' }, ' Solo quello che vede il commerciale: KPI, azioni, decisioni, clienti da seguire, obiettivo se presentato. Niente fotografia, voti, margini né note interne.')) : null;
+  return h('div', { class: 'page call-page ss-agent' }, headCard(app, d, r, refresh), tabs, pdf, ...cards);
+}
+
+// 21/11: testo per Meridian (i commerciali lavorano lì): stesso contenuto del PDF, a blocchi fissi, senza soglie premio
+async function meridianDialog(app, d, r) {
+  const t = today(), mk = monthKey();
+  const [goals, target] = await Promise.all([app.store.agentGoals ? app.store.agentGoals(r.label).catch(() => null) : null, app.store.agentTarget ? app.store.agentTarget(r.label).catch(() => null) : null]);
+  const report = agentReportData({ scores: r.scores || {}, actions: d.net.actions, label: r.label, month: mk, today: t, nextCall: nextCallDate(r.fascia, t) });
+  const ta = h('textarea', { class: 'ss-qtext', rows: 18, readonly: true }, meridianUpdate({ name: r.name, label: r.label, report, goals, target, today: t }));
+  await modal('Esporta per Meridian · ' + r.name, h('div', { class: 'form' },
+    h('p', { class: 'muted' }, 'Copia il testo e incollalo in Meridian: aggiorna il riquadro «Obiettivi del mese» nella Home del commerciale. Se cambi qualcosa qui (KPI, azioni, call), esportalo di nuovo.'), ta),
+    [{ label: 'Chiudi', value: false }, { label: 'Copia', primary: true, run: async () => { await navigator.clipboard.writeText(ta.value).then(() => toast('Copiato: incollalo in Meridian')).catch(() => { ta.select(); toast('Seleziona il testo e copialo'); }); return false; } }]);
+}
+
+async function agentReport(app, d, r) {
+  const t = today(), mk = monthKey(), first = r.name.split(' ').slice(-1)[0];
+  // 21/11 (Tommaso): fotografia dell'obiettivo annuale e a che punto è. Solo se l'obiettivo è già stato presentato (stessa regola della sua Home); niente premi.
+  const tg = app.store.agentTarget ? await app.store.agentTarget(r.label).catch(() => null) : null;
+  const tY = tg?.year || 2027, started = Number(t.slice(0, 4)) >= tY;
+  const ytd = d.customers.filter(c => agentOf(c.assignee) === agentOf(r.label) && !c.isTest && !isIntercompany(c)).reduce((a, c) => a + (Number(c['rev' + tY]) || 0), 0);
+  const pace = started ? Math.round((new Date(t) - new Date(tY + '-01-01')) / 864e5 / 365 * 100) : 0;
+  const e0 = v => Math.round(v).toLocaleString('it-IT') + ' €';
+  const goal = tg?.quota && tg.shownAt ? [h('h2', { class: 'ar-h' }, `Obiettivo ${tY}`),
+    h('div', { class: 'ps-facts ar-goal' }, [['Quota', e0(tg.quota)], ['Fatturato da inizio anno', started ? e0(ytd) : '—'], ['Raggiunto', started ? Math.round(ytd / tg.quota * 100) + '%' : '—'], ['Ritmo lineare', started ? pace + '%' : '—'],
+      ...(tg.marginAvg != null ? [['Margine medio obiettivo', String(tg.marginAvg).replace('.', ',') + '%']] : [])].map(([k, v]) => h('div', {}, h('small', {}, k), h('strong', {}, v)))),
+    h('p', { class: 'ar-note' }, started ? 'Fatture RADIX dei clienti del tuo portafoglio. Il ritmo lineare è indicativo: l\'edilizia non vende uguale tutti i mesi.' : `Si conta dal 1° gennaio ${tY}. Base ${tY - 1}${tg.base != null ? ' ' + e0(tg.base) : ''}${tg.growth ? ', crescita ' + e0(tg.growth) : ''}.`)] : [];
+  const x = agentReportData({ scores: r.scores || {}, actions: d.net.actions, label: r.label, month: mk, today: t, nextCall: nextCallDate(r.fascia, t) });
+  const ST = { fatto: '✓ fatto', 'non fatto': '✗ non fatto', 'in corso': '↻ in corso' };
+  const sec = (title, ...rows) => [h('h2', { class: 'ar-h' }, title), ...rows];
+  const tbl = (head, rows) => h('table', {}, h('thead', {}, h('tr', {}, head.map(c => h('th', {}, c)))), h('tbody', {}, rows));
+  const el = h('div', { class: 'print-sheet agent-report' },
+    h('img', { class: 'ps-head', src: OFFER_HEADER, alt: 'NORDTEX' }),
+    h('div', { class: 'ps-title' }, h('div', {}, h('div', { class: 'ps-kicker' }, 'Aggiornamento'), h('h1', {}, `${r.name} · ${monthName(mk)}`)),
+      h('div', { class: 'ps-facts' }, [['Al', dateIt(t)], ['KPI raggiunti', `${x.kpiDone} su ${x.kpi.length}`], ['Azioni fatte nel mese', String(x.done.length)], ['Prossima call', x.nextCall ? dateIt(x.nextCall) : '—']]
+        .map(([k, v]) => h('div', {}, h('small', {}, k), h('strong', {}, v))))),
+    x.message ? h('p', { class: 'ar-msg' }, x.message) : null,
+    ...goal,
+    ...sec(`KPI di ${monthName(mk)}`, x.kpi.length ? tbl(['KPI', 'Obiettivo', 'Stato', 'Commento'], x.kpi.map(k => h('tr', {}, h('td', {}, h('strong', {}, k.t)), h('td', {}, k.target || '—'), h('td', { class: 'ar-st ' + k.st.replace(' ', '-') }, ST[k.st] || k.st), h('td', {}, k.c || '')))) : h('p', {}, 'Nessun KPI per questo mese.')),
+    ...sec('Azioni da fare', x.open.length ? tbl(['Azione', 'Entro', 'Ultimo passaggio'], x.open.map(a => h('tr', {}, h('td', {}, a.title), h('td', { class: a.late ? 'ar-late' : '' }, a.due ? (a.late ? 'scaduta il ' : '') + dateIt(a.due) : '—'), h('td', {}, a.step || '')))) : h('p', {}, 'Nessuna azione aperta.')),
+    x.done.length ? sec(`Fatte a ${monthName(mk).split(' ')[0]}`, tbl(['Azione', 'Il', 'Esito'], x.done.map(a => h('tr', {}, h('td', {}, a.title), h('td', {}, dateIt(a.doneOn)), h('td', {}, a.step || ''))))) : [],
+    x.decisions.length ? sec(`Decisioni del one to one del ${dateIt(x.o2oDate)}`, h('ol', {}, x.decisions.map(p => h('li', {}, h('strong', {}, p.t), ': ', p.dec)))) : [],
+    x.clients.length ? sec('Clienti da seguire', tbl(['Cliente', 'Perché', 'Stato'], x.clients.map(c => h('tr', {}, h('td', {}, h('strong', {}, c.name)), h('td', {}, c.why), h('td', {}, c.st))))) : [],
+    x.nextO2o ? h('p', {}, h('strong', {}, 'Prossimo one to one: '), dateIt(x.nextO2o)) : null,
+    h('div', { class: 'ps-foot' }, h('span', {}, `NORDTEX · Direzione commerciale · aggiornamento per ${r.name}`), h('span', {}, `Preparato il ${dateIt(t)}`)));
+  let root = document.getElementById('print-root'); if (!root) { root = h('div', { id: 'print-root' }); document.body.append(root); }
+  root.replaceChildren(el);
+  const prev = document.title; document.title = `${t} Aggiornamento ${r.name} ${mk}`;
+  toast(`Nella finestra di stampa scegli «Salva come PDF», poi lo mandi a ${first}`);
+  setTimeout(() => { window.print(); document.title = prev; }, 120);
 }
 
 function photoCard(r) {
@@ -13206,22 +13328,22 @@ function agentTacticsCard(d, r) {
 function clientsCard(app, r, refresh) {
   const list = r.scores?.clienti || [], todo = list.filter(x => x.st !== 'fatta');
   const upd = async (i, patch) => { await saveScores(app, r, { clienti: list.map((x, j) => j === i ? { ...x, ...patch } : x) }); refresh(); };
-  const close = async i => { const es = h('textarea', { rows: 5, placeholder: 'Risposte del cliente (previsione 2027 per famiglia, cantieri, concorrenti e prezzi…)' }, list[i].esito || '');
-    const ok = await modal('Intervista · ' + list[i].name, h('div', { class: 'form' }, h('ol', { class: 'help-list' }, BUDGET_QUESTIONS.map(q => h('li', {}, q))), field('Esito', es)), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, value: true }]);
+  const close = async i => { const es = h('textarea', { rows: 5, placeholder: 'Com\'è andata: cosa è emerso, prossimi passi…' }, list[i].esito || '');
+    const ok = await modal('Cliente · ' + list[i].name, h('div', { class: 'form' }, h('details', { class: 'fold-in' }, h('summary', {}, 'Domande utili (budget)'), h('ol', { class: 'help-list' }, BUDGET_QUESTIONS.map(q => h('li', {}, q)))), field('Esito', es)), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, value: true }]);
     if (ok) upd(i, { st: 'fatta', esito: es.value.trim(), il: today() }); };
-  return h('section', { class: 'card' }, h('h2', {}, `Clienti da intervistare (budget 2027) · ${todo.length} da fare`),
+  return h('section', { class: 'card' }, h('h2', {}, `Clienti da seguire insieme · ${todo.length} da fare`),
     list.length ? h('ul', { class: 'st-list' }, list.map((x, i) => h('li', { class: 'st-row' },
       h('div', { class: 'st-main' }, h('span', { class: 'badge ' + (x.st === 'fatta' ? 'ok' : 'warn') }, x.st === 'fatta' ? 'fatta' + (x.il ? ' ' + dateIt(x.il) : '') : 'da fare'), h('strong', {}, x.name), x.why ? h('small', { class: 'muted' }, ' · ' + x.why) : null),
       x.esito ? h('p', { class: 'st-out' }, x.esito) : null,
-      h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => close(i) }, x.st === 'fatta' ? 'Modifica esito' : 'Intervista fatta…')))))
+      h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => close(i) }, x.st === 'fatta' ? 'Modifica esito' : 'Fatto…')))))
       : emptyState('Nessun cliente in lista.'),
-    h('details', { class: 'fold-in' }, h('summary', {}, 'Le 6 domande per l\'intervista'), h('ol', { class: 'help-list' }, BUDGET_QUESTIONS.map(q => h('li', {}, q)))),
+    h('details', { class: 'fold-in' }, h('summary', {}, 'Domande utili (quelle del budget 2027)'), h('ol', { class: 'help-list' }, BUDGET_QUESTIONS.map(q => h('li', {}, q)))),
     h('button', { class: 'btn small', onclick: () => clientsDialog(app, r, refresh) }, 'Modifica elenco'));
 }
 async function clientsDialog(app, r, refresh) {
   const list = r.scores?.clienti || [];
   const ta = h('textarea', { rows: 9, placeholder: 'Un cliente per riga: nome | motivo\nes. VITA SPA Berlingo | 29.700 €, nuovo, compra solo "altro": laterizio' }, list.map(x => x.name + (x.why ? ' | ' + x.why : '')).join('\n'));
-  const ok = await modal('Clienti da intervistare · ' + r.name, h('div', { class: 'form' }, ta), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
+  const ok = await modal('Clienti da seguire insieme · ' + r.name, h('div', { class: 'form' }, ta), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
     const old = new Map(list.map(x => [x.name, x]));
     const items = ta.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [name, why = ''] = l.split('|').map(s => s.trim()); return { ...(old.get(name) || { st: '' }), name, why }; });
     await saveScores(app, r, { clienti: items }); return true; } }]);
@@ -13328,7 +13450,7 @@ function goalsBlock(app, d, r, refresh, { g, pending, snap }) {
     g ? h('p', {}, h('span', { class: 'badge ' + (g.status === 'concordati' ? 'ok' : 'warn') }, g.status === 'concordati' ? 'concordati il ' + dateIt(g.agreedAt) : 'proposta da concordare'), ' ',
         h('strong', {}, `Sulla Home di ${first}`), ` · inviati il ${dateIt(g.updatedAt)} · `, g.seenAt && g.seenAt >= g.updatedAt ? h('span', { class: 'ok-text' }, 'letti il ' + dateIt(g.seenAt)) : h('span', { class: 'warn-text', style: 'display:inline' }, 'non ancora letti'),
         g.status !== 'concordati' && !pending ? [' ', h('button', { class: 'btn small', onclick: () => agree().catch(e => toast(e.message, 'error')) }, `Segna concordati con ${first}`)] : null)
-      : h('p', { class: 'muted' }, `Quello che prepari qui (KPI, azioni, clienti da intervistare, messaggio) resta solo tuo finché non lo invii a ${first}.`),
+      : h('p', { class: 'muted' }, `Quello che prepari qui (KPI, azioni, clienti da seguire, messaggio) resta solo tuo finché non lo invii a ${first}.`),
     pending ? h('p', {}, h('span', { class: 'badge muted' }, g ? 'modifiche non ancora inviate' : 'bozza, solo tua'), ' ', sendBtn,
       g ? h('small', { class: 'muted' }, ` · inviandole tornano "proposta da concordare"`) : null) : null,
     h('p', { class: 'muted small' }, 'Azioni e KPI si modificano sempre. Si eliminano finché non sono concordati con il commerciale; dopo si modificano o si chiudono.'),
@@ -13347,7 +13469,7 @@ function actionsCard(app, d, r, refresh, acc) {
           h('button', { class: 'btn small', title: 'Modifica', onclick: () => actionDialog(app, d, r, a, ok, refresh) }, '✎ Modifica'),
           h('button', { class: 'btn small', onclick: () => closeAction(app, a, refresh, ok) }, 'Fatta…'),
           ok ? null : h('button', { class: 'btn small', title: 'Elimina', onclick: async () => { if (await modal('Eliminare l\'azione?', h('p', {}, a.title), [{ label: 'Annulla', value: false }, { label: 'Elimina', primary: true, value: true }])) { await app.store.removeDirAction(a.id); toast('Azione eliminata'); refresh(); } } }, '✕'))); }))
-      : emptyState('Nessuna azione aperta: nascono da call, one to one e incontri.'),
+      : emptyState('Nessuna azione aperta: nascono da call, one to one e incontri, oppure con «+ Azione».'),
     ro ? null : h('button', { class: 'btn small', onclick: () => actionDialog(app, d, r, null, false, refresh) }, '+ Azione'));
 }
 async function actionDialog(app, d, r, a, isAccepted, refresh) {
@@ -13360,7 +13482,7 @@ async function actionDialog(app, d, r, a, isAccepted, refresh) {
   }
   const title = h('input', { type: 'text', value: a.title }), due = h('input', { type: 'date', value: a.due || '' }), tt = tacticSelect(d, r, a.tactic);
   const ok = await modal('Modifica azione · ' + r.name, h('div', { class: 'form' }, field('Azione', title), h('div', { class: 'st-pair' }, field('Entro', due), field('Tattica', tt)),
-    isAccepted ? h('p', { class: 'muted small' }, 'Concordata con il commerciale: le modifiche vanno inviate di nuovo dalla linguetta One to one.') : null),
+    isAccepted ? h('p', { class: 'muted small' }, 'Concordata con il commerciale: le modifiche vanno inviate di nuovo dalla linguetta Obiettivi e one to one.') : null),
   [{ label: 'Annulla', value: null }, ...(isAccepted ? [] : [{ label: 'Elimina', run: async () => { await app.store.removeDirAction(a.id); return true; } }]),
     { label: 'Salva', primary: true, run: async () => { if (!title.value.trim()) throw new Error('L\'azione non può essere vuota');
       await app.store.saveDirAction({ ...a, title: title.value.trim(), due: due.value || null, tactic: tt.value || null }); return true; } }]);
@@ -13493,8 +13615,12 @@ async function callPage(app, label) {
       b.onclick = () => { x.st = st; btns.forEach(o => o.classList.remove('sel')); b.classList.add('sel'); }; return b; });
     return { x, note, el: h('div', { class: 'call-kpi' }, h('div', {}, h('strong', {}, x.t), x.target ? h('small', { class: 'muted' }, ' · obiettivo: ' + x.target) : null), h('div', { class: 'call-btns' }, ...btns), note) };
   });
+  // 21/11: i KPI si modificano anche dalla call (stessa finestra e stesse regole della linguetta Obiettivi e one to one)
+  const goalsNow = app.store.agentGoals ? await app.store.agentGoals(label).catch(() => null) : null;
+  const kpiEdit = h('button', { class: 'btn small', title: 'Si ricarica la pagina: prima salva quello che hai già scritto della call',
+    onclick: () => kpiDialog(app, d, r, () => app.go('strategia/' + encodeURIComponent(label) + '/telefonata'), accepted(goalsNow, mk)) }, kpiRows.length ? '✎ Modifica KPI' : 'Imposta KPI del mese');
   const kpiCardEl = h('section', { class: 'card' }, h('h2', {}, `1 · KPI di ${monthName(mk)}`),
-    kpiRows.length ? kpiRows.map(k => k.el) : emptyState('Nessun KPI per questo mese: si impostano nella linguetta One to one.'));
+    kpiRows.length ? kpiRows.map(k => k.el) : emptyState('Nessun KPI per questo mese.'), kpiEdit);
 
   // 2. Azioni da verificare
   const checks = [];
@@ -13555,7 +13681,7 @@ async function callPage(app, label) {
       for (const x of res) { await app.store.saveDirAction(x.action); if (x.newAction) await app.store.saveDirAction({ ...x.newAction, meetingId }); }
       for (const x of news) await app.store.saveDirAction({ label, meetingId, title: x.title, due: x.due, tactic: x.tactic });
       if (kpiRows.length) { const all = { ...(r.scores?.kpi || {}) }; all[mk] = kpiRows.map(k => ({ ...k.x, c: k.note.value.trim() })); await saveScores(app, r, { kpi: all }); }
-      toast(`Telefonata con ${first} registrata` + (res.length ? ` · ${res.length} azioni verificate` : '')); back();
+      toast(`Telefonata con ${first} registrata` + (res.length ? ` · ${res.length} azioni verificate` : '') + ' · ora puoi preparare l\'aggiornamento PDF', 'info'); app.go('strategia/' + encodeURIComponent(label) + '/telefonata'); window.scrollTo(0, 0);
     } catch (e) { toast(e.message, 'error'); btn.disabled = false; }
   };
   const saveBtn = h('button', { class: 'btn primary' }, 'Salva telefonata'); saveBtn.onclick = () => save(saveBtn);
@@ -13644,7 +13770,7 @@ async function o2oPage(app, label) {
     goalsBlock(app, d, r, refresh, goals),
     kpiCard(app, d, r, refresh, acc), actionsCard(app, d, r, refresh, acc), clientsCard(app, r, refresh),
     h('h2', { class: 'ss-sep' }, `Incontro di ${monthName(mk)} `, meet ? h('span', { class: 'badge ' + st.cls }, st.key) : null, o.date ? h('small', { class: 'muted' }, ' · ' + dateIt(o.date) + (o.place ? ' · ' + o.place : '')) : null),
-    ...(meet ? [prep, during, close] : [h('section', { class: 'card' }, emptyState('Il one to one mensile è previsto per la fascia 1 e 2. KPI e azioni qui sopra valgono lo stesso.'))]));
+    ...(meet ? [prep, during, close] : [h('section', { class: 'card' }, emptyState('Il one to one mensile è previsto per la fascia 1 e 2. KPI, azioni e proposta qui sopra valgono per tutti.'))]));
 }
 
 // Vista generale: i one to one del mese di fascia 1 e 2
