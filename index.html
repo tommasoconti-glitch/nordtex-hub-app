@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="56b4bf982b4c">
+<meta name="ntx-build" content="2d57985b3220">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1101,7 +1101,7 @@ h1 + .fix-note{margin:-4px 0 4px}
   .tabbar.tabbar-7 small{font-size:.56rem} .tabbar.tabbar-7 .tab-plus{width:52px;height:52px}
   /* la nota occupa tutto lo schermo, con «Salva nota» grande in fondo */
   .modal-back:has(.note-form){padding:0;align-items:stretch}
-  .modal:has(.note-form){width:100%;max-height:none;height:100%;border-radius:0}
+  .modal:has(.note-form){width:100%;max-height:none;height:100%;border-radius:0} .modal:has(.note-form) .modal-body{flex:1}
   .modal:has(.note-form) .modal-foot{padding:10px 14px calc(10px + env(safe-area-inset-bottom))}
   .modal:has(.note-form) .modal-foot .btn{min-height:52px;font-size:1.05rem;flex:1} .modal:has(.note-form) .modal-foot .btn.primary{flex:2}
   .note-form textarea{font-size:16px}
@@ -1115,9 +1115,14 @@ h1 + .fix-note{margin:-4px 0 4px}
 }
 :root[data-scheme="dark"] .pq-btn.pq-note,:root[data-scheme="dark"] .nq-chip.on{background:#5a5e64}
 .phone-fold[open]>summary small{display:none}
+/* 21/11: scheda cliente sul telefono, lo stato non si schiaccia più in una colonna: fascia e «Cambia stato» sopra, il testo sotto a tutta larghezza */
+@media (max-width:760px){ .gl-status{flex-wrap:wrap;align-items:center} .gl-st-text{order:3;flex-basis:100%} .gl-change{margin-left:auto} }
+/* 21/11: «+ Crea cliente nuovo» nella scelta del cliente */
+.pick-new{display:flex;flex-direction:column;gap:8px;margin-top:6px;padding-top:10px;border-top:1px dashed var(--line)} .pick-new .btn{justify-content:center;min-height:46px;white-space:normal;text-align:center}
+@media (max-width:760px){ .shell:has(.tab-plus) .quote-dock{bottom:calc(80px + env(safe-area-inset-bottom))} .shell:has(.tab-plus) .page.editor{padding-bottom:110px} }   /* il «+» non tocca la barra del totale dell'offerta */
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"56b4bf982b4c"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"2d57985b3220"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -5132,84 +5137,6 @@ function followerSelect(app, customerId, onDone) {
 
 return { followerSelect };
 })();
-__m["js/core/dictation.js"] = (function () {
-// Dettatura gratuita (richiesta Tommaso 01/11/2026): il riconoscimento vocale del browser/telefono scrive nel campo di testo.
-// Nessun audio salvato e nessun costo. Dove non è disponibile (es. alcune app aggiunte alla schermata Home) si usa
-// il microfono della tastiera dell'iPhone, che fa la stessa cosa.
-const dictationAvailable = () => typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-
-// Unisce il testo dettato a quello già scritto, con lo spazio giusto e la maiuscola a inizio frase
-function appendDictated(current, said) {
-  const t = String(said || '').trim(); if (!t) return current;
-  const base = String(current || '').replace(/\s+$/, '');
-  if (!base) return t.charAt(0).toUpperCase() + t.slice(1);
-  const newSentence = /[.!?]$/.test(base);
-  return base + ' ' + (newSentence ? t.charAt(0).toUpperCase() + t.slice(1) : t);
-}
-
-// Avvia la dettatura su una textarea. Ritorna { stop }. onState('ascolto' | 'fermo' | 'errore', messaggio)
-function startDictation(textarea, { onState = () => {}, onInterim = () => {} } = {}) {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { onState('errore', 'unsupported'); return { stop() {} }; }
-  const r = new SR();
-  r.lang = 'it-IT'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
-  let stopped = false;
-  r.onresult = e => {
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      const res = e.results[i];
-      if (res.isFinal) { textarea.value = appendDictated(textarea.value, res[0].transcript); textarea.dispatchEvent(new Event('input', { bubbles: true })); }
-      else interim += res[0].transcript;
-    }
-    onInterim(interim);
-  };
-  r.onerror = e => { stopped = true; onState('errore', e.error || 'errore'); };
-  r.onend = () => { onInterim(''); if (!stopped) onState('fermo'); stopped = true; };
-  try { r.start(); onState('ascolto'); } catch (e) { onState('errore', e.message); }
-  return { stop() { if (!stopped) { try { r.stop(); } catch { /* già fermo */ } } } };
-}
-
-return { dictationAvailable, appendDictated, startDictation };
-})();
-__m["js/core/recorder.js"] = (function () {
-// Registrazione della nota vocale (01/11/2026): microfono del telefono/PC, formato audio/mp4 su iPhone, webm altrove.
-// Qualità voce (32 kbit/s): 10 minuti ≈ 2,4 MB, sotto il limite di 10 MB del contenitore.
-const RECORD_MAX_SECONDS = 10 * 60;
-const recordingAvailable = () => typeof window !== 'undefined' && !!(window.MediaRecorder && navigator.mediaDevices?.getUserMedia);
-
-function pickMime(isSupported = t => window.MediaRecorder?.isTypeSupported?.(t)) {
-  for (const t of ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']) if (isSupported(t)) return t;
-  return '';
-}
-const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-
-// Avvia la registrazione. onTick(secondi), onStop(blob) a fine registrazione (anche automatica a 10 minuti).
-async function startRecording({ onTick = () => {}, onStop = () => {} } = {}) {
-  // se il permesso del microfono non risponde entro 15 secondi, si esce con un messaggio invece di restare bloccati
-  const stream = await Promise.race([navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }),
-    new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error('il microfono non risponde: chiudi e riapri l\'app e riprova'), { name: 'Timeout' })), 15000))]);
-  const mimeType = pickMime();
-  const rec = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 32000 });
-  const chunks = []; const t0 = Date.now();
-  const tick = setInterval(() => { const s = (Date.now() - t0) / 1000; onTick(s); if (s >= RECORD_MAX_SECONDS) stop(); }, 250);
-  rec.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
-  // 05/11 (Tommaso su iPad: "si blocca tutto"): su Safari l'evento di fine registrazione a volte non arriva. Si chiude comunque
-  // una sola volta, con l'audio raccolto fin lì, dopo 3 secondi; il microfono si spegne sempre.
-  let ended = false, guard = null;
-  const finish = () => { if (ended) return; ended = true; clearTimeout(guard); clearInterval(tick); stream.getTracks().forEach(t => t.stop()); onStop(new Blob(chunks, { type: (rec.mimeType || mimeType || 'audio/mp4').split(';')[0] })); };
-  rec.onstop = finish;
-  rec.onerror = finish;
-  rec.start(1000);
-  function stop() {
-    if (ended) return;
-    try { if (rec.state !== 'inactive') { rec.requestData?.(); rec.stop(); } else finish(); } catch { finish(); }
-    clearTimeout(guard); guard = setTimeout(finish, 3000);
-  }
-  return { stop, cancel() { ended = true; clearTimeout(guard); clearInterval(tick); try { if (rec.state !== 'inactive') rec.stop(); } catch { /* */ } stream.getTracks().forEach(t => t.stop()); } };
-}
-
-return { RECORD_MAX_SECONDS, recordingAvailable, pickMime, mmss, startRecording };
-})();
 __m["js/core/search.js"] = (function () {
 // Ricerca clienti: tollerante ad accenti, punteggiatura, forme societarie e piccoli errori di battitura.
 // Ogni parola cercata deve trovare corrispondenza (inizio di parola, numero contenuto o, in mancanza, una lettera di differenza).
@@ -5395,8 +5322,6 @@ __m["js/views/agenda.js"] = (function () {
 const { changeLogCard } = __m["js/views/change-log-ui.js"];
 const { followerSelect } = __m["js/views/dir-follower-ui.js"];
 const { h, fill, eur, dateIt, dateTimeIt, statusBadge, toast, modal, field, emptyState, debounce, telLinks, today } = __m["js/ui.js"];
-const { dictationAvailable, startDictation } = __m["js/core/dictation.js"];
-const { recordingAvailable, startRecording, mmss } = __m["js/core/recorder.js"];
 const { radixOfferRow, radixOfferOpen, dueState: rxDueState } = __m["js/views/radix-offers.js"];
 const { openActions } = __m["js/views/actions.js"];
 const { outcomeButtons } = __m["js/views/outcome-quick.js"];
@@ -5767,8 +5692,7 @@ function callDialog(c, phones) {
 const quoteCls = s => ({ Bozza: 'muted', Inviata: 'warn', Accettata: 'ok', Persa: 'bad' }[s] || 'muted');
 
 // 21/11 (Marco, «sul telefono pochi tasti e chiari»): stessa finestra su computer e telefono, più semplice.
-// Tipo di contatto a pulsanti, un solo microfono grande («Tocca e parla»), Ricontattare a scelte rapide,
-// esito e offerta collegata in «Altri dettagli» (chiusi). Nessuna funzione tolta: la dettatura resta accanto al testo.
+// Tipo di contatto a pulsanti, Ricontattare a scelte rapide, esito e offerta collegata in «Altri dettagli» (chiusi).
 const KIND_SHORT = { Videochiamata: 'Video' };
 async function noteDialog(app, c, preset = {}) {
   let kindVal = CONTACT_KINDS.includes(preset.kind) ? preset.kind : CONTACT_KINDS[0];
@@ -5787,35 +5711,24 @@ async function noteDialog(app, c, preset = {}) {
       onclick: () => { recall = r.id; drawRecall(); if (r.id === 'date') { due.focus(); due.showPicker?.(); } } }, r.label))),
     recall === 'no' ? null : h('div', { class: 'nq-recall-more' }, recall === 'date' ? due : h('small', { class: 'muted' }, 'Entro il ' + dateIt(recallDate(recall, today()))), fu));
   drawRecall();
-  const voice = app.store.saveNoteAudio && recordingAvailable() ? voiceRecorder({ big: true }) : null;
   // 03/11: la nota si può collegare a un'offerta del cliente (app o RADIX)
   const choices = app.store.linkNote ? await offerChoices(app, c.id).catch(() => []) : [];
   const offSel = choices.length ? offerSelect(choices, preset.offer || '') : null;
-  // senza registrazione (versione locale o browser senza microfono) il pulsante grande detta nel testo
-  const bigDictate = voice ? null : dictateButton(body, { big: true });
   const res = await modal('Nuova nota — ' + c.name, h('div', { class: 'form note-form' },
     kinds,
-    voice ? voice.el : bigDictate,
-    h('div', { class: 'field' }, h('div', { class: 'note-head' }, h('span', {}, voice ? 'oppure scrivi qui' : 'Nota'), voice ? dictateButton(body) : null), body),
+    // 21/11 (Tommaso): niente note vocali né dettatura dell'app; per parlare si usa il microfono della tastiera del telefono
+    h('div', { class: 'field' }, h('span', {}, 'Nota'), body, h('small', { class: 'muted' }, 'Per parlare invece di scrivere usa il microfono 🎤 della tastiera del telefono.')),
     h('div', { class: 'field' }, h('span', { class: 'nq-label' }, 'Ricontattare'), recallBox),
     h('details', { class: 'fold-in nq-more', open: !!preset.offer || !!preset.outcome }, h('summary', {}, offSel ? 'Altri dettagli (esito, offerta collegata)' : 'Altri dettagli (esito)'),
       h('div', { class: 'form' }, field('Esito', outcome), offSel ? field('Offerta (facoltativo)', offSel, 'La nota compare anche nella pagina dell\'offerta.') : null))),
   [{ label: 'Annulla', value: false }, { label: 'Salva nota', primary: true, run: async () => {
-    if (voice?.recording()) throw new Error('Prima ferma la registrazione');
     if (recall === 'date' && !due.value && !fu.value.trim()) throw new Error('Scegli la data del richiamo, oppure tocca «No»');
-    const blob = voice?.blob();
-    const text = body.value.trim() || (blob ? 'Nota vocale' : '');
-    if (!text) throw new Error('Scrivi o registra la nota');
+    const text = body.value.trim();
+    if (!text) throw new Error('Scrivi la nota');
     const n = await app.store.addNote({ customerId: c.id, kind: kindVal, outcome: outcome.value, body: text, actions: recallAction(recall, today(), due.value, fu.value) });
     if (offSel?.value) await app.store.linkNote(n.id, parseRef(offSel.value)).catch(e => toast('Nota salvata, ma non collegata all\'offerta: ' + e.message, 'error'));
-    if (blob) {
-      try { await app.store.saveNoteAudio(n.id, blob); }
-      catch (e) { toast('Nota salvata, ma l\'audio non è stato caricato: ' + e.message, 'error'); return true; }
-      toast('Nota salvata. Trascrizione in corso…');
-      transcribeLater(app, c, n.id);
-    } else toast('Nota salvata');
+    toast('Nota salvata');
     return true; } }]);
-  voice?.cancel();   // chiusa la finestra (anche con ✕): il microfono si spegne sempre
   return res;
 }
 
@@ -5834,44 +5747,6 @@ async function deleteNoteDialog(app, n) {
   [{ label: 'Annulla', value: false }, { label: 'Elimina', primary: true, run: async () => { try { await app.store.deleteNote(n.id); } catch (e) { throw dbHint(e); } toast('Nota eliminata'); return true; } }]);
 }
 
-// Registratore nella finestra della nota: Registra → Ferma → ascolto di prova / Rifai.
-// Durante la registrazione si aggiorna SOLO il contatore: il pulsante "Ferma" resta lo stesso elemento
-// (ridisegnarlo a ogni secondo faceva perdere il tocco sull'iPhone).
-function voiceRecorder({ big = false } = {}) {
-  let rec = null, blob = null, url = null, starting = false;
-  const box = h('div', { class: 'voice' + (big ? ' voice-big' : '') });
-  const time = h('span', { class: 'rec-time' });
-  const stopBtn = h('button', { type: 'button', class: big ? 'mic-big on' : 'btn small rec on', 'aria-label': 'Ferma la registrazione', onclick: () => { stopBtn.disabled = true; stopBtn.textContent = 'Chiudo…'; rec?.stop(); } }, '■ Ferma');
-  const showIdle = () => big
-    ? fill(box, h('button', { type: 'button', class: 'mic-big', 'aria-label': 'Registra la nota a voce', onclick: start }, '🎤'), h('strong', { class: 'mic-cap' }, 'Tocca e parla'), h('small', { class: 'muted' }, 'l\'audio resta salvato e arriva anche scritto'))
-    : fill(box, h('button', { type: 'button', class: 'btn small rec', onclick: start }, '● Registra nota vocale'), h('small', { class: 'muted' }, 'Parli, l\'audio resta salvato e arriva anche scritto.'));
-  const showRec = () => { stopBtn.disabled = false; stopBtn.textContent = '■ Ferma'; time.textContent = '● 0:00'; fill(box, stopBtn, time, h('small', { class: 'muted' }, big ? 'tocca per fermare · massimo 10 minuti' : 'massimo 10 minuti')); };
-  const showDone = () => {
-    if (url) URL.revokeObjectURL(url); url = URL.createObjectURL(blob);
-    fill(box, h('audio', { controls: true, src: url, preload: 'metadata' }), h('button', { type: 'button', class: 'link', onclick: () => { blob = null; showIdle(); } }, 'Elimina e rifai'),
-      h('small', { class: 'muted' }, 'Al salvataggio l\'audio resta nella scheda e arriva la trascrizione scritta.'));
-  };
-  async function start() {
-    if (starting || rec) return; starting = true;
-    try {
-      rec = await startRecording({ onTick: s => { time.textContent = '● ' + mmss(s); }, onStop: b => { rec = null; blob = b; if (blob.size) showDone(); else { toast('Registrazione vuota: riprova', 'error'); showIdle(); } } });
-      showRec();
-    } catch (e) { rec = null; toast(e.name === 'NotAllowedError' ? 'Consenti l\'uso del microfono per registrare (Impostazioni › Safari › Microfono)' : 'Microfono non disponibile: ' + (e.message || e.name), 'error'); showIdle(); }
-    finally { starting = false; }
-  }
-  showIdle();
-  return { el: box, blob: () => blob, recording: () => !!rec, cancel() { rec?.cancel(); rec = null; } };
-}
-
-// Trascrizione dopo il salvataggio (non blocca): a fine lavoro aggiorna la scheda se è ancora aperta
-async function transcribeLater(app, c, noteId) {
-  const r = await app.store.transcribeNote(noteId).catch(() => ({ status: 'failed' }));
-  const msg = { ready: 'Trascrizione pronta', limit: 'Limite mensile di trascrizioni raggiunto: l\'audio è salvato', disabled: 'Trascrizione disattivata: l\'audio è salvato' }[r.status]
-    || (r.code === 'NOT_CONFIGURED' ? 'Trascrizione non ancora attiva: l\'audio è salvato' : 'Trascrizione non riuscita: l\'audio è salvato');
-  toast(msg, r.status === 'ready' ? 'info' : 'error');
-  if (location.hash === '#/agenda/' + encodeURIComponent(c.id) || location.hash === '#/agenda/' + c.id) app.go('agenda/' + c.id);
-}
-
 // Nella cronologia: ascolto (scaricato solo quando serve) e trascrizione, correggibile da autore o Direzione
 function noteVoice(app, n, refresh) {
   const a = n.audio; if (!a) return null;
@@ -5883,8 +5758,7 @@ function noteVoice(app, n, refresh) {
   } }, '▶ Ascolta');
   const t = a.transcript;
   const canEdit = n.authorId === app.session.userId || app.session.role === 'direzione';
-  const online = app.store.mode !== 'locale';
-  const tr = !t ? h('p', { class: 'muted small' }, online ? 'Trascrizione non disponibile.' : 'Trascrizione automatica solo nella versione online.', canEdit && online ? h('button', { type: 'button', class: 'link', onclick: async () => { toast('Trascrizione in corso…'); const r = await app.store.transcribeNote(n.id).catch(() => ({ status: 'failed' })); toast(r.status === 'ready' ? 'Trascrizione pronta' : 'Trascrizione non riuscita', r.status === 'ready' ? 'info' : 'error'); refresh(); } }, ' Trascrivi') : null)
+  const tr = !t ? h('p', { class: 'muted small' }, 'Trascrizione non disponibile.')
     : t.status === 'processing' ? h('p', { class: 'muted small' }, 'Trascrizione in corso… ', h('button', { type: 'button', class: 'link', onclick: refresh }, 'Aggiorna'))
     : t.status === 'failed' ? h('p', { class: 'muted small' }, 'Trascrizione non riuscita: resta l\'audio.')
     : h('div', { class: 'transcript' }, h('small', { class: 'muted' }, t.approved ? 'Trascrizione (riletta)' : 'Trascrizione automatica — da rileggere'),
@@ -5896,27 +5770,6 @@ async function transcriptDialog(app, n, text) {
   const ta = h('textarea', { rows: 8 }, text);
   return modal('Correggi la trascrizione', h('div', { class: 'form' }, field('Testo', ta), h('p', { class: 'fine' }, 'Correggi nomi, prodotti e quantità: questo testo resta nella scheda cliente.')),
     [{ label: 'Annulla', value: false }, { label: 'Salva', primary: true, run: async () => { await app.store.approveTranscript(n.id, ta.value); toast('Trascrizione salvata'); return true; } }]);
-}
-
-// Pulsante "Detta": il telefono scrive mentre parli (gratis). Se non disponibile, indica il microfono della tastiera.
-function dictateButton(textarea, { big = false } = {}) {
-  const live = h('small', { class: 'dict-live' });
-  let session = null;
-  const idle = big ? '🎤' : '🎤 Detta';
-  const btn = h('button', { type: 'button', class: big ? 'mic-big dict-btn' : 'btn small dict-btn', 'aria-label': 'Detta la nota', onclick: () => {
-    if (session) { session.stop(); return; }
-    if (!dictationAvailable()) { keyboardHint(); return; }
-    session = startDictation(textarea, {
-      onInterim: t => { live.textContent = t; },
-      onState: (st, msg) => {
-        if (st === 'ascolto') { btn.classList.add('on'); btn.textContent = '■ Ferma'; live.textContent = 'In ascolto… parla pure'; return; }
-        btn.classList.remove('on'); btn.textContent = idle; live.textContent = ''; session = null;
-        if (st === 'errore') { if (msg === 'no-speech') toast('Non ho sentito niente: riprova', 'error'); else if (msg !== 'aborted') keyboardHint(); }
-      } });
-  } }, idle);
-  const keyboardHint = () => { toast('Su questo dispositivo usa il microfono 🎤 della tastiera per dettare'); textarea.focus(); };
-  return big ? h('div', { class: 'voice voice-big' }, btn, h('strong', { class: 'mic-cap' }, 'Tocca e parla'), live, h('small', { class: 'muted' }, 'scrive mentre parli, oppure scrivi qui sotto'))
-    : h('span', { class: 'dict' }, live, btn);
 }
 
 async function contactDialog(app, c, p = {}) {
@@ -6115,7 +5968,7 @@ async function linkDialog(app, c, existing) {
       toast('Collegamento salvato'); return true; } }]);
 }
 
-return { listSignals, viewAgenda, phoneList, quoteCls, noteDialog, noteVoice, dictateButton, newCustomerDialog, editCustomerDialog };
+return { listSignals, viewAgenda, phoneList, quoteCls, noteDialog, noteVoice, newCustomerDialog, editCustomerDialog };
 })();
 __m["js/core/pdf-fonts.js"] = (function () {
 // Larghezze dei caratteri Helvetica / Helvetica-Bold (font standard PDF, nessun file da incorporare), codici WinAnsi 32-255, in millesimi di punto.
@@ -7941,7 +7794,7 @@ const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions
 const { fiscalFields } = __m["js/views/fiscal.js"];
 const { makeLine, fixLineDescriptions, totals, lineNet, lineAmount, priceLevel, canQuote, searchProducts, totalDiscount, palletsFor, PRICE_LEVEL, DISCOUNT_ALERT, DISCOUNT_ALERT_LABEL, DISCOUNT_MAX, DISCOUNT_MAX_LABEL, EURO_PALLET, euroPalletCount, BIGBAG_PALLET, bigBagCount } = __m["js/core/pricing.js"];
 const { regionOf } = __m["js/core/geo.js"];
-const { quoteCls, noteDialog } = __m["js/views/agenda.js"];
+const { quoteCls, noteDialog, newCustomerDialog } = __m["js/views/agenda.js"];
 const { offerChoices, noteOfferChip, pickNoteForOffer, linkNoteDialog, canLinkNote } = __m["js/views/note-offers.js"];
 const { buildIndex, searchCustomers } = __m["js/core/search.js"];
 const { OFFER_HEADER, OFFER_FOOTER, OFFER_HEADER_JPG, OFFER_FOOTER_JPG } = __m["js/brand-assets.js"];
@@ -8725,12 +8578,12 @@ let pickIndex = { src: null, ix: null };
 async function startNewQuote(app) {
   const quotes = await app.store.quotes().catch(() => []);
   const recentIds = quotes.slice().sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))).map(q => q.customerId);
-  const c = await pickCustomer(app, { title: 'Nuova offerta: per quale cliente?', recentIds, recentLabel: 'Clienti delle ultime offerte', blockSales: true });
+  const c = await pickCustomer(app, { title: 'Nuova offerta: per quale cliente?', recentIds, recentLabel: 'Clienti delle ultime offerte', blockSales: true, create: ['cliente'] });
   if (c) app.go('offerta/nuova/' + c.id);
 }
 
 // Scelta del cliente (cerca per nome, città, P.IVA, numero): usata da "+ Nuova offerta" e "+ Nuova nota"
-async function pickCustomer(app, { title, recentIds = [], recentLabel = 'Clienti recenti', blockSales = false, query = '', footer = null }) {
+async function pickCustomer(app, { title, recentIds = [], recentLabel = 'Clienti recenti', blockSales = false, query = '', footer = null, create = [] }) {
   const all = await app.customers();
   if (pickIndex.src !== all) pickIndex = { src: all, ix: buildIndex(all) };
   const recent = [...new Set(recentIds)].map(id => app.store.customer(id)).filter(Boolean).slice(0, 6);
@@ -8739,10 +8592,21 @@ async function pickCustomer(app, { title, recentIds = [], recentLabel = 'Clienti
     const close = v => { back.remove(); resolve(v || null); };
     const item = c => { const blocked = blockSales && !!c.salesBlockedSince;
       return h('button', { class: 'pick-item', disabled: blocked, onclick: () => close(c) }, h('strong', {}, c.name), h('small', { class: 'muted' }, blocked ? 'Vendita bloccata in RADIX' : [c.city, c.prov, c.status].filter(Boolean).join(' · '))); };
+    // 21/11 (Marco): se il cliente non c'è si crea da qui, con il nome già scritto, e si prosegue con la nota o l'offerta
+    const createNew = contact => async () => {
+      back.remove();
+      let made = null;
+      try { await newCustomerDialog(app, input.value.trim(), { contact, onCreated: c => { made = c; } }); } catch (e) { toast(e.message, 'error'); }
+      resolve(made);
+    };
+    const createBox = q => create.length && q.trim().length >= 3 ? h('div', { class: 'pick-new' },
+      create.includes('cliente') ? h('button', { type: 'button', class: 'btn', onclick: createNew(false) }, `+ Crea «${q.trim()}» come cliente nuovo`) : null,
+      create.includes('contatto') ? h('button', { type: 'button', class: 'btn', onclick: createNew(true) }, '+ È un contatto (progettista, impresa)') : null) : null;
     const draw = q => {
       const rows = q.trim() ? searchCustomers(pickIndex.ix, q).slice(0, 12).map(r => r.c) : recent;
       fill(list, q.trim() ? null : (recent.length ? h('small', { class: 'muted pick-hint' }, recentLabel) : h('small', { class: 'muted pick-hint' }, 'Scrivi nome, città, P.IVA o numero cliente')),
-        ...rows.map(item), q.trim() && !rows.length ? h('p', { class: 'muted' }, 'Nessun cliente trovato. Un cliente nuovo si crea da Clienti › “+ Nuovo cliente”.') : null);
+        ...rows.map(item), q.trim() && !rows.length ? h('p', { class: 'muted' }, create.length ? 'Nessun cliente trovato con questo nome.' : 'Nessun cliente trovato. Un cliente nuovo si crea da Clienti › “+ Nuovo cliente”.') : null,
+        createBox(q));
     };
     const input = h('input', { type: 'search', enterkeyhint: 'search', autocomplete: 'off', placeholder: 'Cerca il cliente…', 'aria-label': 'Cerca il cliente',
       oninput: debounce(e => draw(e.target.value), 100),
@@ -8874,7 +8738,7 @@ function phoneQuick(app, { notes, quotes }) {
   const last = [...new Set(seen.map(x => x[1]))].map(id => app.store.customer(id)).filter(Boolean).slice(0, 3);
   const big = (cls, ico, title, sub, onclick) => h('button', { type: 'button', class: 'pq-btn ' + cls, onclick }, h('span', { class: 'pq-ico', 'aria-hidden': 'true' }, ico), h('span', { class: 'pq-txt' }, h('strong', {}, title), h('small', {}, sub)));
   return h('section', { class: 'phone-quick' },
-    big('pq-note', '📝', 'Nuova nota', 'visita o telefonata, anche a voce', () => startNewNote(app)),
+    big('pq-note', '📝', 'Nuova nota', 'visita, telefonata o email', () => startNewNote(app)),
     big('pq-quote', '€', 'Nuova offerta', 'prodotti, trasporto, PDF', () => startNewQuote(app)),
     last.length ? [h('h3', { class: 'pq-sub' }, 'Ultimi clienti'), last.map(c => h('a', { class: 'pq-cust', href: '#/agenda/' + c.id },
       h('span', {}, h('strong', {}, c.name), h('small', {}, [c.city, c.prov ? '(' + c.prov + ')' : ''].filter(Boolean).join(' '))), h('span', { class: 'more-go', 'aria-hidden': 'true' }, '›')))] : null);
@@ -8883,7 +8747,7 @@ function phoneQuick(app, { notes, quotes }) {
 // "+ Nuova nota" dalla Home (richiesta Tommaso 01/11): scegli il cliente, scrivi/detta/registra, poi si apre la sua scheda
 async function startNewNote(app) {
   const mine = (await app.store.notes().catch(() => [])).filter(n => n.authorId === app.session.userId).map(n => n.customerId);
-  const c = await pickCustomer(app, { title: 'Nuova nota: per quale cliente?', recentIds: mine, recentLabel: 'Clienti delle ultime note' });
+  const c = await pickCustomer(app, { title: 'Nuova nota: per quale cliente?', recentIds: mine, recentLabel: 'Clienti delle ultime note', create: ['cliente', 'contatto'] });
   if (c && await noteDialog(app, c)) app.go('agenda/' + c.id);
 }
 
@@ -10855,7 +10719,7 @@ const STEPS = [
     'Il trasporto si calcola da solo dall\'indirizzo del cliente. Controlla le righe e lo sconto: oltre 50+5 serve la Direzione.',
     'Salva, poi "Anteprima PDF" o "Invia per email". Quando il cliente accetta, segnala Accettata e passa l\'ordine all\'ufficio.'] },
   { n: 3, title: 'Lascia una nota o una visita', href: '#/agenda', go: 'Apri Clienti', items: [
-    'Dalla scheda del cliente premi "Nota": tipo (visita, telefonata, email) e cosa è successo, anche a voce.',
+    'Dalla scheda del cliente premi "Nota": tipo (visita, telefonata, email) e cosa è successo (per parlare usa il microfono della tastiera).',
     'Aggiungi il prossimo passo con una data: diventa un follow-up e la Home te lo ricorda.'] },
   { n: 4, title: 'Ogni giorno', href: '#/home', go: 'Apri la Home', items: [
     'La Home ti dice cosa fare oggi: follow-up scaduti, offerte da sentire, clienti da richiamare.',
@@ -10978,7 +10842,7 @@ const HELP = {
     steps: [
       'Cerca per nome, località o P.IVA; i filtri in alto separano Attivi, Da recuperare, Persi, Mai fatturato e Potenziali.',
       'Nella scheda cliente, "In corso" mostra offerte aperte (app e RADIX), ordini in corso in RADIX e follow-up.',
-      'Dopo ogni visita o telefonata premi "+ Nota": scegli il tipo di contatto, scrivi o detta, aggiungi un follow-up con la data. Se riguarda un\'offerta, sceglila in "Offerta": la nota compare anche lì.',
+      'Dopo ogni visita o telefonata premi "+ Nota": scegli il tipo di contatto, scrivi (per parlare usa il microfono della tastiera), aggiungi un follow-up con la data. Se riguarda un\'offerta, sceglila in "Offerta": la nota compare anche lì.',
       'Una nota già scritta si collega a un\'offerta con "🔗 collega a un\'offerta" accanto alla nota.',
       'Nuovo cliente: bastano ragione sociale, indirizzo con provincia e un contatto. I dati per l\'ordine (SDI/PEC, pagamento, banca) si possono mettere subito o quando arriva l\'ordine.',
       'Lo stato del cliente si cambia a mano solo con un motivo (es. "Cessata attività").',
@@ -14231,7 +14095,7 @@ function quickSheet() {
   const back = h('div', { class: 'modal-back sheet-back', onclick: e => { if (e.target === back) close(); } },
     h('div', { class: 'sheet', role: 'dialog', 'aria-label': 'Cosa vuoi fare?' },
       h('div', { class: 'sheet-head' }, h('strong', {}, 'Cosa vuoi fare?'), h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Chiudi', onclick: close }, '✕')),
-      big('pq-note', '📝', 'Nuova nota', 'visita o telefonata, anche a voce', startNewNote),
+      big('pq-note', '📝', 'Nuova nota', 'visita, telefonata o email', startNewNote),
       big('pq-quote', '€', 'Nuova offerta', 'prodotti, trasporto, PDF', startNewQuote)));
   document.body.append(back);
 }
