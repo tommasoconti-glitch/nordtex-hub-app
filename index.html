@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="bdf929d93cac">
+<meta name="ntx-build" content="f021db1595e0">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -933,7 +933,7 @@ h2.fold-head::after,.fold-head h2::after{content:' ▾';color:var(--muted,#888);
 .chip.ss-tag{cursor:default;min-height:22px;padding:1px 8px;font-size:.74rem;background:var(--info-bg);color:#1d5fbf;border-color:transparent}
 .ss-goal{padding:8px 12px;border-left:4px solid var(--brand);background:var(--surface-2,#f6f7f4);border-radius:6px}
 .ss-kpis{display:flex;flex-direction:column;gap:6px}
-.ss-kpi{display:grid;grid-template-columns:2fr 2fr 1.6fr;gap:6px}
+.ss-kpi{display:grid;grid-template-columns:2fr 2fr 1.6fr auto;gap:6px;align-items:center}
 @media (max-width:700px){.ss-kpi{grid-template-columns:1fr}}
 .ss-checks{display:flex;flex-wrap:wrap;gap:6px 14px}
 .st-line{flex-wrap:wrap} .st-line .ss-tsel{flex:1 1 180px}
@@ -1127,9 +1127,13 @@ h1 + .fix-note{margin:-4px 0 4px}
   .page.editor .page-head .actions>select{width:auto;flex:none;min-width:120px}
   .page.editor .page-head .actions .fc-line{margin-right:6px}
 }
+/* 21/11 Sales strategy: elenco unico dei commerciali e scheda a linguette */
+.ss-net .ss-next{display:flex;flex-direction:column;gap:4px} .ss-net .ss-next a{white-space:nowrap}
+.ss-tabs{margin-top:0} .ss-tabs .tab{text-decoration:none}
+.ss-agent .call-date{margin:0 0 4px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"bdf929d93cac"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"f021db1595e0"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -12733,6 +12737,26 @@ function o2oMinutes(o, newTitles = []) {
 
 return { O2O_FASCE, o2oState, proposePoints, monthFacts, o2oMinutes };
 })();
+__m["js/core/ss-accept.js"] = (function () {
+// 21/11 (Tommaso): azioni e KPI si modificano sempre; si eliminano solo finché il commerciale non li ha accettati
+// («concordati» nella proposta inviata sulla sua Home). Dopo si modificano o si chiudono, ma restano come traccia.
+function accepted(goals, month) {
+  const ok = goals?.status === 'concordati';
+  return {
+    action: a => ok && (goals.actions || []).some(x => x.title === a.title),
+    kpi: k => ok && goals.month === month && (goals.kpi || []).some(x => x.t === k.t),
+  };
+}
+
+// Elenco unico dei commerciali (21/11): prima chi va sentito (in ritardo, poi da sentire), poi per fascia; le zone scoperte in fondo
+const DUE_ORDER = { 'in ritardo': 0, 'da sentire': 1 };
+function networkOrder(rows) {
+  const k = r => [r.state === 'scoperta' ? 1 : 0, DUE_ORDER[r.due?.state] ?? 2, r.fascia || 9, String(r.name || '')];
+  return [...rows].sort((a, b) => { const x = k(a), y = k(b); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i]; return x[3].localeCompare(y[3], 'it'); });
+}
+
+return { accepted, networkOrder };
+})();
 __m["js/views/strategy.js"] = (function () {
 // "Strategia" (08/11/2026, Tommaso): un'unica sezione con il gestionale della Direzione, a finestre che si aprono e si chiudono.
 // Fasce della rete, chi sentire questa settimana, incontri (esito scritto a mano; l'intervista si registra con Plaud) e azioni con scadenza.
@@ -12749,6 +12773,8 @@ const { buildNetworkSheets, exportFileName, agentOf, actionCustomer, actionTitle
 const { buildXlsx } = __m["js/core/xlsx-write.js"];
 const { REASONS, nextCallDate, callActions, postponements, applyCheck, callSummary } = __m["js/core/call.js"];
 const { O2O_FASCE, o2oState, proposePoints, monthFacts, o2oMinutes } = __m["js/core/one2one.js"];
+const { accepted, networkOrder } = __m["js/core/ss-accept.js"];
+const { isIntercompany } = __m["js/core/company-photo.js"];
 // 17/11 «Scheda rete»: file Excel per la chat Rete (telefonate del lunedì, affiancamenti). Solo Tommaso, non chi ha la sola lettura.
 async function exportNetwork(app, d, label = null, btn = null) {
   if (btn) { btn.disabled = true; btn.textContent = 'Preparo il file…'; }
@@ -12837,7 +12863,7 @@ function objectiveCard(app, d, refresh) {
     st.obiettivo ? h('p', { class: 'ss-goal' }, st.obiettivo) : h('p', { class: 'muted' }, 'Imposta obiettivo e strategie dell\'anno: sono aziendali e non cambiano durante l\'anno.'),
     future ? h('p', { class: 'muted' }, `Il ${st.anno} non è ancora iniziato: qui sotto la base ${Y} da cui si parte. Dal 1° gennaio i numeri si calcolano sul ${st.anno}.`) : null,
     h('div', { class: 'ss-objm' },
-      h('div', {}, h('small', {}, `Fatturato ${Y} (clienti nell'HUB)`), measureLine(d, 'fatturato', st.tFatt ?? 100, null, `la tacca è il ritmo lineare (${pct(d.measures.pace)}), indicativo: l'edilizia non vende uguale tutti i mesi`)),
+      h('div', {}, h('small', {}, `Fatturato ${Y} (clienti nell'HUB, esclusi Matrial e Steldo)`), measureLine(d, 'fatturato', st.tFatt ?? 100, null, `la tacca è il ritmo lineare (${pct(d.measures.pace)}), indicativo: l'edilizia non vende uguale tutti i mesi`)),
       h('div', {}, h('small', {}, 'Margine medio aziendale'), measureLine(d, 'margine', st.tMarg ?? 24, null, d.measures.margine.value == null ? 'arriva con le fotografie mensili' : ''))),
     h('div', { class: 'actions' }, st.locked
       ? h('button', { class: 'btn small', onclick: () => unlockDialog(app, d, refresh) }, 'Sblocca (solo per correggere)')
@@ -12942,7 +12968,8 @@ async function load(app) {
   const get = l => { if (!nums.has(l)) nums.set(l, { active: 0, rev26: 0, rev25: 0, rev24: 0, anag: 0, rxN: 0, rxV: 0 }); return nums.get(l); };
   const byCust = new Map(customers.map(c => [c.id, c.assignee]));
   const pts = new Map();
-  for (const c of customers) { if (!c.assignee) continue; const n = get(c.assignee); if (c.status === 'Attivo') n.active++; n.rev26 += c.rev2026 || 0; n.rev25 += c.rev2025 || 0; n.rev24 += c.rev2024 || 0; n.anag++;
+  // 21/11: Matrial e Steldo fuori dai conteggi (piano 2027)
+  for (const c of customers) { if (!c.assignee || isIntercompany(c)) continue; const n = get(c.assignee); if (c.status === 'Attivo') n.active++; n.rev26 += c.rev2026 || 0; n.rev25 += c.rev2025 || 0; n.rev24 += c.rev2024 || 0; n.anag++;
     if (c.status === 'Attivo' || c.status === 'Da recuperare') { const pl = customerPlace(c); if (pl) (pts.get(c.assignee) || pts.set(c.assignee, []).get(c.assignee)).push(pl); } }
   const t0 = COMUNI_GEO.prov.TN?.TRAMBILENO, home = t0 ? { lat: t0[0], lng: t0[1] } : { lat: 45.873, lng: 11.074 };
   for (const [l, p] of pts) { const n = get(l); n.km = medianKm(p, home, distanceKm); n.vic = proximityScore(n.km); }
@@ -12952,80 +12979,61 @@ async function load(app) {
   // 08/11 roadmap: misure calcolate dai dati (fatturato e clienti dall'HUB, mix e margine dalle fotografie, offerte RADIX in ritardo)
   const rxOpen = rx.filter(radixOfferOpen), t0d = today();
   const photos = rows.map(r => ({ fascia: r.fascia, foto: (r.scores?.foto || [])[0] ? photoFlat(r.scores.foto[0]) : null }));
-  const measures = computeMeasures({ customers: customers.filter(c => !c.isTest), photos, rxLate: rxOpen.filter(o => { const due = radixOfferDue(o); return due && due < t0d; }).length, rxOpen: rxOpen.length, today: t0d });
+  const measures = computeMeasures({ customers: customers.filter(c => !c.isTest && !isIntercompany(c)), photos, rxLate: rxOpen.filter(o => { const due = radixOfferDue(o); return due && due < t0d; }).length, rxOpen: rxOpen.length, today: t0d });
   return { net, rows, nums, customers, strat, measures };
 }
 
 async function viewStrategy(app, label, sub) {
   if (!canSeeStrategy(app.session)) { app.go('home'); return h('div'); }
-  const el = label && sub === 'telefonata' && !app.session.strategyViewer ? await callPage(app, label) : label && sub === 'one-to-one' && !app.session.strategyViewer ? await o2oPage(app, label) : label ? await viewAgent(app, label) : await viewMain(app);
+  const el = label && sub === 'telefonata' && !app.session.strategyViewer ? await callPage(app, label) : label && sub === 'one-to-one' ? await o2oPage(app, label) : label ? await viewAgent(app, label) : await viewMain(app);
   // 08/11 sera: chi ha la condivisione in sola lettura vede tutto ma non trova i pulsanti che modificano
   if (app.session.strategyViewer) { el.classList.add('ss-readonly'); el.prepend(h('p', { class: 'ss-ro-banner' }, 'Sola lettura · Sales strategy di Tommaso Conti, condivisa con la Direzione e con Meridian. Le modifiche le fa solo lui.')); }
   return el;
 }
 
+// 21/11 (Tommaso: «la parte in cui si seguono i commerciali è frammentata, più elenchi creano confusione»):
+// in alto il piano (obiettivo → strategie → tattiche), sotto UN solo elenco dei commerciali. Aprendo il nome:
+// Fotografia, One to one, Call del lunedì. «Questa settimana», one to one del mese, azioni in scadenza, fasce e
+// ultimi incontri sono diventati colonne di questo elenco o parti della scheda del commerciale.
 async function viewMain(app) {
-  const d = await load(app), t = today(), refresh = () => app.go('strategia');
-  const numsLine = l => { const n = d.nums.get(l); if (!n) return null;
-    return h('small', { class: 'muted' }, `${n.active} attivi · 2026 ${eur(n.rev26)} (2025 ${eur(n.rev25)})` + (n.rxN ? ` · ${n.rxN} offerte RADIX aperte` + (n.rxV ? ' ' + eur(n.rxV) : '') : '')); };
-  const week = thisWeek(d.rows);
-  const acts = openActions(d.net.actions, t);
-  const unset = d.rows.filter(r => !r.fascia && r.state !== 'scoperta');
-
-  const weekCard = h('section', { class: 'card' }, h('h2', {}, `Questa settimana · ${week.length} da sentire`),
-    h('p', { class: 'muted' }, 'Fascia 1 ogni lunedì, fascia 2 ogni 2-3 settimane. Dopo la telefonata registri l\'incontro: esito, registrazione Plaud e azioni.'),
-    week.length ? h('ul', { class: 'st-list' }, week.map(r => h('li', { class: 'st-row' },
-      h('div', { class: 'st-main' }, fChip(r.fascia), h('strong', {}, r.name), tripIcon(tripOf(d, r)), dueBadge(r),
-        h('small', { class: 'muted' }, r.last ? ' ultimo contatto ' + dateIt(r.last) : ' mai sentito'),
-        r.open ? h('small', { class: r.late ? 'bad-text' : 'muted' }, ` · ${r.open} azioni aperte` + (r.late ? `, ${r.late} scadute` : '')) : null),
-      glanceLine(d, r), numsLine(r.label),
-      h('div', { class: 'actions' }, h('a', { class: 'btn small primary', href: '#/strategia/' + encodeURIComponent(r.label) + '/telefonata' }, '📞 Telefonata'),
-        h('button', { class: 'btn small', onclick: () => meetingDialog(app, d, r, refresh) }, 'Registra incontro'),
-        h('a', { class: 'btn small', href: '#/strategia/' + encodeURIComponent(r.label) }, 'Scheda')))))
-      : emptyState(d.rows.some(r => r.fascia) ? 'Nessuno da sentire: la rete di questa settimana è coperta.' : 'Assegna le fasce in "Rete e fasce": da lì nasce il calendario.'));
-
-  // 08/11 (Tommaso: "Azioni aperte crea molto disordine"): solo scadute e in scadenza nei prossimi 7 giorni, una riga per commerciale.
-  // L'elenco completo resta nella scheda di ogni commerciale.
-  const in7 = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
-  const hot = acts.filter(a => a.due && a.due <= in7);
-  const byAg = [...hot.reduce((m, a) => m.set(a.label, [...(m.get(a.label) || []), a]), new Map())].sort((x, y) => x[1][0].due.localeCompare(y[1][0].due));
-  const lateN = hot.filter(a => a.late).length;
-  const actCard = h('section', { class: 'card' }, h('h2', {}, `Azioni in scadenza · ${hot.length}` + (lateN ? ` (${lateN} ${lateN === 1 ? 'scaduta' : 'scadute'})` : '')),
-    h('p', { class: 'muted' }, `Scadute o da fare entro 7 giorni. Le altre ${acts.length - hot.length} azioni aperte sono nelle schede dei commerciali.`),
-    byAg.length ? h('ul', { class: 'st-list' }, byAg.map(([l, as]) => { const late = as.filter(a => a.late).length;
-      return h('li', { class: 'st-row' }, h('div', { class: 'st-main' }, h('strong', {}, displayName(l)),
-        h('small', { class: late ? 'bad-text' : 'muted' }, ` · ${as.length} ${as.length === 1 ? 'azione' : 'azioni'}` + (late ? `, ${late} ${late === 1 ? 'scaduta' : 'scadute'}` : '') + ` · prima entro ${dateIt(as[0].due)}`),
-        h('small', { class: 'muted', style: 'display:block' }, as.map(a => a.title.split(':')[0]).join(' · '))),
-        h('div', { class: 'actions' }, h('a', { class: 'btn small', href: '#/strategia/' + encodeURIComponent(l) }, 'Scheda'))); }))
-      : emptyState('Niente in scadenza nei prossimi 7 giorni.'));
-
-  const byF = [1, 2, 3, null].map(f => [f, d.rows.filter(r => (r.fascia || null) === f)]).filter(([, rs]) => rs.length);
-  const netCard = h('section', { class: 'card' }, h('h2', {}, 'Rete e fasce'),
-    h('p', { class: 'muted' }, `Fascia 1: ${d.rows.filter(r => r.fascia === 1).length} su 8 · fascia 2: ${d.rows.filter(r => r.fascia === 2).length} · fascia 3: ${d.rows.filter(r => r.fascia === 3).length}` + (unset.length ? ` · ${unset.length} senza fascia` : '') + '. 🚗 affiancamento in giornata · 🛏 con pernottamento, per fascia 1 e 2 (dai km, oltre 200 in linea d\'aria; correggibile nella scheda). Tocca un nome per la scheda.'),
-    byF.map(([f, rs]) => [h('h3', { class: 'st-h3' }, f ? FASCE[f] : 'Senza fascia'),
-      h('div', { class: 'table-wrap' }, h('table', { class: 'table compact' },
-        h('thead', {}, h('tr', {}, h('th', {}, 'Commerciale'), h('th', {}, 'Stato'), h('th', {}, 'Ultimo contatto'), h('th', {}, 'Azioni'), h('th', { class: 'num' }, 'Km · vicin.'), h('th', { class: 'num' }, 'Area'), h('th', { class: 'num' }, 'Fatt. 2026'), h('th', { class: 'num' }, 'Offerte RADIX'))),
-        h('tbody', {}, rs.map(r => { const n = d.nums.get(r.label) || {};
-          return h('tr', { class: 'net-row', onclick: () => app.go('strategia/' + encodeURIComponent(r.label)) },
-            h('td', {}, h('strong', {}, r.name), ' ', tripIcon(tripOf(d, r)), h('br'), glanceLine(d, r)),
-            h('td', {}, r.state !== 'attivo' ? h('span', { class: 'badge ' + (r.state === 'scoperta' ? 'bad' : 'warn') }, r.state) : dueBadge(r) || h('span', { class: 'muted' }, '–')),
-            h('td', {}, r.last ? dateIt(r.last) : h('span', { class: 'muted' }, 'mai')),
-            h('td', {}, r.open ? h('span', { class: r.late ? 'bad-text' : '' }, String(r.open)) : h('span', { class: 'muted' }, '–')),
-            h('td', { class: 'num' }, n.km != null ? `${n.km} · ${n.vic}` : '–'),
-            h('td', { class: 'num' }, (() => { const f = lastPhoto(r); const x = f && areaScores(photoFlat(f)); return x?.avg != null ? x.avg.toLocaleString('it-IT') + (x.n < 6 ? '*' : '') : '–'; })()),
-            h('td', { class: 'num' }, n.rev26 ? eur(n.rev26) : '–'), h('td', { class: 'num' }, n.rxN ? (n.rxV ? `${n.rxN} · ${eur(n.rxV)}` : String(n.rxN)) : '–')); }))))]));
-
-  const recent = d.net.meetings.slice(0, 15);
-  const meetCard = h('section', { class: 'card' }, h('h2', {}, 'Ultimi incontri'),
-    recent.length ? h('ul', { class: 'st-list' }, recent.map(m => h('li', { class: 'st-row' },
-      h('div', { class: 'st-main' }, h('small', { class: 'muted' }, dateIt(m.date) + ' · ' + m.kind + ' · '), h('strong', {}, displayName(m.label)), m.plaud ? h('small', { class: 'muted' }, ' · Plaud: ' + m.plaud) : null),
-      m.outcome ? h('p', { class: 'st-out' }, m.outcome) : null)))
-      : emptyState('Ancora nessun incontro registrato.'));
-
+  const d = await load(app), refresh = () => app.go('strategia');
   return h('div', { class: 'page' },
     h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Sales strategy'),
-      h('p', { class: 'muted' }, 'Metodo 2027 con la rete: fasce, interviste, affiancamenti e azioni.' + (app.session.strategyViewer ? '' : ' Visibile a te; in sola lettura a Marco Ferrari, Lorenzo e Marco Terzi.'))), exportButton(app, d, null)),
-    foldCards(h('div', { class: 'section-body' }, objectiveCard(app, d, refresh), weekCard, o2oCard(d), h('h2', { class: 'ss-sep' }, 'Strategie e tattiche'), ...strategyCards(app, d, refresh), h('h2', { class: 'ss-sep' }, 'Azioni con la rete'), actCard, netCard, meetCard), 'ntx-st-closed'));
+      h('p', { class: 'muted' }, 'Il piano 2027 e come lo segui con la rete: in alto obiettivo, strategie e tattiche; sotto i commerciali.' + (app.session.strategyViewer ? '' : ' Visibile a te; in sola lettura a Marco Ferrari, Lorenzo e Marco Terzi.'))), exportButton(app, d, null)),
+    foldCards(h('div', { class: 'section-body' }, h('h2', { class: 'ss-sep' }, '1 · Il piano: obiettivo, strategie e tattiche'), objectiveCard(app, d, refresh), ...strategyCards(app, d, refresh),
+      h('h2', { class: 'ss-sep' }, '2 · I commerciali'), networkCard(app, d)), 'ntx-st-closed'));
+}
+
+// L'elenco unico dei commerciali
+function networkCard(app, d) {
+  const t = today(), mk = monthKey();
+  const rows = networkOrder(d.rows);
+  const week = rows.filter(r => r.state !== 'scoperta' && ['in ritardo', 'da sentire'].includes(r.due?.state)).length;
+  const unset = d.rows.filter(r => !r.fascia && r.state !== 'scoperta').length;
+  const o2oOf = r => O2O_FASCE.includes(r.fascia) && r.state !== 'scoperta' ? o2oState((r.scores?.o2o || {})[mk], t) : null;
+  const kpiOf = r => { const l = (r.scores?.kpi || {})[mk] || []; return l.length ? `${l.filter(x => x.st === 'fatto').length}/${l.length}` : null; };
+  const go = (r, sub = '') => app.go('strategia/' + encodeURIComponent(r.label) + sub);
+  const nextStep = r => {
+    if (r.state === 'scoperta') return h('span', { class: 'badge bad' }, 'zona scoperta');
+    const o = o2oOf(r), call = dueBadge(r);
+    return h('div', { class: 'ss-next' },
+      call ? h('a', { href: '#/strategia/' + encodeURIComponent(r.label) + '/telefonata', class: 'plain', onclick: e => e.stopPropagation() }, call, h('small', { class: 'muted' }, ' call')) : r.fascia ? null : h('small', { class: 'muted' }, 'senza fascia'),
+      o ? h('a', { href: '#/strategia/' + encodeURIComponent(r.label) + '/one-to-one', class: 'plain', onclick: e => e.stopPropagation() }, h('span', { class: 'badge ' + o.cls }, o.key), h('small', { class: 'muted' }, ' one to one')) : null);
+  };
+  return h('section', { class: 'card' }, h('h2', {}, `Commerciali · ${week} da sentire questa settimana`),
+    h('p', { class: 'muted' }, `Fascia 1: ${d.rows.filter(r => r.fascia === 1).length} · fascia 2: ${d.rows.filter(r => r.fascia === 2).length} · fascia 3: ${d.rows.filter(r => r.fascia === 3).length}` + (unset ? ` · ${unset} senza fascia` : '') +
+      '. In cima chi va sentito. Fascia 1: call ogni lunedì e one to one al mese; fascia 2: call ogni 2-3 settimane e one to one al mese. Tocca un nome per la sua scheda.'),
+    h('div', { class: 'table-wrap' }, h('table', { class: 'table compact ss-net' },
+      h('thead', {}, h('tr', {}, h('th', {}, 'Commerciale'), h('th', {}, 'Prossimo passo'), h('th', {}, 'Ultimo contatto'), h('th', { class: 'num' }, 'Azioni aperte'), h('th', { class: 'num' }, `KPI ${monthName(mk).split(' ')[0]}`), h('th', { class: 'num' }, 'Fatt. 2026'), h('th', { class: 'num' }, 'Offerte RADIX'))),
+      h('tbody', {}, rows.map(r => { const n = d.nums.get(r.label) || {};
+        return h('tr', { class: 'net-row', onclick: () => go(r) },
+          h('td', {}, fChip(r.fascia), ' ', h('strong', {}, r.name), ' ', tripIcon(tripOf(d, r)), h('br'), glanceLine(d, r)),
+          h('td', {}, nextStep(r)),
+          h('td', {}, r.last ? dateIt(r.last) : h('span', { class: 'muted' }, 'mai')),
+          h('td', { class: 'num' }, r.open ? h('span', { class: r.late ? 'bad-text' : '' }, String(r.open) + (r.late ? ` (${r.late} scad.)` : '')) : h('span', { class: 'muted' }, '–')),
+          h('td', { class: 'num' }, kpiOf(r) || h('span', { class: 'muted' }, '–')),
+          h('td', { class: 'num' }, n.rev26 ? eur(n.rev26) : '–'),
+          h('td', { class: 'num' }, n.rxN ? (n.rxV ? `${n.rxN} · ${eur(n.rxV)}` : String(n.rxN)) : '–')); })))));
 }
 
 const sel = (opts, v) => h('select', {}, opts.map(([val, l]) => h('option', { value: val, selected: String(val) === String(v ?? '') }, l)));
@@ -13108,13 +13116,20 @@ function headCard(app, d, r, refresh) {
         r.note ? h('small', { class: 'muted' }, ' · ' + r.note) : null), glanceLine(d, r)),
     a ? h('div', { class: 'ss-eval' }, h('div', { class: 'ss-score' }, h('strong', {}, a.avg != null ? a.avg.toLocaleString('it-IT') : '–'), h('small', {}, '/ 3 area')),
       h('div', { class: 'ss-ind' }, AREA_INDICATORS.map(([k, l]) => h('span', { class: 'badge ' + tone(a.scores[k]), title: l }, `${l} ${a.values[k] != null ? VALFMT[k](a.values[k]) : '–'}`))))
-      : h('p', { class: 'muted' }, 'Nessuna fotografia: inizia da "Domande per Meridian" qui sotto, poi "Nuova fotografia".'),
-    h('div', { class: 'actions' },
-      h('button', { class: 'btn small primary', onclick: () => meetingDialog(app, d, r, refresh) }, 'Registra incontro'),
-      h('button', { class: 'btn small', onclick: () => meetingDialog(app, d, r, refresh, 'telefonata') }, 'Telefonata'),
+      : h('p', { class: 'muted' }, 'Nessuna fotografia: nella linguetta Fotografia trovi «Domande per Meridian» e «Prima fotografia».'),
+    app.session.strategyViewer ? null : h('div', { class: 'actions' },
+      h('button', { class: 'btn small', onclick: () => meetingDialog(app, d, r, refresh) }, 'Registra incontro'),
       h('button', { class: 'btn small', onclick: () => meetingDialog(app, d, r, refresh, 'appunto') }, 'Appunto'),
-      h('button', { class: 'btn small', onclick: () => photoDialog(app, r, refresh) }, 'Nuova fotografia'),
       h('button', { class: 'btn small', onclick: () => agentDialog(app, d, r, refresh) }, 'Fascia e voti')));
+}
+
+// 21/11: la scheda del commerciale in tre linguette (Fotografia · One to one · Call del lunedì), stessa testata per tutte
+const SS_TABS = [['', 'Fotografia'], ['/one-to-one', 'One to one'], ['/telefonata', 'Call del lunedì']];
+function agentPage(app, d, r, tab, ...cards) {
+  const refresh = () => app.go('strategia/' + encodeURIComponent(r.label) + tab);
+  const tabs = h('div', { class: 'tabs ss-tabs', role: 'tablist' }, SS_TABS.filter(([k]) => !(k === '/telefonata' && (r.state === 'scoperta' || app.session.strategyViewer)))
+    .map(([k, l]) => h('a', { role: 'tab', class: 'tab' + (tab === k ? ' on' : ''), 'aria-selected': String(tab === k), href: '#/strategia/' + encodeURIComponent(r.label) + k }, l)));
+  return h('div', { class: 'page call-page ss-agent' }, headCard(app, d, r, refresh), tabs, ...cards);
 }
 
 function photoCard(r) {
@@ -13141,23 +13156,28 @@ function photoCard(r) {
     prev ? h('small', { class: 'muted' }, `Fotografia precedente ${dateIt(prev.date)}: area ${scoreOf(prev).avg ?? '–'}`) : null);
 }
 
-function kpiCard(app, d, r, refresh) {
+function kpiCard(app, d, r, refresh, acc = accepted(null, '')) {
   const k = monthKey(), list = (r.scores?.kpi || {})[k] || [];
   const done = list.filter(x => x.st === 'fatto').length;
   const setSt = async (i, st) => { const all = { ...(r.scores.kpi || {}) }; all[k] = list.map((x, j) => j === i ? { ...x, st } : x); await saveScores(app, r, { kpi: all }); refresh(); };
   return h('section', { class: 'card' }, h('h2', {}, `KPI di ${monthName(k)} · ${done}/${list.length}`),
     list.length ? h('ul', { class: 'st-list' }, list.map((x, i) => h('li', { class: 'st-row' },
-      h('div', { class: 'st-main' }, h('span', { class: 'badge ' + (x.st === 'fatto' ? 'ok' : x.st === 'non fatto' ? 'bad' : 'muted') }, x.st || 'in corso'), h('strong', {}, x.t), tagChip(d, x.tt) || h('small', { class: 'warn-text', style: 'display:inline' }, ' · senza tattica')),
+      h('div', { class: 'st-main' }, h('span', { class: 'badge ' + (x.st === 'fatto' ? 'ok' : x.st === 'non fatto' ? 'bad' : 'muted') }, x.st || 'in corso'), h('strong', {}, x.t), tagChip(d, x.tt) || h('small', { class: 'warn-text', style: 'display:inline' }, ' · senza tattica'),
+        acc.kpi(x) ? h('span', { class: 'badge ok', title: 'Concordato con il commerciale: si modifica, non si elimina' }, 'concordato') : null),
       x.target ? h('small', { class: 'muted' }, 'Obiettivo: ' + x.target) : null,
       h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => setSt(i, 'fatto') }, 'Fatto'), h('button', { class: 'btn small', onclick: () => setSt(i, 'non fatto') }, 'Non fatto'), h('button', { class: 'btn small', onclick: () => setSt(i, '') }, 'In corso')))))
       : emptyState('Nessun KPI per questo mese.'),
-    h('button', { class: 'btn small', onclick: () => kpiDialog(app, d, r, refresh) }, list.length ? 'Modifica KPI' : 'Imposta KPI del mese'));
+    app.session.strategyViewer ? null : h('button', { class: 'btn small', onclick: () => kpiDialog(app, d, r, refresh, acc) }, list.length ? '✎ Modifica KPI' : 'Imposta KPI del mese'));
 }
-async function kpiDialog(app, d, r, refresh) {
+async function kpiDialog(app, d, r, refresh, acc = accepted(null, '')) {
   const k = monthKey(), list = (r.scores?.kpi || {})[k] || [];
   const rows = h('div', { class: 'ss-kpis' });
-  const addRow = (x = {}) => rows.append(h('div', { class: 'ss-kpi' }, h('input', { type: 'text', class: 'k-t', value: x.t || '', placeholder: 'KPI (es. Offerte seguite)' }),
-    h('input', { type: 'text', class: 'k-target', value: x.target || '', placeholder: 'Obiettivo (es. tutte le aperte con esito)' }), tacticSelect(d, r, x.tt)));
+  // 21/11: ✕ per togliere un KPI, solo se non è già concordato con il commerciale
+  const addRow = (x = {}) => { const locked = !!x.t && acc.kpi(x);
+    const row = h('div', { class: 'ss-kpi', 'data-orig': x.t || '', 'data-locked': locked ? '1' : '' }, h('input', { type: 'text', class: 'k-t', value: x.t || '', placeholder: 'KPI (es. Offerte seguite)' }),
+      h('input', { type: 'text', class: 'k-target', value: x.target || '', placeholder: 'Obiettivo (es. tutte le aperte con esito)' }), tacticSelect(d, r, x.tt),
+      locked ? h('span', { class: 'badge ok', title: 'Concordato: si modifica, non si elimina' }, 'concordato') : h('button', { type: 'button', class: 'btn small', title: 'Togli questo KPI', onclick: () => row.remove() }, '✕'));
+    rows.append(row); };
   list.forEach(addRow); if (!list.length) { addRow(); addRow(); addRow(); }
   const msg = h('textarea', { rows: 3, placeholder: 'Messaggio all\'agente (facoltativo): compare in cima ai suoi obiettivi' }, r.scores?.msg || '');
   const ok = await modal(`KPI di ${monthName(k)} · ${r.name}`, h('div', { class: 'form' },
@@ -13165,8 +13185,9 @@ async function kpiDialog(app, d, r, refresh) {
     tacticOptions(d, r).length ? null : h('p', { class: 'warn-text' }, 'Nessuna tattica attiva per questo agente: creala in Sales strategy › Tattiche.'),
     rows, h('button', { class: 'btn small', type: 'button', onclick: () => addRow() }, '+ KPI'), field('Messaggio all\'agente', msg)), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
     const old = new Map(list.map(x => [x.t, x]));
-    const items = [...rows.querySelectorAll('.ss-kpi')].map(el => ({ t: el.querySelector('.k-t').value.trim(), target: el.querySelector('.k-target').value.trim(), tt: el.querySelector('.ss-tsel').value || null })).filter(x => x.t)
-      .map(x => ({ ...x, st: old.get(x.t)?.st || '' }));
+    for (const el of rows.querySelectorAll('.ss-kpi')) if (el.dataset.locked && !el.querySelector('.k-t').value.trim()) throw new Error(`«${el.dataset.orig}» è concordato con il commerciale: puoi cambiarne il testo, non eliminarlo`);
+    const items = [...rows.querySelectorAll('.ss-kpi')].map(el => ({ t: el.querySelector('.k-t').value.trim(), target: el.querySelector('.k-target').value.trim(), tt: el.querySelector('.ss-tsel').value || null, o: el.dataset.orig })).filter(x => x.t)
+      .map(x => ({ ...x, st: (old.get(x.t) || old.get(x.o))?.st || '' })).map(({ o, ...x }) => x);
     const all = { ...(r.scores?.kpi || {}) }; all[k] = items; await saveScores(app, r, { kpi: all, msg: msg.value.trim() }); return true; } }]);
   if (ok) refresh();
 }
@@ -13296,34 +13317,68 @@ async function syncGoals(app, d, r) {
   return { g, pending, snap };
 }
 
-async function viewAgent(app, label) {
-  const d = await load(app), r = d.rows.find(x => x.label === label);
-  if (!r) return h('div', { class: 'page' }, h('p', {}, 'Commerciale non trovato.'), h('a', { href: '#/strategia' }, '← Sales strategy'));
-  const refresh = () => app.go('strategia/' + encodeURIComponent(label));
-  const { g, pending, snap } = await syncGoals(app, d, r);
-  const acts = openActions(d.net.actions, today(), label);
-  const actCard = h('section', { class: 'card' }, h('h2', {}, `Azioni aperte · ${acts.length}`),
-    acts.length ? h('ul', { class: 'st-list' }, acts.map(a => h('li', { class: 'st-row' }, h('div', { class: 'st-main' }, h('span', {}, a.title),
-      a.due ? h('small', { class: a.late ? 'bad-text' : 'muted' }, ' entro ' + dateIt(a.due)) : null, tagChip(d, a.tactic) || h('small', { class: 'warn-text', style: 'display:inline' }, ' · senza tattica')), h('div', { class: 'actions' }, h('button', { class: 'btn small', onclick: () => closeAction(app, a, refresh) }, 'Fatta…')))))
-      : emptyState('Nessuna azione aperta: nascono quando registri un incontro.'));
-  const first = r.name.split(' ').slice(-1)[0];
+// Proposta all'agente (KPI, azioni, clienti, messaggio): stato e invio. Va nella linguetta One to one.
+function goalsBlock(app, d, r, refresh, { g, pending, snap }) {
+  if (r.state === 'scoperta') return null;
+  const label = r.label, first = r.name.split(' ').slice(-1)[0];
   const agree = async () => { const cur = await app.store.agentGoals(label); await app.store.saveAgentGoals({ ...cur, status: 'concordati', agreedAt: new Date().toISOString() }); toast(`Obiettivi concordati con ${first}`); refresh(); };
   const send = async () => { await app.store.saveAgentGoals({ ...snap, status: 'proposta', agreedAt: null }); toast(`Proposta inviata: ora è sulla Home di ${first}`); refresh(); };
   const sendBtn = pending ? h('button', { class: 'btn small primary', onclick: () => send().catch(e => toast(e.message, 'error')) }, g ? `Invia le modifiche a ${first}` : `Invia la proposta a ${first}`) : null;
-  const goalsLine = r.state === 'scoperta' ? null : h('div', { class: 'ss-goals' },
+  return h('div', { class: 'ss-goals' },
     g ? h('p', {}, h('span', { class: 'badge ' + (g.status === 'concordati' ? 'ok' : 'warn') }, g.status === 'concordati' ? 'concordati il ' + dateIt(g.agreedAt) : 'proposta da concordare'), ' ',
         h('strong', {}, `Sulla Home di ${first}`), ` · inviati il ${dateIt(g.updatedAt)} · `, g.seenAt && g.seenAt >= g.updatedAt ? h('span', { class: 'ok-text' }, 'letti il ' + dateIt(g.seenAt)) : h('span', { class: 'warn-text', style: 'display:inline' }, 'non ancora letti'),
         g.status !== 'concordati' && !pending ? [' ', h('button', { class: 'btn small', onclick: () => agree().catch(e => toast(e.message, 'error')) }, `Segna concordati con ${first}`)] : null)
       : h('p', { class: 'muted' }, `Quello che prepari qui (KPI, azioni, clienti da intervistare, messaggio) resta solo tuo finché non lo invii a ${first}.`),
     pending ? h('p', {}, h('span', { class: 'badge muted' }, g ? 'modifiche non ancora inviate' : 'bozza, solo tua'), ' ', sendBtn,
       g ? h('small', { class: 'muted' }, ` · inviandole tornano "proposta da concordare"`) : null) : null,
+    h('p', { class: 'muted small' }, 'Azioni e KPI si modificano sempre. Si eliminano finché non sono concordati con il commerciale; dopo si modificano o si chiudono.'),
     g?.agentNote ? h('p', { class: 'st-out' }, h('strong', {}, `Osservazioni di ${first}`), h('small', { class: 'muted' }, g.agentNoteAt ? ' · ' + dateIt(g.agentNoteAt) : ''), h('br'), g.agentNote) : null);
+}
+
+// Azioni aperte del commerciale: ✎ sempre, ✕ solo se non concordate, «Fatta…» per chiuderle
+function actionsCard(app, d, r, refresh, acc) {
+  const acts = openActions(d.net.actions, today(), r.label), ro = app.session.strategyViewer;
+  return h('section', { class: 'card' }, h('h2', {}, `Azioni aperte · ${acts.length}`),
+    acts.length ? h('ul', { class: 'st-list' }, acts.map(a => { const ok = acc.action(a);
+      return h('li', { class: 'st-row' }, h('div', { class: 'st-main' }, h('span', {}, a.title),
+        a.due ? h('small', { class: a.late ? 'bad-text' : 'muted' }, ' entro ' + dateIt(a.due)) : null, tagChip(d, a.tactic) || h('small', { class: 'warn-text', style: 'display:inline' }, ' · senza tattica'),
+        ok ? h('span', { class: 'badge ok', title: 'Concordata con il commerciale: si modifica o si chiude, non si elimina' }, 'concordata') : null),
+        ro ? null : h('div', { class: 'actions' },
+          h('button', { class: 'btn small', title: 'Modifica', onclick: () => actionDialog(app, d, r, a, ok, refresh) }, '✎ Modifica'),
+          h('button', { class: 'btn small', onclick: () => closeAction(app, a, refresh, ok) }, 'Fatta…'),
+          ok ? null : h('button', { class: 'btn small', title: 'Elimina', onclick: async () => { if (await modal('Eliminare l\'azione?', h('p', {}, a.title), [{ label: 'Annulla', value: false }, { label: 'Elimina', primary: true, value: true }])) { await app.store.removeDirAction(a.id); toast('Azione eliminata'); refresh(); } } }, '✕'))); }))
+      : emptyState('Nessuna azione aperta: nascono da call, one to one e incontri.'),
+    ro ? null : h('button', { class: 'btn small', onclick: () => actionDialog(app, d, r, null, false, refresh) }, '+ Azione'));
+}
+async function actionDialog(app, d, r, a, isAccepted, refresh) {
+  if (!a) {   // nuova azione: stesso blocco di call e incontri (cliente obbligatorio o «più clienti / zona»)
+    const na = newActionsBlock(d, r, 1);
+    const ok = await modal('Nuova azione · ' + r.name, h('div', { class: 'form' }, na.el), [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run: async () => {
+      const news = na.collect(); if (!news.length) throw new Error('Scrivi l\'azione');
+      for (const x of news) await app.store.saveDirAction({ label: r.label, title: x.title, due: x.due, tactic: x.tactic }); return true; } }]);
+    if (ok) { toast('Azione aggiunta'); refresh(); } return;
+  }
+  const title = h('input', { type: 'text', value: a.title }), due = h('input', { type: 'date', value: a.due || '' }), tt = tacticSelect(d, r, a.tactic);
+  const ok = await modal('Modifica azione · ' + r.name, h('div', { class: 'form' }, field('Azione', title), h('div', { class: 'st-pair' }, field('Entro', due), field('Tattica', tt)),
+    isAccepted ? h('p', { class: 'muted small' }, 'Concordata con il commerciale: le modifiche vanno inviate di nuovo dalla linguetta One to one.') : null),
+  [{ label: 'Annulla', value: null }, ...(isAccepted ? [] : [{ label: 'Elimina', run: async () => { await app.store.removeDirAction(a.id); return true; } }]),
+    { label: 'Salva', primary: true, run: async () => { if (!title.value.trim()) throw new Error('L\'azione non può essere vuota');
+      await app.store.saveDirAction({ ...a, title: title.value.trim(), due: due.value || null, tactic: tt.value || null }); return true; } }]);
+  if (ok) { toast('Azione aggiornata'); refresh(); }
+}
+
+// Linguetta «Fotografia»: com'è la zona e come va (obiettivo, fotografia, tattiche, diario, domande per Meridian)
+async function viewAgent(app, label) {
+  const d = await load(app), r = d.rows.find(x => x.label === label);
+  if (!r) return h('div', { class: 'page' }, h('p', {}, 'Commerciale non trovato.'), h('a', { href: '#/strategia' }, '← Sales strategy'));
+  const refresh = () => app.go('strategia/' + encodeURIComponent(label));
+  const first = r.name.split(' ').slice(-1)[0];
   const targetLine = r.state === 'scoperta' ? null : await targetEditor(app, label, first, refresh);   // 17/11 obiettivo annuale: visibile solo dopo «presentato»
   const exp = exportButton(app, d, label);
-  const callBtn = app.session.strategyViewer || r.state === 'scoperta' ? null : h('a', { class: 'btn small primary', href: '#/strategia/' + encodeURIComponent(label) + '/telefonata' }, '📞 Telefonata');
-  const o2oBtn = app.session.strategyViewer || !O2O_FASCE.includes(r.fascia) ? null : h('a', { class: 'btn small', href: '#/strategia/' + encodeURIComponent(label) + '/one-to-one' }, '👥 One to one del mese');
-  return h('div', { class: 'page' }, headCard(app, d, r, refresh), exp || callBtn ? h('p', { class: 'ss-export' }, callBtn, ' ', o2oBtn, ' ', exp) : null, targetLine, goalsLine,
-    foldCards(h('div', { class: 'section-body ss-body' }, photoCard(r), kpiCard(app, d, r, refresh), agentTacticsCard(d, r), clientsCard(app, r, refresh), actCard, await diaryCard(app, d, r, d.customers), meridianCard(app, d, r, d.customers, refresh)), 'ntx-ss-agent'));
+  const pc = photoCard(r);
+  if (!app.session.strategyViewer) pc.append(h('button', { class: 'btn small', onclick: () => photoDialog(app, r, refresh) }, lastPhoto(r) ? 'Nuova fotografia' : 'Prima fotografia'));
+  return agentPage(app, d, r, '', exp ? h('p', { class: 'ss-export' }, exp) : null, targetLine,
+    foldCards(h('div', { class: 'section-body ss-body' }, pc, agentTacticsCard(d, r), await diaryCard(app, d, r, d.customers), meridianCard(app, d, r, d.customers, refresh)), 'ntx-ss-agent'));
 }
 
 async function photoDialog(app, r, refresh) {
@@ -13410,11 +13465,11 @@ async function meetingDialog(app, d, r, refresh, preKind = 'intervista') {
   if (ok) { toast('Incontro registrato'); refresh(); }
 }
 
-async function closeAction(app, a, refresh) {
+async function closeAction(app, a, refresh, isAccepted = false) {
   const res = h('input', { type: 'text', placeholder: 'Esito (facoltativo)' }, );
   res.value = a.result || '';
   const ok = await modal('Azione fatta', h('div', { class: 'form' }, h('p', {}, h('strong', {}, displayName(a.label)), ' · ' + a.title), field('Esito', res)),
-    [{ label: 'Annulla', value: null }, { label: 'Elimina', run: async () => { await app.store.removeDirAction(a.id); return true; } },
+    [{ label: 'Annulla', value: null }, ...(isAccepted ? [] : [{ label: 'Elimina', run: async () => { await app.store.removeDirAction(a.id); return true; } }]),
       { label: 'Segna fatta', primary: true, run: async () => { await app.store.saveDirAction({ ...a, doneOn: today(), result: res.value.trim() }); return true; } }]);
   if (ok) refresh();
 }
@@ -13439,7 +13494,7 @@ async function callPage(app, label) {
     return { x, note, el: h('div', { class: 'call-kpi' }, h('div', {}, h('strong', {}, x.t), x.target ? h('small', { class: 'muted' }, ' · obiettivo: ' + x.target) : null), h('div', { class: 'call-btns' }, ...btns), note) };
   });
   const kpiCardEl = h('section', { class: 'card' }, h('h2', {}, `1 · KPI di ${monthName(mk)}`),
-    kpiRows.length ? kpiRows.map(k => k.el) : emptyState('Nessun KPI per questo mese: si impostano nella scheda del commerciale.'));
+    kpiRows.length ? kpiRows.map(k => k.el) : emptyState('Nessun KPI per questo mese: si impostano nella linguetta One to one.'));
 
   // 2. Azioni da verificare
   const checks = [];
@@ -13509,10 +13564,8 @@ async function callPage(app, label) {
     h('div', { class: 'actions call-save' }, h('button', { class: 'btn', onclick: back }, 'Annulla'), saveBtn),
     nc ? h('p', { class: 'muted' }, `Prossima telefonata: ${dateIt(nc)} (fascia ${r.fascia}).`) : null);
 
-  return h('div', { class: 'page call-page' },
-    h('header', { class: 'page-head' }, h('div', {}, h('a', { href: '#/strategia/' + encodeURIComponent(label), class: 'link' }, '← ' + r.name),
-      h('h1', {}, `Telefonata · ${r.name} `, fChip(r.fascia)),
-      h('p', { class: 'muted call-date' }, (r.last ? 'ultimo contatto ' + dateIt(r.last) : 'mai sentito') + ' · telefonata del ', date))),
+  return agentPage(app, d, r, '/telefonata',
+    h('p', { class: 'muted call-date' }, (r.last ? 'Ultimo contatto ' + dateIt(r.last) : 'Mai sentito') + ' · call del ', date, nc ? ` · la prossima, fascia ${r.fascia}: ${dateIt(nc)}` : ''),
     kpiCardEl, actCardEl, talkCard, endCard);
 }
 
@@ -13521,7 +13574,9 @@ async function o2oPage(app, label) {
   const d = await load(app), r = d.rows.find(x => x.label === label);
   if (!r) return h('div', { class: 'page' }, h('p', {}, 'Commerciale non trovato.'), h('a', { href: '#/strategia' }, '← Sales strategy'));
   const t = today(), mk = monthKey(), first = r.name.split(' ').slice(-1)[0];
-  const back = () => app.go('strategia/' + encodeURIComponent(label));
+  const back = () => app.go('strategia/' + encodeURIComponent(label) + '/one-to-one');
+  const refresh = back;
+  const goals = await syncGoals(app, d, r), acc = accepted(goals.g, mk);
   const all = { ...(r.scores?.o2o || {}) }, o = { ...(all[mk] || {}) };
   const kpis = (r.scores?.kpi || {})[mk] || [];
   const rx = app.store.radixOffers ? await app.store.radixOffers().catch(() => []) : [];
@@ -13554,7 +13609,7 @@ async function o2oPage(app, label) {
   const btn = (txt, cls, fn) => { const b = h('button', { type: 'button', class: 'btn ' + cls }, txt); b.onclick = async () => { b.disabled = true; try { await fn(); } catch (e) { toast(e.message, 'error'); } finally { b.disabled = false; } }; return b; };
 
   const tile = (l, v, s2) => h('div', { class: 'o2o-tile' }, h('small', {}, l), h('strong', {}, v), s2 ? h('span', { class: 'muted' }, s2) : null);
-  const prep = h('section', { class: 'card' }, h('h2', {}, '1 · Preparazione'),
+  const prep = h('section', { class: 'card' }, h('h2', {}, 'Preparazione'),
     h('div', { class: 'o2o-tiles' }, tile(`KPI di ${monthName(mk)}`, `${facts.kpiDone} su ${facts.kpiTot}`, 'raggiunti'), tile('Azioni del mese', `${facts.actDone} su ${facts.actTot}`, 'fatte'),
       tile('Rinviate 2 volte o più', String(facts.postponed), 'azioni aperte'), tile('Offerte RADIX aperte', String(offers.length), 'sui suoi clienti')),
     h('div', { class: 'st-pair' }, field('Data', date), field('Dove', place)),
@@ -13565,12 +13620,12 @@ async function o2oPage(app, label) {
       btn('Segna preparato', 'primary', async () => { if (!date.value) throw new Error('Metti la data del one to one'); if (!pts.some(p => String(p.t || '').trim())) throw new Error('Serve almeno un punto da discutere');
         await store({ status: o.status === 'fatto' ? 'fatto' : 'preparato' }); toast(`One to one con ${first} preparato`); app.go('strategia/' + encodeURIComponent(label) + '/one-to-one'); })));
 
-  const during = h('section', { class: 'card' }, h('h2', {}, '2 · Durante · una nota per punto'),
+  const during = h('section', { class: 'card' }, h('h2', {}, 'Durante · una nota per punto'),
     h('p', { class: 'muted' }, 'Per ogni punto: cosa vi siete detti e la decisione presa. Puoi salvare quando vuoi e riprendere dopo.'), duringList, field('Registrazione', plaud),
     h('div', { class: 'actions' }, btn('Salva le note', '', async () => { await store({}); toast('Note salvate'); })));
 
   const na = newActionsBlock(d, r, 2);
-  const close = h('section', { class: 'card' }, h('h2', {}, '3 · Chiusura'),
+  const close = h('section', { class: 'card' }, h('h2', {}, 'Chiusura'),
     h('p', { class: 'muted' }, 'Le decisioni diventano azioni (con il cliente). I KPI del mese prossimo si impostano nella scheda, come oggi, e vanno nella Home del commerciale come proposta.'),
     h('h4', {}, 'Azioni decise'), na.el, field('Prossimo one to one', next),
     h('div', { class: 'actions' }, btn('Annulla', '', async () => back()),
@@ -13583,11 +13638,13 @@ async function o2oPage(app, label) {
         for (const x of news) await app.store.saveDirAction({ label, meetingId, title: x.title, due: x.due, tactic: x.tactic });
         toast(`One to one con ${first} chiuso: verbale nella scheda`); back(); })));
 
-  return h('div', { class: 'page call-page' },
-    h('header', { class: 'page-head' }, h('div', {}, h('a', { href: '#/strategia/' + encodeURIComponent(label), class: 'link' }, '← ' + r.name),
-      h('h1', {}, `One to one di ${monthName(mk)} · ${r.name} `, fChip(r.fascia)),
-      h('p', { class: 'muted' }, h('span', { class: 'badge ' + st.cls }, st.key), o.date ? ' · ' + dateIt(o.date) : '', o.place ? ' · ' + o.place : ''))),
-    prep, during, close);
+  // 21/11: nella linguetta One to one c'è tutto quello che si prepara per il commerciale: proposta (KPI, azioni, clienti) e incontro del mese
+  const meet = O2O_FASCE.includes(r.fascia) && r.state !== 'scoperta';
+  return agentPage(app, d, r, '/one-to-one',
+    goalsBlock(app, d, r, refresh, goals),
+    kpiCard(app, d, r, refresh, acc), actionsCard(app, d, r, refresh, acc), clientsCard(app, r, refresh),
+    h('h2', { class: 'ss-sep' }, `Incontro di ${monthName(mk)} `, meet ? h('span', { class: 'badge ' + st.cls }, st.key) : null, o.date ? h('small', { class: 'muted' }, ' · ' + dateIt(o.date) + (o.place ? ' · ' + o.place : '')) : null),
+    ...(meet ? [prep, during, close] : [h('section', { class: 'card' }, emptyState('Il one to one mensile è previsto per la fascia 1 e 2. KPI e azioni qui sopra valgono lo stesso.'))]));
 }
 
 // Vista generale: i one to one del mese di fascia 1 e 2
