@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="98cf26d1aca6">
+<meta name="ntx-build" content="c839a7a3677f">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1161,12 +1161,13 @@ h1 + .fix-note{margin:-4px 0 4px}
 .dn-card-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.85rem;color:var(--muted)}
 .dn-chip{font-size:.78rem;font-weight:600;padding:2px 8px;border-radius:999px;background:#eef1f5;color:#475467}
 .dn-chip.ok{background:var(--ok-bg);color:var(--ok)}.dn-chip.warn{background:var(--warn-bg);color:var(--warn)}.dn-chip.bad{background:var(--bad-bg);color:var(--bad)}
-.dn-body{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;padding:14px 16px 16px}
-@media (max-width:900px){.dn-body{grid-template-columns:1fr}}
+.dn-body{display:grid;grid-template-columns:minmax(0,1fr) 320px;grid-template-areas:"main side" "thread side";gap:4px 18px;padding:14px 16px 16px;align-items:start}
+.dn-main{grid-area:main}.dn-side{grid-area:side}.dn-thread{grid-area:thread}
+@media (max-width:900px){.dn-body{grid-template-columns:1fr;grid-template-areas:"main" "side" "thread";gap:12px}}
 .dn-fields{display:grid;gap:10px;margin-bottom:12px}
 .dn-field{background:var(--bg);border-radius:10px;padding:10px 12px}.dn-field h5{margin:0 0 4px;font-size:.74rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
 .dn-text,.dn-replies .msg-body{white-space:pre-wrap}
-.dn-main h4,.dn-side h4{margin:0;font-size:.82rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.dn-main h4,.dn-side h4,.dn-thread h4{margin:0;font-size:.82rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
 .dn-after>h4{margin-top:4px}
 .dn-thread{border-top:1px solid var(--line);padding-top:10px}.dn-replies{margin:8px 0}
 .dn-reply{display:flex;gap:8px;align-items:flex-end;margin-top:8px}.dn-reply textarea{flex:1}
@@ -1192,9 +1193,38 @@ h1 + .fix-note{margin:-4px 0 4px}
 .dn-group{border:1px solid var(--line);border-radius:10px;padding:8px 12px 4px;margin:10px 0 0}.dn-group legend{font-size:.78rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:0 6px}
 .dn-reserved{margin-top:10px}
 .dn-links{margin:0;padding-left:18px}.dn-links li{margin:4px 0}
+/* 23/11 sera (Marco): note di direzione sul telefono */
+.pq-dn{display:flex;gap:8px}.pq-dn-open{flex:1;position:relative;text-decoration:none}.pq-dn-open:hover{text-decoration:none}
+.pq-dn-new{width:76px;flex:none;justify-content:center;padding:0}.pq-dn-new .pq-ico{font-size:2rem}
+.pq-count{position:absolute;top:10px;right:12px;min-width:26px;height:26px;padding:0 7px;border-radius:999px;background:var(--nt-red,#D40E41);color:#fff;font-weight:700;font-size:.9rem;display:flex;align-items:center;justify-content:center}
+.pq-count[hidden]{display:none}
+.dn-pick-incontro .pq-ico{background:var(--info-bg)}.dn-pick-decisione .pq-ico{background:var(--ok-bg)}.dn-pick-segnalazione .pq-ico{background:var(--warn-bg)}
+@media (max-width:760px){
+  .dir-notes .page-head p{display:none}
+  .dn-new{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.dn-new .btn{padding:11px 4px;font-size:.9rem;min-height:46px}.dn-new .btn.ghost{grid-column:1/-1}
+  .dn-toolbar{display:grid;gap:8px}.dn-seg{display:flex;width:100%}.dn-seg button{flex:1;padding:9px 4px;min-height:42px}
+  .dn-search input{font-size:16px;min-height:44px}
+  .dn-card>summary{padding:12px 12px 10px}.dn-card-title strong{font-size:1.08rem}
+  .dn-body{padding:12px}
+  .dn-side-block{padding:10px}
+  .dn-tasks li{padding:4px 0}.dn-tasks li input{width:22px;height:22px}
+  .dn-task-add input,.dn-task-add select,.dn-reply textarea{font-size:16px;min-height:44px}
+  .dn-task-add .btn{min-height:44px;flex:1 1 100%}
+  .dn-reply{flex-direction:column;align-items:stretch}.dn-reply .btn{min-height:46px}
+  .dn-actions .btn{flex:1 1 30%;min-height:44px}
+  .dn-mine-list li{padding:6px 0;border-bottom:1px solid var(--line)}.dn-mine-list li:last-child{border-bottom:0}.dn-mine-list .btn{margin-left:auto;min-height:40px}
+  .dn-x{padding:8px 10px}
+  /* la finestra della nota a tutto schermo, come la nota dei clienti */
+  .modal-back:has(.dn-form){padding:0;align-items:stretch}
+  .modal:has(.dn-form){width:100%;max-height:none;height:100%;border-radius:0}.modal:has(.dn-form) .modal-body{flex:1}
+  .modal:has(.dn-form) .modal-foot{padding:10px 14px calc(10px + env(safe-area-inset-bottom))}
+  .modal:has(.dn-form) .modal-foot .btn{min-height:52px;font-size:1.05rem;flex:1}.modal:has(.dn-form) .modal-foot .btn.primary{flex:2}
+  .dn-form textarea,.dn-form input,.dn-form select{font-size:16px}
+  .dn-form .dn-seg{width:100%}
+}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"98cf26d1aca6"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"c839a7a3677f"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -3676,14 +3706,10 @@ function noteBody(app, n, refresh, folk) {
   const blocked = n.status !== 'chiusa' && openTasks(n).length > 0;
   return h('div', { class: 'dn-body' },
     h('div', { class: 'dn-main' },
-      missingAfter ? h('p', { class: 'alert warn' }, 'Incontro fatto: tocca «Modifica» per scrivere l\'esito e aggiungi gli impegni qui di fianco.') : null,
+      missingAfter ? h('p', { class: 'alert warn' }, 'Incontro fatto: tocca «Modifica» per scrivere l\'esito e aggiungi gli impegni.') : null,
       before.length ? h('div', { class: 'dn-fields' }, before) : null,
       after.length ? h('div', { class: 'dn-fields dn-after' }, h('h4', {}, n.kind === 'incontro' ? 'Dopo l\'incontro' : 'Altro'), after) : null,
-      !before.length && !after.length ? h('p', { class: 'muted' }, 'Nessun campo compilato: tocca «Modifica».') : null,
-      h('div', { class: 'dn-thread' }, h('h4', {}, `Aggiornamenti${(n.replies || []).length ? ' · ' + n.replies.length : ''}`),
-        (n.replies || []).length ? h('div', { class: 'msg-list dn-replies' }, n.replies.map(r => h('div', { class: 'msg' + (r.authorId === me ? ' mine' : '') },
-          h('small', { class: 'msg-meta' }, `${r.authorId === me ? 'Tu' : r.authorName || '—'} · ${ago(r.at)}`), h('div', { class: 'msg-body' }, r.body)))) : null,
-        n.status !== 'chiusa' ? h('div', { class: 'dn-reply' }, box, h('button', { class: 'btn small primary', type: 'button', onclick: send }, 'Invia')) : null)),
+      !before.length && !after.length ? h('p', { class: 'muted' }, 'Nessun campo compilato: tocca «Modifica».') : null),
     h('aside', { class: 'dn-side' },
       tasksBlock(app, n, refresh, folk),
       filesBlock(app, n, refresh),
@@ -3692,7 +3718,12 @@ function noteBody(app, n, refresh, folk) {
         h('button', { class: 'btn small' + (blocked ? '' : ' ok'), type: 'button', disabled: blocked || null, title: blocked ? 'Prima segna come fatti gli impegni' : '', onclick: toggle }, n.status === 'chiusa' ? '↺ Riapri' : '✓ Chiudi nota'),
         n.authorId === me ? h('button', { class: 'btn small danger', type: 'button', onclick: del }, 'Cancella') : null,
         h('p', { class: 'fine muted' }, `Scritta da ${n.authorName || '—'} il ${dateTimeIt(n.createdAt)}` + (n.updatedByName && n.updatedAt !== n.createdAt ? ` · ultima modifica ${n.updatedByName} ${ago(n.updatedAt)}` : ''),
-          n.customerId ? [' · ', h('a', { href: '#/agenda/' + encodeURIComponent(n.customerId) }, 'scheda cliente →')] : null))));
+          n.customerId ? [' · ', h('a', { href: '#/agenda/' + encodeURIComponent(n.customerId) }, 'scheda cliente →')] : null))),
+    // 23/11 sera: gli aggiornamenti in un blocco a parte (sul telefono vengono dopo impegni e allegati)
+    h('div', { class: 'dn-thread' }, h('h4', {}, `Aggiornamenti${(n.replies || []).length ? ' · ' + n.replies.length : ''}`),
+      (n.replies || []).length ? h('div', { class: 'msg-list dn-replies' }, n.replies.map(r => h('div', { class: 'msg' + (r.authorId === me ? ' mine' : '') },
+        h('small', { class: 'msg-meta' }, `${r.authorId === me ? 'Tu' : r.authorName || '—'} · ${ago(r.at)}`), h('div', { class: 'msg-body' }, r.body)))) : null,
+      n.status !== 'chiusa' ? h('div', { class: 'dn-reply' }, box, h('button', { class: 'btn small primary', type: 'button', onclick: send }, 'Invia')) : null));
 }
 
 function noteCard(app, n, refresh, folk, { open = false, fresh = false } = {}) {
@@ -3759,6 +3790,22 @@ async function viewDirNotes(app, openId = '') {
   return page;
 }
 
+// 23/11 sera (Marco, telefono): nuova nota di direzione da qualsiasi pagina: tipo con tre pulsanti grandi, poi la finestra
+async function newDirNote(app) {
+  const kind = await new Promise(resolve => {
+    const close = v => { back.remove(); resolve(v); };
+    const big = (k, ico, sub) => h('button', { type: 'button', class: 'pq-btn dn-pick-' + k, onclick: () => close(k) }, h('span', { class: 'pq-ico', 'aria-hidden': 'true' }, ico), h('span', { class: 'pq-txt' }, h('strong', {}, NOTE_KINDS[k].label), h('small', {}, sub)));
+    const back = h('div', { class: 'modal-back sheet-back', onclick: e => { if (e.target === back) close(null); } },
+      h('div', { class: 'sheet', role: 'dialog', 'aria-label': 'Nota di direzione' },
+        h('div', { class: 'sheet-head' }, h('strong', {}, 'Nota di direzione'), h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Chiudi', onclick: () => close(null) }, '✕')),
+        big('incontro', '🤝', 'con un fornitore, un cliente, in azienda'), big('decisione', '✔', 'cosa si è deciso e chi la applica'), big('segnalazione', '❗', 'un fatto da sapere e cosa serve fare')));
+    document.body.append(back);
+  });
+  if (!kind) return;
+  const id = await noteDialog(app, kind);
+  if (id) app.go('note' + (typeof id === 'string' ? '/' + id : ''));
+}
+
 // Home (Direzione e Ufficio): i miei impegni aperti e le note nuove
 async function dirNotesHomeCard(app) {
   if (!canSeeDirNotes(app.session) || !app.store.dirNotes) return null;
@@ -3789,7 +3836,7 @@ async function customerDirNotes(app, customer) {
     h('ul', { class: 'dn-links' }, sortNotes(mine).map(n => h('li', {}, h('a', { href: '#/note/' + n.id }, noteTitle(n)), n.status === 'chiusa' ? h('span', { class: 'muted' }, ' · chiusa') : null))));
 }
 
-return { noteDialog, viewDirNotes, dirNotesHomeCard, dirNotesBadge, customerDirNotes, canSeeDirNotes };
+return { noteDialog, viewDirNotes, newDirNote, dirNotesHomeCard, dirNotesBadge, customerDirNotes, canSeeDirNotes };
 })();
 __m["js/views/goals-card.js"] = (function () {
 // 08/11/2026 (Tommaso: "lavoro nella pagina SS del commerciale e deve essere subito chiaro sulla sua bacheca").
@@ -9336,11 +9383,12 @@ function hubPhoto(customers, year = '2026') {
 return { isIntercompany, hubPhoto };
 })();
 __m["js/views/home.js"] = (function () {
-const { dirNotesHomeCard } = __m["js/views/dir-notes.js"];
+const { dirNotesHomeCard, dirNotesBadge, newDirNote } = __m["js/views/dir-notes.js"];
+const { canSeeDirNotes } = __m["js/core/dir-notes.js"];
 const { goalsCard } = __m["js/views/goals-card.js"];
 const { targetCard } = __m["js/views/target-card.js"];
 const { radixFuLine } = __m["js/views/radix-offers.js"];
-const { h, fill, eur, dateIt, today, telLinks } = __m["js/ui.js"];
+const { h, fill, eur, dateIt, today, telLinks, toast } = __m["js/ui.js"];
 const { openActions } = __m["js/views/actions.js"];
 const { startNewQuote, pickCustomer } = __m["js/views/quotes.js"];
 const { noteDialog } = __m["js/views/agenda.js"];
@@ -9456,8 +9504,19 @@ function phoneQuick(app, { notes, quotes }) {
   return h('section', { class: 'phone-quick' },
     big('pq-note', '📝', 'Nuova nota', 'visita, telefonata o email', () => startNewNote(app)),
     big('pq-quote', '€', 'Nuova offerta', 'prodotti, trasporto, PDF', () => startNewQuote(app)),
+    canSeeDirNotes(app.session) ? dirNotesQuick(app) : null,
     last.length ? [h('h3', { class: 'pq-sub' }, 'Ultimi clienti'), last.map(c => h('a', { class: 'pq-cust', href: '#/agenda/' + c.id },
       h('span', {}, h('strong', {}, c.name), h('small', {}, [c.city, c.prov ? '(' + c.prov + ')' : ''].filter(Boolean).join(' '))), h('span', { class: 'more-go', 'aria-hidden': 'true' }, '›')))] : null);
+}
+
+// 23/11 sera (Marco): sul telefono le note di direzione dalla Home, con il numero delle novità e dei miei impegni urgenti
+function dirNotesQuick(app) {
+  const count = h('span', { class: 'pq-count', hidden: true });
+  dirNotesBadge(app).then(n => { if (n) { count.textContent = n; count.hidden = false; } }).catch(() => {});
+  return h('div', { class: 'pq-dn' },
+    h('a', { class: 'pq-btn pq-dn-open', href: '#/note' }, h('span', { class: 'pq-ico', 'aria-hidden': 'true' }, '✎'),
+      h('span', { class: 'pq-txt' }, h('strong', {}, 'Note di direzione'), h('small', {}, 'novità e i miei impegni')), count),
+    h('button', { type: 'button', class: 'pq-btn pq-dn-new', 'aria-label': 'Nuova nota di direzione', onclick: () => newDirNote(app).catch(e => toast(e.message, 'error')) }, h('span', { class: 'pq-ico', 'aria-hidden': 'true' }, '+')));
 }
 
 // "+ Nuova nota" dalla Home (richiesta Tommaso 01/11): scegli il cliente, scrivi/detta/registra, poi si apre la sua scheda
@@ -11693,7 +11752,7 @@ const HELP = {
       'Scegli a chi si riferisce: il fornitore dall\'elenco («Altro» per uno nuovo), il cliente dall\'anagrafica o l\'azienda. Il titolo si compone da solo, sempre «TIPO · nome · data».',
       'Nella nota, a destra, gli impegni: cosa va fatto, chi e entro quando. Ognuno li ritrova nella sua Home e in «I miei impegni»; si spuntano quando sono fatti. La nota si chiude solo con tutti gli impegni fatti.',
       'Una nota per argomento: gli aggiornamenti si scrivono sotto con «Invia», non con una nota nuova. Gli allegati (PDF, foto, Word, Excel) con «📎 Allega».',
-      'Il numero rosso sul menu e l\'etichetta «Nuova» dicono cosa è cambiato dall\'ultima volta che hai aperto le note, più i tuoi impegni scaduti o di oggi.'],
+      'Sul telefono: dalla Home il pulsante «Note di direzione» (con il numero delle novità) e «+» per una nota nuova; anche dal «+» rosso in basso. Il numero rosso sul menu e l\'etichetta «Nuova» dicono cosa è cambiato dall\'ultima volta che hai aperto le note, più i tuoi impegni scaduti o di oggi.'],
     notes: ['«🔒 Riservata»: la vedono solo Tommaso e Marco (non l\'Ufficio); la scelgono solo loro.', 'Le note collegate a un cliente compaiono anche nella sua scheda (solo per Direzione e Ufficio).', 'Le note sui clienti per la rete restano le note normali della scheda cliente: qui solo quello che gli agenti non devono vedere.', 'Una nota la cancella solo chi l\'ha scritta; modificarla o chiuderla può chiunque della direzione.'] },
   sistemi: { title: 'Sistemi', intro: 'Pacchetti e stratigrafie (in prova, visibile solo alla Direzione).', steps: [], notes: [] },
   profilo: {
@@ -14801,7 +14860,7 @@ const { viewSystems, viewSystem } = __m["js/views/systems.js"];
 const { canSeeSystems } = __m["js/core/systems.js"];
 const { viewDataUpdate, canUpdateData } = __m["js/views/data-update.js"];
 const { viewStrategy, canSeeStrategy } = __m["js/views/strategy.js"];
-const { viewDirNotes, canSeeDirNotes, dirNotesBadge } = __m["js/views/dir-notes.js"];
+const { viewDirNotes, canSeeDirNotes, dirNotesBadge, newDirNote } = __m["js/views/dir-notes.js"];
 const VERSION = '1.0.0';
 
 // Navigazione (01/11): le offerte hanno una voce propria; il profilo è l'iniziale in alto a destra (telefono) o il nome in basso (computer)
@@ -14992,7 +15051,7 @@ function shell(active, content, key = active) {
       showsAssist(app.session) && key !== 'offerta' ? h('button', { class: 'assist-fab', type: 'button', title: 'Scrivi a Tommaso', onclick: () => app.session.preview ? toast('Anteprima: qui l\'agente scrive a Tommaso. In anteprima non si inviano messaggi.') : assistDialog(app, key).catch(e => toast(e.message, 'error')) },
         h('span', { 'aria-hidden': 'true' }, '💬'), h('span', { class: 'assist-label' }, 'Assistenza'), h('span', { class: 'assist-count', hidden: !app.navCounts?.assist }, app.navCounts?.assist || '')) : null),
     h('nav', { class: 'tabbar' + (tabs.length + (plus ? 1 : 0) > 5 ? ' tabbar-6' : '') + (tabs.length + (plus ? 1 : 0) > 6 ? ' tabbar-7' : '') }, withPlus(tabs.map(n => h('a', { href: '#/' + n.id, class: tabActive(n.id) ? 'active' : '' }, h('span', { class: 'ico' }, n.icon), h('small', {}, n.label),
-      (n.id === 'altro' && app.navCounts?.ordini) || (n.id === 'bacheca' && app.navCounts?.bacheca) ? h('span', { class: 'tab-dot' + (n.id === 'bacheca' ? ' nav-badge-bacheca' : '') }) : null)))));
+      (n.id === 'altro' && (app.navCounts?.ordini || app.navCounts?.note)) || (n.id === 'bacheca' && app.navCounts?.bacheca) ? h('span', { class: 'tab-dot' + (n.id === 'bacheca' ? ' nav-badge-bacheca' : '') }) : null)))));
 }
 
 // Foglio del «+»: due pulsanti grandi, poi la scelta del cliente
@@ -15004,7 +15063,8 @@ function quickSheet() {
     h('div', { class: 'sheet', role: 'dialog', 'aria-label': 'Cosa vuoi fare?' },
       h('div', { class: 'sheet-head' }, h('strong', {}, 'Cosa vuoi fare?'), h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Chiudi', onclick: close }, '✕')),
       big('pq-note', '📝', 'Nuova nota', 'visita, telefonata o email', startNewNote),
-      big('pq-quote', '€', 'Nuova offerta', 'prodotti, trasporto, PDF', startNewQuote)));
+      big('pq-quote', '€', 'Nuova offerta', 'prodotti, trasporto, PDF', startNewQuote),
+      canSeeDirNotes(app.session) ? big('pq-dn-sheet', '✎', 'Nota di direzione', 'incontro, decisione, segnalazione', newDirNote) : null));   // 23/11 sera (Marco)
   document.body.append(back);
 }
 
