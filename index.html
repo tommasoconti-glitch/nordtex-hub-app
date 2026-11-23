@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="db4ae607a036">
+<meta name="ntx-build" content="1b4775ea5dd7">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1148,9 +1148,11 @@ h1 + .fix-note{margin:-4px 0 4px}
 .dn-field{margin:0 0 10px}.dn-field small{display:block;font-size:.78rem}.dn-text,.dn-replies .msg-body{white-space:pre-wrap}
 .dn-replies{margin:10px 0}.dn-actions{margin-top:8px;gap:6px;flex-wrap:wrap}
 .dn-links{margin:0;padding-left:18px}.dn-links li{margin:4px 0}
+.dn-files{margin:6px 0 10px}.dn-file-list{list-style:none;margin:4px 0 6px;padding:0}.dn-file-list li{display:flex;align-items:center;gap:6px;margin:3px 0}
+.dn-file-list .linklike{background:none;border:0;padding:0;color:var(--link,#2f6fb5);cursor:pointer;font:inherit;text-align:left}.dn-file-x{background:none;border:0;color:var(--muted);cursor:pointer;padding:2px 6px}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"db4ae607a036"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"1b4775ea5dd7"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1877,7 +1879,8 @@ function previewStore(store, label) {
       if (prop === 'lastVisits') return async () => new Map([...(await target.lastVisits())].filter(([id]) => ownCustomer(id)));
       if (prop === 'plans') return async () => [];
       if (prop === 'dirNotes') return async () => [];   // 23/11: le note di direzione gli agenti non le vedono
-      if (/DirNote$/.test(String(prop))) return async () => { throw new PreviewError(); };
+      if (prop === 'dirNoteFilesReady') return () => false;
+      if (/DirNote/.test(String(prop))) return async () => { throw new PreviewError(); };
       if (prop === 'posts') return async () => (await target.posts()).filter(p => (p.audience || []).length === 0 || p.audience.includes(label));
       if (prop === 'logOpen' || prop === 'accessSummary' || prop === 'dataCopy') return async () => null;
       if (WRITE.test(String(prop))) return async () => { throw new PreviewError(); };
@@ -2114,7 +2117,27 @@ function notesText(notes) {
   }).join('\n\n');
 }
 
-return { NOTE_KINDS, SUBJECTS, NOTE_STATES, canSeeDirNotes, allFields, checkDirNote, dateIt, noteTitle, checkReply, matchNote, sortNotes, notesText };
+// 23/11 Allegati delle note (migrazione 20261123150000): PDF, immagini, Word, Excel fino a 15 MB
+const FILE_MAX = 15 * 1024 * 1024;
+const FILE_EXT = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', 'image/webp': 'webp',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/msword': 'doc', 'application/vnd.ms-excel': 'xls' };
+const BY_EXT = Object.fromEntries(Object.entries(FILE_EXT).map(([m, e]) => [e, m])); BY_EXT.jpeg = 'image/jpeg';
+// Tipo del file: dal browser, o dall'estensione quando il browser non lo dice (succede con Word/Excel su alcuni telefoni)
+function fileMime(file) {
+  if (FILE_EXT[file?.type]) return file.type;
+  const ext = String(file?.name || '').toLowerCase().split('.').pop();
+  return BY_EXT[ext] || null;
+}
+function checkFile(file) {
+  const mime = fileMime(file);
+  if (!mime) throw new Error('Si possono allegare PDF, foto, Word ed Excel');
+  if (!file.size || file.size > FILE_MAX) throw new Error('File troppo grande (massimo 15 MB)');
+  return { mime, ext: FILE_EXT[mime], name: String(file.name || 'allegato').slice(0, 160) };
+}
+const sizeIt = b => b >= 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
+
+return { NOTE_KINDS, SUBJECTS, NOTE_STATES, canSeeDirNotes, allFields, checkDirNote, dateIt, noteTitle, checkReply, matchNote, sortNotes, notesText, FILE_MAX, FILE_EXT, fileMime, checkFile, sizeIt };
 })();
 __m["js/data/local-store.js"] = (function () {
 // Archivio locale: dati di riferimento (clienti, prodotti) da hub-data.json,
@@ -2123,7 +2146,7 @@ __m["js/data/local-store.js"] = (function () {
 const { checkForecast } = __m["js/core/forecast.js"];
 const { fixProducts } = __m["js/core/product-fixes.js"];
 const { seesThread, isStaffOf, checkMessage, statusAfter } = __m["js/core/messages.js"];
-const { canSeeDirNotes, checkDirNote, checkReply } = __m["js/core/dir-notes.js"];
+const { canSeeDirNotes, checkDirNote, checkReply, checkFile } = __m["js/core/dir-notes.js"];
 const { normTerms, uid, nowIso, visibleTo, nextQuoteNumber, DIREZIONE, CONTACT_KINDS, NOTE_OUTCOMES, makeProspect, checkLink, applyStatus, checkStatusChange, radixNoteView, radixVisible, checkOrderRequest, ORDER_STATES, checkRadixOutcome, radixOfferForAgent, checkStop, checkFiscal, customerEdits, canEditCustomer } = __m["js/data/model.js"];
 function memoryKv(initial = {}) {
   const m = new Map(Object.entries(initial));
@@ -2277,7 +2300,7 @@ function createLocalStore({ data, kv }) {
     // 23/11 Note di direzione (stesse regole della versione online: Direzione e Ufficio, niente sola lettura)
     async dirNotes() {
       const s = mustSession(); if (!canSeeDirNotes(s)) return [];
-      return (await col('dirNotes')).map(n => ({ ...structuredClone(n), lastAt: [n.updatedAt, ...(n.replies || []).map(r => r.at)].sort().pop() }));
+      return (await col('dirNotes')).map(n => ({ ...structuredClone(n), files: (n.files || []).map(({ data, ...f }) => f), lastAt: [n.updatedAt, ...(n.replies || []).map(r => r.at)].sort().pop() }));
     },
     async saveDirNote(input, id = null) {
       const s = mustSession(); if (!canSeeDirNotes(s)) throw new Error('Solo Direzione e Ufficio');
@@ -2295,6 +2318,24 @@ function createLocalStore({ data, kv }) {
       const s = mustSession(); if (!canSeeDirNotes(s)) throw new Error('Solo Direzione e Ufficio');
       const n = (await col('dirNotes')).find(x => x.id === id); if (!n) throw new Error('Nota non trovata');
       n.status = close ? 'chiusa' : 'aperta'; n.updatedAt = nowIso(); n.updatedBy = s.userId; n.updatedByName = s.name; await save('dirNotes');
+    },
+    dirNoteFilesReady: () => true,
+    async addDirNoteFile(noteId, file) {
+      const s = mustSession(); if (!canSeeDirNotes(s)) throw new Error('Solo Direzione e Ufficio');
+      const v = checkFile(file); const n = (await col('dirNotes')).find(x => x.id === noteId); if (!n) throw new Error('Nota non trovata');
+      const bytes = new Uint8Array(await file.arrayBuffer()); let bin = ''; for (let i = 0; i < bytes.length; i += 32768) bin += String.fromCharCode(...bytes.subarray(i, i + 32768));
+      (n.files ||= []).push({ id: uid(), path: `${noteId}/${uid()}.${v.ext}`, name: v.name, mime: v.mime, size: file.size, data: btoa(bin), authorId: s.userId, authorName: s.name, at: nowIso() });
+      n.updatedAt = nowIso(); await save('dirNotes');
+    },
+    async dirNoteFileBlob(f) {
+      const n = (await col('dirNotes')).find(x => (x.files || []).some(y => y.id === f.id)); const g = n?.files.find(y => y.id === f.id);
+      if (!g) throw new Error('File non disponibile');
+      return new Blob([Uint8Array.from(atob(g.data), c => c.charCodeAt(0))], { type: g.mime });
+    },
+    async deleteDirNoteFile(f) {
+      const s = mustSession(); const n = (await col('dirNotes')).find(x => (x.files || []).some(y => y.id === f.id)); const i = n ? n.files.findIndex(y => y.id === f.id) : -1;
+      if (i < 0 || !canSeeDirNotes(s) || (n.files[i].authorId !== s.userId && n.authorId !== s.userId)) throw new Error('Può toglierlo solo chi l\'ha caricato o chi ha scritto la nota');
+      n.files.splice(i, 1); await save('dirNotes');
     },
     async deleteDirNote(id) {
       const s = mustSession(); const list = await col('dirNotes'); const i = list.findIndex(x => x.id === id);
@@ -2647,7 +2688,7 @@ const { normTypology } = __m["js/data/model.js"];
 const { checkForecast } = __m["js/core/forecast.js"];
 const { fixProducts } = __m["js/core/product-fixes.js"];
 const { normTerms, nowIso, makeProspect, applyStatus, checkStatusChange, radixNoteView, checkOrderRequest, checkRadixOutcome, checkStop, checkFiscal, customerEdits, canEditCustomer, EDIT_FIELDS, EDIT_DB, EDIT_FROM_DB } = __m["js/data/model.js"];
-const { checkDirNote, checkReply } = __m["js/core/dir-notes.js"];
+const { checkDirNote, checkReply, checkFile } = __m["js/core/dir-notes.js"];
 const AUDIO_MAX = 10 * 1024 * 1024;
 const AUDIO_EXT = { 'audio/mp4': 'mp4', 'audio/webm': 'webm', 'audio/ogg': 'ogg' };
 const audioMime = t => { const m = String(t || '').split(';')[0].trim().toLowerCase(); return AUDIO_EXT[m] ? m : m === 'audio/x-m4a' || m === 'audio/aac' ? 'audio/mp4' : null; };
@@ -2669,7 +2710,7 @@ function safeStorage() {
 function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage = safeStorage() }) {
   if (!/^https:\/\/[a-z0-9]+\.supabase\.co$/.test(url || '')) throw fail('CONFIG', 'Indirizzo Supabase non valido');
   if (!key || key.startsWith('sb_secret_') || /service_role/.test(key)) throw fail('CONFIG', 'Serve la chiave pubblica, mai quella di servizio');
-  let session = null, token = null, profile = null, products = null, customers = null, people = null;
+  let session = null, token = null, profile = null, products = null, customers = null, people = null, dirFiles = false;   // dirFiles: allegati delle note di direzione attivi (migrazione 20261123150000)
 
   async function api(path, { method = 'GET', body, prefer } = {}) {
     if (!token) throw fail('SESSION', 'Accesso richiesto');
@@ -2989,14 +3030,20 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     },
     // 23/11 Note di direzione (migrazione 20261123120000_hub_note_direzione.sql). Tabella assente = migrazione non applicata: null
     async dirNotes() {
-      const rows = await api('/rest/v1/hub_dir_notes?select=*,hub_dir_note_replies(id,author_id,body,created_at)&order=updated_at.desc&limit=500').catch(() => null);
+      // 23/11: con gli allegati se la migrazione 20261123150000 è applicata, altrimenti senza
+      const base = '/rest/v1/hub_dir_notes?order=updated_at.desc&limit=500&select=*,hub_dir_note_replies(id,author_id,body,created_at)';
+      let rows = await api(base + ',hub_dir_note_files(id,path,name,mime_type,size_bytes,author_id,created_at)').catch(() => null);
+      dirFiles = !!rows;
+      if (!rows) rows = await api(base).catch(() => null);
       if (!rows) return null;
       const nm = await names().catch(() => new Map());
       return rows.map(n => { const replies = (n.hub_dir_note_replies || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at))
         .map(r => ({ id: r.id, authorId: r.author_id, authorName: nm.get(r.author_id) || '', body: r.body, at: r.created_at }));
         return { id: n.id, kind: n.kind, subjectType: n.subject_type, subject: n.subject, topic: n.topic || '', date: n.note_date, customerId: n.customer_id ? (custCode(n.customer_id) || null) : null,
           fields: n.fields || {}, status: n.status, authorId: n.author_id, authorName: nm.get(n.author_id) || '', createdAt: n.created_at, updatedAt: n.updated_at,
-          updatedBy: n.updated_by, updatedByName: nm.get(n.updated_by) || '', replies, lastAt: [n.updated_at, ...replies.map(r => r.at)].sort().pop() }; });
+          updatedBy: n.updated_by, updatedByName: nm.get(n.updated_by) || '', replies, lastAt: [n.updated_at, ...replies.map(r => r.at)].sort().pop(),
+          files: (n.hub_dir_note_files || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at)).map(f => ({ id: f.id, path: f.path, name: f.name, mime: f.mime_type,
+            size: f.size_bytes, authorId: f.author_id, authorName: nm.get(f.author_id) || '', at: f.created_at })) }; });
     },
     async saveDirNote(input, id = null) {
       const v = checkDirNote(input);
@@ -3007,6 +3054,24 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
     async replyDirNote(id, body) { await api('/rest/v1/rpc/hub_dir_note_reply', { method: 'POST', body: { p_note: id, p_body: checkReply(body) } }); },
     async closeDirNote(id, close = true) { await api('/rest/v1/rpc/hub_dir_note_close', { method: 'POST', body: { p_note: id, p_close: close } }); },
     async deleteDirNote(id) { await api('/rest/v1/rpc/hub_dir_note_delete', { method: 'POST', body: { p_note: id } }); },
+    dirNoteFilesReady: () => dirFiles,
+    async addDirNoteFile(noteId, file) {
+      const v = checkFile(file);
+      const path = `${noteId}/${crypto.randomUUID()}.${v.ext}`;
+      const up = await rawFetch('/storage/v1/object/hub-dir-notes/' + path, { method: 'POST', body: file, headers: { 'Content-Type': v.mime, 'x-upsert': 'false' } });
+      if (!up.ok) throw fail('HTTP_' + up.status, 'File non caricato (' + up.status + ')');
+      try { await api('/rest/v1/rpc/hub_dir_note_file_add', { method: 'POST', body: { p_note: noteId, p_path: path, p_name: v.name, p_mime: v.mime, p_size: file.size } }); }
+      catch (e) { await rawFetch('/storage/v1/object/hub-dir-notes/' + path, { method: 'DELETE' }).catch(() => {}); throw e; }
+    },
+    async dirNoteFileBlob(f) {
+      const r = await rawFetch('/storage/v1/object/authenticated/hub-dir-notes/' + f.path.split('/').map(encodeURIComponent).join('/'));
+      if (!r.ok) throw fail('HTTP_' + r.status, 'File non disponibile');
+      return r.blob();
+    },
+    async deleteDirNoteFile(f) {
+      const path = await api('/rest/v1/rpc/hub_dir_note_file_delete', { method: 'POST', body: { p_file: f.id } });
+      await rawFetch('/storage/v1/object/hub-dir-notes/' + String(path || f.path), { method: 'DELETE' }).catch(() => {});
+    },
     async readThread(id) { await api('/rest/v1/rpc/hub_thread_read', { method: 'POST', body: { p_thread: id } }).catch(() => {}); },
     async closeThread(id, close = true) { await api('/rest/v1/rpc/hub_thread_close', { method: 'POST', body: { p_thread: id, p_close: close } }); },
     async products() {
@@ -5540,7 +5605,7 @@ __m["js/views/dir-notes.js"] = (function () {
 // Tre tipi di nota con i campi già pronti (Incontro, Decisione, Segnalazione), titolo sempre «TIPO · nome · data»,
 // aggiornamenti come risposte sotto la nota, Chiudi quando è finita. Gli agenti non le vedono.
 const { h, fill, toast, modal, field, today, dateTimeIt, debounce } = __m["js/ui.js"];
-const { NOTE_KINDS, SUBJECTS, NOTE_STATES, allFields, noteTitle, matchNote, sortNotes, notesText, canSeeDirNotes } = __m["js/core/dir-notes.js"];
+const { NOTE_KINDS, SUBJECTS, NOTE_STATES, allFields, noteTitle, matchNote, sortNotes, notesText, canSeeDirNotes, sizeIt } = __m["js/core/dir-notes.js"];
 
 const ago = iso => { if (!iso) return ''; const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
   return m < 1 ? 'adesso' : m < 60 ? `${m} min fa` : m < 1440 ? `${Math.round(m / 60)} h fa` : dateTimeIt(iso); };
@@ -5585,6 +5650,37 @@ async function noteDialog(app, kind, existing = null) {
   return modal((existing ? 'Modifica · ' : 'Nuova nota · ') + K.label, body, [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run }]);
 }
 
+// 23/11 Allegati: aprire (nuova scheda, aperta subito altrimenti il telefono la blocca), aggiungere, togliere
+async function openFile(app, f) {
+  const w = window.open('', '_blank');
+  try {
+    const url = URL.createObjectURL(await app.store.dirNoteFileBlob(f));
+    if (w) w.location.href = url; else { const a = h('a', { href: url, download: f.name }); document.body.append(a); a.click(); a.remove(); }
+    setTimeout(() => URL.revokeObjectURL(url), 300000);
+  } catch (e) { w?.close(); toast(e.message, 'error'); }
+}
+function filesBlock(app, n, refresh) {
+  if (!app.store.dirNoteFilesReady?.()) return null;
+  const me = app.session.userId, files = n.files || [];
+  const input = h('input', { type: 'file', multiple: true, hidden: true, accept: '.pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx,.xls,.xlsx,application/pdf,image/*' });
+  const btn = h('button', { class: 'btn small', type: 'button', onclick: () => input.click() }, '📎 Allega file');
+  input.onchange = async () => {
+    const list = [...input.files]; if (!list.length) return;
+    btn.disabled = true; btn.textContent = 'Caricamento…';
+    let ok = 0; for (const f of list) { try { await app.store.addDirNoteFile(n.id, f); ok++; } catch (e) { toast(`${f.name}: ${e.message}`, 'error'); } }
+    if (ok) toast(ok === 1 ? 'File allegato' : `${ok} file allegati`);
+    await refresh(n.id);
+  };
+  const del = async f => { if (!await modal('Togliere l\'allegato?', h('p', {}, f.name), [{ label: 'Annulla', value: false }, { label: 'Togli', primary: true, value: true }])) return;
+    try { await app.store.deleteDirNoteFile(f); toast('Allegato tolto'); await refresh(n.id); } catch (e) { toast(e.message, 'error'); } };
+  return h('div', { class: 'dn-files' }, h('small', { class: 'muted' }, 'Allegati'),
+    files.length ? h('ul', { class: 'dn-file-list' }, files.map(f => h('li', {},
+      h('button', { class: 'linklike', type: 'button', onclick: () => openFile(app, f) }, '📄 ' + f.name),
+      h('span', { class: 'muted fine' }, ` ${sizeIt(f.size)} · ${f.authorName || ''}`),
+      f.authorId === me || n.authorId === me ? h('button', { class: 'dn-file-x', type: 'button', title: 'Togli', 'aria-label': 'Togli ' + f.name, onclick: () => del(f) }, '✕') : null))) : null,
+    h('div', { class: 'row' }, btn, input));
+}
+
 function noteBody(app, n, refresh) {
   const me = app.session.userId;
   const rows = allFields(n.kind).filter(([key]) => n.fields?.[key]).map(([key, label]) => h('div', { class: 'dn-field' }, h('small', { class: 'muted' }, label), h('div', { class: 'dn-text' }, n.fields[key])));
@@ -5601,6 +5697,7 @@ function noteBody(app, n, refresh) {
       n.customerId ? [' · ', h('a', { href: '#/agenda/' + encodeURIComponent(n.customerId) }, 'scheda cliente →')] : null),
     rows.length ? rows : h('p', { class: 'muted' }, 'Nessun campo compilato.'),
     missingAfter ? h('p', { class: 'alert warn' }, 'Incontro fatto: tocca «Modifica» e scrivi Esito e Impegni.') : null,
+    filesBlock(app, n, refresh),
     (n.replies || []).length ? h('div', { class: 'msg-list dn-replies' }, n.replies.map(r => h('div', { class: 'msg' + (r.authorId === me ? ' mine' : '') },
       h('small', { class: 'msg-meta' }, `${r.authorId === me ? 'Tu' : r.authorName || '—'} · ${ago(r.at)}`), h('div', { class: 'msg-body' }, r.body)))) : null,
     n.status !== 'chiusa' ? h('div', { class: 'msg-reply' }, box, h('div', { class: 'row' }, h('button', { class: 'btn small primary', type: 'button', onclick: send }, 'Aggiungi'))) : null,
@@ -5613,7 +5710,7 @@ function noteBody(app, n, refresh) {
 const noteRow = (app, n, refresh, open = false) => h('details', { class: 'of-row dn-row dn-' + n.kind + (n.status === 'chiusa' ? ' dn-closed' : ''), open: open || null, id: 'dn-' + n.id },
   h('summary', {}, n.status === 'chiusa' ? h('span', { class: 'badge muted' }, NOTE_STATES.chiusa) : null,
     h('strong', { class: 'dn-title' }, noteTitle(n)),
-    h('span', { class: 'of-sub' }, [n.authorName, (n.replies || []).length ? `${n.replies.length} aggiornament${n.replies.length === 1 ? 'o' : 'i'}` : ''].filter(Boolean).join(' · ')),
+    h('span', { class: 'of-sub' }, [n.authorName, (n.replies || []).length ? `${n.replies.length} aggiornament${n.replies.length === 1 ? 'o' : 'i'}` : '', (n.files || []).length ? `📎 ${n.files.length}` : ''].filter(Boolean).join(' · ')),
     h('span', { class: 'of-age' }, ago(n.lastAt))),
   h('div', { class: 'of-body' }, noteBody(app, n, refresh)));
 
