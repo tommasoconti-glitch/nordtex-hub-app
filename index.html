@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="a9e683a4e33a">
+<meta name="ntx-build" content="88ff5c8d0445">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1140,7 +1140,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 #print-root .agent-report .ar-goal{margin:1mm 0} #print-root .agent-report .ar-note{font-size:7.5pt;color:#676568;margin:1mm 0 0}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a9e683a4e33a"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"88ff5c8d0445"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -6275,18 +6275,31 @@ function unitCost(p) {
   return { cost: p.purchasePrice, reason: '' };
 }
 
+// 23/11 (Tommaso, offerta Simpex POLICELL ritirato a Casale): la merce che esce da un deposito costa anche il trasporto
+// che abbiamo pagato per portarla lì. Si aggiunge al costo d'acquisto (costo del deposito escluso, decisione Tommaso).
+// POLICELL BigBag a Casale: 857 km (calcolo HUB, via Brennero) × 2,10 €/km (listino n.05 pag. 43) ÷ 66 m³ a carico = 27,27 €/m³.
+const INBOUND_FREIGHT = Object.freeze({
+  CASALE: { 'L05-P42-0129': { perUnit: 27.27, note: 'trasporto Krummnussbaum–Casale: 857 km × 2,10 €/km ÷ 66 m³' } },
+});
+function inboundFreight(q, l) {
+  const depot = l.pickup?.depot || (q.depot && q.depot !== 'diretta' ? q.depot : null);
+  return (depot && INBOUND_FREIGHT[depot]?.[l.productId]) || null;
+}
+
 function quoteMargin(q, byId) {
-  let revenue = 0, cost = 0, covered = 0;
+  let revenue = 0, cost = 0, covered = 0, inbound = 0;
   const lines = q.lines.map(l => {
     const uc = unitCost(byId.get(l.productId));
     const net = lineAmount(l);
     if (uc.cost === null) return { productId: l.productId, net, cost: null, margin: null, pct: null, reason: uc.reason };
-    const c = round2(uc.cost * l.qty), m = round2(net - c);
+    const fr = inboundFreight(q, l), unit = uc.cost + (fr ? fr.perUnit : 0);
+    const c = round2(unit * l.qty), m = round2(net - c);
+    if (fr) inbound += round2(fr.perUnit * l.qty);
     revenue += net; cost += c; covered++;
-    return { productId: l.productId, net, unitCost: uc.cost, unitNet: lineNet(l), cost: c, margin: m, pct: net > 0 ? m / net * 100 : null, reason: '' };
+    return { productId: l.productId, net, unitCost: unit, purchaseCost: uc.cost, inbound: fr, unitNet: lineNet(l), cost: c, margin: m, pct: net > 0 ? m / net * 100 : null, reason: '' };
   });
   const goods = round2(q.lines.reduce((s, l) => s + lineAmount(l), 0));
-  return { lines, covered, missing: q.lines.length - covered, revenue: round2(revenue), cost: round2(cost), margin: round2(revenue - cost),
+  return { lines, covered, missing: q.lines.length - covered, revenue: round2(revenue), cost: round2(cost), inbound: round2(inbound), margin: round2(revenue - cost),
     pct: revenue > 0 ? (revenue - cost) / revenue * 100 : null, complete: covered === q.lines.length, goods };
 }
 
@@ -6331,7 +6344,7 @@ function quoteCommission(q, rules, assignee) {
   return { configured: true, amount, base, avgRate: base > 0 ? amount / base * 100 : 0, lines, toDefine: lines.filter(x => x.undefinedRate).length, custom: !!rules?.agents?.[assignee], isDefault: !rules?.default?.bands?.length };
 }
 
-return { unitCost, quoteMargin, validateBands, DEFAULT_COMMISSION_RULES, effectiveRules, bandsFor, commissionRate, quoteCommission };
+return { unitCost, INBOUND_FREIGHT, inboundFreight, quoteMargin, validateBands, DEFAULT_COMMISSION_RULES, effectiveRules, bandsFor, commissionRate, quoteCommission };
 })();
 __m["js/core/logistics.js"] = (function () {
 // Logistica offerte: regole di trasporto del Listino NORDTEX n.05 (01/10/2026), riempimento del mezzo,
@@ -8296,10 +8309,11 @@ async function viewQuoteEditor(app, id, customerId) {
       h('p', { class: 'warn-text' }, `Nessuna riga con prezzo d'acquisto: margine non calcolabile. Il costo va chiesto all'ufficio.`),
       h('p', { class: 'fine' }, 'Trasporto e altri addebiti esclusi dal margine.'));
     return h('div', { class: 'econ-box dir' }, h('small', {}, 'Solo Direzione · margine'),
-      row('Costo merce (RADIX storico)', eur(m.cost)), row('Margine merce', `${eur(m.margin)} · ${pct(m.pct)}`, 'grand-sm' + (m.margin < 0 ? ' neg' : '')),
+      row('Costo merce (RADIX storico)', eur(m.cost - m.inbound)), m.inbound ? row('Trasporto fino al deposito', eur(m.inbound)) : null, row('Margine merce', `${eur(m.margin)} · ${pct(m.pct)}`, 'grand-sm' + (m.margin < 0 ? ' neg' : '')),
       c.configured ? [row(`Provvigione ${who}`, `${eur(c.amount)} · ${pct(c.avgRate)}` + (c.toDefine ? ` · ${c.toDefine} ${c.toDefine === 1 ? 'riga' : 'righe'} oltre 50+15+5: da definire` : '')), row('Margine dopo provvigione', `${eur(m.margin - c.amount)} · ${pct(m.revenue > 0 ? (m.margin - c.amount) / m.revenue * 100 : null)}`, 'grand-sm')] : row('Provvigione', 'regole da impostare'),
       m.missing ? h('p', { class: 'warn-text' }, `${m.missing} ${m.missing === 1 ? 'riga' : 'righe'} senza costo utilizzabile: margine calcolato sulle altre`) : null,
       ((n) => n ? h('p', { class: 'bad-text' }, `${n} ${n === 1 ? 'riga' : 'righe'} sotto il ${MIN_MARGIN}% di margine sul prodotto: il piano 2027 non ammette vendite sotto il ${MIN_MARGIN}%.`) : null)(m.lines.filter(x => x.pct !== null && x.pct < MIN_MARGIN).length),
+      m.inbound ? h('p', { class: 'fine' }, `Merce dal deposito: al costo si aggiunge il trasporto per portarla lì (${m.lines.filter(x => x.inbound).map(x => x.inbound.note)[0]}); costo del deposito escluso.`) : null,
       h('p', { class: 'fine' }, 'Costi d\'acquisto RADIX storici, attualità da verificare. Trasporto e altri addebiti esclusi dal margine.'));
   }
   function drawTotals() {
