@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="3c6d61403c43">
+<meta name="ntx-build" content="a9e683a4e33a">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1140,7 +1140,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 #print-root .agent-report .ar-goal{margin:1mm 0} #print-root .agent-report .ar-note{font-size:7.5pt;color:#676568;margin:1mm 0 0}
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"3c6d61403c43"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"a9e683a4e33a"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1701,8 +1701,8 @@ function paymentOptions({ isDir, customerTerms, current } = {}) {
 const normTerms = v => (/^\s*anticipato\s*$/i.test(v || '') ? "ANTICIPATO ALL'ORDINE" : v);
 const normPayment = v => (!v || /^da concordare$/i.test(v) ? 'DA CONCORDARE' : normTerms(v));
 
-// ---- Offerte inviate: richiamo dopo 7 giorni, esito obbligatorio dopo 30 (decisione Direzione 31/10/2026)
-const QUOTE_CALL_DAYS = 7, QUOTE_OUTCOME_DAYS = 30, QUOTE_SNOOZE_DAYS = 15;
+// ---- Offerte inviate: richiamo dopo 10 giorni (piano 2027, 23/11; prima 7), esito obbligatorio dopo 30 (decisione Direzione 31/10/2026)
+const QUOTE_CALL_DAYS = 10, QUOTE_OUTCOME_DAYS = 30, QUOTE_SNOOZE_DAYS = 15;
 const LOST_REASONS = ['Prezzo', 'Concorrente', 'Tempi di consegna', 'Trasporto', 'Progetto rinviato o annullato', 'Prodotto non adatto', 'Nessuna risposta', 'Altro'];
 const addDays = (iso, d) => new Date(new Date(iso).getTime() + d * 864e5).toISOString().slice(0, 10);
 
@@ -5105,6 +5105,68 @@ async function openActions(app) {
 
 return { openActions };
 })();
+__m["js/core/discount-rules.js"] = (function () {
+// Sconto massimo per famiglia e ok della Direzione (piano commerciale 2027 approvato il 16/11/2026, fascicolo 3, decisione 5):
+// «Sconto massimo per famiglia; oltre, ok della Direzione prima dell'offerta (HUB quando attivo, intanto email)».
+// Massimo assoluto 50+15+5 (DISCOUNT_MAX in pricing.js). Prima della data di partenza vale la regola 2026: 50+5 per tutte le famiglie.
+// Il margine allo sconto massimo è nel piano; qui servono solo i tetti (il costo d'acquisto lo vede solo la Direzione).
+
+// Piano 2027, decisione 2: nessuna vendita sotto il 20% di margine sul prodotto (lo vede solo la Direzione, che ha i costi).
+const MIN_MARGIN = 20;
+const FAMILY_CAPS_FROM = '2027-01-01';   // 23/11 Tommaso: i tetti per famiglia partono con i contratti 2027
+
+const C = (max, label, note = '') => Object.freeze({ max, label, note });
+const CAP_2026 = C(52.5, '50+5', 'regola 2026, uguale per tutte le famiglie');
+// Famiglie come nel Master prodotti. Fibra: «quello che lascia il 20% (circa 50+2)» → 50+2 = 51%.
+const FAMILY_CAPS_2027 = Object.freeze({
+  'Fibra di legno': C(51, '50+2', 'fibra STEICO e NATURHELD: lo sconto che lascia il 20% di margine'),
+  'Vetro cellulare': C(52.5, '50+5'),
+  'Legno microlamellare': C(52.5, '50+5'),
+  'Blocchi in laterizio': C(52.5, '50+5', '50+10 solo come eccezione approvata'),
+  'Sistemi di tenuta': C(52.5, '50+5'),
+  'Costruzioni a secco': C(52.5, '50+5'),
+  'Argilla': C(52.5, '50+5'),
+  'Canapa': C(50, '50'),
+  'Minerali': C(50, '50'),
+  'Finiture': C(50, '50'),
+  'Sistemi radianti': C(59.63, 'nessun tetto', 'sistemisti: nessun tetto sulla vendita, margine medio almeno 18,5%'),
+});
+// Famiglie che il piano non elenca (lana minerale, ETICS, articoli speciali…): resta il 50+5.
+const CAP_OTHER_2027 = C(52.5, '50+5', 'famiglia non elencata nel piano 2027: resta il 50+5');
+
+const day = d => (d instanceof Date ? d.toISOString() : String(d || new Date().toISOString())).slice(0, 10);
+const rules2027Active = (date = new Date()) => day(date) >= FAMILY_CAPS_FROM;
+
+function discountCap(family, date = new Date()) {
+  if (!rules2027Active(date)) return CAP_2026;
+  return FAMILY_CAPS_2027[family] || CAP_OTHER_2027;
+}
+
+const disc = d => Math.round((1 - (d || [0, 0, 0]).reduce((v, x) => v * (1 - (Number(x) || 0) / 100), 1)) * 10000) / 100;
+
+// 23/11 (Tommaso): niente spunta e niente blocco. Oltre il tetto il commerciale invia lo stesso e la Direzione riceve un avviso.
+function lineDiscountState(l, date = new Date()) {
+  const cap = discountCap(l.family, date), d = disc(l.discounts);
+  const over = !(l.depotPrice || l.pickupPrice) && d > cap.max + 1e-9;   // prezzo da deposito: netto fisso deciso dalla Direzione
+  return { over, cap, discount: d };
+}
+
+const linesOverCap = (lines, date = new Date()) => (lines || []).filter(l => lineDiscountState(l, date).over);
+
+const n2 = x => String(Math.round(x * 100) / 100).replace('.', ',');
+// Testo dell'avviso alla Direzione quando parte un'offerta con righe oltre il tetto.
+function overCapNotice(q, by = '', date = new Date()) {
+  const rows = linesOverCap(q.lines, date).map(l => { const st = lineDiscountState(l, date);
+    return `${l.description}: sconto ${n2(st.discount)}% (massimo ${st.cap.label}${l.family ? ' per ' + l.family.toLowerCase() : ''})`; });
+  if (!rows.length) return '';
+  return `Offerta ${q.number || ''}${q.customer?.name ? ' a ' + q.customer.name : ''} inviata${by ? ' da ' + by : ''} con ${rows.length === 1 ? 'una riga' : rows.length + ' righe'} oltre lo sconto massimo: ${rows.join('; ')}.`;
+}
+
+// Chi non riceve l'avviso perché decide lui: la Direzione (Tommaso, Marco), non l'ufficio.
+const isDiscountDecider = s => !!s && s.role === 'direzione' && !s.office && !s.readOnly && !s.preview;
+
+return { MIN_MARGIN, FAMILY_CAPS_FROM, CAP_2026, FAMILY_CAPS_2027, CAP_OTHER_2027, rules2027Active, discountCap, lineDiscountState, linesOverCap, overCapNotice, isDiscountDecider };
+})();
 __m["js/core/geo.js"] = (function () {
 // Sigla provincia -> regione (nomi come nelle tabelle trasporto del listino n.05)
 const REGIONI = {
@@ -7806,6 +7868,7 @@ return { threadView, threadRow, rxRef, assistDialog, assistUnread, askOfficeCard
 __m["js/views/quotes.js"] = (function () {
 const { changeLogCard } = __m["js/views/change-log-ui.js"];
 const { depotPriceFor, setDepotPrice, canSetDepotPrice, undoPickup } = __m["js/core/product-fixes.js"];
+const { lineDiscountState, isDiscountDecider, rules2027Active, MIN_MARGIN, linesOverCap, overCapNotice } = __m["js/core/discount-rules.js"];
 const { forecastSelect, forecastMonthInput } = __m["js/views/radix-offers.js"];
 const { h, fill, eur, num, dateIt, toast, modal, field, emptyState, debounce } = __m["js/ui.js"];
 const { QUOTE_STATES, productLabel, PAYMENT_TERMS, PAYMENT_OTHER, paymentOptions, normPayment, LOST_REASONS, QUOTE_SNOOZE_DAYS, quoteReminders, missingForOrder, followsQuote } = __m["js/data/model.js"];
@@ -7937,6 +8000,7 @@ async function viewQuoteEditor(app, id, customerId) {
   }
   const products = await app.products();
   if (id) fixLineDescriptions(q.lines, new Map(products.map(p => [p.id, p])));   // 04/11: spessore mancante nelle righe salvate prima della correzione
+  if (id) { const fam = new Map(products.map(p => [p.id, p.family])); for (const l of q.lines || []) if (!l.family && fam.get(l.productId)) l.family = fam.get(l.productId); }   // 23/11: la famiglia serve al tetto di sconto
   const commRules = await app.store.getSetting?.('commissions').catch(() => null) ?? null;
   const viewerIsDir = app.session.role === 'direzione';
   // 03/11 (Tommaso, opzione A): l'avviso "prezzo da verificare nel Master" lo vede solo la Direzione; per gli agenti vale il listino n.05
@@ -8045,7 +8109,8 @@ async function viewQuoteEditor(app, id, customerId) {
     if (viewerIsDir) {
       const uc = unitCost(byId.get(l.productId)); if (uc.cost === null) return h('small', { class: 'econ muted' }, 'Margine n.d.: ' + uc.reason);
       const net = lineNet(l), m = (net - uc.cost) / net * 100;
-      return h('small', { class: 'econ ' + (m < 0 ? 'neg' : '') }, `Costo ${eur(uc.cost)} · margine ${eur(net - uc.cost)}/${l.unit.toLowerCase()} · ${pct(m)}`);
+      // 23/11 (piano 2027, decisione 2): nessuna vendita sotto il 20% di margine sul prodotto
+      return h('small', { class: 'econ ' + (m < MIN_MARGIN ? 'neg' : '') }, `Costo ${eur(uc.cost)} · margine ${eur(net - uc.cost)}/${l.unit.toLowerCase()} · ${pct(m)}`, m < MIN_MARGIN ? h('strong', {}, ` · sotto il ${MIN_MARGIN}% minimo del piano`) : '');
     }
     return null;   // 04/11 (Tommaso): gli agenti non vedono le provvigioni
   }
@@ -8171,6 +8236,17 @@ async function viewQuoteEditor(app, id, customerId) {
     } }, '✉ Chiedi il prezzo da deposito alla Direzione'),
       h('small', { class: 'muted' }, ` ${rule.price} €/m³ netto, trasporto compreso, se esce da un deposito con giacenza`));
   }
+  // 23/11 (Tommaso, piano 2027 decisione 5): oltre lo sconto massimo della famiglia nessun blocco e nessuna spunta:
+  // il commerciale invia lo stesso e alla Direzione arriva un avviso con le righe oltre il tetto.
+  function discountBox(l) {
+    const st = lineDiscountState(l); if (!st.over) return null;
+    const capTxt = `${st.cap.label}${l.family ? ' per ' + l.family.toLowerCase() : ''}`;
+    return h('div', { class: 'depot-price' },
+      h('small', { class: 'warn-text' }, h('strong', {}, `⚠ ${num(st.discount)}%: oltre lo sconto massimo ${capTxt}.`),
+        isDiscountDecider(app.session) ? '' : ' Puoi inviare l\'offerta: la Direzione riceve un avviso.'),
+      isDiscountDecider(app.session) && st.cap.note ? h('small', { class: 'muted' }, st.cap.note) : null);
+  }
+
   function drawLines() {
     fill(linesBody, ...q.lines.map((l, i) => {
       const info = h('div', {}), netTd = h('td', { class: 'num', 'data-label': 'Netto unit.' }), amtTd = h('td', { class: 'num', 'data-label': 'Importo' });
@@ -8186,8 +8262,8 @@ async function viewQuoteEditor(app, id, customerId) {
           byId.get(l.productId)?.clearance ? h('small', { class: 'warn-text' }, '⚠ ' + byId.get(l.productId).clearance + (pal !== null && Math.ceil(pal - 1e-6) - pal > 1e-6 ? ` → ${Math.ceil(pal - 1e-6)} bancali = ${num(Math.ceil(pal - 1e-6) * l.palletQuantity)} m²` : '')) : null,   // 05/11: articoli fuori listino a esaurimento (Isorel N88174)
           byId.get(l.productId)?.family === 'Blocchi in laterizio' && pal !== null && Math.ceil(pal - 1e-6) - pal > 1e-6 ? h('small', { class: 'warn-text' }, `Laterizi: vendita solo a bancali completi → ${Math.ceil(pal - 1e-6)} bancali = ${num(Math.ceil(pal - 1e-6) * l.palletQuantity)} ${String(l.unit).toLowerCase()}`) : null,
           bigLoad(l, pal),
-          disc > DISCOUNT_MAX ? h('small', { class: 'bad-text' }, h('strong', {}, `⛔ Sconto complessivo ${num(disc)}%: oltre lo sconto massimo applicabile ${DISCOUNT_MAX_LABEL}`))
-            : disc > DISCOUNT_ALERT ? h('small', { class: 'warn-text' }, `⚠ ${num(disc)}% · oltre ${DISCOUNT_ALERT_LABEL}`) : null);   // 06/11: sulla riga solo l'etichetta, la spiegazione una volta sotto il totale
+          disc > DISCOUNT_MAX ? h('small', { class: 'bad-text' }, h('strong', {}, `⛔ Sconto complessivo ${num(disc)}%: oltre lo sconto massimo applicabile ${DISCOUNT_MAX_LABEL}`)) : null,
+          discountBox(l));   // 23/11: tetto della famiglia (piano 2027) con ok della Direzione sulla riga
         fill(netTd, eur(lineNet(l))); fill(amtTd, h('strong', {}, eur(lineAmount(l))));
       };
       const live = () => { tp?.redraw(); refresh(); drawTotals(); };   // 13/11: prima il trasporto, poi il prezzo con trasporto
@@ -8223,6 +8299,7 @@ async function viewQuoteEditor(app, id, customerId) {
       row('Costo merce (RADIX storico)', eur(m.cost)), row('Margine merce', `${eur(m.margin)} · ${pct(m.pct)}`, 'grand-sm' + (m.margin < 0 ? ' neg' : '')),
       c.configured ? [row(`Provvigione ${who}`, `${eur(c.amount)} · ${pct(c.avgRate)}` + (c.toDefine ? ` · ${c.toDefine} ${c.toDefine === 1 ? 'riga' : 'righe'} oltre 50+15+5: da definire` : '')), row('Margine dopo provvigione', `${eur(m.margin - c.amount)} · ${pct(m.revenue > 0 ? (m.margin - c.amount) / m.revenue * 100 : null)}`, 'grand-sm')] : row('Provvigione', 'regole da impostare'),
       m.missing ? h('p', { class: 'warn-text' }, `${m.missing} ${m.missing === 1 ? 'riga' : 'righe'} senza costo utilizzabile: margine calcolato sulle altre`) : null,
+      ((n) => n ? h('p', { class: 'bad-text' }, `${n} ${n === 1 ? 'riga' : 'righe'} sotto il ${MIN_MARGIN}% di margine sul prodotto: il piano 2027 non ammette vendite sotto il ${MIN_MARGIN}%.`) : null)(m.lines.filter(x => x.pct !== null && x.pct < MIN_MARGIN).length),
       h('p', { class: 'fine' }, 'Costi d\'acquisto RADIX storici, attualità da verificare. Trasporto e altri addebiti esclusi dal margine.'));
   }
   function drawTotals() {
@@ -8252,7 +8329,7 @@ async function viewQuoteEditor(app, id, customerId) {
       h('div', { class: 'grand' }, h('span', {}, 'Totale'), h('strong', {}, eur(t.total))),
       showPriceWarn && t.warnings ? h('p', { class: 'warn-text' }, `${t.warnings} ${t.warnings === 1 ? 'riga' : 'righe'} con prezzo da verificare nel Master`) : null,
       t.discountOverMax ? h('p', { class: 'bad-text' }, h('strong', {}, `⛔ ${t.discountOverMax} ${t.discountOverMax === 1 ? 'riga' : 'righe'} oltre lo sconto massimo applicabile ${DISCOUNT_MAX_LABEL}`)) : null,
-      t.discountAlerts > (t.discountOverMax || 0) ? h('p', { class: 'warn-text' }, `⚠ ${t.discountAlerts - (t.discountOverMax || 0)} ${t.discountAlerts - (t.discountOverMax || 0) === 1 ? 'riga' : 'righe'} con sconto complessivo oltre ${DISCOUNT_ALERT_LABEL}: ${viewerIsDir ? 'per gli agenti serve la tua autorizzazione' : 'serve autorizzazione Direzione'}`) : null,
+      ((n) => n ? h('p', { class: 'warn-text' }, `⚠ ${n} ${n === 1 ? 'riga' : 'righe'} oltre lo sconto massimo ${rules2027Active() ? 'della famiglia (piano 2027)' : DISCOUNT_ALERT_LABEL}${isDiscountDecider(app.session) ? '' : ': all\'invio la Direzione riceve un avviso'}`) : null)(linesOverCap(q.lines).length),
       t.freightPending ? h('p', { class: 'muted' }, 'Trasporto da definire: non è compreso nel totale.') : null,
       econBox());
     const tr = isPickup(q) && !t.freight ? 'ritiro al deposito' : t.freightPending ? 'trasporto da definire' : t.freight ? 'trasporto ' + eur(t.freight) : 'trasporto compreso';
@@ -8421,9 +8498,15 @@ async function viewQuoteEditor(app, id, customerId) {
         const r = pdf();
         const r2 = await app.store.sendQuote({ quoteId: q.id, to: list.join(', '), subject: subject.value, message: [msg.value.trim(), sheetsBox.checked ? sheetsText : '', 'In allegato l\'offerta in PDF. Restiamo a disposizione per qualsiasi chiarimento.\nCordiali saluti'].filter(Boolean).join('\n\n'),
           includeBcc: !isDir || bccBox.checked, pdf: toBase64(r.bytes), pdfName: r.fileName });
-        sentFromApp = true; done.pdf = done.mail = true; draw();
+        sentFromApp = true; done.pdf = done.mail = true; draw(); notifyOverCap();
         toast('Offerta inviata a ' + r2.to.join(', ') + (r2.cc?.length ? ' (copia a te)' : ''));
       } catch (err) { e.target.disabled = false; e.target.textContent = 'Invia dall\'app'; toast(err.message, 'error'); }
+    };
+    // 23/11: offerta partita con sconti oltre il tetto → avviso alla Direzione (non blocca l'invio se l'avviso non parte)
+    const notifyOverCap = async () => {
+      if (isDiscountDecider(app.session) || app.session.preview) return;
+      const body = overCapNotice(q, app.session.name); if (!body) return;
+      try { await app.store.sendMessage({ channel: 'ufficio', topic: 'Prezzo', quoteId: q.id, page: 'offerta', body }); } catch { /* l'offerta è comunque partita */ }
     };
     const step = (n, label, ok, btn) => h('div', { class: 'send-step' + (ok ? ' ok' : '') }, h('span', { class: 'n' }, ok ? '✓' : n), h('div', {}, label), btn);
     const draw = () => fill(st,
@@ -8445,7 +8528,7 @@ async function viewQuoteEditor(app, id, customerId) {
       [{ label: 'Annulla', value: false }, { label: 'Ho inviato l\'email', primary: true, run: async () => {
         if (sentFromApp) return true;   // stato e registro già aggiornati dal server
         if (!done.mail) throw new Error('Prima apri l\'email (passo 2) e inviala dal tuo programma di posta');
-        q.status = 'Inviata'; q.sentAt = new Date().toISOString();
+        q.status = 'Inviata'; q.sentAt = new Date().toISOString(); notifyOverCap();
         Object.assign(q, await app.store.saveQuote(q));
         await app.store.logQuoteSend({ quoteId: q.id, to: to.value.trim(), bcc: done.shared || (isDir && !bccBox.checked) ? [] : QUOTE_BCC, subject: subject.value, total: q.total ?? null }).catch(() => null);
         return true;
@@ -10857,7 +10940,7 @@ const HELP = {
     intro: 'La tua giornata: cosa fare oggi e come sta andando il tuo lavoro.',
     steps: [
       'In "Da fare oggi" trovi i follow-up in scadenza, le offerte da risentire e quelle che aspettano un esito: parti da lì.',
-      'Un\'offerta inviata va risentita dopo 7 giorni; dopo 30 giorni l\'app chiede l\'esito (Accettata o Persa) prima di farne una nuova.',
+      'Un\'offerta inviata va risentita dopo 10 giorni; dopo 30 giorni l\'app chiede l\'esito (Accettata o Persa) prima di farne una nuova.',
       'I riquadri di "Andamento" si cliccano e portano all\'elenco corrispondente.',
     ],
     notes: ['La riga in fondo dice a che data sono aggiornati i dati RADIX (clienti, fatturato, giacenze).',
