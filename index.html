@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="88ff5c8d0445">
+<meta name="ntx-build" content="db4ae607a036">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1139,8 +1139,18 @@ h1 + .fix-note{margin:-4px 0 4px}
 #print-root .agent-report ol{margin:1mm 0 0 5mm;padding:0} #print-root .agent-report li{margin:1mm 0}
 #print-root .agent-report .ar-goal{margin:1mm 0} #print-root .agent-report .ar-note{font-size:7.5pt;color:#676568;margin:1mm 0 0}
 
+/* 23/11 Note di direzione */
+.dir-notes .dn-new{margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.dn-filters{display:grid;gap:8px;margin-bottom:8px}
+.dn-row>summary strong.dn-title{max-width:none;white-space:normal}
+.dn-row.dn-incontro>summary{border-left:3px solid #2f7ae5}.dn-row.dn-decisione>summary{border-left:3px solid var(--ok)}.dn-row.dn-segnalazione>summary{border-left:3px solid #e09a00}
+.dn-row.dn-closed>summary strong{color:var(--muted)}
+.dn-field{margin:0 0 10px}.dn-field small{display:block;font-size:.78rem}.dn-text,.dn-replies .msg-body{white-space:pre-wrap}
+.dn-replies{margin:10px 0}.dn-actions{margin-top:8px;gap:6px;flex-wrap:wrap}
+.dn-links{margin:0;padding-left:18px}.dn-links li{margin:4px 0}
+
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"88ff5c8d0445"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"db4ae607a036"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1830,7 +1840,7 @@ const WRITE = /^(add|save|delete|set|toggle|mark|import|changePassword|followupD
 
 // 04/11: profilo "sola lettura" (accessi di prova Meridian): vede come la Direzione, ogni scrittura è bloccata qui e nel database.
 // Restano permessi: cambio della propria password, registro aperture, calcolo km (sola lettura dei percorsi).
-const READ_ONLY_WRITE = /^(add|save|delete|set|toggle|mark|import|followupDone|logQuoteSend|request|update|transcribe|approve|remove|link|send|close|readThread)/;
+const READ_ONLY_WRITE = /^(add|save|delete|set|toggle|mark|import|followupDone|logQuoteSend|request|update|transcribe|approve|remove|link|send|close|readThread|reply)/;
 const READ_ONLY_TEXT = 'Profilo in sola lettura: puoi consultare tutto, ma non modificare né inviare.';
 class ReadOnlyError extends Error { constructor() { super(READ_ONLY_TEXT); this.code = 'READ_ONLY'; } }
 function readOnlyStore(store) {
@@ -1866,6 +1876,8 @@ function previewStore(store, label) {
         return async (...a) => (await target.radixOffers(...a)).filter(o => ownCustomer(o.customerId) && radixOfferForAgent(o, role)); }
       if (prop === 'lastVisits') return async () => new Map([...(await target.lastVisits())].filter(([id]) => ownCustomer(id)));
       if (prop === 'plans') return async () => [];
+      if (prop === 'dirNotes') return async () => [];   // 23/11: le note di direzione gli agenti non le vedono
+      if (/DirNote$/.test(String(prop))) return async () => { throw new PreviewError(); };
       if (prop === 'posts') return async () => (await target.posts()).filter(p => (p.audience || []).length === 0 || p.audience.includes(label));
       if (prop === 'logOpen' || prop === 'accessSummary' || prop === 'dataCopy') return async () => null;
       if (WRITE.test(String(prop))) return async () => { throw new PreviewError(); };
@@ -2028,6 +2040,82 @@ const statusAfter = (t, senderId) => (senderId === t.authorId ? 'in attesa' : 'r
 
 return { TOPICS, THREAD_STATES, isAssistDesk, canUseAssist, showsAssist, isStaffOf, seesThread, isUnread, isWaiting, sortForStaff, checkMessage, statusAfter };
 })();
+__m["js/core/dir-notes.js"] = (function () {
+// Note di direzione (23/11/2026, richiesta di Marco Ferrari, decisione di Tommaso: «creala che poi vediamo»).
+// Un posto unico e ordinato per le note della direzione su fornitori, clienti e azienda, al posto di Teams/OneNote.
+// Le vedono e le scrivono Direzione e Ufficio (Tommaso, Marco, Christian, Irina); NON gli agenti, NON i profili in sola lettura (Meridian).
+// Logica senza interfaccia, condivisa da archivio locale, online e test.
+
+// Tre tipi, ognuno con i suoi campi (lo schema concordato il 23/11: «strutturiamoli così sappiamo cosa inserire e come»)
+const NOTE_KINDS = {
+  incontro: { label: 'Incontro', fields: [['chi', 'Chi c\'è'], ['obiettivo', 'Obiettivo'], ['chiediamo', 'Cosa chiediamo'], ['portiamo', 'Cosa portiamo']],
+    after: [['esito', 'Esito'], ['impegni', 'Impegni (chi fa cosa, entro quando)']] },
+  decisione: { label: 'Decisione', fields: [['deciso', 'Cosa si è deciso'], ['perche', 'Perché'], ['chi', 'Chi la applica'], ['quando', 'Da quando']], after: [] },
+  segnalazione: { label: 'Segnalazione', fields: [['fatto', 'Il fatto'], ['fonte', 'Da chi l\'abbiamo saputo'], ['azione', 'Cosa serve fare e chi']], after: [] },
+};
+const SUBJECTS = { fornitore: 'Fornitore', cliente: 'Cliente', azienda: 'Azienda' };
+const NOTE_STATES = { aperta: 'Aperta', chiusa: 'Chiusa' };
+
+// Chi vede le note: Direzione e Ufficio; mai agenti, anteprima come agente o sola lettura
+const canSeeDirNotes = s => !!s && s.role === 'direzione' && !s.preview && !s.readOnly;
+
+const allFields = kind => [...(NOTE_KINDS[kind]?.fields || []), ...(NOTE_KINDS[kind]?.after || [])];
+
+const clean = (v, max) => String(v ?? '').replace(/\r\n/g, '\n').trim().slice(0, max);
+
+// Controllo e pulizia di una nota prima del salvataggio (stesse regole della funzione del database)
+function checkDirNote(n) {
+  const kind = n?.kind;
+  if (!NOTE_KINDS[kind]) throw new Error('Scegli il tipo di nota');
+  const subjectType = n.subjectType || 'azienda';
+  if (!SUBJECTS[subjectType]) throw new Error('Scegli se riguarda un fornitore, un cliente o l\'azienda');
+  const subject = clean(n.subject, 80);
+  if (subjectType !== 'azienda' && !subject) throw new Error(`Scrivi il nome del ${SUBJECTS[subjectType].toLowerCase()}`);
+  const topic = clean(n.topic, 80);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(n.date || '') ? n.date : null;
+  if (!date) throw new Error('Scrivi la data');
+  const fields = {};
+  for (const [k] of allFields(kind)) { const v = clean(n.fields?.[k], 4000); if (v) fields[k] = v; }
+  const first = NOTE_KINDS[kind].fields[kind === 'incontro' ? 1 : 0][0];
+  if (!fields[first] && !topic) throw new Error(`Scrivi almeno «${NOTE_KINDS[kind].fields.find(f => f[0] === first)[1]}»`);
+  return { kind, subjectType, subject: subjectType === 'azienda' && !subject ? 'NORDTEX' : subject, topic, date, customerId: subjectType === 'cliente' ? (n.customerId || null) : null, fields };
+}
+
+const dateIt = d => d ? d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4) : '';
+// Titolo sempre nello stesso formato: TIPO · nome · data (· tema)
+const noteTitle = n => [NOTE_KINDS[n.kind]?.label.toUpperCase() || 'NOTA', n.subject, dateIt(n.date), n.topic].filter(Boolean).join(' · ');
+
+function checkReply(body) {
+  const b = String(body || '').trim();
+  if (!b) throw new Error('Scrivi la risposta');
+  if (b.length > 4000) throw new Error('Testo troppo lungo (massimo 4000 caratteri)');
+  return b;
+}
+
+// Ricerca per parola su titolo, campi e risposte
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+function matchNote(n, q) {
+  const words = norm(q).split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const text = norm([noteTitle(n), ...Object.values(n.fields || {}), ...(n.replies || []).map(r => r.body)].join(' '));
+  return words.every(w => text.includes(w));
+}
+
+// Ordine: aperte prima, poi per ultima modifica (la più recente in alto)
+const sortNotes = list => list.slice().sort((a, b) => (a.status === 'chiusa') - (b.status === 'chiusa') || String(b.lastAt || b.updatedAt || '').localeCompare(String(a.lastAt || a.updatedAt || '')));
+
+// Testo per Claude (e per copiare in una mail): una nota dopo l'altra, campi e risposte
+function notesText(notes) {
+  return notes.map(n => {
+    const lines = [`## ${noteTitle(n)}${n.status === 'chiusa' ? ' · CHIUSA' : ''}`, `Scritta da ${n.authorName || '—'} il ${dateIt((n.createdAt || '').slice(0, 10))}` + (n.updatedByName && n.updatedAt !== n.createdAt ? `, modificata da ${n.updatedByName} il ${dateIt((n.updatedAt || '').slice(0, 10))}` : '')];
+    for (const [k, l] of allFields(n.kind)) if (n.fields?.[k]) lines.push(`**${l}:** ${n.fields[k]}`);
+    for (const r of n.replies || []) lines.push(`- ${r.authorName || '—'} (${dateIt((r.at || '').slice(0, 10))}): ${r.body}`);
+    return lines.join('\n');
+  }).join('\n\n');
+}
+
+return { NOTE_KINDS, SUBJECTS, NOTE_STATES, canSeeDirNotes, allFields, checkDirNote, dateIt, noteTitle, checkReply, matchNote, sortNotes, notesText };
+})();
 __m["js/data/local-store.js"] = (function () {
 // Archivio locale: dati di riferimento (clienti, prodotti) da hub-data.json,
 // attività (note, follow-up, referenti, offerte, bacheca) salvate nel browser (IndexedDB).
@@ -2035,6 +2123,7 @@ __m["js/data/local-store.js"] = (function () {
 const { checkForecast } = __m["js/core/forecast.js"];
 const { fixProducts } = __m["js/core/product-fixes.js"];
 const { seesThread, isStaffOf, checkMessage, statusAfter } = __m["js/core/messages.js"];
+const { canSeeDirNotes, checkDirNote, checkReply } = __m["js/core/dir-notes.js"];
 const { normTerms, uid, nowIso, visibleTo, nextQuoteNumber, DIREZIONE, CONTACT_KINDS, NOTE_OUTCOMES, makeProspect, checkLink, applyStatus, checkStatusChange, radixNoteView, radixVisible, checkOrderRequest, ORDER_STATES, checkRadixOutcome, radixOfferForAgent, checkStop, checkFiscal, customerEdits, canEditCustomer } = __m["js/data/model.js"];
 function memoryKv(initial = {}) {
   const m = new Map(Object.entries(initial));
@@ -2052,7 +2141,7 @@ function indexedDbKv(dbName = 'nordtex-hub') {
   return { get: k => tx('readonly', s => s.get(k)), set: (k, v) => tx('readwrite', s => s.put(v, k)) };
 }
 
-const COLLECTIONS = ['links', 'dirFollowers', 'notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio', 'postReads', 'plans', 'stops', 'radixLinks', 'threads', 'radixLines'];
+const COLLECTIONS = ['links', 'dirFollowers', 'notes', 'contacts', 'quotes', 'posts', 'prospects', 'statusChanges', 'settings', 'quoteSends', 'orders', 'radixOutcomes', 'noteAudio', 'postReads', 'plans', 'stops', 'radixLinks', 'threads', 'radixLines', 'dirNotes'];
 
 function createLocalStore({ data, kv }) {
   if (data?.schema !== 'nordtex-hub-data-v1') throw new Error('Dati HUB non compatibili');
@@ -2184,6 +2273,33 @@ function createLocalStore({ data, kv }) {
       const s = mustSession(); const t = (await col('threads')).find(x => x.id === id);
       if (!t || !(t.authorId === s.userId || isStaffOf(s, t.channel))) throw new Error('Conversazione non trovata');
       t.status = close ? 'chiusa' : statusAfter(t, t.lastBy); await save('threads');
+    },
+    // 23/11 Note di direzione (stesse regole della versione online: Direzione e Ufficio, niente sola lettura)
+    async dirNotes() {
+      const s = mustSession(); if (!canSeeDirNotes(s)) return [];
+      return (await col('dirNotes')).map(n => ({ ...structuredClone(n), lastAt: [n.updatedAt, ...(n.replies || []).map(r => r.at)].sort().pop() }));
+    },
+    async saveDirNote(input, id = null) {
+      const s = mustSession(); if (!canSeeDirNotes(s)) throw new Error('Solo Direzione e Ufficio');
+      const v = checkDirNote(input); const list = await col('dirNotes'); const at = nowIso();
+      if (id) { const n = list.find(x => x.id === id); if (!n) throw new Error('Nota non trovata'); Object.assign(n, v, { updatedAt: at, updatedBy: s.userId, updatedByName: s.name }); await save('dirNotes'); return n.id; }
+      const n = { id: uid(), ...v, status: 'aperta', authorId: s.userId, authorName: s.name, createdAt: at, updatedAt: at, updatedBy: s.userId, updatedByName: s.name, replies: [] };
+      list.push(n); await save('dirNotes'); return n.id;
+    },
+    async replyDirNote(id, body) {
+      const s = mustSession(); if (!canSeeDirNotes(s)) throw new Error('Solo Direzione e Ufficio');
+      const b = checkReply(body); const n = (await col('dirNotes')).find(x => x.id === id); if (!n) throw new Error('Nota non trovata');
+      n.replies.push({ id: uid(), authorId: s.userId, authorName: s.name, body: b, at: nowIso() }); await save('dirNotes');
+    },
+    async closeDirNote(id, close = true) {
+      const s = mustSession(); if (!canSeeDirNotes(s)) throw new Error('Solo Direzione e Ufficio');
+      const n = (await col('dirNotes')).find(x => x.id === id); if (!n) throw new Error('Nota non trovata');
+      n.status = close ? 'chiusa' : 'aperta'; n.updatedAt = nowIso(); n.updatedBy = s.userId; n.updatedByName = s.name; await save('dirNotes');
+    },
+    async deleteDirNote(id) {
+      const s = mustSession(); const list = await col('dirNotes'); const i = list.findIndex(x => x.id === id);
+      if (i < 0 || list[i].authorId !== s.userId || !canSeeDirNotes(s)) throw new Error('Può cancellarla solo chi l\'ha scritta');
+      list.splice(i, 1); await save('dirNotes');
     },
     async linkRadix(id, code) {
       mustSession(); if (!isDir()) throw new Error('Solo l\'ufficio o la Direzione');
@@ -2531,6 +2647,7 @@ const { normTypology } = __m["js/data/model.js"];
 const { checkForecast } = __m["js/core/forecast.js"];
 const { fixProducts } = __m["js/core/product-fixes.js"];
 const { normTerms, nowIso, makeProspect, applyStatus, checkStatusChange, radixNoteView, checkOrderRequest, checkRadixOutcome, checkStop, checkFiscal, customerEdits, canEditCustomer, EDIT_FIELDS, EDIT_DB, EDIT_FROM_DB } = __m["js/data/model.js"];
+const { checkDirNote, checkReply } = __m["js/core/dir-notes.js"];
 const AUDIO_MAX = 10 * 1024 * 1024;
 const AUDIO_EXT = { 'audio/mp4': 'mp4', 'audio/webm': 'webm', 'audio/ogg': 'ogg' };
 const audioMime = t => { const m = String(t || '').split(';')[0].trim().toLowerCase(); return AUDIO_EXT[m] ? m : m === 'audio/x-m4a' || m === 'audio/aac' ? 'audio/mp4' : null; };
@@ -2870,6 +2987,26 @@ function createSupabaseStore({ url, key, fetchImpl = globalThis.fetch, storage =
       if (done) await api('/rest/v1/hub_note_radix_done', { method: 'POST', body: { note_id: noteId } });
       else await api('/rest/v1/hub_note_radix_done?note_id=eq.' + noteId, { method: 'DELETE' });
     },
+    // 23/11 Note di direzione (migrazione 20261123120000_hub_note_direzione.sql). Tabella assente = migrazione non applicata: null
+    async dirNotes() {
+      const rows = await api('/rest/v1/hub_dir_notes?select=*,hub_dir_note_replies(id,author_id,body,created_at)&order=updated_at.desc&limit=500').catch(() => null);
+      if (!rows) return null;
+      const nm = await names().catch(() => new Map());
+      return rows.map(n => { const replies = (n.hub_dir_note_replies || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at))
+        .map(r => ({ id: r.id, authorId: r.author_id, authorName: nm.get(r.author_id) || '', body: r.body, at: r.created_at }));
+        return { id: n.id, kind: n.kind, subjectType: n.subject_type, subject: n.subject, topic: n.topic || '', date: n.note_date, customerId: n.customer_id ? (custCode(n.customer_id) || null) : null,
+          fields: n.fields || {}, status: n.status, authorId: n.author_id, authorName: nm.get(n.author_id) || '', createdAt: n.created_at, updatedAt: n.updated_at,
+          updatedBy: n.updated_by, updatedByName: nm.get(n.updated_by) || '', replies, lastAt: [n.updated_at, ...replies.map(r => r.at)].sort().pop() }; });
+    },
+    async saveDirNote(input, id = null) {
+      const v = checkDirNote(input);
+      let cust = null; if (v.customerId) { try { cust = custUuid(v.customerId); } catch { cust = null; } }
+      return api('/rest/v1/rpc/hub_dir_note_save', { method: 'POST', body: { p_id: id, p_kind: v.kind, p_subject_type: v.subjectType, p_subject: v.subject, p_topic: v.topic,
+        p_date: v.date, p_customer: cust, p_fields: v.fields } });
+    },
+    async replyDirNote(id, body) { await api('/rest/v1/rpc/hub_dir_note_reply', { method: 'POST', body: { p_note: id, p_body: checkReply(body) } }); },
+    async closeDirNote(id, close = true) { await api('/rest/v1/rpc/hub_dir_note_close', { method: 'POST', body: { p_note: id, p_close: close } }); },
+    async deleteDirNote(id) { await api('/rest/v1/rpc/hub_dir_note_delete', { method: 'POST', body: { p_note: id } }); },
     async readThread(id) { await api('/rest/v1/rpc/hub_thread_read', { method: 'POST', body: { p_thread: id } }).catch(() => {}); },
     async closeThread(id, close = true) { await api('/rest/v1/rpc/hub_thread_close', { method: 'POST', body: { p_thread: id, p_close: close } }); },
     async products() {
@@ -5398,6 +5535,134 @@ function recallAction(id, base, picked, title) {
 
 return { RECALL, recallDate, recallAction };
 })();
+__m["js/views/dir-notes.js"] = (function () {
+// Note di direzione (23/11/2026, richiesta di Marco Ferrari): fornitori, clienti e azienda, per Direzione e Ufficio.
+// Tre tipi di nota con i campi già pronti (Incontro, Decisione, Segnalazione), titolo sempre «TIPO · nome · data»,
+// aggiornamenti come risposte sotto la nota, Chiudi quando è finita. Gli agenti non le vedono.
+const { h, fill, toast, modal, field, today, dateTimeIt, debounce } = __m["js/ui.js"];
+const { NOTE_KINDS, SUBJECTS, NOTE_STATES, allFields, noteTitle, matchNote, sortNotes, notesText, canSeeDirNotes } = __m["js/core/dir-notes.js"];
+
+const ago = iso => { if (!iso) return ''; const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  return m < 1 ? 'adesso' : m < 60 ? `${m} min fa` : m < 1440 ? `${Math.round(m / 60)} h fa` : dateTimeIt(iso); };
+
+// Suggerimenti per il nome: produttori dal listino (fornitori) e clienti dell'anagrafica
+async function suggestions(app) {
+  const [prods, custs] = await Promise.all([app.products().catch(() => []), app.customers().catch(() => [])]);
+  const suppliers = [...new Set((prods || []).map(p => String(p.producer || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  return { suppliers, customers: (custs || []).filter(c => !c.isTest) };
+}
+
+// Finestra per scrivere o modificare una nota
+async function noteDialog(app, kind, existing = null) {
+  const k = existing?.kind || kind, K = NOTE_KINDS[k];
+  const { suppliers, customers } = await suggestions(app);
+  const listId = 'dn-names-' + Date.now();
+  const names = h('datalist', { id: listId });
+  const subjectType = h('select', { 'aria-label': 'Riguarda' }, Object.entries(SUBJECTS).map(([v, l]) => h('option', { value: v }, l)));
+  subjectType.value = existing?.subjectType || (k === 'incontro' ? 'fornitore' : 'azienda');
+  const subject = h('input', { type: 'text', list: listId, maxlength: 80, placeholder: 'es. Staudacher', value: existing?.subject || '' });
+  const fillNames = () => { const t = subjectType.value;
+    fill(names, (t === 'fornitore' ? suppliers : t === 'cliente' ? customers.map(c => c.name) : []).slice(0, 400).map(v => h('option', { value: v })));
+    subject.placeholder = t === 'fornitore' ? 'es. Staudacher' : t === 'cliente' ? 'Nome del cliente (scegli dall\'elenco)' : 'NORDTEX (o lascia vuoto)'; };
+  subjectType.onchange = fillNames; fillNames();
+  const date = h('input', { type: 'date', value: existing?.date || today() });
+  const topic = h('input', { type: 'text', maxlength: 80, placeholder: 'facoltativo, es. prezzi 2027', value: existing?.topic || '' });
+  const boxes = {};
+  const area = ([key, label], after = false) => { boxes[key] = h('textarea', { rows: key === 'chiediamo' || key === 'esito' || key === 'impegni' ? 4 : 2, maxlength: 4000 });
+    boxes[key].value = existing?.fields?.[key] || ''; return field(label + (after ? ' (dopo l\'incontro)' : ''), boxes[key]); };
+  const body = h('div', { class: 'form dn-form' },
+    h('div', { class: 'grid2' }, field('Riguarda', subjectType), field('Nome', subject)),
+    h('div', { class: 'grid2' }, field(k === 'incontro' ? 'Data dell\'incontro' : 'Data', date), field('Tema', topic)), names,
+    K.fields.map(f => area(f)), K.after.length ? h('h4', { class: 'help-h' }, 'Dopo l\'incontro') : null, K.after.map(f => area(f, true)));
+  const run = async () => {
+    const t = subjectType.value, name = subject.value.trim();
+    const cust = t === 'cliente' ? customers.find(c => c.name.toLowerCase() === name.toLowerCase()) : null;
+    const input = { kind: k, subjectType: t, subject: cust ? cust.name : name, customerId: cust?.id || null, date: date.value, topic: topic.value,
+      fields: Object.fromEntries(Object.entries(boxes).map(([key, b]) => [key, b.value])) };
+    const id = await app.store.saveDirNote(input, existing?.id || null);
+    toast(existing ? 'Nota aggiornata' : 'Nota salvata'); return id || true;
+  };
+  return modal((existing ? 'Modifica · ' : 'Nuova nota · ') + K.label, body, [{ label: 'Annulla', value: null }, { label: 'Salva', primary: true, run }]);
+}
+
+function noteBody(app, n, refresh) {
+  const me = app.session.userId;
+  const rows = allFields(n.kind).filter(([key]) => n.fields?.[key]).map(([key, label]) => h('div', { class: 'dn-field' }, h('small', { class: 'muted' }, label), h('div', { class: 'dn-text' }, n.fields[key])));
+  const missingAfter = n.kind === 'incontro' && n.status !== 'chiusa' && !n.fields?.esito && n.date <= today();
+  const box = h('textarea', { rows: 2, maxlength: 4000, placeholder: 'Aggiornamento, risposta, decisione presa…', 'aria-label': 'Risposta' });
+  const send = async e => { e.target.disabled = true;
+    try { await app.store.replyDirNote(n.id, box.value); box.value = ''; toast('Aggiunto'); await refresh(n.id); } catch (err) { toast(err.message, 'error'); } finally { e.target.disabled = false; } };
+  const edit = async () => { if (await noteDialog(app, n.kind, n)) await refresh(n.id); };
+  const toggle = async () => { try { await app.store.closeDirNote(n.id, n.status !== 'chiusa'); await refresh(n.id); } catch (err) { toast(err.message, 'error'); } };
+  const del = async () => { if (!await modal('Cancellare la nota?', h('p', {}, noteTitle(n) + ': si cancellano anche le risposte. Non si torna indietro.'), [{ label: 'Annulla', value: false }, { label: 'Cancella', primary: true, value: true }])) return;
+    try { await app.store.deleteDirNote(n.id); toast('Nota cancellata'); await refresh(); } catch (err) { toast(err.message, 'error'); } };
+  return h('div', { class: 'dn-body' },
+    h('p', { class: 'fine muted' }, `${SUBJECTS[n.subjectType] || ''} · scritta da ${n.authorName || '—'} il ${dateTimeIt(n.createdAt)}` + (n.updatedByName && n.updatedAt !== n.createdAt ? ` · modificata da ${n.updatedByName} il ${dateTimeIt(n.updatedAt)}` : ''),
+      n.customerId ? [' · ', h('a', { href: '#/agenda/' + encodeURIComponent(n.customerId) }, 'scheda cliente →')] : null),
+    rows.length ? rows : h('p', { class: 'muted' }, 'Nessun campo compilato.'),
+    missingAfter ? h('p', { class: 'alert warn' }, 'Incontro fatto: tocca «Modifica» e scrivi Esito e Impegni.') : null,
+    (n.replies || []).length ? h('div', { class: 'msg-list dn-replies' }, n.replies.map(r => h('div', { class: 'msg' + (r.authorId === me ? ' mine' : '') },
+      h('small', { class: 'msg-meta' }, `${r.authorId === me ? 'Tu' : r.authorName || '—'} · ${ago(r.at)}`), h('div', { class: 'msg-body' }, r.body)))) : null,
+    n.status !== 'chiusa' ? h('div', { class: 'msg-reply' }, box, h('div', { class: 'row' }, h('button', { class: 'btn small primary', type: 'button', onclick: send }, 'Aggiungi'))) : null,
+    h('div', { class: 'row dn-actions' },
+      h('button', { class: 'btn small', type: 'button', onclick: edit }, '✎ Modifica'),
+      h('button', { class: 'btn small', type: 'button', onclick: toggle }, n.status === 'chiusa' ? 'Riapri' : '✓ Chiudi'),
+      n.authorId === me ? h('button', { class: 'btn small danger', type: 'button', onclick: del }, 'Cancella') : null));
+}
+
+const noteRow = (app, n, refresh, open = false) => h('details', { class: 'of-row dn-row dn-' + n.kind + (n.status === 'chiusa' ? ' dn-closed' : ''), open: open || null, id: 'dn-' + n.id },
+  h('summary', {}, n.status === 'chiusa' ? h('span', { class: 'badge muted' }, NOTE_STATES.chiusa) : null,
+    h('strong', { class: 'dn-title' }, noteTitle(n)),
+    h('span', { class: 'of-sub' }, [n.authorName, (n.replies || []).length ? `${n.replies.length} aggiornament${n.replies.length === 1 ? 'o' : 'i'}` : ''].filter(Boolean).join(' · ')),
+    h('span', { class: 'of-age' }, ago(n.lastAt))),
+  h('div', { class: 'of-body' }, noteBody(app, n, refresh)));
+
+async function viewDirNotes(app, openId = '') {
+  if (!canSeeDirNotes(app.session)) return h('div', { class: 'page' }, h('p', { class: 'muted' }, 'Le note di direzione le vedono solo Direzione e Ufficio.'));
+  let notes = await app.store.dirNotes();
+  const page = h('div', { class: 'page dir-notes' });
+  const head = h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Note di direzione'),
+    h('p', { class: 'muted' }, 'Fornitori, clienti e azienda. Le vedono Tommaso, Marco, Christian e Irina; gli agenti no. Una nota per argomento: gli aggiornamenti si scrivono sotto.')));
+  if (notes === null) return fill(page, head, h('section', { class: 'card' }, h('p', { class: 'alert warn' },
+    'Le note di direzione non sono ancora attive online: va applicata nel database la migrazione 20261123120000_hub_note_direzione.sql.')));
+  let subj = '', state = 'aperte', q = '';
+  const list = h('div', { class: 'of-rows' }), count = h('span', { class: 'muted fine' });
+  const refresh = async (keepOpen = '') => { notes = await app.store.dirNotes() || []; draw(keepOpen); };
+  const shown = () => sortNotes(notes.filter(n => (!subj || n.subjectType === subj) && (state === 'tutte' || (state === 'chiuse') === (n.status === 'chiusa')) && matchNote(n, q)));
+  const draw = (keepOpen = '') => { const s = shown();
+    count.textContent = `${s.length} not${s.length === 1 ? 'a' : 'e'}`;
+    fill(list, s.length ? s.map(n => noteRow(app, n, refresh, n.id === keepOpen)) : h('p', { class: 'muted of-empty-line' }, notes.length ? 'Nessuna nota con questi filtri.' : 'Ancora nessuna nota: comincia con «+ Incontro», «+ Decisione» o «+ Segnalazione».'));
+    if (keepOpen) document.getElementById('dn-' + keepOpen)?.scrollIntoView({ block: 'nearest' }); };
+  const chipRow = (opts, get, set) => { const row = h('div', { class: 'chips' }); const paint = () => row.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.v === get()));
+    opts.forEach(([v, l]) => row.append(h('button', { class: 'chip', type: 'button', 'data-v': v, onclick: () => { set(v); paint(); draw(); } }, l))); paint(); return row; };
+  const search = h('input', { type: 'search', placeholder: 'Cerca una parola (es. Staudacher, prezzi, Baugroup)', 'aria-label': 'Cerca', oninput: debounce(e => { q = e.target.value; draw(); }, 200) });
+  const add = kind => h('button', { class: 'btn' + (kind === 'incontro' ? ' primary' : ''), type: 'button', onclick: async () => { const id = await noteDialog(app, kind); if (id) await refresh(typeof id === 'string' ? id : ''); } }, '+ ' + NOTE_KINDS[kind].label);
+  const copy = h('button', { class: 'btn', type: 'button', title: 'Copia le note visibili come testo (per Claude o per una mail)', onclick: async () => {
+    const txt = notesText(shown());
+    await navigator.clipboard.writeText(txt).then(() => toast('Note copiate: incollale nella chat di Claude')).catch(() => modal('Copia le note', h('textarea', { rows: 16, readonly: true }, txt), [{ label: 'Chiudi', value: true }])); } }, '⧉ Copia per Claude');
+  fill(page, head,
+    h('div', { class: 'row dn-new' }, add('incontro'), add('decisione'), add('segnalazione'), copy),
+    h('section', { class: 'card' },
+      h('div', { class: 'dn-filters' }, chipRow([['', 'Tutte'], ['fornitore', 'Fornitori'], ['cliente', 'Clienti'], ['azienda', 'Azienda']], () => subj, v => { subj = v; }),
+        chipRow([['aperte', 'Aperte'], ['chiuse', 'Chiuse'], ['tutte', 'Tutte']], () => state, v => { state = v; }), h('div', { class: 'search-row' }, search), count),
+      list));
+  if (openId && notes.some(n => n.id === openId && n.status === 'chiusa')) state = 'tutte';
+  draw(openId);
+  return page;
+}
+
+// Nella scheda cliente: le note di direzione collegate (solo Direzione e Ufficio)
+async function customerDirNotes(app, customer) {
+  if (!canSeeDirNotes(app.session) || !app.store.dirNotes) return null;
+  const all = await app.store.dirNotes().catch(() => null);
+  const mine = (all || []).filter(n => n.customerId === customer.id || (n.subjectType === 'cliente' && n.subject.toLowerCase() === String(customer.name || '').toLowerCase()));
+  if (!mine.length) return null;
+  return h('section', { class: 'card dn-customer' }, h('h2', {}, 'Note di direzione'), h('p', { class: 'muted fine' }, 'Le vedono Direzione e Ufficio, non gli agenti.'),
+    h('ul', { class: 'dn-links' }, sortNotes(mine).map(n => h('li', {}, h('a', { href: '#/note/' + n.id }, noteTitle(n)), n.status === 'chiusa' ? h('span', { class: 'muted' }, ' · chiusa') : null))));
+}
+
+return { noteDialog, viewDirNotes, customerDirNotes, canSeeDirNotes };
+})();
 __m["js/views/agenda.js"] = (function () {
 const { changeLogCard } = __m["js/views/change-log-ui.js"];
 const { followerSelect } = __m["js/views/dir-follower-ui.js"];
@@ -5412,6 +5677,7 @@ const { radixOrderRow } = __m["js/views/radix-orders.js"];
 const { purchaseSummary, SALES_YEARS } = __m["js/core/purchases.js"];
 const { RECALL, recallDate, recallAction } = __m["js/core/note-quick.js"];
 const { offerChoices, offerSelect, parseRef, noteOfferChip, linkNoteDialog, canLinkNote } = __m["js/views/note-offers.js"];
+const { customerDirNotes } = __m["js/views/dir-notes.js"];
 // 01/11 sera (Tommaso: "si può migliorare?"): all'apertura solo i clienti su cui lavorare (attivi, da recuperare, potenziali),
 // in ordine "da seguire prima"; la ricerca cerca sempre in tutti i clienti.
 const WORK = ['Attivo', 'Da recuperare', 'Potenziale'];
@@ -5657,6 +5923,7 @@ async function customerCard(app, c) {
     app.store.radixOrders ? app.store.radixOrders({ customerId: c.id }).catch(() => []) : [],
     app.store.customerFixes ? app.store.customerFixes(c.id).catch(() => []) : []]);
   const links = app.store.links ? await app.store.links(c.id).catch(() => null) : null;   // null = tabella non ancora creata
+  const dirNotesBox = await customerDirNotes(app, c).catch(() => null);   // 23/11: note di direzione collegate (solo Direzione e Ufficio)
   const lastVisit = notes.find(n => n.kind === 'Visita' || (n.source === 'RADIX' && /visita/i.test(n.kind || '')));
   const addr = [c.street, [c.cap, c.city].filter(Boolean).join(' '), c.prov ? `(${c.prov})` : ''].filter(Boolean).join(', ');
   const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([c.street, c.cap, c.city, c.prov].filter(Boolean).join(' '));
@@ -5736,6 +6003,7 @@ async function customerCard(app, c) {
         older.length ? h('details', { class: 'fold-in' }, h('summary', {}, `Vedi tutte (${notes.length})`), h('ol', { class: 'timeline' }, older.map(noteItem))) : null]
         : h('p', { class: 'muted' }, 'Nessuna attività registrata. Aggiungi la prima nota: visita, telefonata o email, con un follow-up.')),
     links ? linksCard(app, c, links, refresh) : null,
+    dirNotesBox,
     purchasesCard(c),
     // Dati e contatti: chiuso, si apre quando serve
     h('details', { class: 'card fold-box', open: fixes.length > 0 && isDirS }, h('summary', {}, 'Dati e contatti'),
@@ -11114,6 +11382,12 @@ const HELP = {
       '«Obiettivi e one to one»: KPI del mese, azioni e clienti da intervistare; li invii al commerciale con «Invia la proposta» e, quando siete d\'accordo, «Segna concordati». Sotto c\'è il one to one del mese (fascia 1 e 2): preparazione, durante, chiusura.',
       '«Call del lunedì»: per ogni KPI fatto / non fatto / in corso, per ogni azione se è stata fatta e come si prosegue, poi esito e nuove azioni. I KPI si modificano anche da qui con «✎ Modifica KPI».'],
     notes: ['Azioni e KPI si modificano sempre; si eliminano solo finché non sono concordati con il commerciale. Dopo si modificano o si chiudono.', 'Le finestre si aprono e si chiudono toccando il titolo; l\'app ricorda come le hai lasciate.', 'Le aree scoperte (Ex area) stanno in fondo all\'elenco finché non hanno un commerciale.', 'Fatturato del piano e numeri per commerciale escludono Matrial e Steldo (intercompany).'] },
+  note: { title: 'Note di direzione', intro: 'Le note della direzione su fornitori, clienti e azienda. Le vedono e le scrivono Tommaso, Marco, Christian e Irina; gli agenti no.',
+    steps: ['Scegli il tipo: «+ Incontro» (chi c\'è, obiettivo, cosa chiediamo, cosa portiamo; dopo: esito e impegni), «+ Decisione» (cosa, perché, chi la applica, da quando) o «+ Segnalazione» (il fatto, da chi l\'abbiamo saputo, cosa serve fare).',
+      'Scrivi a chi si riferisce (fornitore, cliente o azienda) e la data: il titolo si compone da solo, sempre «TIPO · nome · data».',
+      'Una nota per argomento: gli aggiornamenti si scrivono sotto la nota con «Aggiungi», non con una nota nuova. Quando è finita, «✓ Chiudi».',
+      'In alto filtri per Fornitori, Clienti, Azienda, Aperte/Chiuse, e la ricerca per parola. «⧉ Copia per Claude» copia le note visibili come testo.'],
+    notes: ['Le note collegate a un cliente compaiono anche nella sua scheda (solo per Direzione e Ufficio).', 'Le note sui clienti per la rete restano le note normali della scheda cliente: qui solo quello che gli agenti non devono vedere.', 'Una nota la cancella solo chi l\'ha scritta; modificarla o chiuderla può chiunque della direzione.'] },
   sistemi: { title: 'Sistemi', intro: 'Pacchetti e stratigrafie (in prova, visibile solo alla Direzione).', steps: [], notes: [] },
   profilo: {
     title: 'Profilo',
@@ -13937,6 +14211,7 @@ const { canSeeSystems } = __m["js/core/systems.js"];
 const { canUpdateData } = __m["js/views/data-update.js"];
 const { canSeeStrategy } = __m["js/views/strategy.js"];
 const { canSeeOfficeDesk } = __m["js/views/office.js"];
+const { canSeeDirNotes } = __m["js/core/dir-notes.js"];
 const { h } = __m["js/ui.js"];
 const { ordersSection } = __m["js/views/orders.js"];
 const { radixOrdersSection } = __m["js/views/radix-orders.js"];
@@ -13953,6 +14228,7 @@ async function viewMore(app) {
   return h('div', { class: 'page' }, h('header', { class: 'page-head' }, h('div', {}, h('h1', {}, 'Altro'))),
     h('div', { class: 'more-list' },
       canSeeStrategy(app.session) ? item('#/strategia', '◆', 'Sales strategy', 'Fasce, interviste, azioni (solo tu)') : null,
+      canSeeDirNotes(app.session) ? item('#/note', '✎', 'Note di direzione', 'Fornitori, clienti, azienda (non le vedono gli agenti)') : null,
       canSeeOfficeDesk(app.session) ? item('#/ufficio', '⇄', 'Ufficio', 'La scrivania di Christian e Irina') : null,
       item('#/ordini', '⇪', 'Ordini', 'Da inserire in RADIX', n),
       item('#/rete', '↻', 'Attività rete', 'Note, visite, offerte di tutti'),
@@ -14218,6 +14494,7 @@ const { viewSystems, viewSystem } = __m["js/views/systems.js"];
 const { canSeeSystems } = __m["js/core/systems.js"];
 const { viewDataUpdate, canUpdateData } = __m["js/views/data-update.js"];
 const { viewStrategy, canSeeStrategy } = __m["js/views/strategy.js"];
+const { viewDirNotes, canSeeDirNotes } = __m["js/views/dir-notes.js"];
 const VERSION = '1.0.0';
 
 // Navigazione (01/11): le offerte hanno una voce propria; il profilo è l'iniziale in alto a destra (telefono) o il nome in basso (computer)
@@ -14234,6 +14511,7 @@ const NAV = [
   { id: 'giacenze', label: 'Giacenze', icon: '▦', phoneDir: false },   // 04/11 (Nonini non la trovava in Mappe): sul telefono degli agenti è una voce della barra in basso; Direzione da Altro
   { id: 'sistemi', label: 'Sistemi', icon: '▥', only: canSeeSystems, phone: false },
   { id: 'strategia', label: 'Sales strategy', icon: '◆', only: canSeeStrategy, group: 'Direzione', phone: false },   // 08/11: gestionale della Direzione, solo Tommaso
+  { id: 'note', label: 'Note di direzione', icon: '✎', only: canSeeDirNotes, phone: false },   // 23/11 (Marco): fornitori, clienti, azienda; Direzione e Ufficio
   { id: 'rete', label: 'Attività rete', icon: '↻', dir: true, phone: false },
   { id: 'manager', label: 'Area manager', icon: '▤', dir: true, phone: false },
   { id: 'dati', label: 'Aggiorna dati', icon: '⟳', only: canUpdateData, phone: false },
@@ -14378,7 +14656,7 @@ function shell(active, content, key = active) {
   const isDir = app.session.role === 'direzione', pv = app.session.preview;
   const office = isOffice(app.session);
   // 02/11 Ufficio: menu corto (il resto lo consultano in RADIX)
-  const OFFICE_NAV = ['home', 'ordini', 'agenda', 'preventivi', 'giacenze', 'bacheca', 'dati'];
+  const OFFICE_NAV = ['home', 'ordini', 'agenda', 'preventivi', 'giacenze', 'bacheca', 'note', 'dati'];
   const items = NAV.filter(n => (!n.dir || isDir) && (!n.only || n.only(app.session)) && (!office || OFFICE_NAV.includes(n.id)))
     .map(n => office && n.id === 'home' ? { ...n, label: 'Ufficio' } : office && n.id === 'ordini' ? { ...n, phone: true } : n);
   const badge = id => id === 'ordini' && app.navCounts?.ordini ? h('span', { class: 'tab-count' }, app.navCounts.ordini)
@@ -14386,7 +14664,7 @@ function shell(active, content, key = active) {
   const nav = items.filter(n => n.side !== false).flatMap(n => [n.group ? h('div', { class: 'nav-group' }, n.group) : null,
     h('a', { href: '#/' + n.id, class: 'nav-item' + (active === n.id ? ' active' : '') }, h('span', { class: 'ico', 'aria-hidden': 'true' }, n.icon), h('span', {}, n.label), badge(n.id))]);
   const tabs = items.filter(n => n.phone !== false && !(isDir && n.phoneDir === false) && !(office && n.id === 'giacenze'));
-  const tabActive = id => active === id || (id === 'altro' && ['ordini', 'rete', 'manager', 'mappe', 'giacenze', 'sistemi', 'dati', 'ufficio', 'strategia'].includes(active) && isDir);
+  const tabActive = id => active === id || (id === 'altro' && ['ordini', 'rete', 'manager', 'mappe', 'giacenze', 'sistemi', 'dati', 'ufficio', 'strategia', 'note'].includes(active) && isDir);
   const who = h('div', { class: 'who' }, h('a', { href: '#/profilo', class: 'who-name' }, h('strong', {}, pv ? pv.by : app.session.name)), h('small', {}, pv ? 'Direzione · anteprima' : app.session.readOnly ? 'Sola lettura' : office ? 'Ufficio' : isDir ? 'Direzione' : (app.session.assignee || 'Agente')),
     h('button', { class: 'link', onclick: signOut }, 'Esci'));
   const bar = pv ? h('div', { class: 'preview-bar', role: 'status' }, h('span', {}, h('strong', {}, 'Anteprima '), app.session.assignee, h('small', {}, ' · sola lettura')),
@@ -14485,13 +14763,14 @@ async function render() {
   const [route, ...args] = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
   if (!app.session) { root.replaceChildren(loginView()); return; }
   const seq = ++renderSeq;
-  const views = { home: viewHome, agenda: viewAgenda, preventivi: viewQuotes, offerta: viewQuoteEditor, bacheca: viewBoard, rete: viewNetwork, manager: viewManager, mappe: viewMaps, giacenze: viewStock, ufficio: viewOfficeHome, profilo: viewAccount, ordini: viewOrders, altro: viewMore, rxofferta: viewRadixOffer, giri: viewPlans, giro: viewPlan, sistemi: viewSystems, sistema: viewSystem, dati: viewDataUpdate, primi: viewFirstSteps, strategia: viewStrategy };
+  const views = { home: viewHome, agenda: viewAgenda, preventivi: viewQuotes, offerta: viewQuoteEditor, bacheca: viewBoard, rete: viewNetwork, manager: viewManager, mappe: viewMaps, giacenze: viewStock, ufficio: viewOfficeHome, profilo: viewAccount, ordini: viewOrders, altro: viewMore, rxofferta: viewRadixOffer, giri: viewPlans, giro: viewPlan, sistemi: viewSystems, sistema: viewSystem, dati: viewDataUpdate, primi: viewFirstSteps, strategia: viewStrategy, note: viewDirNotes };
   const key = views[route] ? route : 'home';
   if (['rete', 'manager', 'ordini', 'altro'].includes(key) && app.session.role !== 'direzione') { app.go('home'); return; }
   // 07/11: Primi passi al primo accesso dell'agente (spento finché la 1.0 non va a tutta la rete, con Meridian)
   if (key === 'home' && PRIMI_PASSI_AUTO && app.session.role !== 'direzione' && !app.session.office && !app.session.preview && !firstStepsDone()) { app.go('primi'); return; }
   if (key === 'ufficio' && !canSeeOfficeDesk(app.session)) { app.go('home'); return; }
   if (key === 'strategia' && !canSeeStrategy(app.session)) { app.go('home'); return; }
+  if (key === 'note' && !canSeeDirNotes(app.session)) { app.go('home'); return; }
   if (isOffice(app.session) && ['ufficio', 'rete', 'manager', 'mappe', 'giri', 'giro', 'sistemi', 'sistema', 'altro'].includes(key)) { app.go('home'); return; }
   // vecchi collegamenti alle schede della Home (prima del 01/11 sera)
   if (key === 'home' && args[0]) { const to = { attivita: 'rete', ordini: 'ordini', bacheca: 'bacheca', manager: 'manager' }[args[0]]; if (to) { app.go(to); return; } }
