@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="c839a7a3677f">
+<meta name="ntx-build" content="696a4637d871">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1224,7 +1224,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"c839a7a3677f"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"696a4637d871"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1354,6 +1354,8 @@ __m["js/core/pricing.js"] = (function () {
 // Calcolo offerte NORDTEX HUB.
 // Prezzi sempre dal Master prodotti (listino n.05); nessuna conversione di unità inventata.
 
+// 27/11: stessa regola di hasGlue in logistics.js (qui ripetuta: la funzione server delle offerte non include logistics.js)
+const hasGlue = p => p?.family === 'Blocchi in laterizio' && /collante incluso/i.test(p?.technical || '');
 const PRICE_LEVEL = Object.freeze({ OK: 'ok', WARN: 'warn', BLOCKED: 'blocked' });
 const DISCOUNT_ALERT = 52.5; // Condizioni agenti 2026: sconto massimo previsto 50+5 (52,5% complessivo); oltre serve autorizzazione Direzione
 const DISCOUNT_ALERT_LABEL = '50+5 (52,5%)';
@@ -1425,6 +1427,7 @@ function fixLineDescriptions(lines, byId) {
     const p = byId.get(l.productId); if (!p) continue;
     const right = lineDescription(p);
     if (l.description !== right && l.description === oldLineDescription(p)) { l.description = right; n++; }
+    if (hasGlue(p) && !l.glue) { l.glue = true; n++; }   // 27/11: righe salvate prima della frase sul collante
   }
   return n;
 }
@@ -1438,6 +1441,7 @@ function makeLine(p, qty, discounts = [0, 0, 0], policy = 'avvisa') {
     family: p.family, producer: p.producer || '', unit: normUnit(p.saleUnit), listPrice: p.price,
     qty, discounts: [...discounts], level: pl.level, warnings: pl.reasons,
     palletQuantity: p.palletQuantity ?? null, palletUnit: p.palletUnit ?? null,
+    ...(hasGlue(p) ? { glue: true } : {}),
   };
 }
 
@@ -4391,6 +4395,7 @@ const customerLines = c => [c.name, c.street, [c.cap, c.city, c.prov ? `(${c.pro
 const TG = new Set(["25002001", "25002002", "25002003", "25002004", "25003001", "25003002", "25003003", "25003004", "25003005", "25003006", "25003007", "25003008", "25003009", "25004001", "25004002", "25004003", "25004004", "25004007", "25004008", "25004009", "25004010", "25005001", "25005004", "301668", "330561", "334121", "334122", "334123", "334180", "334273", "334274", "334275", "334276", "335244", "338431", "341344", "341345", "344668", "344670", "367943", "367949", "367950", "389781", "399305", "411038", "411876", "411900", "411901", "411913", "411917", "411919", "411921", "411940", "411966", "411968", "411970", "411972", "411975", "426980", "426984", "427013", "433507", "433513", "433514", "433515", "433550", "433551", "433553", "433556"]);
 const tongueGroove = l => !!l && TG.has(String(l.listCode || '').trim());
 
+const GLUE_LINE_TEXT = 'Collante per giunto sottile compreso nella fornitura, consegnato su un bancale a parte';
 function lineExtra(l) {
   const out = [], pal = palletsFor(l);
   if (tongueGroove(l)) out.push('bordo a incastro M+F');
@@ -4401,6 +4406,8 @@ function lineExtra(l) {
     // 17/11: sotto un decimo di bancale niente riga «circa 0,0 bancali»
     if (pal >= 0.05) out.push(Math.abs(pal - Math.round(pal)) < 1e-6 ? `${Math.round(pal)} ${Math.round(pal) === 1 ? 'bancale' : 'bancali'}` : `circa ${n(pal, 1)} bancali`);
   }
+  // 27/11 (Tommaso): sui blocchi rettificati il cliente deve leggere in offerta che la colla è compresa e arriva su un bancale suo
+  if (l.glue) out.push(GLUE_LINE_TEXT);
   if (l.unitNote) out.push(l.unitNote);   // prezzi per unità scelti dall'agente (02/11)
   if (l.pickup) out.push(`Ritiro a cura del cliente presso ${l.pickup.label}`);   // 13/11: resto ritirato in deposito
   return out;
@@ -4486,7 +4493,7 @@ function pickupStockIssues(q, stock) {
   return { depotDate: dep?.date || null, issues: out };
 }
 
-return { DEPOTS, RADIX_DEPOTS, stockDepot, TRANSPORT_BY, isPickup, transportByFor, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, FREIGHT_FULL, freightRows, docSequence, customerLines, tongueGroove, lineExtra, quoteDocHtml, quoteFileName, pickupStockIssues };
+return { DEPOTS, RADIX_DEPOTS, stockDepot, TRANSPORT_BY, isPickup, transportByFor, CLAUSES, fmtN, dotDate, UM, discText, hideDiscounts, docPrice, customerCode, destinationLines, freightLabel, FREIGHT_FULL, freightRows, docSequence, customerLines, tongueGroove, GLUE_LINE_TEXT, lineExtra, quoteDocHtml, quoteFileName, pickupStockIssues };
 })();
 __m["js/core/mailto.js"] = (function () {
 const { totals } = __m["js/core/pricing.js"];
