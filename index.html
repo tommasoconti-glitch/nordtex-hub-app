@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; font-src data:; media-src blob:; connect-src 'self' https://lwjpkmwakpnhmdnvhewb.supabase.co https://nominatim.openstreetmap.org https://router.project-osrm.org; base-uri 'none'; form-action 'none'">
-<meta name="ntx-build" content="696a4637d871">
+<meta name="ntx-build" content="1a06c924cf8a">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1224,7 +1224,7 @@ h1 + .fix-note{margin:-4px 0 4px}
 }
 
 </style>
-<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"696a4637d871"};</script>
+<script>window.NTX_CONFIG = {"mode":"supabase","build":"online","supabaseUrl":"https://lwjpkmwakpnhmdnvhewb.supabase.co","supabaseKey":"sb_publishable_ZUOI7VornVnuxU8zMJpL2w_EooZZob8","buildId":"1a06c924cf8a"};</script>
 </head>
 <body>
 <div id="app"><div class="login"><p class="muted">Caricamento…</p></div></div>
@@ -1851,7 +1851,9 @@ function checkRadixOutcome({ outcome, note = '', next = null } = {}) {
 // Data del prossimo contatto: quella fissata nell'app, altrimenti il follow-up previsto in RADIX
 const radixOfferDue = o => o.nextFollowup || o.followup || null;
 // Offerte fatte in RADIX come DIREZIONALE: le vedono Direzione e consulenti interni, non gli agenti (decisione Tommaso 01/11/2026)
-const radixOfferForAgent = (o, assigneeRole) => String(o.radixAgent || '').toUpperCase() !== 'DIREZIONALE' || assigneeRole === 'Consulente interno';
+// 27/11 (Tommaso): «se hanno il cliente in anagrafica è loro, chiunque faccia l'offerta»: il commerciale vede anche le offerte
+// fatte in RADIX come DIREZIONALE sui suoi clienti (sostituisce la regola del 01/11). Resta come funzione per l'anteprima e il negozio locale.
+const radixOfferForAgent = () => true;
 
 // Validità dell'offerta (01/11 sera, Tommaso): "scade tra N giorni" è il motivo più concreto per richiamare
 function validityInfo(validUntil, today = new Date().toISOString().slice(0, 10)) {
